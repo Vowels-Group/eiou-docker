@@ -1597,7 +1597,31 @@ php /app/eiou/scripts/transaction-archive-cron.php --dry-run
 php /app/eiou/scripts/transaction-archive-cron.php
 ```
 
-Logs are written to `/var/log/eiou/transaction-archive.log`. The run's JSON output includes `pairs_processed`, `pairs_archived`, `pairs_skipped_gap`, `moved`, `batches`, and `archive_backup_file` — `pairs_skipped_gap > 0` is worth investigating (a gap is either a local data issue or a missing sync). Phase 1 of #863 only produces the checkpoint metadata; Phase 2 will wire `verifyChainIntegrity()` to consume it for the O(recent) hot-path.
+Logs are written to `/var/log/eiou/transaction-archive.log`. The run's JSON output includes `pairs_processed`, `pairs_archived`, `pairs_skipped_gap`, `moved`, `batches`, and `archive_backup_file` — `pairs_skipped_gap > 0` is worth investigating (a gap is either a local data issue or a missing sync). Phase 2 of #863 (shipped) wires `verifyChainIntegrity()` to consume the checkpoint for an O(recent) hot-path.
+
+---
+
+## Chain Integrity Audit
+
+### verify-chain
+
+Walk every bilateral chain on this node end-to-end, bypassing the hot-path checkpoint-trust optimization, and recompute each pair's archive hash to detect tampering. Use when auditing a node after a restore, investigating a `pairs_skipped_gap` from the archival cron, or generally checking that the on-disk archive is consistent with what the checkpoint says it should be.
+
+**Usage:**
+```bash
+eiou verify-chain
+```
+
+**Output (per pair, to stdout):**
+- `transactions: N settled (across live + archive)`
+- `chain: OK` or `chain: FAIL - N gap(s)` with the missing txids
+- `checkpoint: none` (pair has no archive yet), `checkpoint: archive hash matches stored value`, or `checkpoint: FAIL - archive hash mismatch` (archive was modified outside the archival service)
+
+**Exit codes:**
+- `0` — every pair clean
+- `1` — at least one pair has a finding (chain gap or hash mismatch)
+
+This command is intentionally NOT on any cron — it's O(all history) per pair, which is the cost Phase 2 exists to AVOID on every send. Run it deliberately.
 
 ---
 

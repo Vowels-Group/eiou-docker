@@ -348,6 +348,16 @@ elseif($request === "backup"){
   $backupService = $app->services->getBackupService();
   $backupService->handleCommand($cleanArgv, $output);
 }
+// Chain integrity audit (#863 phase 2 safety net)
+// Walks every bilateral chain end-to-end (live + archive) and verifies
+// each pair's archive hash against the stored checkpoint. Exits 1 if
+// any pair has findings (gap or hash mismatch).
+elseif($request === "verify-chain"){
+  $debugService->output("Executing verify-chain request", 'SILENT');
+  $chainAuditService = $app->services->getChainAuditService();
+  $exitCode = $chainAuditService->handleCommand($cleanArgv, $output);
+  exit($exitCode);
+}
 // Tx Drop Agreement
 elseif($request === "chaindrop"){
   $debugService->output("Executing chain drop request", 'SILENT');

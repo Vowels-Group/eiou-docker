@@ -70,6 +70,50 @@ class TransactionArchiveRepository extends AbstractRepository
      *
      * @return array{hash_a:string,hash_b:string}[]
      */
+    /**
+     * Return every distinct bilateral pair with at least one transaction in
+     * live OR archive. Unlike findEligibleBilateralPairs(), this doesn't
+     * filter on retention / status — used by `eiou verify-chain` to scan
+     * the full set of chains on this node.
+     *
+     * @return array{hash_a:string,hash_b:string}[]
+     */
+    public function findAllBilateralPairs(int $pairLimit = 10000): array
+    {
+        $sqlParts = [
+            "SELECT DISTINCT
+                    LEAST(sender_public_key_hash, receiver_public_key_hash) AS hash_a,
+                    GREATEST(sender_public_key_hash, receiver_public_key_hash) AS hash_b
+             FROM transactions
+             WHERE sender_public_key_hash IS NOT NULL
+               AND receiver_public_key_hash IS NOT NULL
+               AND sender_public_key_hash != receiver_public_key_hash"
+        ];
+
+        // Archive side — skip gracefully if the table is absent.
+        try {
+            $probe = $this->pdo->query("SELECT 1 FROM transactions_archive LIMIT 1");
+            if ($probe !== false) {
+                $sqlParts[] = "SELECT DISTINCT
+                    LEAST(sender_public_key_hash, receiver_public_key_hash) AS hash_a,
+                    GREATEST(sender_public_key_hash, receiver_public_key_hash) AS hash_b
+                 FROM transactions_archive
+                 WHERE sender_public_key_hash IS NOT NULL
+                   AND receiver_public_key_hash IS NOT NULL
+                   AND sender_public_key_hash != receiver_public_key_hash";
+            }
+        } catch (PDOException $e) {
+            // Archive missing — live-only result is correct.
+        }
+
+        $unionSql = implode("\n UNION \n", $sqlParts)
+                  . "\nORDER BY hash_a, hash_b\nLIMIT :limit";
+        $stmt = $this->pdo->prepare($unionSql);
+        $stmt->bindValue(':limit', max(1, $pairLimit), PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function findEligibleBilateralPairs(int $retentionDays, int $pairLimit): array
     {
         // Age measured against the DB-assigned `timestamp` column (DATETIME(6))

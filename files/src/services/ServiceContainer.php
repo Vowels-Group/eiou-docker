@@ -44,6 +44,7 @@ use Eiou\Contracts\SendOperationServiceInterface;
 use Eiou\Services\PaymentRequestService;
 use Eiou\Services\PaymentRequestArchivalService;
 use Eiou\Services\TransactionArchivalService;
+use Eiou\Services\ChainAuditService;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Proxies\SyncServiceProxy;
@@ -1009,6 +1010,25 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['TransactionArchivalService'];
+    }
+
+    /**
+     * Get ChainAuditService instance
+     *
+     * Used by the `eiou verify-chain` CLI command to audit bilateral chains
+     * end-to-end (live + archive) and compare each pair's archive hash
+     * against the stored checkpoint — Phase 2's safety net against archive
+     * tampering. Distinct from ChainVerificationService above which runs
+     * pre-send chain-integrity checks.
+     */
+    public function getChainAuditService(): ChainAuditService {
+        if (!isset($this->services['ChainAuditService'])) {
+            $this->services['ChainAuditService'] = new ChainAuditService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class),
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionArchiveRepository::class)
+            );
+        }
+        return $this->services['ChainAuditService'];
     }
 
     /**

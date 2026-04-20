@@ -64,24 +64,32 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'],
         ];
 
-        // verifyChainIntegrity now issues TWO prepares: live SELECT + archive
-        // SELECT. Archive is merged into the txid lookup set so archived
-        // `previous_txid` references don't false-positive as gaps. Tests
-        // return empty-archive via willReturnOnConsecutiveCalls.
+        // Phase 2 verify issues TWO prepares:
+        //   1. live SELECT from `transactions` (via AbstractRepository::execute,
+        //      which binds 4 params via bindValue and calls execute())
+        //   2. checkpoint lookup from `transaction_chain_checkpoints` (direct
+        //      $this->pdo->prepare + execute(array) — no bindValue calls)
+        // The archive isn't scanned in the fast path (default useCheckpoint=true):
+        // if the pair's checkpoint exists, we trust it; if it doesn't, any
+        // missing previous_txid is a real gap. This test's mock returns
+        // `false` from fetch (no checkpoint) — so the chain walks pure-live.
         $this->pdo->expects($this->exactly(2))
             ->method('prepare')
-            ->with($this->stringContains('SELECT txid, previous_txid, status'))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(8))
+        $this->stmt->expects($this->exactly(4))  // only live query binds named params
             ->method('bindValue');
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(2))  // live + checkpoint
             ->method('execute');
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(1))  // live only
             ->method('fetchAll')
-            ->willReturnOnConsecutiveCalls($transactions, []);
+            ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))  // checkpoint row lookup
+            ->method('fetch')
+            ->willReturn(false);  // no checkpoint for this pair
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -107,15 +115,19 @@ class TransactionChainRepositoryTest extends TestCase
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(8))
+        $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
         $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
-            ->willReturnOnConsecutiveCalls($transactions, []);
+            ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);  // no checkpoint → missing prev_txid is a real gap
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -138,9 +150,13 @@ class TransactionChainRepositoryTest extends TestCase
         $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
-            ->willReturnOnConsecutiveCalls([], []);
+            ->willReturn([]);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -168,15 +184,19 @@ class TransactionChainRepositoryTest extends TestCase
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(8))
+        $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
         $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
-            ->willReturnOnConsecutiveCalls($transactions, []);
+            ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -200,15 +220,19 @@ class TransactionChainRepositoryTest extends TestCase
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(8))
+        $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
         $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
-            ->willReturnOnConsecutiveCalls($transactions, []);
+            ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);  // no checkpoint → tx2 missing is a real gap
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -235,15 +259,19 @@ class TransactionChainRepositoryTest extends TestCase
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(8))
+        $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
         $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->exactly(2))
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
-            ->willReturnOnConsecutiveCalls($transactions, []);
+            ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -255,18 +283,18 @@ class TransactionChainRepositoryTest extends TestCase
 
     public function testVerifyChainIntegrityQueryIncludesCancelledAndRejected(): void
     {
-        // Regression: the query must NOT filter out cancelled/rejected transactions.
-        // Asserting on the SQL shape locks in the intent of the fix so a future
-        // refactor can't reintroduce the status filter without this test failing.
-        // With #863 Phase 1, verify now issues TWO prepares (live + archive) —
-        // neither should contain "status NOT IN".
+        // Regression: the live-query SQL must NOT filter out cancelled/rejected
+        // transactions. Phase 2 also prepares a checkpoint lookup on
+        // `transaction_chain_checkpoints` — that query doesn't touch status
+        // either, so the "no status NOT IN" constraint holds for both.
         $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->with($this->logicalNot($this->stringContains("status NOT IN")))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->exactly(2))->method('execute');
-        $this->stmt->expects($this->exactly(2))->method('fetchAll')->willReturn([]);
+        $this->stmt->expects($this->exactly(1))->method('fetchAll')->willReturn([]);
+        $this->stmt->expects($this->exactly(1))->method('fetch')->willReturn(false);
 
         $this->repository->verifyChainIntegrity('user', 'contact');
     }
@@ -376,47 +404,48 @@ class TransactionChainRepositoryTest extends TestCase
         $userPublicKey = 'user-pubkey';
         $contactPublicKey = 'contact-pubkey';
 
-        $summaryData = [
-            'transaction_count' => 10,
-            'oldest_txid' => 'tx-oldest',
-            'newest_txid' => 'tx-newest'
-        ];
-
-        $txidList = [
+        // Phase 2 getChainStateSummary: two queries (live then archive),
+        // each iterates rows via while-fetch; count/oldest/newest are
+        // computed in PHP after the merge. Archive query here returns
+        // empty (no archived rows) — matches a node that hasn't archived
+        // yet. oldest/newest are by lexical txid, matching MIN/MAX semantics.
+        $liveTxids = [
+            ['txid' => 'tx3'],
             ['txid' => 'tx1'],
             ['txid' => 'tx2'],
-            ['txid' => 'tx3'],
         ];
 
         $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(8)) // 4 for summary + 4 for txid list
+        $this->stmt->expects($this->exactly(8)) // 4 live + 4 archive
             ->method('bindValue');
 
         $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
         $fetchIndex = 0;
-        $this->stmt->expects($this->exactly(5)) // 1 summary + 3 txids + 1 false terminator
+        $this->stmt
             ->method('fetch')
-            ->willReturnCallback(function() use (&$fetchIndex, $summaryData, $txidList) {
+            ->willReturnCallback(function() use (&$fetchIndex, $liveTxids) {
                 $fetchIndex++;
-                if ($fetchIndex === 1) {
-                    return $summaryData;
+                // Live: return 3 rows then false (terminator).
+                // Archive: returns false immediately (no archive rows).
+                $liveLen = count($liveTxids);
+                if ($fetchIndex <= $liveLen) {
+                    return $liveTxids[$fetchIndex - 1];
                 }
-                // Return txid list items then false
-                $listIndex = $fetchIndex - 2;
-                return $txidList[$listIndex] ?? false;
+                return false;
             });
 
         $result = $this->repository->getChainStateSummary($userPublicKey, $contactPublicKey);
 
-        $this->assertEquals(10, $result['transaction_count']);
-        $this->assertEquals('tx-oldest', $result['oldest_txid']);
-        $this->assertEquals('tx-newest', $result['newest_txid']);
+        $this->assertEquals(3, $result['transaction_count']);
+        $this->assertEquals('tx1', $result['oldest_txid']);  // lexical min
+        $this->assertEquals('tx3', $result['newest_txid']);  // lexical max
         $this->assertIsArray($result['txid_list']);
+        $this->assertCount(3, $result['txid_list']);
     }
 
     public function testGetChainStateSummaryReturnsDefaultsOnFailure(): void

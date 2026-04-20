@@ -264,18 +264,21 @@ class TransactionRepository extends AbstractRepository {
      * @param string $type
      * @return array
      */
-    public function getTransactionsByType(string $type): array
+    public function getTransactionsByType(string $type, int $limit = 10, int $offset = 0): array
     {
+        // TODO(#863 phase 3): push $type into SQL + UNION archive so this
+        // isn't O(all history). Callers in ApiController already pass
+        // $limit + $offset (which this method previously silently dropped
+        // because its signature was single-arg) — matching the signature
+        // here at least lets the API result respect pagination, but the
+        // inner getTransactionHistory still scans live-only until a deeper
+        // refactor.
         $allTransactions = $this->getTransactionHistory(PHP_INT_MAX);
-        $filtered = [];
-
-        foreach ($allTransactions as $transaction) {
-            if ($transaction['type'] === $type) {
-                $filtered[] = $transaction;
-            }
-        }
-
-        return $filtered;
+        $filtered = array_values(array_filter(
+            $allTransactions,
+            fn($tx) => ($tx['type'] ?? null) === $type
+        ));
+        return array_slice($filtered, $offset, $limit);
     }
 
     /**
@@ -304,27 +307,18 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders)";
-
+        $selectCols = "receiver_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "sender_address IN ($placeholders)";
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
-        } else {
-            $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+            $where .= " AND currency = ?";
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $currency !== null ? [$currency] : []);
 
-        try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
-        } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get sent transactions: ' . $e->getMessage(), 'WARNING');
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get sent transactions'
+        );
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
     }
 
@@ -343,27 +337,18 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT sender_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders)";
-
+        $selectCols = "sender_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "receiver_address IN ($placeholders)";
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
-        } else {
-            $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+            $where .= " AND currency = ?";
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $currency !== null ? [$currency] : []);
 
-        try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
-        } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get received transactions: ' . $e->getMessage(), 'WARNING');
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get received transactions'
+        );
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
@@ -383,28 +368,20 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT sender_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders) AND LOWER(sender_address) = LOWER(?)";
-
-        $additionalParams = [$senderAddress];
+        $selectCols = "sender_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "receiver_address IN ($placeholders) AND LOWER(sender_address) = LOWER(?)";
+        $extraParams = [$senderAddress];
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $additionalParams[] = $currency;
+            $where .= " AND currency = ?";
+            $extraParams[] = $currency;
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
-        $additionalParams[] = $limit;
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $extraParams);
 
-        $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
-        try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
-        } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get received transactions by address: ' . $e->getMessage(), 'WARNING');
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get received transactions by address'
+        );
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
@@ -425,29 +402,85 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders) AND LOWER(receiver_address) = LOWER(?)";
-
-        $additionalParams = [$receiverAddress];
+        $selectCols = "receiver_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "sender_address IN ($placeholders) AND LOWER(receiver_address) = LOWER(?)";
+        $extraParams = [$receiverAddress];
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $additionalParams[] = $currency;
+            $where .= " AND currency = ?";
+            $extraParams[] = $currency;
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
-        $additionalParams[] = $limit;
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $extraParams);
 
-        $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get sent transactions by address'
+        );
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
+    }
+
+    /**
+     * Private helper: run the same SELECT against `transactions` AND
+     * `transactions_archive`, merge + sort + limit in PHP. Used by the
+     * four sent/received methods above so a CLI history dump after
+     * archival shows the complete history (not just live rows).
+     *
+     * Semantics:
+     *   - Live query MUST succeed — it's the primary source of truth.
+     *     Failure returns `[]` and logs a WARNING.
+     *   - Archive query is best-effort. On PDOException (archive table
+     *     missing during v9→v10 transitional period, etc.) it
+     *     contributes zero rows and no error is surfaced.
+     *   - Each side's `LIMIT $limit` is applied independently before the
+     *     merge. This means we fetch up to 2 × $limit rows and then
+     *     re-sort / re-slice in PHP. For reasonable limits (tens to
+     *     hundreds) this is cheap; the archive's index on `timestamp`
+     *     keeps the per-side fetch fast.
+     *
+     * @param string $selectCols     The comma-separated SELECT list (no "FROM").
+     * @param string $where          WHERE clause body (with ?  placeholders).
+     * @param array  $whereParams    Parameters for the WHERE placeholders.
+     * @param int    $limit          Row cap after merge.
+     * @param string $errorContext   Log message prefix on failure.
+     * @return array Rows sorted by `timestamp` DESC, capped at $limit.
+     */
+    private function queryTransactionsUnionArchive(
+        string $selectCols,
+        string $where,
+        array $whereParams,
+        int $limit,
+        string $errorContext
+    ): array {
+        $liveQuery    = "SELECT {$selectCols} FROM transactions WHERE {$where} ORDER BY timestamp DESC LIMIT ?";
+        $archiveQuery = "SELECT {$selectCols} FROM transactions_archive WHERE {$where} ORDER BY timestamp DESC LIMIT ?";
+
+        $paramsWithLimit = array_merge($whereParams, [$limit]);
+
         try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
+            $stmt = $this->pdo->prepare($liveQuery);
+            $stmt->execute($paramsWithLimit);
+            $liveRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get sent transactions by address: ' . $e->getMessage(), 'WARNING');
+            Logger::getInstance()->log("{$errorContext}: " . $e->getMessage(), 'WARNING');
             return [];
         }
 
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
+        $archiveRows = [];
+        try {
+            $stmt = $this->pdo->prepare($archiveQuery);
+            $stmt->execute($paramsWithLimit);
+            $archiveRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Archive table missing — live-only result is correct.
+        }
+
+        if ($archiveRows === []) {
+            return $liveRows;
+        }
+
+        $merged = array_merge($liveRows, $archiveRows);
+        usort($merged, fn($a, $b) => strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? ''));
+        return array_slice($merged, 0, $limit);
     }
 
     /**

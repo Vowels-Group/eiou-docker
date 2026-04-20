@@ -67,23 +67,51 @@ class TransactionContactRepository extends AbstractRepository {
         $contactHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
 
         try {
-            // Calculate sent to this contact
-            $query = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole, COALESCE(SUM(amount_frac), 0) AS sum_frac FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute([$userHash, $contactHash]);
-            $sentRow = $stmt->fetch(PDO::FETCH_ASSOC);
-            $sent = self::sumCarry((int)$sentRow['sum_whole'], (int)$sentRow['sum_frac']);
+            // UNION live + archive on each side. Archive silently contributes
+            // zero rows if the table doesn't exist yet (v9→v10 transitional),
+            // MySQL treats the missing-table case as a query error which we
+            // swallow via the union-with-empty-select pattern below (SELECT 0,0
+            // UNION ALL ...FROM archive where archive may error).
+            //
+            // Simpler: two separate queries, summed in PHP. Archive query
+            // errors are caught and treated as 0 contribution.
+            $sentLive = $this->sumAmountsFromTable($this->tableName, $userHash, $contactHash);
+            $recvLive = $this->sumAmountsFromTable($this->tableName, $contactHash, $userHash);
+            $sentArchive = $this->sumAmountsFromTable('transactions_archive', $userHash, $contactHash);
+            $recvArchive = $this->sumAmountsFromTable('transactions_archive', $contactHash, $userHash);
 
-            // Calculate received from this contact
-            $query = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole, COALESCE(SUM(amount_frac), 0) AS sum_frac FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute([$contactHash, $userHash]);
-            $receivedRow = $stmt->fetch(PDO::FETCH_ASSOC);
-            $received = self::sumCarry((int)$receivedRow['sum_whole'], (int)$receivedRow['sum_frac']);
+            $sent     = $sentLive->add($sentArchive);
+            $received = $recvLive->add($recvArchive);
 
             return $received->subtract($sent);
         } catch (PDOException $e) {
             Logger::getInstance()->log('Failed to get contact balance: ' . $e->getMessage(), 'WARNING');
+            return SplitAmount::zero();
+        }
+    }
+
+    /**
+     * Private helper: SUM(amount) from one table for a specific
+     * sender→receiver direction + status='completed'. Returns SplitAmount::zero()
+     * on PDOException (archive table missing during v9→v10 transitional
+     * period, etc.) rather than propagating — the live query is the primary
+     * source of truth and should not fail merely because archive is absent.
+     */
+    private function sumAmountsFromTable(string $table, string $senderHash, string $receiverHash): SplitAmount
+    {
+        try {
+            $sql = "SELECT COALESCE(SUM(amount_whole), 0) AS sum_whole,
+                           COALESCE(SUM(amount_frac), 0) AS sum_frac
+                    FROM {$table}
+                    WHERE sender_public_key_hash = ?
+                      AND receiver_public_key_hash = ?
+                      AND status = 'completed'";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$senderHash, $receiverHash]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return self::sumCarry((int) $row['sum_whole'], (int) $row['sum_frac']);
+        } catch (PDOException $e) {
+            // Archive-missing or other transient table issue — contribute 0.
             return SplitAmount::zero();
         }
     }
@@ -115,17 +143,14 @@ class TransactionContactRepository extends AbstractRepository {
         // Build placeholders for IN clause
         $placeholders = $this->createPlaceholders($contactHashes);
 
-        // Single query to get all balances using UNION, grouped by contact and currency
-        $query = "
-            SELECT
-                contact_hash,
-                currency,
-                SUM(sent_whole) as total_sent_whole,
-                SUM(sent_frac) as total_sent_frac,
-                SUM(received_whole) as total_received_whole,
-                SUM(received_frac) as total_received_frac
-            FROM (
-                -- Sent from user to contacts
+        // Build a single UNION query across live + archive for each direction
+        // (sent / received), grouped at the outer level. Four UNION branches
+        // total: live-sent, live-received, archive-sent, archive-received.
+        // On a node where the archive table doesn't exist yet (fresh v9→v10
+        // migration moment) the query fails; we retry without the archive
+        // branches so balance display keeps working. Live is always present.
+        $buildQuery = function (bool $includeArchive) use ($placeholders) {
+            $liveSent = "-- Sent live
                 SELECT
                     receiver_public_key_hash as contact_hash,
                     currency,
@@ -137,11 +162,8 @@ class TransactionContactRepository extends AbstractRepository {
                 WHERE sender_public_key_hash = ?
                     AND receiver_public_key_hash IN ($placeholders)
                     AND status = 'completed'
-                GROUP BY receiver_public_key_hash, currency
-
-                UNION ALL
-
-                -- Received by user from contacts
+                GROUP BY receiver_public_key_hash, currency";
+            $liveRecv = "-- Received live
                 SELECT
                     sender_public_key_hash as contact_hash,
                     currency,
@@ -153,19 +175,81 @@ class TransactionContactRepository extends AbstractRepository {
                 WHERE receiver_public_key_hash = ?
                     AND sender_public_key_hash IN ($placeholders)
                     AND status = 'completed'
-                GROUP BY sender_public_key_hash, currency
-            ) as balance_calc
-            GROUP BY contact_hash, currency
-        ";
+                GROUP BY sender_public_key_hash, currency";
+            $branches = [$liveSent, $liveRecv];
+            if ($includeArchive) {
+                $archiveSent = "-- Sent archive
+                    SELECT
+                        receiver_public_key_hash as contact_hash,
+                        currency,
+                        SUM(amount_whole) as sent_whole,
+                        SUM(amount_frac) as sent_frac,
+                        0 as received_whole,
+                        0 as received_frac
+                    FROM transactions_archive
+                    WHERE sender_public_key_hash = ?
+                        AND receiver_public_key_hash IN ($placeholders)
+                        AND status = 'completed'
+                    GROUP BY receiver_public_key_hash, currency";
+                $archiveRecv = "-- Received archive
+                    SELECT
+                        sender_public_key_hash as contact_hash,
+                        currency,
+                        0 as sent_whole,
+                        0 as sent_frac,
+                        SUM(amount_whole) as received_whole,
+                        SUM(amount_frac) as received_frac
+                    FROM transactions_archive
+                    WHERE receiver_public_key_hash = ?
+                        AND sender_public_key_hash IN ($placeholders)
+                        AND status = 'completed'
+                    GROUP BY sender_public_key_hash, currency";
+                $branches[] = $archiveSent;
+                $branches[] = $archiveRecv;
+            }
+            $unionBody = implode("\n\n                UNION ALL\n\n                ", $branches);
+            return "
+                SELECT
+                    contact_hash,
+                    currency,
+                    SUM(sent_whole) as total_sent_whole,
+                    SUM(sent_frac) as total_sent_frac,
+                    SUM(received_whole) as total_received_whole,
+                    SUM(received_frac) as total_received_frac
+                FROM (
+                    {$unionBody}
+                ) as balance_calc
+                GROUP BY contact_hash, currency
+            ";
+        };
 
-        // Prepare parameters: userHash, contactHashes, userHash, contactHashes
-        $params = array_merge([$userHash], $contactHashes, [$userHash], $contactHashes);
+        $liveArchiveParams = array_merge(
+            [$userHash], $contactHashes,  // live sent
+            [$userHash], $contactHashes,  // live received
+            [$userHash], $contactHashes,  // archive sent
+            [$userHash], $contactHashes   // archive received
+        );
+        $liveOnlyParams = array_merge(
+            [$userHash], $contactHashes,
+            [$userHash], $contactHashes
+        );
+
+        $stmt = null;
         try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
+            $stmt = $this->pdo->prepare($buildQuery(true));
+            $stmt->execute($liveArchiveParams);
         } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get all contact balances: ' . $e->getMessage(), 'WARNING');
-            return array_fill_keys($contactPubkeys, []);
+            // Archive table missing (v9→v10 transitional) or other SQL issue
+            // — retry live-only so the balance display keeps working. This is
+            // a no-op when the archive is correctly set up because the first
+            // try succeeds.
+            try {
+                $stmt = $this->pdo->prepare($buildQuery(false));
+                $stmt->execute($liveOnlyParams);
+            } catch (PDOException $e2) {
+                Logger::getInstance()->log('Failed to get all contact balances: ' . $e2->getMessage(), 'WARNING');
+                return array_fill_keys($contactPubkeys, []);
+            }
         }
 
         // Build result array indexed by original pubkey, then by currency
