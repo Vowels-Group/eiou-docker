@@ -43,6 +43,8 @@ use Eiou\Contracts\TransactionProcessingServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
 use Eiou\Services\PaymentRequestService;
 use Eiou\Services\PaymentRequestArchivalService;
+use Eiou\Services\TransactionArchivalService;
+use Eiou\Services\ChainAuditService;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Proxies\SyncServiceProxy;
@@ -989,6 +991,44 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['PaymentRequestArchivalService'];
+    }
+
+    /**
+     * Get TransactionArchivalService instance
+     *
+     * Used by the transaction-archive-cron to move completed transactions
+     * older than the retention threshold into transactions_archive, gated
+     * on per-bilateral-pair chain-integrity verification.
+     */
+    public function getTransactionArchivalService(): TransactionArchivalService {
+        if (!isset($this->services['TransactionArchivalService'])) {
+            $this->services['TransactionArchivalService'] = new TransactionArchivalService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionArchiveRepository::class),
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class),
+                $this->currentUser,
+                $this->getBackupService()
+            );
+        }
+        return $this->services['TransactionArchivalService'];
+    }
+
+    /**
+     * Get ChainAuditService instance
+     *
+     * Used by the `eiou verify-chain` CLI command to audit bilateral chains
+     * end-to-end (live + archive) and compare each pair's archive hash
+     * against the stored checkpoint — Phase 2's safety net against archive
+     * tampering. Distinct from ChainVerificationService above which runs
+     * pre-send chain-integrity checks.
+     */
+    public function getChainAuditService(): ChainAuditService {
+        if (!isset($this->services['ChainAuditService'])) {
+            $this->services['ChainAuditService'] = new ChainAuditService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class),
+                $this->getRepositoryFactory()->get(\Eiou\Database\TransactionArchiveRepository::class)
+            );
+        }
+        return $this->services['ChainAuditService'];
     }
 
     /**

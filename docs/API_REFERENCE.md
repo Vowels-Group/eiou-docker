@@ -1300,6 +1300,8 @@ Get system settings.
             "cleanup_metrics_retention_days": 90,
             "payment_requests_archive_retention_days": 180,
             "payment_requests_archive_batch_size": 500,
+            "transactions_archive_retention_days": 30,
+            "transactions_archive_batch_size": 500,
             "p2p_rate_limit_per_minute": 60,
             "rate_limit_max_attempts": 10,
             "rate_limit_window_seconds": 60,
@@ -1356,6 +1358,8 @@ Get system settings.
 - `cleanup_metrics_retention_days`: Days to retain metrics data (min 1)
 - `payment_requests_archive_retention_days`: Days resolved (non-pending) payment requests stay in the live `payment_requests` table before moving to `payment_requests_archive` (min 1). Archived rows stay queryable — this is a move, not a delete
 - `payment_requests_archive_batch_size`: Max rows the nightly archival cron moves per run (min 1)
+- `transactions_archive_retention_days`: Days completed transactions stay in the live `transactions` table before moving to `transactions_archive` (min 1). Archival is additionally gated per bilateral pair on a gap-free chain-integrity check — pairs with a detected gap are skipped, not archived. This is a move, not a delete
+- `transactions_archive_batch_size`: Max rows the transactions archival cron moves per batch per bilateral pair (min 1)
 - `p2p_rate_limit_per_minute`: Maximum P2P requests per minute (min 1)
 - `rate_limit_max_attempts`: Max attempts before rate limit triggers (min 1)
 - `rate_limit_window_seconds`: Rate limit time window in seconds (min 1)
@@ -1428,6 +1432,8 @@ Update system settings.
 | `cleanup_metrics_retention_days` | int | Metrics data retention days (min 1) |
 | `payment_requests_archive_retention_days` | int | Days before resolved payment requests move to `payment_requests_archive` (min 1). Move, not delete |
 | `payment_requests_archive_batch_size` | int | Max rows moved per archival cron run (min 1) |
+| `transactions_archive_retention_days` | int | Days before completed transactions move to `transactions_archive` (min 1). Archival gated per bilateral pair on chain-integrity verify |
+| `transactions_archive_batch_size` | int | Max rows moved per batch per bilateral pair (min 1) |
 | `p2p_rate_limit_per_minute` | int | Max P2P requests per minute (min 1) |
 | `rate_limit_max_attempts` | int | Attempts before rate limit triggers (min 1) |
 | `rate_limit_window_seconds` | int | Rate limit time window seconds (min 1) |

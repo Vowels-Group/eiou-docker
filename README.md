@@ -271,6 +271,18 @@ Preview what would move without touching the DB:
 docker exec eiou-node php /app/eiou/scripts/payment-request-archive-cron.php --dry-run
 ```
 
+### Transactions Archival
+
+Completed transactions older than `transactionsArchiveRetentionDays` (default: 30 days) move nightly to a separate `transactions_archive` table via `transaction-archive-cron.php` (01:30 UTC, offset 30m from payment-request archival). Unlike payment requests, transactions form per-pair chains linked by `previous_txid`, so archival is gated per bilateral pair on `verifyChainIntegrityByHashes()` returning `valid=true` — pairs with a detected chain gap are **skipped** (not archived) so the gap stays inspectable. Clean pairs get a row in `transaction_chain_checkpoints` recording the gap-free-at-archival proof (SHA-256 over the sorted archived-txid list + highest archived timestamp + count). `verifyChainIntegrity()` (on every outbound send) consults this checkpoint in its default mode and collapses from O(all history) to O(recent tail). Audit any time with `eiou verify-chain` — walks every pair end-to-end and recomputes each archive hash to catch tampering that the hot path trusts past.
+
+**Archive-aware sync**: counterparty nodes with different archival states sync cleanly — dedup checks (`transactionExistsTxid`), outgoing-response lookups (`getByTxid`), peer status queries (`getStatusByTxid`), and chain-conflict detection all consult both live and archive. If a conflict somehow arrives against an archived tx, the archive always wins (settled history) and the remote tx is still inserted with chain-tiebreak ordering at read time — the archive is never modified.
+
+```bash
+docker exec eiou-node eiou changesettings transactionsArchiveRetentionDays 90
+docker exec eiou-node php /app/eiou/scripts/transaction-archive-cron.php --dry-run
+docker exec eiou-node eiou verify-chain  # full-walk audit + tamper detection; exits 1 on any finding
+```
+
 ### Manual Backup Commands
 
 ```bash

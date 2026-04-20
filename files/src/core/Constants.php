@@ -52,7 +52,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 9;
+    const SCHEMA_VERSION = 10;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -563,6 +563,8 @@ class Constants {
     const CLEANUP_METRICS_RETENTION_DAYS = 90;     // Days to keep delivery metrics (default: 90)
     const PAYMENT_REQUESTS_ARCHIVE_RETENTION_DAYS = 180; // Days after resolution before a payment request is archived (default: 180)
     const PAYMENT_REQUESTS_ARCHIVE_BATCH_SIZE = 500; // Rows moved per transaction in the archival job (default: 500)
+    const TRANSACTIONS_ARCHIVE_RETENTION_DAYS = 30; // Days after completion before a transaction is archived (default: 30). Only applies to bilateral chains that verify gap-free at the moment of archival. Shorter than the payment-requests default because chain-integrity verification runs on every outbound send — moving settled txs out of the live table sooner keeps the hot path tight.
+    const TRANSACTIONS_ARCHIVE_BATCH_SIZE = 500; // Rows moved per transaction in the transactions archival job (default: 500)
     const CLEANUP_RATE_LIMIT_SECONDS = 3600;       // Seconds before expired rate limit entries are cleaned (default: 3600)
 
     // Database locking

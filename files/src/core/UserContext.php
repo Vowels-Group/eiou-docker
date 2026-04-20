@@ -914,6 +914,24 @@ class UserContext {
     }
 
     /**
+     * Days after completion (using COALESCE(time, UNIX_TIMESTAMP(timestamp))) before a
+     * transaction becomes eligible for archival. Actual archival is additionally gated
+     * on the bilateral chain verifying gap-free at the moment of archival — see
+     * TransactionArchivalService. Floor of 1 day so a misconfigured 0 cannot turn the
+     * job into an immediate move.
+     */
+    public function getTransactionsArchiveRetentionDays(): int {
+        return max(1, (int) ($this->get('transactionsArchiveRetentionDays') ?? Constants::TRANSACTIONS_ARCHIVE_RETENTION_DAYS));
+    }
+
+    /**
+     * How many rows the transactions archival job moves per transaction.
+     */
+    public function getTransactionsArchiveBatchSize(): int {
+        return max(1, (int) ($this->get('transactionsArchiveBatchSize') ?? Constants::TRANSACTIONS_ARCHIVE_BATCH_SIZE));
+    }
+
+    /**
      * Get held transaction retention days
      *
      * @return int
@@ -1243,6 +1261,8 @@ class UserContext {
             'cleanupMetricsRetentionDays' => Constants::CLEANUP_METRICS_RETENTION_DAYS,
             'paymentRequestsArchiveRetentionDays' => Constants::PAYMENT_REQUESTS_ARCHIVE_RETENTION_DAYS,
             'paymentRequestsArchiveBatchSize' => Constants::PAYMENT_REQUESTS_ARCHIVE_BATCH_SIZE,
+            'transactionsArchiveRetentionDays' => Constants::TRANSACTIONS_ARCHIVE_RETENTION_DAYS,
+            'transactionsArchiveBatchSize' => Constants::TRANSACTIONS_ARCHIVE_BATCH_SIZE,
 
             // Rate limiting
             'p2pRateLimitPerMinute' => Constants::P2P_RATE_LIMIT_PER_MINUTE,

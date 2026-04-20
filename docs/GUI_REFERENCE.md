@@ -243,7 +243,7 @@ Handles settings and debug operations.
 | Backup & Logging → Backup | `backupCronTime`, `backupRetentionCount` |
 | Backup & Logging → Logging | `logMaxEntries`, `logLevel` |
 | Data Retention → Cleanup | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
-| Data Retention → Archive | `paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize` |
+| Data Retention → Archive | `paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`, `transactionsArchiveRetentionDays`, `transactionsArchiveBatchSize` |
 | Rate Limiting → Throughput | `p2pRateLimitPerMinute` |
 | Rate Limiting → Attempt Blocking | `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |

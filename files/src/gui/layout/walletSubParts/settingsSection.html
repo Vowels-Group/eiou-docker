@@ -634,6 +634,14 @@
                                 <i class="fas fa-info-circle"></i> Days after resolution before a payment request is archived
                             </small>
                         </div>
+
+                        <div class="form-group">
+                            <label for="transactionsArchiveRetentionDays">Transactions Archive:</label>
+                            <input type="number" id="transactionsArchiveRetentionDays" name="transactionsArchiveRetentionDays" value="<?php echo htmlspecialchars($user->getTransactionsArchiveRetentionDays()); ?>" min="1" step="1" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Days after completion before a transaction is archived. Archival is additionally gated per bilateral pair on a gap-free chain-integrity check — pairs with a detected gap are skipped (not archived) so the gap stays inspectable.
+                            </small>
+                        </div>
                     </div>
                 </div>
 

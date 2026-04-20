@@ -64,21 +64,32 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'],
         ];
 
-        $this->pdo->expects($this->once())
+        // Phase 2 verify issues TWO prepares:
+        //   1. live SELECT from `transactions` (via AbstractRepository::execute,
+        //      which binds 4 params via bindValue and calls execute())
+        //   2. checkpoint lookup from `transaction_chain_checkpoints` (direct
+        //      $this->pdo->prepare + execute(array) — no bindValue calls)
+        // The archive isn't scanned in the fast path (default useCheckpoint=true):
+        // if the pair's checkpoint exists, we trust it; if it doesn't, any
+        // missing previous_txid is a real gap. This test's mock returns
+        // `false` from fetch (no checkpoint) — so the chain walks pure-live.
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
-            ->with($this->stringContains('SELECT txid, previous_txid, status'))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(4))
+        $this->stmt->expects($this->exactly(4))  // only live query binds named params
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))  // live + checkpoint
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(1))  // live only
             ->method('fetchAll')
-            ->with(PDO::FETCH_ASSOC)
             ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))  // checkpoint row lookup
+            ->method('fetch')
+            ->willReturn(false);  // no checkpoint for this pair
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -100,19 +111,23 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 is missing
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
             ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);  // no checkpoint → missing prev_txid is a real gap
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -128,16 +143,20 @@ class TransactionChainRepositoryTest extends TestCase
         $userPublicKey = 'user-pubkey';
         $contactPublicKey = 'contact-pubkey';
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
             ->willReturn([]);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -161,20 +180,23 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 txid in lookup
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
-            ->with(PDO::FETCH_ASSOC)
             ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -194,19 +216,23 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'], // tx2 missing entirely
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
             ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);  // no checkpoint → tx2 missing is a real gap
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -229,20 +255,23 @@ class TransactionChainRepositoryTest extends TestCase
             ['txid' => 'tx3', 'previous_txid' => 'tx2', 'status' => 'completed'],
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->exactly(4))
             ->method('bindValue');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
-        $this->stmt->expects($this->once())
+        $this->stmt->expects($this->exactly(1))
             ->method('fetchAll')
-            ->with(PDO::FETCH_ASSOC)
             ->willReturn($transactions);
+
+        $this->stmt->expects($this->exactly(1))
+            ->method('fetch')
+            ->willReturn(false);
 
         $result = $this->repository->verifyChainIntegrity($userPublicKey, $contactPublicKey);
 
@@ -254,16 +283,18 @@ class TransactionChainRepositoryTest extends TestCase
 
     public function testVerifyChainIntegrityQueryIncludesCancelledAndRejected(): void
     {
-        // Regression: the query must NOT filter out cancelled/rejected transactions.
-        // Asserting on the SQL shape locks in the intent of the fix so a future
-        // refactor can't reintroduce the status filter without this test failing.
-        $this->pdo->expects($this->once())
+        // Regression: the live-query SQL must NOT filter out cancelled/rejected
+        // transactions. Phase 2 also prepares a checkpoint lookup on
+        // `transaction_chain_checkpoints` — that query doesn't touch status
+        // either, so the "no status NOT IN" constraint holds for both.
+        $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->with($this->logicalNot($this->stringContains("status NOT IN")))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->once())->method('execute');
-        $this->stmt->expects($this->once())->method('fetchAll')->willReturn([]);
+        $this->stmt->expects($this->exactly(2))->method('execute');
+        $this->stmt->expects($this->exactly(1))->method('fetchAll')->willReturn([]);
+        $this->stmt->expects($this->exactly(1))->method('fetch')->willReturn(false);
 
         $this->repository->verifyChainIntegrity('user', 'contact');
     }
@@ -373,47 +404,48 @@ class TransactionChainRepositoryTest extends TestCase
         $userPublicKey = 'user-pubkey';
         $contactPublicKey = 'contact-pubkey';
 
-        $summaryData = [
-            'transaction_count' => 10,
-            'oldest_txid' => 'tx-oldest',
-            'newest_txid' => 'tx-newest'
-        ];
-
-        $txidList = [
+        // Phase 2 getChainStateSummary: two queries (live then archive),
+        // each iterates rows via while-fetch; count/oldest/newest are
+        // computed in PHP after the merge. Archive query here returns
+        // empty (no archived rows) — matches a node that hasn't archived
+        // yet. oldest/newest are by lexical txid, matching MIN/MAX semantics.
+        $liveTxids = [
+            ['txid' => 'tx3'],
             ['txid' => 'tx1'],
             ['txid' => 'tx2'],
-            ['txid' => 'tx3'],
         ];
 
         $this->pdo->expects($this->exactly(2))
             ->method('prepare')
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(8)) // 4 for summary + 4 for txid list
+        $this->stmt->expects($this->exactly(8)) // 4 live + 4 archive
             ->method('bindValue');
 
         $this->stmt->expects($this->exactly(2))
             ->method('execute');
 
         $fetchIndex = 0;
-        $this->stmt->expects($this->exactly(5)) // 1 summary + 3 txids + 1 false terminator
+        $this->stmt
             ->method('fetch')
-            ->willReturnCallback(function() use (&$fetchIndex, $summaryData, $txidList) {
+            ->willReturnCallback(function() use (&$fetchIndex, $liveTxids) {
                 $fetchIndex++;
-                if ($fetchIndex === 1) {
-                    return $summaryData;
+                // Live: return 3 rows then false (terminator).
+                // Archive: returns false immediately (no archive rows).
+                $liveLen = count($liveTxids);
+                if ($fetchIndex <= $liveLen) {
+                    return $liveTxids[$fetchIndex - 1];
                 }
-                // Return txid list items then false
-                $listIndex = $fetchIndex - 2;
-                return $txidList[$listIndex] ?? false;
+                return false;
             });
 
         $result = $this->repository->getChainStateSummary($userPublicKey, $contactPublicKey);
 
-        $this->assertEquals(10, $result['transaction_count']);
-        $this->assertEquals('tx-oldest', $result['oldest_txid']);
-        $this->assertEquals('tx-newest', $result['newest_txid']);
+        $this->assertEquals(3, $result['transaction_count']);
+        $this->assertEquals('tx1', $result['oldest_txid']);  // lexical min
+        $this->assertEquals('tx3', $result['newest_txid']);  // lexical max
         $this->assertIsArray($result['txid_list']);
+        $this->assertCount(3, $result['txid_list']);
     }
 
     public function testGetChainStateSummaryReturnsDefaultsOnFailure(): void
@@ -507,54 +539,95 @@ class TransactionChainRepositoryTest extends TestCase
     // getLocalTransactionByPreviousTxid() Tests
     // =========================================================================
 
-    public function testGetLocalTransactionByPreviousTxidReturnsTransaction(): void
+    public function testGetLocalTransactionByPreviousTxidReturnsTransactionTaggedAsLive(): void
     {
+        // Live hit short-circuits (no archive prepare) and tags the row
+        // with _source='live' so downstream conflict resolution can apply
+        // the archive-wins rule iff source is 'archive'.
         $previousTxid = 'prev-tx';
         $pubkeyHash1 = 'hash1';
         $pubkeyHash2 = 'hash2';
-        $expectedTransaction = [
+        $dbRow = [
             'txid' => 'local-tx',
             'previous_txid' => $previousTxid,
             'sender_public_key_hash' => $pubkeyHash1
         ];
 
-        $this->pdo->expects($this->once())
+        $this->pdo->expects($this->once())  // live prepare only, archive short-circuited
             ->method('prepare')
             ->with($this->stringContains('WHERE previous_txid = :previous_txid'))
             ->willReturn($this->stmt);
 
-        $this->stmt->expects($this->exactly(5))
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute');
-
-        $this->stmt->expects($this->once())
-            ->method('fetch')
-            ->with(PDO::FETCH_ASSOC)
-            ->willReturn($expectedTransaction);
+        $this->stmt->expects($this->exactly(5))->method('bindValue');
+        $this->stmt->expects($this->once())->method('execute');
+        $this->stmt->expects($this->once())->method('fetch')->willReturn($dbRow);
 
         $result = $this->repository->getLocalTransactionByPreviousTxid($previousTxid, $pubkeyHash1, $pubkeyHash2);
 
-        $this->assertEquals($expectedTransaction, $result);
+        $this->assertSame('live', $result['_source']);
+        // Every other field from the DB row is preserved
+        $this->assertSame('local-tx', $result['txid']);
+        $this->assertSame($previousTxid, $result['previous_txid']);
     }
 
-    public function testGetLocalTransactionByPreviousTxidReturnsNullWhenNotFound(): void
+    public function testGetLocalTransactionByPreviousTxidReturnsNullWhenNeitherHasIt(): void
     {
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->willReturn($this->stmt);
+        // Live miss falls through to archive; both miss → null.
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(false);
 
-        $this->stmt->expects($this->once())
-            ->method('execute');
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetch')->willReturn(false);
 
-        $this->stmt->expects($this->once())
-            ->method('fetch')
-            ->willReturn(false);
+        $this->pdo->expects($this->exactly(2))->method('prepare')
+            ->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $result = $this->repository->getLocalTransactionByPreviousTxid('prev', 'hash1', 'hash2');
+        $this->assertNull($result);
+    }
+
+    public function testGetLocalTransactionByPreviousTxidFallsThroughToArchiveTaggedSource(): void
+    {
+        // Live miss → archive hit → row returned with _source='archive'
+        // so resolveChainConflict applies the archive-wins rule.
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(false);
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')->willReturn(true);
+        $archiveStmt->method('fetch')->willReturn([
+            'txid' => 'archived-tx',
+            'previous_txid' => 'prev',
+        ]);
+
+        $this->pdo->expects($this->exactly(2))->method('prepare')
+            ->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
 
         $result = $this->repository->getLocalTransactionByPreviousTxid('prev', 'hash1', 'hash2');
 
-        $this->assertNull($result);
+        $this->assertNotNull($result);
+        $this->assertSame('archived-tx', $result['txid']);
+        $this->assertSame('archive', $result['_source']);
+    }
+
+    public function testGetLocalTransactionByPreviousTxidArchiveMissingFallsBackToNull(): void
+    {
+        // Live miss + archive table missing (v9→v10 transitional or test
+        // env without archive table) — must not blow up.
+        $liveStmt = $this->createMock(PDOStatement::class);
+        $liveStmt->method('execute')->willReturn(true);
+        $liveStmt->method('fetch')->willReturn(false);
+
+        $archiveStmt = $this->createMock(PDOStatement::class);
+        $archiveStmt->method('execute')
+            ->willThrowException(new PDOException('Table transactions_archive not found'));
+
+        $this->pdo->method('prepare')->willReturnOnConsecutiveCalls($liveStmt, $archiveStmt);
+
+        $this->assertNull($this->repository->getLocalTransactionByPreviousTxid('prev', 'hash1', 'hash2'));
     }
 
     // =========================================================================
