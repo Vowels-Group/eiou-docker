@@ -177,6 +177,21 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+/**
+ * Display-time normalisation for transaction descriptions. Old contact-
+ * request txs stored their description as the long phrase "Contact request
+ * transaction"; the current default is the shorter "Contact request".
+ * Render the short form regardless of what's in the DB so the history looks
+ * consistent across old + new rows. Returns the input unchanged for any
+ * other description.
+ */
+function displayTxDescription(desc) {
+    if (desc === 'Contact request transaction') {
+        return 'Contact request';
+    }
+    return desc;
+}
+
 // ============================================================================
 // Paginator — shared pagination utility for server-rendered tables
 // ============================================================================
@@ -1102,11 +1117,23 @@ function renderTransactionModal(tx) {
     // Build HTML content
     var html = '';
 
-    // Header with amount
-    var headerClass = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
+    // Header with amount. Contact-request transactions carry amount=0 by
+    // definition (they only exist to establish a bilateral link) — showing
+    // "+0 USD" with a green/red sent/received tint misrepresents them as
+    // money movements. For contact reqs, promote the direction (Sent /
+    // Received with arrow icon) into the header's hero slot instead of a
+    // muted em-dash above a duplicate direction line.
+    var isContactReq = tx.tx_type === 'contact';
+    var headerClass = isContactReq
+        ? 'tx-modal-header-neutral'
+        : (tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received');
     html += '<div class="tx-modal-header ' + headerClass + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
-    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    if (isContactReq) {
+        html += '<div class="tx-modal-amount tx-modal-amount-placeholder"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    } else {
+        html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
+        html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    }
     html += '</div>';
 
     // Status, type, and role badges
@@ -1151,7 +1178,7 @@ function renderTransactionModal(tx) {
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description)) + '</div>';
         html += '</div>';
     }
 
@@ -2252,7 +2279,6 @@ function scrollQuickActions(direction) {
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
 var currentContactPubkeyHash = null;
-var contactTransactionData = [];
 var currentContactCurrencies = [];
 var currentContactBalances = {};
 
@@ -3050,8 +3076,6 @@ function showInfoModal(el) {
 function openContactModal(contact, openTab) {
     // Store current contact ID for refresh
     currentContactId = contact.contact_id;
-    // Store transactions for detail view
-    contactTransactionData = contact.transactions || [];
 
     // Set contact name in header
     document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
@@ -3451,7 +3475,8 @@ function openContactModal(contact, openTab) {
         for (var i = 0; i < transactions.length; i++) {
             var tx = transactions[i];
             var isSent = tx.type === 'sent';
-            var amountClass = isSent ? 'transaction-sent' : 'transaction-received';
+            var isContactReq = tx.tx_type === 'contact';
+            var amountClass = isContactReq ? 'text-muted' : (isSent ? 'transaction-sent' : 'transaction-received');
             var amountPrefix = isSent ? '−' : '+';
             var status = (tx.status || '').toLowerCase();
             var inProgress = (status !== 'completed' && status !== 'rejected' && status !== 'cancelled');
@@ -3460,29 +3485,35 @@ function openContactModal(contact, openTab) {
             var description = tx.description || '';
             var rowClass = 'tx-row cursor-pointer' + (inProgress ? ' tx-item-in-progress' : '');
 
-            html += '<tr class="' + rowClass + '" data-action="showContactTxDetail" data-index="' + i + '" title="' + escapeHtml(tx.date || '') + ' — click for details">';
+            // Open the main #transactionModal as a stacked overlay on top of
+            // the contact modal. Inherits the `modal-stack-top` pattern used
+            // by every other "drill into tx" path so click-outside + Escape
+            // dismiss only the tx modal and return the user here.
+            html += '<tr class="' + rowClass + '" data-action="openTransactionModalByTxid" data-txid="' + escapeHtml(tx.txid || '') + '" title="' + escapeHtml(tx.date || '') + ' — click for details">';
             html += '<td class="col-tx-status-icon text-center">';
             html += '<span class="tx-status-icon tx-status-' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">';
             html += '<i class="fas ' + statusIcon + '"></i>';
             html += '</span>';
             html += '</td>';
-            html += '<td class="col-tx-desc" title="' + escapeHtml(description || 'No description') + '">';
-            html += escapeHtml(description || '—');
+            var displayDesc = displayTxDescription(description);
+            html += '<td class="col-tx-desc" title="' + escapeHtml(displayDesc || 'No description') + '">';
+            html += escapeHtml(displayDesc || '—');
             html += '</td>';
             html += '<td class="col-number col-tx-amount text-right ' + amountClass + '">';
-            html += amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD');
+            if (isContactReq) {
+                // Mobile shows the label instead of the em-dash (see
+                // `.tx-amount-contact-label` comment in page.css for why).
+                html += '<span class="tx-amount-contact-label">Contact request</span>';
+                html += '<span class="tx-amount-mdash">&mdash;</span>';
+            } else {
+                html += amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD');
+            }
             html += '</td>';
             html += '</tr>';
         }
         html += '</tbody></table>';
         transactionsEl.innerHTML = html;
     }
-
-    // Reset transaction view to list (in case detail was open before)
-    var txListView = document.getElementById('tx-list-view');
-    var txDetailView = document.getElementById('tx-detail-view');
-    if (txListView) txListView.style.display = 'block';
-    if (txDetailView) txDetailView.style.display = 'none';
 
     // Open specified tab or default to info tab
     var tabToOpen = openTab || 'info-tab';
@@ -4005,143 +4036,6 @@ function showModalTab(tabId, button) {
             }
         }
     }
-}
-
-/**
- * Shows the detailed view for a specific transaction within the contact modal.
- *
- * Retrieves transaction data from the contactTransactionData array and renders
- * a detailed view with amount, status badges, transaction type, counterparty
- * address, description, date, and routing information for P2P transactions.
- * Hides the transaction list and shows the detail view.
- *
- * @param {number} index - Zero-based index into the contactTransactionData array
- * @returns {void}
- * @requires contactTransactionData - Global array set by openContactModal
- * @example
- * // Called from transaction item onclick in contact modal
- * <div onclick="showContactTxDetail(0)">Transaction 1</div>
- */
-function showContactTxDetail(index) {
-    if (!contactTransactionData || !contactTransactionData[index]) {
-        return;
-    }
-
-    var tx = contactTransactionData[index];
-    var content = document.getElementById('contact-tx-detail-content');
-
-    // Build direction info
-    var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
-    var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
-
-    // Build status badge (escapeHtml for defense-in-depth)
-    var status = tx.status || 'completed';
-    var statusBadge = '<span class="tx-status-badge tx-status-' + escapeHtml(status) + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span>';
-
-    // Build transaction type badge
-    var txType = tx.tx_type || 'standard';
-    var txTypeBadge;
-    if (txType === 'contact') {
-        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-contact"><i class="fas fa-user-plus"></i> Contact Request</span>';
-    } else if (txType === 'p2p') {
-        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>';
-    } else {
-        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-direct"><i class="fas fa-exchange-alt"></i> Direct</span>';
-    }
-
-    // Build role badge (Sent/Received/Relay)
-    var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
-    var roleLabel = tx.type === 'sent' ? 'Sent' : 'Received';
-    var roleBadgeClass = tx.type === 'sent' ? 'tx-modal-badge-sent' : 'tx-modal-badge-received';
-    if (tx.direction === 'relay') {
-        roleIcon = 'fa-random';
-        roleLabel = 'Relay';
-        roleBadgeClass = 'tx-modal-badge-relay';
-    }
-    var roleBadge = '<span class="tx-modal-badge ' + roleBadgeClass + '"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
-
-    // Build HTML content
-    var html = '';
-
-    // Header with amount
-    var headerClass2 = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
-    html += '<div class="tx-modal-header ' + headerClass2 + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
-    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
-    html += '</div>';
-
-    // Status, type, and role badges
-    html += '<div class="tx-modal-badges">';
-    html += statusBadge;
-    html += txTypeBadge;
-    html += roleBadge;
-    html += '</div>';
-
-    // Details section
-    html += '<div class="tx-detail-section">';
-
-    // To/From address (shows which address the transaction was sent to/from)
-    var counterpartyAddress = tx.type === 'sent' ? tx.receiver_address : tx.sender_address;
-    if (counterpartyAddress) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-        html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(counterpartyAddress) + '</div>';
-        html += '</div>';
-    }
-
-    // Description
-    if (tx.description) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
-        html += '</div>';
-    }
-
-    // Date/Time
-    html += '<div class="tx-detail-row">';
-    html += '<div class="tx-detail-label">Date & Time</div>';
-    html += '<div class="tx-detail-value">' + escapeHtml(tx.date || 'Unknown') + '</div>';
-    html += '</div>';
-
-    // Transaction ID
-    if (tx.txid) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Transaction ID</div>';
-        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.txid) + '</div>';
-        html += '</div>';
-    }
-
-    // Routing Hash (only for P2P transactions, not direct or contact)
-    if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Routing Hash</div>';
-        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.memo) + '</div>';
-        html += '</div>';
-    }
-
-    html += '</div>';
-
-    content.innerHTML = html;
-
-    // Show detail view, hide list view
-    document.getElementById('tx-list-view').style.display = 'none';
-    document.getElementById('tx-detail-view').style.display = 'block';
-}
-
-/**
- * Hides the transaction detail view and shows the transaction list.
- *
- * Switches the contact modal's transactions tab from the detailed single
- * transaction view back to the list of all transactions with this contact.
- *
- * @returns {void}
- * @example
- * // Called from "Back to list" button in transaction detail view
- * <button onclick="hideContactTxDetail()">Back to list</button>
- */
-function hideContactTxDetail() {
-    document.getElementById('tx-detail-view').style.display = 'none';
-    document.getElementById('tx-list-view').style.display = 'block';
 }
 
 /**
@@ -5732,7 +5626,7 @@ function openPrPendingModal(el) {
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + escapeHtml(dirLabel) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
     if (desc) {
-        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(displayTxDescription(desc)) + '</div></div>';
     }
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
 
@@ -5809,7 +5703,7 @@ function openPrHistoryModal(el) {
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + (direction === 'incoming' ? 'Incoming — they requested' : 'Outgoing — you requested') + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
     if (desc) {
-        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(displayTxDescription(desc)) + '</div></div>';
     }
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value" style="color:' + statusColor + '">' + ucfirst(escapeHtml(status)) + '</div></div>';
@@ -6967,7 +6861,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'acceptChainDrop': function() { acceptChainDrop(); },
         'rejectChainDrop': function() { rejectChainDrop(); },
         'refreshContactModalTransactions': function() { refreshContactModalTransactions(); },
-        'hideContactTxDetail': function() { hideContactTxDetail(); },
 
         // Server-side "Search entire database" actions — bypass the
         // local-filter loop and ask the backend to LIKE across the full
@@ -7082,12 +6975,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'dismissToast': function(el) {
             var toast = el.parentElement;
             if (toast && toast.parentNode) { toast.parentNode.removeChild(toast); }
-        },
-
-        // Contact modal transaction detail
-        'showContactTxDetail': function(el) {
-            var index = parseInt(el.getAttribute('data-index'), 10);
-            showContactTxDetail(index);
         },
 
         // Analytics consent modal

@@ -466,7 +466,7 @@ class TransactionContactRepository extends AbstractRepository {
         $result = [];
         while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $desc = $row['description'] ?? null;
-            if ($desc !== null && $desc !== 'Contact request transaction') {
+            if ($desc !== null && $desc !== 'Contact request' && $desc !== 'Contact request transaction') {
                 $result[$row['currency']] = $desc;
             }
         }
