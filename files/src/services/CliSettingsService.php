@@ -41,7 +41,26 @@ class CliSettingsService
 
         // Check if command line based or user input based
         if(isset($argv[2])){
-            if(strtolower($argv[2]) === 'defaultfee'){
+            if(strtolower($argv[2]) === 'reset'){
+                // "settings reset" → wipe every saved setting back to the
+                // defaults this build considers default. No value to validate.
+                // Destructive enough to warrant a typed confirmation unless
+                // the caller explicitly opts out with --yes.
+                $confirm = strtolower($argv[3] ?? '');
+                if ($confirm !== '--yes' && $confirm !== '-y') {
+                    $output->error('Destructive operation. Re-run with `eiou settings reset --yes` to confirm.');
+                    return;
+                }
+                try {
+                    \Eiou\Core\UserContext::getInstance()->resetToDefaults();
+                    \Eiou\Utils\Logger::getInstance()->info('settings_reset_to_defaults_via_cli', []);
+                    $output->success('All settings have been reset to defaults.');
+                } catch (\Throwable $e) {
+                    \Eiou\Utils\Logger::getInstance()->logException($e, ['context' => 'settings_reset_to_defaults_via_cli']);
+                    $output->error('Reset failed: ' . $e->getMessage());
+                }
+                return;
+            } elseif(strtolower($argv[2]) === 'defaultfee'){
                 $key = 'defaultFee';
                 $validation = InputValidator::validateFeePercent($argv[3]);
                 if (!$validation['valid']) {
@@ -264,6 +283,16 @@ class CliSettingsService
                 $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
                 if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'paymentrequestsarchiveretentiondays'){
+                $key = 'paymentRequestsArchiveRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'transactionsarchiveretentiondays'){
+                $key = 'transactionsArchiveRetentionDays';
+                $validation = InputValidator::validatePositiveInteger($argv[3] ?? '', 1);
+                if (!$validation['valid']) { $output->validationError($key, $validation['error']); return; }
+                $value = $validation['value'];
             // Rate limiting
             } elseif(strtolower($argv[2]) === 'p2pratelimitperminute'){
                 $key = 'p2pRateLimitPerMinute';
@@ -407,6 +436,8 @@ class CliSettingsService
                     ['num' => '33', 'label' => 'Held TX retention days'],
                     ['num' => '34', 'label' => 'RP2P retention days'],
                     ['num' => '35', 'label' => 'Metrics retention days'],
+                    ['num' => '35a', 'label' => 'Payment requests archive retention days'],
+                    ['num' => '35b', 'label' => 'Transactions archive retention days'],
                 ],
                 'Rate Limiting' => [
                     ['num' => '36', 'label' => 'P2P rate limit per minute'],
@@ -841,6 +872,28 @@ class CliSettingsService
                     $value = $validation['value'];
                     break;
 
+                case '35a':
+                    echo "Enter payment requests archive retention days (minimum 1, default 180): ";
+                    $key = 'paymentRequestsArchiveRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '35b':
+                    echo "Enter transactions archive retention days (minimum 1, default 30): ";
+                    $key = 'transactionsArchiveRetentionDays';
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), 1);
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
                 // Rate Limiting
                 case '36':
                     echo "Enter P2P rate limit per minute (minimum 1): ";
@@ -1160,6 +1213,8 @@ class CliSettingsService
             'cleanup_held_tx_retention_days' => $this->currentUser->getCleanupHeldTxRetentionDays(),
             'cleanup_rp2p_retention_days' => $this->currentUser->getCleanupRp2pRetentionDays(),
             'cleanup_metrics_retention_days' => $this->currentUser->getCleanupMetricsRetentionDays(),
+            'payment_requests_archive_retention_days' => $this->currentUser->getPaymentRequestsArchiveRetentionDays(),
+            'transactions_archive_retention_days' => $this->currentUser->getTransactionsArchiveRetentionDays(),
             // Rate limiting
             'p2p_rate_limit_per_minute' => $this->currentUser->getP2pRateLimitPerMinute(),
             'rate_limit_max_attempts' => $this->currentUser->getRateLimitMaxAttempts(),
@@ -1229,6 +1284,8 @@ class CliSettingsService
             echo "\tHeld TX retention: " . $settings['cleanup_held_tx_retention_days'] . " days\n";
             echo "\tRP2P retention: " . $settings['cleanup_rp2p_retention_days'] . " days\n";
             echo "\tMetrics retention: " . $settings['cleanup_metrics_retention_days'] . " days\n";
+            echo "\tPayment requests archive: " . $settings['payment_requests_archive_retention_days'] . " days\n";
+            echo "\tTransactions archive: " . $settings['transactions_archive_retention_days'] . " days\n";
             echo "\n  Rate Limiting:\n";
             echo "\tP2P rate limit: " . $settings['p2p_rate_limit_per_minute'] . "/min\n";
             echo "\tMax attempts: " . $settings['rate_limit_max_attempts'] . "\n";

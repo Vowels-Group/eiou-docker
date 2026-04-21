@@ -220,6 +220,15 @@ body {
     max-width: 200px;
     height: auto;
 }
+/* Action buttons below the QR (Export / Scan) — side-by-side on wide,
+   wrap to two lines on narrow screens. */
+.qr-action-row {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
 
 /* Input with inline action button (e.g., QR scanner) */
 .input-with-action {
@@ -555,11 +564,67 @@ body {
 /* Ping Status Controls */
 .ping-controls {
     margin-top: 0.75rem;
+    min-height: 1.25rem;
 }
 
 .ping-result-message {
     margin-left: 0.5rem;
     font-size: 0.85rem;
+}
+
+/* Connection status row — Online badge, Chain badge, and the Check
+   Status button share one line. Wraps to multiple lines if the
+   viewport is too narrow for the whole row to fit. */
+.connection-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+.connection-status-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+}
+.connection-status-label {
+    color: #6c757d;
+    white-space: nowrap;
+}
+.connection-status-btn {
+    margin-left: auto;
+}
+
+/* Empty-state placeholder for the Chain Gap Resolution section when
+   the chain is healthy and no proposal is outstanding. */
+.chain-drop-empty {
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+}
+.chain-drop-empty .fa-check-circle {
+    color: var(--status-success-bg, #28a745);
+    margin-right: 0.35rem;
+}
+
+/* Shared one-liner empty-state note used under sections that otherwise
+   disappear when their list is empty (Pending Contact Requests, etc.).
+   A subdued line — not a big empty-state panel with a giant icon —
+   because the goal is "tell users there's nothing awaiting them"
+   without making the empty section feel weighty. The check icon pulls
+   from the user-selected status colour scheme via --status-success-bg,
+   so the same muted-green / red / neutral palette the rest of the
+   status UI uses flows through here too. */
+.section-empty-note {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+    margin-bottom: 1rem;
+}
+.section-empty-note .fa-check-circle {
+    color: var(--status-success-bg, #28a745);
 }
 
 /* Chain column icons on the contact list — icon-only, colored via the status
@@ -592,7 +657,7 @@ body {
     padding: 0.15rem 0.4rem;
 }
 
-/* Chain drop proposal badges on contact card — same soft failure
+/* Tx drop proposal badges on contact card — same soft failure
    palette as .badge-blocked above, driven by the status color scheme. */
 .badge-danger {
     background-color: var(--status-failure-soft-bg, #e9ecef);
@@ -690,6 +755,120 @@ body {
 }
 
 /* Contacts Table Layout */
+/* "Search entire database" button — sits inside the search bar next to
+   the search input on Recent Transactions and Payment Requests. On
+   narrow viewports it wraps to the next line via .contacts-search-bar's
+   flex-wrap. */
+.search-database-btn {
+    white-space: nowrap;
+    align-self: center;
+}
+
+/* Banner shown once a server-side search returns. Replaces the local
+   "X transactions found" count with a DB-sourced "N matches for 'term'
+   · Clear search" line. Uses the primary-info colour family because
+   the state it's reporting is informational, not a warning. */
+.search-results-banner {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 1rem;
+    background: #e7f1ff;
+    border: 1px solid #9ec5fe;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #084298;
+}
+.search-results-banner .fa-database { color: #0d6efd; }
+.search-results-banner .search-results-clear {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #0d6efd;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.search-results-banner .search-results-clear:hover {
+    text-decoration: underline;
+}
+
+/* Row visibility primitives used by filter/search and the paginator.
+   Each class is independently toggleable; a row is visible iff neither is
+   present. Search/filter code touches .filter-hidden; Paginator touches
+   .paginator-hidden. Keeping them orthogonal means sort (which only
+   reorders DOM nodes) doesn't have to care about either. */
+tr.filter-hidden,
+tr.paginator-hidden {
+    display: none;
+}
+
+/* Paginator bar — rendered below each paginated table via Paginator.create().
+   Flex row so size selector, range summary, page nav, and Load-older
+   button all sit on one line on desktop and wrap on mobile. */
+.paginator-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #495057;
+}
+.paginator-size-label {
+    display: inline-flex;
+    align-items: center;
+    font-weight: 500;
+}
+.paginator-size-select {
+    padding: 0.2rem 0.35rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+}
+.paginator-range {
+    color: #6c757d;
+}
+.paginator-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.paginator-page-indicator {
+    min-width: 5.5rem;
+    text-align: center;
+    color: #6c757d;
+}
+.paginator-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    color: #495057;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.paginator-btn:hover:not([disabled]) {
+    background: #f0f7ff;
+    border-color: #9ec5fe;
+}
+.paginator-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.paginator-load-more {
+    margin-left: auto;
+}
+
 .contacts-table-wrapper {
     /* Horizontal scroll for narrow screens, vertical scroll past ~60% of the
        viewport height so power users with many contacts don't stretch the
@@ -789,6 +968,18 @@ body {
     .contacts-table.tx-table .col-tx-status-icon { width: 28px; padding-left: 0.25rem; padding-right: 0; }
     .contacts-table.tx-table .col-name   { width: auto; }
     .contacts-table.tx-table .col-tx-amount { width: auto; }
+}
+
+/* Contact-request rows show an em-dash in the amount cell instead of a
+   zero value. On desktop, the Type column's "Contact" badge disambiguates;
+   on mobile, the Type column is hidden — so swap the em-dash for a
+   "Contact request" label at narrow viewports to avoid an orphan em-dash
+   that could read as "hidden" or "unknown". */
+.tx-amount-contact-label { display: none; font-style: italic; font-size: 0.85em; }
+.tx-amount-mdash         { display: inline; }
+@media (max-width: 600px) {
+    .tx-amount-contact-label { display: inline; }
+    .tx-amount-mdash         { display: none; }
 }
 
 /* Sortable column headers */
@@ -1077,6 +1268,14 @@ body {
     border-bottom: 2px solid #dee2e6;
     padding-bottom: 0.5rem;
 }
+/* When the h2 sits inside a .section-header (title + action-button row),
+   the wrapper already draws the separator — drop the h2's own border to
+   avoid a stubby double line under just the title text. */
+.form-container .section-header h2 {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
 
 .form-group {
     margin-bottom: 1rem;
@@ -1127,59 +1326,6 @@ body {
     margin-top: 2rem;
 }
 
-/* P2P Info Alert (collapsible) */
-.p2p-info-alert {
-    background: #e7f3ff;
-    border: 1px solid #b3d9ff;
-    border-radius: 4px;
-    padding: 0.6rem 1rem;
-    margin-bottom: 1.5rem;
-    cursor: pointer;
-}
-
-.p2p-info-header {
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    -webkit-box-align: center;
-    -ms-flex-align: center;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Fallback margin for browsers without gap support (TOR browser compatibility) */
-.p2p-info-header > * + * {
-    margin-left: 0.5rem;
-}
-
-@supports (gap: 0.5rem) {
-    .p2p-info-header > * + * {
-        margin-left: 0;
-    }
-}
-
-.p2p-info-header i,
-.p2p-info-header strong {
-    color: #0066cc;
-}
-
-.p2p-info-header strong {
-    -webkit-box-flex: 1;
-    -ms-flex: 1;
-    flex: 1;
-}
-
-.p2p-info-chevron {
-    font-size: 0.8rem;
-}
-
-.p2p-info-detail {
-    display: none;
-    margin: 0.5rem 0 0 1.5rem;
-    color: #333;
-    font-size: 0.9rem;
-}
-
 /* Best Fee Route — experimental warning */
 .best-fee-flask {
     color: #856404;
@@ -1198,7 +1344,13 @@ body {
 /* Settings Grid Layout */
 .settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    /* `auto-fill` (not `auto-fit`) keeps empty column slots on rows that
+       aren't fully populated. A group with 2 items in a 3-column-wide
+       viewport now leaves an empty slot on the right instead of
+       stretching the two items to fill — which aligns them visually
+       with sibling groups that have 3+ items (Feature Toggles → GUI
+       vs Transactions, etc.). */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.5rem;
 }
 
@@ -1552,7 +1704,7 @@ body {
    free for the amount and status color schemes without overloading meaning.
    `.btn-danger` and `.btn-warning` are deliberately left red / yellow so
    truly destructive or cautionary actions (Delete, Reject, Logout, Block,
-   Propose chain drop) stay visually distinct. */
+   Propose tx drop) stay visually distinct. */
 .btn-success {
     background: #0d6efd;
     color: white;
@@ -1862,6 +2014,15 @@ html {
     justify-content: center;
 }
 
+/* Stacked-on-top variant — used when the contact modal is opened from
+   within the Transaction Details modal. Higher z-index so it renders
+   above, and a lighter backdrop so the two overlays don't double up
+   into near-black. */
+.modal.modal-stack-top {
+    z-index: 10010;
+    background-color: rgba(0, 0, 0, 0.25);
+}
+
 .modal-content {
     background-color: white;
     margin: auto;
@@ -1973,12 +2134,19 @@ tr.contact-card:hover .contact-name-cell {
 
 /* Transaction Status Badges */
 .tx-status-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
+    line-height: 1.2;
+}
+.tx-status-badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 .tx-status-pending {
@@ -2023,22 +2191,51 @@ tr.contact-card:hover .contact-name-cell {
     color: #000;
 }
 
-/* Transaction Detail Modal */
-/* Transaction detail popup within the contact modal */
-.contact-tx-popup {
-    max-width: 85%;
-    margin: 0.5rem auto;
-    background: #fff;
-    border: 1px solid #dee2e6;
-    border-radius: 10px;
-    padding: 0.75rem;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+/* Contact modal transactions tab — compact table (status + amount +
+   description). Counterparty is omitted because we're in the contact,
+   and date is omitted because rows are already sorted descending by
+   date; the full timestamp is available in the row's tooltip and in
+   the transaction detail view. */
+.contact-modal-tx-wrapper { width: 100%; }
+/* Keep table-layout:fixed (inherited from .contacts-table) but override the
+   column widths inherited from .tx-table which were sized for the wider
+   mobile Recent Transactions view with 7 columns. Here we have 3. */
+.contact-modal-tx-table thead th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #6c757d;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid #dee2e6;
 }
-.contact-tx-popup .tx-modal-amount { font-size: 1.2rem; }
-.contact-tx-popup .tx-modal-header { border-radius: 8px; padding: 0.75rem; }
-.contact-tx-popup .tx-detail-row { padding: 0.5rem 0.75rem; }
-.contact-tx-popup .tx-detail-label { font-size: 0.8rem; min-width: 90px; }
-.contact-tx-popup .tx-detail-value { font-size: 0.8rem; }
+.contact-modal-tx-table tbody td { padding: 0.5rem 0.5rem; vertical-align: middle; }
+/* Status icon — tight column with just enough padding that the icon
+   doesn't hug the modal wall. Higher specificity than .tx-table td.col-tx-status-icon. */
+.contact-modal-tx-table th.col-tx-status-icon,
+.contact-modal-tx-table td.col-tx-status-icon {
+    width: 2.25rem;
+    padding-left: 0.5rem;
+    padding-right: 0.25rem;
+    text-align: center;
+}
+/* Description absorbs the middle space and truncates with ellipsis so
+   long memos don't push the amount off-screen. Amount sits on the
+   right with just enough width to fit typical values without wrapping. */
+.contact-modal-tx-table th.col-tx-desc,
+.contact-modal-tx-table td.col-tx-desc {
+    width: auto;
+    max-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #495057;
+    font-size: 0.85rem;
+}
+.contact-modal-tx-table th.col-tx-amount,
+.contact-modal-tx-table td.col-tx-amount {
+    width: 28%;
+    white-space: nowrap;
+}
+.contact-modal-tx-table .tx-status-icon { font-size: 0.95rem; }
 
 .tx-detail-section {
     border: 1px solid #dee2e6;
@@ -2070,6 +2267,17 @@ tr.contact-card:hover .contact-name-cell {
 .tx-detail-value {
     flex: 1;
     color: #212529;
+}
+
+/* Clickable variant — used when the detail row jumps to a contact modal. */
+.tx-detail-value-link {
+    color: #0d6efd;
+}
+.tx-detail-value-link:hover {
+    text-decoration: underline;
+}
+.tx-detail-value-link .tx-modal-mono {
+    color: inherit;
 }
 
 /* Transaction item hover effect */
@@ -2227,6 +2435,11 @@ tr.tx-item-in-progress > td:first-child {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    line-height: 1.2;   /* see .tx-modal-badge comment — symmetric whitespace around x-height */
+}
+.tx-type-badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 .tx-type-p2p {
@@ -2419,12 +2632,16 @@ tr.tx-item-in-progress > td:first-child {
     }
 }
 
+/* Success / error accent follows the status-color-scheme setting (western
+   keeps green+/red-, eastern swaps, neutral collapses to the theme default).
+   Warning + info are category colours independent of win/loss semantics so
+   they stay hardcoded. */
 .toast.toast-success {
-    border-left-color: #28a745;
+    border-left-color: var(--status-success-bg, #6c757d);
 }
 
 .toast.toast-error {
-    border-left-color: #dc3545;
+    border-left-color: var(--status-failure-bg, #6c757d);
 }
 
 .toast.toast-warning {
@@ -2439,10 +2656,10 @@ tr.tx-item-in-progress > td:first-child {
     font-size: 1.25rem;
 }
 
-.toast.toast-success .toast-icon { color: #28a745; }
-.toast.toast-error .toast-icon { color: #dc3545; }
+.toast.toast-success .toast-icon { color: var(--status-success-bg, #6c757d); }
+.toast.toast-error .toast-icon   { color: var(--status-failure-bg, #6c757d); }
 .toast.toast-warning .toast-icon { color: #ffc107; }
-.toast.toast-info .toast-icon { color: #17a2b8; }
+.toast.toast-info .toast-icon    { color: #17a2b8; }
 
 .toast-content {
     flex: 1;
@@ -2466,6 +2683,39 @@ tr.tx-item-in-progress > td:first-child {
     padding: 0;
     font-size: 1.25rem;
     line-height: 1;
+}
+
+/* Live-event toasts: richer variant with action button + click-to-expand
+   details. Base .toast styles still apply; these only layer extras. */
+.toast-event { cursor: pointer; }
+.toast-event .toast-action {
+    margin-right: 0.35rem;
+    white-space: nowrap;
+}
+.toast-event .toast-details-wrap {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e9ecef;
+    font-size: 0.85rem;
+}
+.toast-event.toast-expanded {
+    cursor: default;
+    max-width: 420px;
+}
+.toast-event dl.toast-details {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15rem 0.75rem;
+}
+.toast-event dl.toast-details dt {
+    color: #6c757d;
+    font-weight: 500;
+}
+.toast-event dl.toast-details dd {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .toast-close:hover {
@@ -2632,10 +2882,18 @@ tr.tx-item-in-progress > td:first-child {
 }
 
 .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
     font-size: 0.75rem;
     font-weight: 600;
+    line-height: 1.2;   /* symmetric whitespace around x-height; keeps icon + text co-centered */
+}
+.badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 .badge-id {
@@ -2716,6 +2974,34 @@ tr.tx-item-in-progress > td:first-child {
 
 .modal-tab-scroll {
     height: 100%;
+}
+
+/* Contact modal shell — pinned so switching between Info / Transactions /
+   Status / Settings does NOT reflow the modal height. Lower pin on
+   desktop (70vh) than on mobile (85vh) because the tallest tab (Info)
+   doesn't need 85% of a desktop viewport, and the extra whitespace
+   below short tabs (Status especially) looked wasted. The Transactions
+   table scrolls internally when it exceeds the remaining space. */
+#contactModal .modal-content {
+    height: 70vh;
+    max-height: 90vh;
+}
+@media (max-width: 600px) {
+    #contactModal .modal-content {
+        height: 85vh;
+    }
+}
+
+/* Transaction Details modal — single-content, so it fits to content on
+   desktop (capped by the shared `.modal-content { max-height: 90vh }`)
+   rather than rendering as a giant mostly-empty panel for a short tx.
+   On phones we pin to 85vh so the modal doesn't awkwardly overlap the
+   on-screen keyboard or end up tiny on short viewports. */
+@media (max-width: 600px) {
+    #transactionModal .modal-content {
+        height: 85vh;
+        max-height: 90vh;
+    }
 }
 
 .modal-footer {
@@ -2802,8 +3088,13 @@ tr.tx-item-in-progress > td:first-child {
 }
 /* Alert banners with inline action button — button sits to the right of the
    text on wide screens and wraps below (right-aligned) on narrow screens.
-   Icon + text stay together; only the button wraps. */
+   Icon + text stay together; only the button wraps. Self-contained flex so
+   callers only need `.alert-banner-row` (no parallel `d-flex align-center
+   gap-lg` needed). */
 .alert-banner-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
     flex-wrap: wrap;
 }
 .alert-banner-content {
@@ -3193,6 +3484,11 @@ tr.tx-item-in-progress > td:first-child {
     border: 1.5px solid currentColor;
     font-size: 0.82rem;
     font-weight: 600;
+    line-height: 1.2;
+}
+.dlq-stat-chip > i {
+    line-height: inherit;
+    flex-shrink: 0;
 }
 
 /* Filter dropdown reuses .contacts-filter-select from the shared table chrome.
@@ -3231,8 +3527,11 @@ tr.tx-item-in-progress > td:first-child {
 
 /* DLQ table — extends .contacts-table with dlq-specific column widths.
    Reason column truncates with ellipsis so actions always fit on one line. */
-.dlq-table.contacts-table .col-dlq-type    { width: 9%; }
-.dlq-table.contacts-table .col-name        { width: 15%; }
+.dlq-table.contacts-table .col-dlq-type    { width: 10%; }
+/* Recipient widened substantially now that the Status column is gone
+   and the slim status icon takes only 2% — gives the .onion address
+   plenty of room before the ellipsis kicks in on desktop. */
+.dlq-table.contacts-table .col-name        { width: 32%; }
 .dlq-table.contacts-table .col-dlq-reason  {
     width: 16%;
     max-width: 0;
@@ -3242,7 +3541,6 @@ tr.tx-item-in-progress > td:first-child {
     color: #495057;
 }
 .dlq-table.contacts-table .col-dlq-date    { width: 13%; white-space: nowrap; }
-.dlq-table.contacts-table .col-dlq-status  { width: 8%; }
 .dlq-table.contacts-table .col-dlq-actions { width: 20%; white-space: nowrap; }
 
 /* Narrow screens: collapse action buttons and status to icon-only */
@@ -3280,6 +3578,54 @@ tr.tx-item-in-progress > td:first-child {
     background: #f0f7ff;
 }
 
+/* Dedicated leading status-icon column on DLQ rows — mirrors the
+   col-tx-status-icon pattern on the Recent Transactions table so that
+   on mobile (where the full Status column is hidden to save horizontal
+   space) the pending / retrying / resolved / abandoned state is still
+   visible at a glance in the one column that stays on-screen.
+   Resolved and abandoned colours pull from the user-selected status
+   colour scheme via --status-success-bg / --status-failure-bg (western
+   = green/red, eastern = red/green, neutral = greys), so a user's
+   colour-blind-friendly or culture-specific preference in Settings
+   flows through here too. Pending / retrying stay at fixed accent
+   colours because they're in-progress states, not outcomes. */
+.dlq-table.contacts-table .col-dlq-status-icon {
+    /* Very narrow — the column holds a single Font Awesome glyph so
+       more breathing room just shows as empty white space. Padding
+       zeroed on the right so the icon sits close to the Type badge
+       that follows. */
+    width: 2%;
+    padding: 0.4rem 0 0.4rem 0.75rem;
+    text-align: center;
+    vertical-align: middle;
+}
+.dlq-type-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+}
+.dlq-type-status-pending   { color: #b8860b; }  /* amber — needs attention */
+.dlq-type-status-retrying  { color: #0d6efd; }  /* blue — active retry */
+/* Resolved + abandoned use the #6c757d neutral-grey fallback (matching
+   every other status icon in this file — tx-status-completed,
+   chain-icon-valid, etc.) so the Settings → neutral colour scheme lands
+   on grey for success/failure rows. Under neutral the custom property
+   is set to `initial` which effectively reverts the var() lookup to
+   the fallback — the fallback IS the neutral colour for the scheme. */
+.dlq-type-status-resolved  { color: var(--status-success-bg, #6c757d); }
+.dlq-type-status-abandoned { color: var(--status-failure-bg, #6c757d); }
+
+/* Mobile: the generic .contacts-table rule hides cols 3+. With the new
+   leading status-icon column, Type + Recipient have shifted to cols
+   2 and 3 — keep col 3 visible so mobile shows icon + type + recipient. */
+@media (max-width: 600px) {
+    .contacts-table.dlq-table thead th:nth-child(3),
+    .contacts-table.dlq-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+}
+
 /* Inline status badge for DLQ rows */
 .dlq-status-badge {
     display: inline-flex;
@@ -3296,10 +3642,13 @@ tr.tx-item-in-progress > td:first-child {
     font-size: 0.82rem;
 }
 
-/* Single-line truncation with ellipsis — applied to recipient and reason spans */
+/* Single-line truncation with ellipsis — applied to recipient and
+   reason spans. Uses width:100% so it fills whatever the column gives
+   it (28% of the table on desktop for Recipient) rather than a fixed
+   140px cap that truncated early. */
 .dlq-truncate {
     display: block;
-    max-width: 140px;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3374,13 +3723,6 @@ tr.tx-item-in-progress > td:first-child {
     }
 }
 
-/* DLQ description / info paragraph */
-.dlq-description {
-    color: #6c757d;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-}
-
 /* Empty-state success icon */
 .dlq-empty-icon {
     color: #28a745;
@@ -3411,13 +3753,6 @@ tr.tx-item-in-progress > td:first-child {
     font-style: italic;
 }
 
-/* Footer item count note */
-.dlq-footer-count {
-    color: #6c757d;
-    font-size: 0.85rem;
-    margin-top: 0.75rem;
-}
-
 /* Legacy class — scroll is now always enabled on .dlq-table-wrapper */
 .dlq-table-scrollable { }
 
@@ -3430,18 +3765,6 @@ tr.tx-item-in-progress > td:first-child {
 /* DLQ search bar */
 .dlq-search-bar {
     margin-bottom: 0.75rem;
-}
-.dlq-search-bar input {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    outline: none;
-}
-.dlq-search-bar input:focus {
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
 }
 
 /* DLQ dropdown (mobile action menus) */
@@ -3677,7 +4000,13 @@ tr.tx-item-in-progress > td:first-child {
     color: #6c757d;
 }
 
-.search-input-with-icon {
+/* Scoped through `.search-icon-wrapper` to bump specificity to 0,2,0 so
+   the asymmetric left padding wins against the generic `.form-group
+   input { padding: 0.8rem }` rule (same specificity, but this selector
+   appears later in the stylesheet, so it wins). Without this the New
+   eIOU recipient search renders with equal padding all round and the
+   magnifying-glass icon overlaps the placeholder text. */
+.search-icon-wrapper .search-input-with-icon {
     width: 100%;
     padding: 0.5rem 0.75rem 0.5rem 2.25rem;
     border: 1px solid #ced4da;
@@ -3785,6 +4114,169 @@ tr.tx-item-in-progress > td:first-child {
     border-radius: 4px;
     margin-bottom: 1rem;
     border-left: 4px solid #0d6efd;
+}
+
+/* Pending contact requests table — compact tabular view; each row opens a
+   modal with the full accept/reject form. Column widths are tuned so the
+   identifier (usually a Tor onion) gets enough room before truncating. */
+.pending-contacts-table tbody tr.pending-contact-row {
+    transition: background 0.15s ease;
+}
+.pending-contacts-table tbody tr.pending-contact-row:hover {
+    background: #f0f7ff;
+}
+.pending-contacts-table .pending-col-identifier {
+    /* Wide enough to show a 10-chars-...10-chars onion slice. */
+    min-width: 220px;
+    max-width: 38%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pending-contacts-table .pending-col-message {
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pending-contacts-table .pending-col-currencies {
+    min-width: 120px;
+    white-space: nowrap;
+}
+.pending-contacts-table .pending-col-currencies .badge {
+    margin-right: 0.25rem;
+}
+
+/* On mobile the Currencies column is the first thing to drop — users can
+   still see it in the detail modal. Identifier + Message are what's needed
+   to pick the right request out of a stack. */
+@media (max-width: 600px) {
+    .pending-contacts-table .pending-col-currencies {
+        display: none;
+    }
+    .pending-contacts-table .pending-col-identifier {
+        max-width: 50%;
+    }
+}
+
+/* Pending-contact modal compact layout: address icons, collapsed public
+   key, accordion per currency. All about vertical budget — the old card
+   rendered 3 full addresses + the full PEM pubkey + every currency's form
+   stacked, which blew out the modal height on anything beyond one currency. */
+.pending-addresses-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.pending-addr-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem;
+    background: #f1f5f9;
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    color: #495057;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.pending-addr-icon:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+.pending-addr-icon.address-tor   { color: #7a2e8f; }
+.pending-addr-icon.address-https { color: #198754; }
+.pending-addr-icon.address-http  { color: #0d6efd; }
+.pending-addr-label {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.pending-pubkey-disclosure {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    background: #fafbfc;
+}
+.pending-pubkey-disclosure > summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+    list-style: none;
+}
+.pending-pubkey-disclosure > summary::-webkit-details-marker { display: none; }
+.pending-pubkey-disclosure > summary::before {
+    content: "▸ ";
+    color: #6c757d;
+}
+.pending-pubkey-disclosure[open] > summary::before { content: "▾ "; }
+.pending-pubkey-disclosure .pubkey-display {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    word-break: break-all;
+}
+
+.pending-currency-accordion {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: white;
+}
+.pending-currency-accordion[open] {
+    background: #fafbfc;
+}
+.pending-currency-summary {
+    cursor: pointer;
+    padding: 0.6rem 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+    font-weight: 500;
+}
+.pending-currency-summary::-webkit-details-marker { display: none; }
+.pending-currency-summary::before {
+    content: "▸";
+    color: #6c757d;
+    font-size: 0.85rem;
+    display: inline-block;
+    width: 0.85rem;
+}
+.pending-currency-accordion[open] .pending-currency-summary::before {
+    content: "▾";
+}
+.pending-currency-code {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    min-width: 3ch;
+}
+.pending-currency-summary-msg {
+    font-size: 0.85rem;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.pending-currency-body {
+    padding: 0 0.85rem 0.85rem 0.85rem;
+    border-top: 1px solid #e9ecef;
+    padding-top: 0.75rem;
+}
+.pending-currency-body .currency-decline-form {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #e9ecef;
+    text-align: right;
+}
+.pending-currency-body .currency-decline-btn {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+.pending-currency-body .currency-decline-btn:hover {
+    opacity: 1;
 }
 
 .pending-contact-header {
@@ -4050,6 +4542,15 @@ hr.currency-separator-double {
 
 
 .input-monospace { font-family: 'Courier New', monospace; }
+/* Let the placeholder render in the normal proportional font — the
+   monospace is meant for the *typed* address (legibility of long
+   base32 / hex strings), not for the prompt text. In monospace,
+   punctuation runs like `HTTP(S) address` look like they have a
+   double space after the parenthesis because monospace cells are
+   wider than the glyph; proportional font removes the illusion. */
+.input-monospace::placeholder {
+    font-family: inherit;
+}
 
 /* --- Transactions --- */
 .section-header-actions {
@@ -4185,10 +4686,79 @@ hr.currency-separator-double {
     padding-bottom: 0.25rem;
 }
 
+/* Sub-heading within a settings subsection — used to break long flat
+   toggle lists into domain groups (Transactions / Contacts / GUI /
+   System in Feature Toggles). Muted uppercase, smaller than the main
+   subsection title, with a hair-line divider above each group
+   (except the first) so the groups read as clearly separated blocks
+   rather than running together. */
+.settings-group-heading {
+    color: #6c757d;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0.5rem 0 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+/* Divider + extra top spacing only when a heading follows a preceding
+   settings-grid — so the second, third, … group in a multi-group section
+   gets a hair-line separator, and the first heading in a section (which
+   sits right below the section's h4 or intro prose) stays tight. Also
+   catches cases where a single h5 follows a grid (e.g. Active Remembered
+   Sessions below the GUI Security fields), which `:first-of-type`
+   incorrectly treated as first. */
+.settings-grid + .settings-group-heading {
+    margin-top: 2.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #dee2e6;
+}
+.settings-group-heading i { color: #adb5bd; }
+
 .settings-rate-desc {
     color: #6c757d;
     font-size: 0.875rem;
     margin-bottom: 0.75rem;
+}
+
+/* Shared callout block used at the top of sections (Wallet Settings,
+   API Keys, Failed Messages, …) to set context + explain key semantics
+   for the rest of the card. Reads as "help/guidance" distinct from
+   the surrounding controls. Rendered as a <details> so users can
+   collapse the block — particularly handy on mobile where the text
+   otherwise eats a full screen of scroll. Default state is open on
+   desktop / closed on mobile (script flips the `open` attribute). */
+.section-intro {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--surface-2, #f0f3f6);
+    border-left: 3px solid var(--border-color, #dee2e6);
+    border-radius: 4px;
+}
+details.section-intro > summary {
+    cursor: pointer;
+    list-style: none;           /* drop the default triangle */
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+details.section-intro > summary::-webkit-details-marker { display: none; }
+details.section-intro > summary::after {
+    content: "\f078"; /* fa-chevron-down */
+    font-family: "Font Awesome 6 Free", "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+    margin-left: auto;
+    transition: transform 0.15s ease;
+}
+details.section-intro[open] > summary::after { transform: rotate(-180deg); }
+details.section-intro > .section-intro-body {
+    margin-top: 0.45rem;
+    font-weight: normal;
 }
 
 .settings-actions { margin-top: 1.5rem; }
@@ -4197,16 +4767,6 @@ hr.currency-separator-double {
    Full-width block beneath the two select fields. Each row shows a device's
    UA family, a "This device" badge if it matches the current cookie, the
    last-used/expires timestamps, and a per-device Sign-out button. */
-.active-sessions-container {
-    margin-top: 1.25rem;
-    padding-top: 1rem;
-    border-top: 1px solid #e9ecef;
-}
-.active-sessions-heading {
-    margin: 0 0 0.5rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-}
 .active-sessions-list {
     display: flex;
     flex-direction: column;
@@ -4331,8 +4891,16 @@ hr.currency-separator-double {
    The actual direction color is driven by the amount color scheme further
    down in this file. */
 .tx-modal-header-sent,
-.tx-modal-header-received {
+.tx-modal-header-received,
+.tx-modal-header-neutral {
     /* background/border inherited from .tx-modal-header above */
+}
+/* Neutral variant for contact-request transactions — amount is always zero
+   by definition, so the sent/received color scheme would be misleading.
+   Amount itself is rendered as a muted em-dash placeholder below. */
+.tx-modal-amount-placeholder {
+    color: var(--text-muted, #6c757d);
+    font-weight: normal;
 }
 
 .tx-modal-amount {
@@ -4373,12 +4941,39 @@ hr.currency-separator-double {
     gap: 0.5rem;
     margin-bottom: 1.5rem;
     -webkit-flex-wrap: wrap; -ms-flex-wrap: wrap; flex-wrap: wrap;
+    -webkit-align-items: center; -ms-flex-align: center; align-items: center;
 }
 
-.tx-modal-badge {
+/* Badges in the Transaction Details modal use inline-flex + centered
+   alignment so icon-bearing badges (P2P Routed, Sent) and plain-text
+   badges (Completed/Rejected/Cancelled) share identical vertical
+   metrics. Without this the text-only status badge sits off-center
+   relative to its icon-bearing neighbours.
+
+   `line-height: 1` cropped the natural descender/x-height whitespace
+   asymmetrically against Font Awesome's glyph metrics, which made the
+   text look slightly low vs the icon even though both boxes were
+   centered. Bumping to 1.2 restores symmetric vertical whitespace around
+   the text's x-height, so text + icon read as centered together. */
+.tx-modal-badge,
+.tx-modal-badges .tx-status-badge {
+    display: -webkit-inline-box;
+    display: -ms-inline-flexbox;
+    display: inline-flex;
+    -webkit-align-items: center; -ms-flex-align: center; align-items: center;
+    gap: 0.3rem;
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
+    line-height: 1.2;
+}
+.tx-modal-badge > i,
+.tx-modal-badges .tx-status-badge > i {
+    line-height: inherit;
+    flex-shrink: 0;
+}
+
+.tx-modal-badge {
     color: white;
 }
 
@@ -4901,4 +5496,322 @@ hr.currency-separator-double {
     --status-success-soft-fg: initial;
     --status-failure-soft-bg: initial;
     --status-failure-soft-fg: initial;
+}
+
+/* ===================================================================== */
+/* API Keys section                                                      */
+/* ===================================================================== */
+.api-keys-bulk-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    min-height: 1.75rem; /* keep layout stable when the status string is empty */
+}
+.api-keys-bulk-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+.api-keys-access-state {
+    font-size: 0.85rem;
+}
+.api-keys-empty,
+.empty-panel {
+    padding: 1.25rem;
+    border: 1px dashed var(--border-color, #ccc);
+    border-radius: 6px;
+    text-align: center;
+}
+.api-keys-permissions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.75rem;
+}
+/* Re-auth modal is always opened on top of another API key modal, so it
+   needs to sit above the standard .modal z-index (10000). */
+#apiKeysVerifyModal { z-index: 10010; }
+.api-keys-permission-group {
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin: 0;
+}
+.api-keys-permission-group legend {
+    font-weight: 600;
+    padding: 0 0.25rem;
+    font-size: 0.9rem;
+}
+/* `label.` prefix beats the generic `.form-group label { display: block;
+   font-weight: bold }` rule. `width: auto` on the checkbox beats the
+   `.form-group input { width: 100% }` rule that otherwise stretches it
+   across the row and shoves the text off-screen. */
+label.api-keys-permission {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    margin-bottom: 0;
+    font-weight: normal;
+    cursor: pointer;
+}
+label.api-keys-permission input[type="checkbox"] {
+    width: auto;
+    margin: 0.2rem 0 0 0;
+    flex: 0 0 auto;
+}
+label.api-keys-permission .api-keys-permission-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+/* Rate limit + Expires side-by-side even in the narrow modal. */
+.api-keys-settings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+.api-keys-edit-permissions,
+.api-keys-perm-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+}
+.perm-chip {
+    font-family: var(--font-mono, monospace);
+    background: var(--surface-2, #f0f1f3);
+    color: var(--text-primary, #212529);
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, #dee2e6);
+    white-space: nowrap;
+}
+.api-keys-filters {
+    margin-bottom: 0.75rem;
+}
+.api-keys-search-row {
+    margin-bottom: 0.6rem;
+}
+.api-keys-search-row .api-keys-search {
+    width: 100%;
+    min-width: 0;
+}
+.api-keys-filter-row {
+    margin-bottom: 0;
+}
+/* Let columns size to content instead of inheriting .contacts-table's
+   fixed layout (which without explicit widths distributes the table 9
+   ways and shrinks long content cells to nothing). */
+.api-keys-table {
+    table-layout: auto;
+}
+.api-keys-table th,
+.api-keys-table td {
+    white-space: nowrap;
+}
+/* Permissions column wraps its chips; every other column stays on one line. */
+.api-keys-table th:nth-child(4),
+.api-keys-table td:nth-child(4) {
+    white-space: normal;
+    min-width: 180px;
+}
+/* Date columns (Last used / Expires) share a min-width so the "Never"
+   placeholder in Last Used doesn't let that column collapse narrower
+   than Expires and clip full datetimes in other rows. */
+.api-keys-table th:nth-child(6),
+.api-keys-table td:nth-child(6),
+.api-keys-table th:nth-child(7),
+.api-keys-table td:nth-child(7) {
+    min-width: 170px;
+}
+/* First column: compact status dot — mirrors .col-tx-status-icon. */
+.api-keys-table .col-api-keys-status {
+    width: 24px;
+    padding-left: 0.4rem;
+    padding-right: 0;
+    text-align: center;
+}
+/* Label column (col 2): an inner wrapper forces the truncation because
+   `max-width` on a `<td>` is silently ignored under `table-layout: auto`
+   — the cell sizes to its widest content no matter what. A block child
+   with an explicit max-width participates in the column-width calc
+   properly and overflows with `…`. */
+.api-keys-label-truncate {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Narrow screens: the shared .contacts-table responsive rule hides every
+   column from the third onwards. For API keys the third column is Key ID,
+   which is the second most useful piece of info on mobile — keep it
+   visible. The real clutter (permissions, rate, dates) starts at col 4
+   and we're happy to hide that; the detail modal shows everything on row
+   click anyway. */
+@media (max-width: 600px) {
+    .api-keys-table thead th:nth-child(3),
+    .api-keys-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .api-keys-table thead th:nth-child(n+4),
+    .api-keys-table tbody td:nth-child(n+4) {
+        display: none;
+    }
+    /* Tighter label cap so a long name doesn't shove the Key ID off-screen. */
+    .api-keys-label-truncate {
+        max-width: 120px;
+    }
+    /* Bulk-action toolbar stacks: status on its own row, the Disable-all /
+       Delete-all pair on a second row. Prevents the buttons from getting
+       crushed into two-line labels. */
+    .api-keys-bulk-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .api-keys-bulk-actions {
+        margin-left: 0;
+        justify-content: flex-end;
+    }
+}
+.api-keys-status-dot {
+    font-size: 0.55rem;
+    vertical-align: middle;
+}
+.api-keys-status-dot--active   { color: var(--status-success-bg, #6c757d); }
+.api-keys-status-dot--disabled { color: var(--status-failure-bg, #6c757d); }
+.api-keys-table .api-keys-id-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+.api-keys-table .api-keys-id-cell code {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.api-keys-table .api-keys-id-copy {
+    background: none;
+    border: none;
+    padding: 0.1rem 0.25rem;
+    cursor: pointer;
+    color: var(--text-muted, #6c757d);
+    flex-shrink: 0;
+}
+.api-keys-table .api-keys-id-copy:hover { color: var(--link-color, #0d6efd); }
+.api-keys-table td {
+    padding: 0.55rem 0.6rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-color, #e9ecef);
+}
+.api-keys-table tbody tr { cursor: pointer; }
+.api-keys-table tbody tr:hover { background: #f8faff; }
+/* The copy button inside the Key ID cell needs to swallow its own click so
+   the row-click handler doesn't fire and open the detail modal on top. */
+.api-keys-table .api-keys-id-copy { pointer-events: auto; }
+
+/* Detail modal */
+.api-keys-detail-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.4rem 1rem;
+    margin: 0;
+}
+.api-keys-detail-list dt {
+    font-weight: 600;
+    color: var(--text-muted, #6c757d);
+    align-self: start;
+}
+.api-keys-detail-list dd {
+    margin: 0;
+    min-width: 0;
+    word-break: break-word;
+}
+.api-keys-detail-id {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.api-keys-detail-id code {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85rem;
+    background: var(--surface-2, #f0f1f3);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    word-break: break-all;
+}
+.api-keys-permission-key {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.api-keys-permission-desc {
+    color: var(--text-muted, #666);
+    font-size: 0.8rem;
+    margin-top: 0.1rem;
+}
+.api-keys-preset-row {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+.api-keys-reveal-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+.api-keys-reveal-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 4px;
+    background: var(--code-bg, #f5f5f5);
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Don't let flex squeeze the Copy button — its label otherwise wraps
+   under the icon and the button becomes visibly taller than the sibling
+   Copy in the Key ID row. */
+.api-keys-reveal-row .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+/* On narrow screens prefer wrapping so the secret is fully visible; the
+   Copy button falls onto its own line rather than crushing the field. */
+@media (max-width: 600px) {
+    .api-keys-reveal-row { flex-wrap: wrap; }
+    .api-keys-reveal-value {
+        white-space: normal;
+        word-break: break-all;
+        overflow: visible;
+    }
+}
+.api-keys-ack {
+    display: flex;
+    gap: 0.4rem;
+    align-items: flex-start;
+    margin-top: 1rem;
+    cursor: pointer;
+}
+.api-keys-ack input[type="checkbox"] { margin-top: 0.2rem; }
+.form-error {
+    color: var(--status-failure-soft-fg, #842029);
+    background: var(--status-failure-soft-bg, #f8d7da);
+    border: 1px solid var(--status-failure-soft-fg, #842029);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
 }

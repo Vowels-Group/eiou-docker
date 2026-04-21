@@ -38,6 +38,13 @@ class UpdateCheckService
     private const WHATS_NEW_SEEN_FILE = '/etc/eiou/config/whats-new-seen.json';
 
     /**
+     * Marker that the node has completed initial setup. Used to tell a
+     * brand-new/pre-setup container apart from a set-up node that just
+     * upgraded (the latter should see the banner).
+     */
+    private const USER_CONFIG_FILE = '/etc/eiou/config/userconfig.json';
+
+    /**
      * Cached release notes from GitHub
      */
     private const RELEASE_NOTES_CACHE_FILE = '/etc/eiou/config/release-notes-cache.json';
@@ -327,28 +334,50 @@ class UpdateCheckService
     /**
      * Check if the "What's New" notification should be shown.
      *
-     * On fresh installs the seen-file doesn't exist yet — seed it silently
-     * with the current version so the user doesn't get a "what's new" popup
-     * on their very first visit. After an upgrade the file will still hold
-     * the old version, triggering the notification.
+     * Thin wrapper over getWhatsNewVariant() for callers that only care
+     * whether the banner is visible, not which variant. Prefer
+     * getWhatsNewVariant() when you need to pick copy ("You're on vX.X.X"
+     * vs "Updated to vX.X.X").
      *
      * @return bool True if the current version has unseen release notes
      */
     public static function shouldShowWhatsNew(): bool
     {
-        if (!file_exists(self::WHATS_NEW_SEEN_FILE)) {
-            // Fresh install — seed and suppress
-            self::dismissWhatsNew();
-            return false;
+        return self::getWhatsNewVariant() !== null;
+    }
+
+    /**
+     * Pick the "What's New" banner variant to render, or null for "no
+     * banner". Distinguishes a fresh install (node has never dismissed a
+     * banner → "You're on vX.X.X") from an upgrade (node dismissed an
+     * earlier version's banner and is now on a newer one → "Updated to
+     * vX.X.X").
+     *
+     * Pure read — does not write the seen file. dismissWhatsNew() is
+     * what records `first_seen_version`, so the first dismissal locks in
+     * which version this node was first installed on; subsequent
+     * upgrades then render the "upgraded" variant.
+     *
+     * @return string|null 'fresh' | 'upgraded' | null
+     */
+    public static function getWhatsNewVariant(): ?string
+    {
+        if (!file_exists(self::USER_CONFIG_FILE)) {
+            return null;
         }
 
-        $raw = file_get_contents(self::WHATS_NEW_SEEN_FILE);
-        if ($raw === false) {
-            return false;
+        $seenData = self::readSeenFile();
+        $current = Constants::APP_VERSION;
+
+        if (($seenData['dismissed_version'] ?? null) === $current) {
+            return null;
         }
 
-        $data = json_decode($raw, true);
-        return ($data['dismissed_version'] ?? '') !== Constants::APP_VERSION;
+        $firstSeen = $seenData['first_seen_version'] ?? null;
+        if ($firstSeen !== null && $firstSeen !== $current) {
+            return 'upgraded';
+        }
+        return 'fresh';
     }
 
     /**
@@ -356,11 +385,33 @@ class UpdateCheckService
      */
     public static function dismissWhatsNew(): void
     {
-        $data = [
-            'dismissed_version' => Constants::APP_VERSION,
-            'dismissed_at' => date('c'),
-        ];
+        $data = self::readSeenFile();
+        $data['dismissed_version'] = Constants::APP_VERSION;
+        $data['dismissed_at'] = date('c');
+        if (!isset($data['first_seen_version'])) {
+            // Defensive: if dismissal arrives before getWhatsNewVariant()
+            // ever recorded a first_seen_version (CLI, tests, direct POST),
+            // still capture it so later upgrades can distinguish variants.
+            $data['first_seen_version'] = Constants::APP_VERSION;
+        }
+        self::writeSeenFile($data);
+    }
 
+    private static function readSeenFile(): array
+    {
+        if (!file_exists(self::WHATS_NEW_SEEN_FILE)) {
+            return [];
+        }
+        $raw = @file_get_contents(self::WHATS_NEW_SEEN_FILE);
+        if ($raw === false) {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private static function writeSeenFile(array $data): void
+    {
         $dir = dirname(self::WHATS_NEW_SEEN_FILE);
         if (!is_dir($dir)) {
             @mkdir($dir, 0750, true);

@@ -68,7 +68,7 @@ Browser Request
 | State Management | Session-based with CSRF protection |
 | Styling | Inline CSS via `page.css` include |
 | Forms | Traditional POST form submissions with redirect |
-| AJAX | Limited use for specific features (ping, chain drop, debug report) |
+| AJAX | Limited use for specific features (ping, tx drop, debug report) |
 
 ---
 
@@ -145,8 +145,8 @@ Handles all contact-related operations.
 | `handleEditContact()` | `editContact` | Update contact settings | `contact_address`, `contact_name`, `contact_fee`, `contact_credit`, `contact_currency` |
 | `handlePingContact()` | `pingContact` | Check contact status (AJAX) | `contact_address` |
 | `handleProposeChainDrop()` | `proposeChainDrop` | Propose dropping missing tx (AJAX) | `contact_pubkey_hash` |
-| `handleAcceptChainDrop()` | `acceptChainDrop` | Accept chain drop proposal (AJAX) | `proposal_id` |
-| `handleRejectChainDrop()` | `rejectChainDrop` | Reject chain drop proposal (AJAX) | `proposal_id` |
+| `handleAcceptChainDrop()` | `acceptChainDrop` | Accept tx drop proposal (AJAX) | `proposal_id` |
+| `handleRejectChainDrop()` | `rejectChainDrop` | Reject tx drop proposal (AJAX) | `proposal_id` |
 | `handleAcceptCurrency()` | `acceptCurrency` | Accept pending incoming currency | `pubkey_hash`, `currency`, `fee`, `credit` |
 | `handleAddCurrency()` | `addCurrency` | Add a new currency to an existing contact (AJAX) | `pubkey`, `currency`, `fee`, `credit` |
 | `handleAcceptAllCurrencies()` | `acceptAllCurrencies` | Accept all pending currencies for a contact (AJAX) | `pubkey_hash`, `currencies` (JSON array), `is_new_contact`, `contact_address`, `contact_name` |
@@ -191,6 +191,7 @@ Handles settings and debug operations.
 | Method | Action Value | Description | Parameters |
 |--------|-------------|-------------|------------|
 | `handleUpdateSettings()` | `updateSettings` | Save wallet settings | Multiple settings fields |
+| `handleResetToDefaults()` | `resetToDefaults` | Wipe every saved setting back to build defaults via `UserContext::resetToDefaults()` — empties `defaultconfig.json` so every setting getter falls back to its `Constants::`-backed default; clears the `name` key from `userconfig.json`. Identity fields, contacts, transactions, backups, and API keys are untouched. CSRF-gated. GUI confirmation modal requires typing `reset` before the submit button enables | `csrf_token` |
 | `handleClearDebugLogs()` | `clearDebugLogs` | Clear debug entries | None |
 | `handleSendDebugReport()` | `sendDebugReport` | Generate debug file | `description` |
 | `handleGetDebugReportJson()` | `getDebugReportJson` | Download debug JSON (AJAX) | `description`, `report_mode` |
@@ -235,12 +236,21 @@ Handles settings and debug operations.
 
 | Category | Settings |
 |----------|----------|
-| Feature Toggles | `hopBudgetRandomized`, `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard`, `autoAcceptRestoredContact`, `autoRejectUnknownCurrency`, `apiEnabled`, `autoRefreshEnabled`, `autoAcceptTransaction`, `autoBackupEnabled`, `updateCheckEnabled`, `analyticsEnabled` |
-| Backup & Logging | `backupCronTime`, `backupRetentionCount`, `logMaxEntries`, `logLevel` |
-| Data Retention | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
-| Rate Limiting | `p2pRateLimitPerMinute`, `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
+| Feature Toggles → Contacts | `contactStatusEnabled`, `contactStatusSyncOnPing`, `autoAcceptRestoredContact`, `autoRejectUnknownCurrency` |
+| Feature Toggles → Transactions | `autoAcceptTransaction`, `hopBudgetRandomized`, `autoChainDropPropose`, `autoChainDropAccept`, `autoChainDropAcceptGuard` |
+| Feature Toggles → GUI | `autoRefreshEnabled`, `hideEmptyGuiSections` |
+| Feature Toggles → System | `apiEnabled`, `autoBackupEnabled`, `updateCheckEnabled`, `analyticsEnabled` |
+| Backup & Logging → Backup | `backupCronTime`, `backupRetentionCount` |
+| Backup & Logging → Logging | `logMaxEntries`, `logLevel` |
+| Data Retention → Cleanup | `cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays` |
+| Data Retention → Archive | `paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`, `transactionsArchiveRetentionDays`, `transactionsArchiveBatchSize` |
+| Rate Limiting → Throughput | `p2pRateLimitPerMinute` |
+| Rate Limiting → Attempt Blocking | `rateLimitMaxAttempts`, `rateLimitWindowSeconds`, `rateLimitBlockSeconds` |
 | Sync | `syncChunkSize`, `syncMaxChunks`, `heldTxSyncTimeoutSeconds` |
-| Network | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds`, `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted`, `maxP2pLevel`, `p2pExpiration`, `directTxExpiration`, `apiCorsAllowedOrigins` |
+| Network → Transport Timeouts | `httpTransportTimeoutSeconds`, `torTransportTimeoutSeconds` |
+| Network → Tor Resilience | `torCircuitMaxFailures`, `torCircuitCooldownSeconds`, `torFailureTransportFallback`, `torFallbackRequireEncrypted` |
+| Network → Routing & Delivery | `maxP2pLevel`, `p2pExpiration`, `directTxExpiration` |
+| Network → API | `apiCorsAllowedOrigins` |
 | Currency | `allowedCurrencies` |
 | Display | `displayDecimals`, `displayDateFormat`, `displayRecentTransactionsLimit`, `maxOutput`, `sessionTimeoutMinutes`, `contactAvatarStyle`, `amountColorScheme`, `statusColorScheme` |
 
@@ -263,6 +273,39 @@ Handles dead letter queue management actions (AJAX only — all responses are JS
 
 **Retry mechanism:**
 The controller re-sends the original signed payload (stored verbatim in the DLQ) directly to the recipient address using `TransportUtilityService::send()`. If the recipient returns a success status, the item is marked `resolved`. On failure it returns to `pending`.
+
+---
+
+### ApiKeysController
+
+Handles all API-key management done from the wallet GUI's Settings tab (AJAX only — all responses are JSON). CSRF is validated on every call via `Session::validateCSRFToken(..., false)` (non-rotating, since the page fires many AJAX calls from a single load). Every destructive call is additionally gated by a short-lived "sensitive access" grant (see below).
+
+| Method | Action Value | Description | Parameters |
+|--------|-------------|-------------|------------|
+| `status()` (inline) | `apiKeysStatus` | Report whether the session currently holds a sensitive-access grant and its seconds remaining. Safe to call from any page render. | `csrf_token` |
+| `verify()` | `apiKeysVerify` | Verify the user's auth code and open a `Session::SENSITIVE_ACCESS_TTL_SECONDS` grant (default 5 min) for this session. | `authcode`, `csrf_token` |
+| `clearAccess()` (inline) | `apiKeysClearAccess` | Drop the sensitive-access grant immediately (user clicked "lock again"). | `csrf_token` |
+| `listKeys()` | `apiKeysList` | List every key on this node — `name`, `key_id`, `permissions`, `rate_limit_per_minute`, `enabled`, timestamps, `expires_at`. **No sensitive-access required** — `key_id` values are public identifiers and listing them is non-destructive. | `csrf_token` |
+| `createKey()` | `apiKeysCreate` | Mint a new key. Returns the `key_id` + secret *once*; the secret is never retrievable again. Reuses `ApiKeyService::validatePermissions()` and `validateRateLimit()` so CLI and GUI agree on what's accepted. | `name`, `permissions[]`, `rate_limit_per_minute` (optional, default 100), `expires_in_days` (optional, `0` or absent = never), `csrf_token` |
+| `toggleKey()` | `apiKeysToggle` | Enable or disable a single key. Idempotent — toggling a key that's already in the target state returns success. | `key_id`, `enable` (`"1"` or `"0"`), `csrf_token` |
+| `updateKey()` | `apiKeysUpdate` | Edit a key's label, rate limit, and/or expiry. Permissions are intentionally **not** editable (revoke + reissue to change scope). Expiry may only be **shortened** — a proposed timestamp later than the current `expires_at` returns `expiration_extension_not_allowed`. Each of `name` / `rate_limit_per_minute` / `expires_in_days` is independently optional; omitted fields stay untouched. | `key_id`, any of `name`, `rate_limit_per_minute`, `expires_in_days`, `csrf_token` |
+| `deleteKey()` | `apiKeysDelete` | Permanently delete a single key. GUI requires the user to type the key's label to confirm. | `key_id`, `csrf_token` |
+| (inline) | `apiKeysDisableAll` | Disable every currently-enabled key in one statement. Returns the affected `count`. | `csrf_token` |
+| (inline) | `apiKeysDeleteAll` | Permanently delete every key on the node. GUI requires the user to type `delete all` verbatim before the destructive button enables. | `csrf_token` |
+
+**Sensitive-access gate:**
+Every mutating action (`apiKeysCreate`, `apiKeysToggle`, `apiKeysUpdate`, `apiKeysDelete`, `apiKeysDisableAll`, `apiKeysDeleteAll`) calls `$this->requireSensitive()` before handling the request. Without an active grant the controller returns `401 sensitive_access_required` with a descriptive message; the client responds by opening the verify modal, collecting the auth code, and retrying the original request automatically on a successful verify. The grant is bound to the session's `auth_time`, so `logout` or a session-timeout rotation invalidates it immediately. Listing (`apiKeysList`, `apiKeysStatus`) is deliberately outside the gate because it's read-only and leaks nothing the operator doesn't already see.
+
+**Bulk-action safety:**
+- "Disable all" is only offered when ≥1 enabled key exists; the confirmation modal states the exact active count.
+- "Delete all" is only offered when ≥1 key exists (enabled or disabled); the user must type `delete all` into a confirmation input before the destructive button enables. No bulk *Enable* — re-activation is intentionally one key at a time so a recently disabled key can't be reactivated in a single careless click.
+- Both return a `count` of affected rows so the client can toast the exact number processed.
+
+**Audit logging:**
+All GUI-driven creations, toggles, updates, deletions, and bulk operations log through the unified `Logger` facade — `SecureLogger` masks any `eiou_*` key-id patterns and any `sk_*` secret patterns, so the audit trail never contains a shown-once secret or correlates a `key_id` to an action in readable form in `app.log`.
+
+**Routing:**
+Dispatched from `Functions.php` via an allowlist of action names. A new action must be added to both the `in_array($action, [...])` check in `Functions.php` **and** the `switch ($action)` in `ApiKeysController::routeAction()` — missing it from the allowlist causes `Functions.php` to fall through and render `wallet.html` (107 kB of HTML) instead of routing to the controller, which manifests client-side as a silent `res.json()` rejection.
 
 ---
 
@@ -343,7 +386,7 @@ Loads and displays banner images from `/gui/assets/banners/`. Any image placed i
 | In-progress banner | Shows pending transaction count |
 | Pending contacts banner | Shows pending contact request count |
 | Pending currency requests | Shows incoming currency requests from existing contacts |
-| Chain drop proposal banner | Incoming proposals requiring action (red alert) |
+| Tx drop proposal banner | Incoming proposals requiring action (red alert) |
 | Completed transaction toasts | Notifications for finished transactions |
 | Received transaction toasts | Notifications for incoming payments |
 | DLQ notifications | Dead letter queue failure alerts |
@@ -431,6 +474,16 @@ Rendered below the Send form in the Send tab. Shows incoming and outgoing paymen
 
 Resolved requests (approved/declined) appear in a collapsed history section. Approved requests show a clickable truncated txid that opens the transaction detail modal.
 
+**History Paginator (resolved requests only):**
+- Same shared `Paginator` IIFE as the Recent Transactions and Contacts tables. Page buttons + size selector (25 / 50 / 100 / All), persisted as `eiou_paginator_size_payment-requests`.
+- **"Load older" button** — fetches next server-side page via `loadMorePaymentRequests` GUI AJAX action. Backed by `PaymentRequestRepository::getResolvedHistoryPage($limit, $offset)` — a single SQL query on the unified table with `WHERE status != 'pending' ORDER BY COALESCE(responded_at, created_at) DESC LIMIT ? OFFSET ?`, matching the initial template's `usort` key so pages append cleanly. Rows rendered via a shared `_paymentRequestRow.html` partial.
+- **"Showing the last N requests"** counter is dynamic via `#pr-meta-loaded-count`; updates after each Load-older click.
+
+**Search database (server-side):**
+- Same pattern as Recent Transactions — button next to the search input, or Enter in the search box. Fires `searchPaymentRequests` GUI AJAX action → `PaymentRequestRepository::searchResolvedHistory` (LIKE across `contact_name`, `description`, `requester_pubkey_hash`, `recipient_pubkey_hash`, `requester_address`).
+- Respects the direction / status filter selects. Hard-capped at 500 rows; response includes `{html, total, capped, cap}`.
+- Result rows replace the tbody; banner shows `N matches for "term" · Clear search`; Clear reloads the page.
+
 ---
 
 #### contactForm.html
@@ -458,7 +511,9 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 - Blocked contacts
 - Search/filter functionality
 - Show more toggle (>16 contacts)
-- Chain drop proposal badges on contact cards:
+- **Shared paginator** — page-size selector (25/50/100/All, persisted per-table via `safeStorageSet` under `eiou_paginator_size_contacts`) + prev/next buttons + range indicator, installed by `Paginator.create('contacts', …)` in `script.js`. Orthogonal `.filter-hidden` / `.paginator-hidden` classes on rows so the local search + status/chain/online filters keep working in combination with pagination
+- **"Load more" button** (accepted contacts only — pending + blocked are always rendered up-front because they're bounded and operationally important). Fetches the next server-side page via the `loadMoreContacts` GUI AJAX action, rendering rows through a shared `_contactRow.html` partial so appended rows are byte-identical to the initial render
+- Tx drop proposal badges on contact cards:
   - Red "Action Required" — incoming proposal needs acceptance
   - Blue "Awaiting Response" — outgoing proposal pending
   - Orange "Blocked" — rejected proposal, transactions blocked
@@ -470,10 +525,10 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 |-----|----------|
 | Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), addresses (with Copy and QR code buttons; QR regenerates when switching address types), public key (single-line display with Copy button), contact ID |
 | Transactions | Recent transactions with this contact |
-| Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, chain drop resolution section (propose/accept/reject) |
+| Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, tx drop resolution section (propose/accept/reject) |
 | Settings | Edit form, block/unblock/delete buttons |
 
-**Chain Drop Resolution Section (in Info tab):**
+**Tx Drop Resolution Section (in Info tab):**
 - Shown when chain has a gap or active proposal
 - Sub-sections: propose, awaiting acceptance, incoming (accept/reject), rejected (repropose)
 - Funds warning: dropping a transaction removes its funds from both balances
@@ -516,6 +571,19 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 - Type badges (Contact, P2P, Direct)
 - Click any row to open detail modal
 
+**Paginator:**
+- Shared `Paginator` IIFE in `script.js` — same infrastructure Contacts and Payment Requests history use. Page-size selector (25 / 50 / 100 / All, persisted per-table), prev/next buttons, range indicator ("101–125 of 200").
+- **"Load older" button** — fetches the next server-side page via the `loadMoreTransactions` GUI AJAX action, rendering rows through the `_transactionHistoryRow.html` partial that both the initial foreach and the AJAX handler consume. Client concatenates the returned `data.rows` onto the in-memory `transactionData[]` so `openTransactionModal(index)` keeps resolving for appended rows. Button auto-hides when the server reports `exhausted: true`.
+- **"Showing the last N transactions"** counter updates dynamically as rows are loaded or replaced. Uses a `#tx-meta-loaded-count` span rewritten by `refreshMetaLoadedCount()`.
+
+**Search database (server-side):**
+- Button next to the search input, also triggered by pressing Enter in the search box.
+- Fires `searchTransactions` GUI AJAX action — backend runs a case-insensitive `LIKE %term%` across counterparty name (direct + P2P end-recipient + P2P initial-sender), transaction description, all four address fields (sender/receiver/end-recipient/initial-sender), and the txid. Pasting any full or partial hash surfaces the matching row, whether it's currently loaded in the paginator window or not.
+- Respects the current direction / type / status filter select values.
+- Hard-capped at 500 rows; response carries `{html, rows[], total, capped, cap}` so the banner can disclose when a broad query was clipped.
+- Result rows **replace** (not append to) the table body. Paginator moves to page 0, load-older is suspended (the result set is bounded by the server cap). Banner shows `N matches for "term" · Clear search` which reloads to the default view.
+- The local search input's live-keystroke filter also searches the P2P endpoint name/address via new `data-tx-endpoint-name` / `data-tx-endpoint-address` row attributes and the txid (via `data-txid`, which was already present on the row for the detail-modal cross-link) — so typing "carol" or pasting a txid locally matches the same rows the database search would return for already-loaded transactions, and the "X transactions found" counter stays consistent after a database search.
+
 **Transaction Modal:**
 - Full transaction details
 - Copy buttons for addresses/txid
@@ -530,13 +598,13 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 
 The Dead Letter Queue section displays messages that could not be delivered after all automatic retry attempts.
 
-**Status Filter:** Dropdown matching contacts/transactions pattern — Any status (default), Pending & Retrying, Pending Only, Resolved, Abandoned.
+**Status Filter:** Dropdown matching contacts/transactions pattern — Any status (default), Pending & Retrying, Pending Only, Resolved, Abandoned. The search bar and filter are both gated on `!empty($dlqItems)` — an empty queue hides them so users aren't shown controls with nothing to act on (matches the Contacts and Payment Requests sections).
 
 **Stats Bar:** Per-status counts (Pending / Retrying / Resolved / Abandoned).
 
-**Table Columns:** Type, Recipient, Failure Reason (truncated), Added, Status, Actions. Uses `contacts-table` chrome with 60vh scrollable wrapper. Clicking any row opens a detail modal with all fields + Retry/Abandon buttons.
+**Table Columns:** Status icon (leading, slim), Type, Recipient, Failure Reason (truncated), Added, Actions. Uses `contacts-table` chrome with 60vh scrollable wrapper. Clicking any row opens a detail modal with all fields + Retry/Abandon buttons. The leading status-icon column carries pending / retrying / resolved / abandoned state via `fa-hourglass-half` / `fa-sync-alt fa-spin` / `fa-check-double` / `fa-ban` — resolved and abandoned colours follow the user-selected status colour scheme. The legacy dedicated "Status" column was removed: the Actions cell carries "Delivered" / "Abandoned" text for terminal rows and the icon + row-click modal cover the rest.
 
-**Mobile (≤600px):** Shows Type + Recipient. Tap row for detail modal with full info and actions. Action buttons and status collapse to icon-only at ≤900px.
+**Mobile (≤600px):** Shows status icon + Type + Recipient (the generic `.contacts-table` rule hiding cols 3+ is overridden here so the recipient stays visible alongside the icon column). Tap row for detail modal with full info and actions. Action buttons collapse to icon-only at ≤900px.
 
 **Actions per row:**
 
@@ -574,10 +642,64 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 
 #### settingsSection.html
 
+**Header callout** — `.section-intro` explaining what Save does, what Reset reverts (unsaved changes only), and pointing at Advanced Settings → Reset to Defaults for a full wipe.
+
 **Settings Form:**
-- Basic wallet settings (currency, fee, credit limit, transport mode)
-- Collapsible Advanced Settings with category dropdown (Feature Toggles, Backup & Logging, Data Retention, Rate Limiting, Sync, Network, Currency, Display)
-- Save/Reset buttons
+- Basic wallet settings organized into four `<h5 class="settings-group-heading">` subsections — **Appearance** (contact avatar style, amount and status color schemes), **Identity** (display name), **Payments** (default currency, fees, credit limit), **Network** (default transport mode)
+- Collapsible Advanced Settings with category dropdown. Categories: **Feature Toggles**, **Currency**, **Display**, **Backup & Logging**, **Data Retention**, **Sync**, **Network**, **Rate Limiting**, **GUI Security**, **Reset to Defaults**
+- Advanced categories with >3 fields are further subdivided into `<h5 class="settings-group-heading">` groups: **Feature Toggles** (Contacts, Transactions, GUI, System), **Backup & Logging** (Backup, Logging), **Data Retention** (Cleanup, Archive), **Rate Limiting** (Throughput, Attempt Blocking), **Network** (Transport Timeouts, Tor Resilience, Routing & Delivery, API). Each subsection is its own `.settings-grid` so the 3-column `auto-fill` layout applies per group
+- **GUI subsection** hosts `autoRefreshEnabled` and `hideEmptyGuiSections`. `hideEmptyGuiSections` (default OFF) hides the Failed Messages / Payment Requests / Pending Contact Requests sections when their lists are empty — when OFF (the default) these sections render an empty-state panel so users know the feature exists
+- **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list. The sessions list heading uses `settings-group-heading` for cross-category consistency, and the empty state uses the shared `.empty-panel` (dashed border + centered text) that also backs the API Keys empty state
+- **Data Retention** category has two subsections with distinct semantics: a **Cleanup** block (`cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`) where rows past retention are **deleted**, and a separate **Archive** block (`paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`) where resolved payment requests past retention **move to the `payment_requests_archive` table** — they stay queryable in the history/search paths. The archive block carries its own inline warning ("nothing is deleted") so users don't confuse it with the cleanup retentions above it
+- **Reset to Defaults** category is a dedicated destructive-action surface — danger button opens `settingsResetToDefaultsModal` which requires typing `reset` into a confirmation input before the submit button enables. Submits to `SettingsController::handleResetToDefaults()` via a separate form (outside the main settings `<form>`, since a nested form isn't legal HTML)
+- Save / Reset buttons at the bottom — Save posts `updateSettings`; Reset is a plain `<button type="reset">` that rolls back unsaved form state
+
+The Settings tab additionally hosts **apiKeysSection.html** (API-key lifecycle, see below) and **debugSection.html** (debug logs, system info, debug report).
+
+---
+
+#### .section-intro — shared top-of-section callout
+
+Any section can start with a `<details class="section-intro text-muted">` callout:
+```html
+<details class="section-intro text-muted">
+    <summary><i class="fas fa-info-circle"></i> <span>Short title</span></summary>
+    <div class="section-intro-body">Longer explanation…</div>
+</details>
+```
+Currently applied to: **Wallet Settings**, **API Keys**, **Failed Messages**, **Debug Information**, **New eIOU**, **Your Contacts**, **Recent Transactions**.
+
+Always ships closed (no `open` attribute) — user clicks the summary to expand via native `<details>` behaviour. Same UX on desktop and mobile and for JS-disabled users (Tor "Safest" mode). The summary shows an info icon on the left and a chevron on the right that rotates when open. CSS lives at `.section-intro` / `details.section-intro > summary` / `.section-intro-body` in `page.css`.
+
+---
+
+#### apiKeysSection.html
+
+Rendered on the **Settings** tab, between the settings form and the debug section. Lists every API key on the node and exposes the full lifecycle (create / enable / disable / edit / delete / bulk-disable / bulk-delete) without leaving the page.
+
+**Toolbar:**
+- **Create API Key** — opens the create modal
+- **Refresh** — re-fetches the list without a full page reload
+- **Disable all** — visible only when ≥1 key is enabled
+- **Delete all** — visible only when ≥1 key exists (enabled or disabled)
+- **"Edits unlocked for N min"** — status text shown while a sensitive-access grant is active
+
+**List rows (one per key):**
+- Label (bold) + Active/Disabled badge
+- `key_id` (monospace)
+- Meta line: permission summary (comma-joined), rate limit, created timestamp, last-used timestamp, expiration (if any)
+- Actions: **Enable/Disable** (toggles single key), **Edit** (label / rate limit / expiry), **Delete** (typed-confirmation)
+
+**Modals (all `position: fixed`, stacked on `.modal` z-index 10000 except re-auth at 10010):**
+- `apiKeysCreateModal` — label, permission checkboxes grouped by scope (Wallet / Contacts / System / Backup / Admin), Read-only / Full access / Clear presets, rate limit (1–`ApiKeyService::MAX_RATE_LIMIT`, default 100), expiry (Never / 30d / 90d / 1 year)
+- `apiKeysRevealModal` — **one-time** secret display with per-field Copy buttons and a mandatory "I've saved..." acknowledgement before Done. Secret is scrubbed from the DOM the moment this modal closes
+- `apiKeysEditModal` — read-only permission chips + editable label / rate-limit / expiry-shortening. Live warning when rate limit is raised above the stored value
+- `apiKeysDeleteModal` — typed confirmation (must match the key's label)
+- `apiKeysDisableAllModal` — one-click confirmation with the exact active-key count
+- `apiKeysDeleteAllModal` — typed confirmation (must type `delete all` verbatim)
+- `apiKeysVerifyModal` — sensitive-action re-auth prompt (auth code input + Unlock). Opens *on top of* whichever modal triggered the gate
+
+Client-side module (`script.js`, IIFE exported as `window.apiKeys`) handles dispatch through a shared `withSensitiveAccess(requestFn, onResponse, label)` helper: on a `401 sensitive_access_required` response the module opens the verify modal, and on successful verify retries the original request with the same `onResponse` handler so the caller doesn't have to know about the re-auth dance.
 
 ---
 

@@ -98,7 +98,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
         'add' => ['max' => 20, 'window' => 60, 'block' => 300],       // 20 contact additions per minute
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
         'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
-        'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 chain drop operations per minute
+        'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 tx drop operations per minute
         'report' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 report generations per minute
         'p2p' => ['max' => 30, 'window' => 60, 'block' => 300],       // 30 P2P approval operations per minute
         'request' => ['max' => 20, 'window' => 60, 'block' => 300],   // 20 payment request operations per minute
@@ -348,7 +348,17 @@ elseif($request === "backup"){
   $backupService = $app->services->getBackupService();
   $backupService->handleCommand($cleanArgv, $output);
 }
-// Chain Drop Agreement
+// Chain integrity audit — safety net for archived chains
+// Walks every bilateral chain end-to-end (live + archive) and verifies
+// each pair's archive hash against the stored checkpoint. Exits 1 if
+// any pair has findings (gap or hash mismatch).
+elseif($request === "verify-chain"){
+  $debugService->output("Executing verify-chain request", 'SILENT');
+  $chainAuditService = $app->services->getChainAuditService();
+  $exitCode = $chainAuditService->handleCommand($cleanArgv, $output);
+  exit($exitCode);
+}
+// Tx Drop Agreement
 elseif($request === "chaindrop"){
   $debugService->output("Executing chain drop request", 'SILENT');
   $chainDropService = $app->services->getChainDropService();

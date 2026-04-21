@@ -81,10 +81,21 @@ class SendOperationServiceTest extends TestCase
         $this->mockChainDropService = $this->createMock(ChainDropServiceInterface::class);
 
         $this->mockRepositoryFactory = $this->createMock(RepositoryFactory::class);
+        // Default ContactCurrencyRepository mock returns TRUE on
+        // hasAcceptedCurrency so the send-path guard (added alongside
+        // the Unblock currency-line fix) lets the existing tests reach
+        // the downstream behaviour they assert on. Tests specifically
+        // covering the no-accepted-currency branch should stub this to
+        // return false.
+        $mockContactCurrencyRepo = $this->createMock(\Eiou\Database\ContactCurrencyRepository::class);
+        $mockContactCurrencyRepo->method('hasAcceptedCurrency')->willReturn(true);
         $this->mockRepositoryFactory->method('get')
-            ->willReturnCallback(function (string $class) {
+            ->willReturnCallback(function (string $class) use ($mockContactCurrencyRepo) {
                 if ($class === TransactionChainRepository::class) {
                     return $this->mockChainRepo;
+                }
+                if ($class === \Eiou\Database\ContactCurrencyRepository::class) {
+                    return $mockContactCurrencyRepo;
                 }
                 return $this->createMock($class);
             });
@@ -851,7 +862,7 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test setChainDropService sets the chain drop service
+     * Test setChainDropService sets the tx drop service
      */
     public function testSetChainDropServiceSetsTheChainDropService(): void
     {
@@ -860,7 +871,7 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test handleDirectRoute auto-proposes chain drop when sync fails to repair
+     * Test handleDirectRoute auto-proposes tx drop when sync fails to repair
      */
     public function testHandleDirectRouteAutoProposesChainDropWhenSyncFails(): void
     {
@@ -1000,7 +1011,7 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test handleDirectRoute falls back to generic error when chain drop service is null
+     * Test handleDirectRoute falls back to generic error when tx drop service is null
      */
     public function testHandleDirectRouteFallsBackWhenChainDropServiceIsNull(): void
     {
@@ -1103,7 +1114,7 @@ class SendOperationServiceTest extends TestCase
             ->method('syncTransactionChain')
             ->willReturn(['success' => true, 'synced_count' => 0, 'error' => null]);
 
-        // ChainDropService should be called to propose chain drop
+        // ChainDropService should be called to propose tx drop
         $this->service->setChainDropService($this->mockChainDropService);
         $this->mockChainDropService->expects($this->once())
             ->method('proposeChainDrop')

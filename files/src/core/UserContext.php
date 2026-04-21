@@ -98,6 +98,45 @@ class UserContext {
     }
 
     /**
+     * Reset every persisted wallet setting to the value this build considers
+     * default. Writes {} into defaultconfig.json so every setting getter
+     * falls back to its Constants-backed default, and removes the `name`
+     * key from userconfig.json (the only setting that lives there;
+     * identity / key fields are preserved). Reloads in-memory state so
+     * subsequent reads reflect the fresh defaults.
+     *
+     * "Defaults" means whatever the running code considers default. Editing
+     * Constants.php on a node redefines that baseline — this is not a
+     * factory reset in the ship-image sense. Contacts, transactions,
+     * backups, and API keys are not touched.
+     *
+     * @throws \RuntimeException on write failure
+     * @return void
+     */
+    public function resetToDefaults(): void {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        if (file_put_contents($defaultPath, json_encode(new \stdClass(), JSON_PRETTY_PRINT), LOCK_EX) === false) {
+            throw new \RuntimeException('Failed to write ' . $defaultPath);
+        }
+
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (file_exists($userPath)) {
+            $contents = file_get_contents($userPath);
+            $data = is_string($contents) ? (json_decode($contents, true) ?: []) : [];
+            if (array_key_exists('name', $data)) {
+                unset($data['name']);
+                if (file_put_contents($userPath, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+                    throw new \RuntimeException('Failed to write ' . $userPath);
+                }
+            }
+        }
+
+        $this->userData = [];
+        $this->initialized = false;
+        $this->loadConfigFromFiles();
+    }
+
+    /**
      * Get a user configuration value
      *
      * @param string $key Configuration key
@@ -552,6 +591,52 @@ class UserContext {
     }
 
     /**
+     * Master toggle for live event notifications (non-reloading XHR poll
+     * that shows toasts + updates tab badges when new incoming payment
+     * requests / contact requests / transactions / DLQ entries arrive).
+     *
+     * @return bool
+     */
+    public function getLiveNotificationsEnabled(): bool {
+        return (bool) ($this->get('liveNotificationsEnabled') ?? Constants::LIVE_NOTIFICATIONS_ENABLED);
+    }
+
+    /**
+     * Verbosity mode for live event notifications.
+     *
+     * Quiet    — only customer-visible events toast (received completed,
+     *            payment requests, contact requests). In-flight tx status
+     *            churn and DLQ failures update badges silently.
+     * Balanced — quiet + DLQ failures toast (default).
+     * Live     — everything toasts, including in-flight tx status churn.
+     *
+     * @return string One of Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS
+     */
+    public function getLiveNotificationsVerbosity(): string {
+        $v = (string) ($this->get('liveNotificationsVerbosity') ?? Constants::LIVE_NOTIFICATIONS_VERBOSITY);
+        return in_array($v, Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS, true)
+            ? $v
+            : Constants::LIVE_NOTIFICATIONS_VERBOSITY;
+    }
+
+    /**
+     * Toast auto-dismiss duration in milliseconds. 0 = persist until user
+     * dismisses.
+     *
+     * @return int
+     */
+    public function getLiveNotificationsToastDurationMs(): int {
+        $v = $this->get('liveNotificationsToastDurationMs');
+        if ($v === null) {
+            return Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS;
+        }
+        $v = (int) $v;
+        return in_array($v, Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS, true)
+            ? $v
+            : Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS;
+    }
+
+    /**
      * Get auto-backup enabled status for daily database backups
      *
      * @return bool
@@ -567,6 +652,20 @@ class UserContext {
      */
     public function getAutoAcceptTransaction(): bool {
         return (bool) ($this->get('autoAcceptTransaction') ?? Constants::AUTO_ACCEPT_TRANSACTION);
+    }
+
+    /**
+     * GUI-only preference: hide empty Failed Messages / Payment Requests /
+     * Pending Contact Requests sections rather than rendering their
+     * empty-state panels. Default OFF — empty panels double as "this
+     * feature exists, you just have nothing here" cues, which helps
+     * discoverability more than it clutters. Power users who'd rather
+     * keep the page short can flip it on in Display.
+     *
+     * @return bool
+     */
+    public function getHideEmptyGuiSections(): bool {
+        return (bool) ($this->get('hideEmptyGuiSections') ?? Constants::HIDE_EMPTY_GUI_SECTIONS);
     }
 
     /**
@@ -686,7 +785,7 @@ class UserContext {
     }
 
     /**
-     * Get auto chain drop propose setting
+     * Get auto tx drop propose setting
      *
      * @return bool
      */
@@ -716,7 +815,7 @@ class UserContext {
     }
 
     /**
-     * Get auto chain drop accept setting
+     * Get auto tx drop accept setting
      *
      * @return bool
      */
@@ -729,7 +828,7 @@ class UserContext {
     }
 
     /**
-     * Get auto chain drop accept guard setting
+     * Get auto tx drop accept guard setting
      *
      * When true, auto-accept checks balances before accepting (blocks debt erasure).
      * When false, auto-accept proceeds unconditionally.
@@ -842,6 +941,40 @@ class UserContext {
      */
     public function getCleanupDlqRetentionDays(): int {
         return max(1, (int) ($this->get('cleanupDlqRetentionDays') ?? Constants::CLEANUP_DLQ_RETENTION_DAYS));
+    }
+
+    /**
+     * Days after resolution before a payment request moves to the archive table.
+     * Floor of 1 day so a misconfigured 0 can't turn the job into an immediate move.
+     */
+    public function getPaymentRequestsArchiveRetentionDays(): int {
+        return max(1, (int) ($this->get('paymentRequestsArchiveRetentionDays') ?? Constants::PAYMENT_REQUESTS_ARCHIVE_RETENTION_DAYS));
+    }
+
+    /**
+     * How many rows the archival job moves per transaction. Keeps the per-batch
+     * lock window short; the cron loops until no eligible rows remain.
+     */
+    public function getPaymentRequestsArchiveBatchSize(): int {
+        return max(1, (int) ($this->get('paymentRequestsArchiveBatchSize') ?? Constants::PAYMENT_REQUESTS_ARCHIVE_BATCH_SIZE));
+    }
+
+    /**
+     * Days after completion (using COALESCE(time, UNIX_TIMESTAMP(timestamp))) before a
+     * transaction becomes eligible for archival. Actual archival is additionally gated
+     * on the bilateral chain verifying gap-free at the moment of archival — see
+     * TransactionArchivalService. Floor of 1 day so a misconfigured 0 cannot turn the
+     * job into an immediate move.
+     */
+    public function getTransactionsArchiveRetentionDays(): int {
+        return max(1, (int) ($this->get('transactionsArchiveRetentionDays') ?? Constants::TRANSACTIONS_ARCHIVE_RETENTION_DAYS));
+    }
+
+    /**
+     * How many rows the transactions archival job moves per transaction.
+     */
+    public function getTransactionsArchiveBatchSize(): int {
+        return max(1, (int) ($this->get('transactionsArchiveBatchSize') ?? Constants::TRANSACTIONS_ARCHIVE_BATCH_SIZE));
     }
 
     /**
@@ -1139,8 +1272,12 @@ class UserContext {
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
             'defaultTransportMode' => Constants::getDefaultTransportMode(),
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
+            'liveNotificationsEnabled' => Constants::LIVE_NOTIFICATIONS_ENABLED,
+            'liveNotificationsVerbosity' => Constants::LIVE_NOTIFICATIONS_VERBOSITY,
+            'liveNotificationsToastDurationMs' => Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
             'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
+            'hideEmptyGuiSections' => Constants::HIDE_EMPTY_GUI_SECTIONS,
             'autoRejectUnknownCurrency' => Constants::AUTO_REJECT_UNKNOWN_CURRENCY,
             'autoAcceptRestoredContact' => Constants::AUTO_ACCEPT_RESTORED_CONTACT,
             'updateCheckEnabled' => Constants::UPDATE_CHECK_ENABLED,
@@ -1171,6 +1308,10 @@ class UserContext {
             'cleanupHeldTxRetentionDays' => Constants::CLEANUP_HELD_TX_RETENTION_DAYS,
             'cleanupRp2pRetentionDays' => Constants::CLEANUP_RP2P_RETENTION_DAYS,
             'cleanupMetricsRetentionDays' => Constants::CLEANUP_METRICS_RETENTION_DAYS,
+            'paymentRequestsArchiveRetentionDays' => Constants::PAYMENT_REQUESTS_ARCHIVE_RETENTION_DAYS,
+            'paymentRequestsArchiveBatchSize' => Constants::PAYMENT_REQUESTS_ARCHIVE_BATCH_SIZE,
+            'transactionsArchiveRetentionDays' => Constants::TRANSACTIONS_ARCHIVE_RETENTION_DAYS,
+            'transactionsArchiveBatchSize' => Constants::TRANSACTIONS_ARCHIVE_BATCH_SIZE,
 
             // Rate limiting
             'p2pRateLimitPerMinute' => Constants::P2P_RATE_LIMIT_PER_MINUTE,

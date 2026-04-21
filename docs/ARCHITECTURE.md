@@ -322,7 +322,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactStatusService` | Contact ping/status checking; auto-creates pending contacts for unknown pings (wallet restore scenario) | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService, ChainDropService |
 | `SyncService` | Transaction chain synchronization | ContactRepo, AddressRepo, P2pRepo, Rp2pRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, BalanceRepo, UtilityContainer, HeldTransactionService, BackupService |
-| `ChainDropService` | Chain drop agreement protocol with auto-accept balance guard | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy, BalanceRepo |
+| `ChainDropService` | Tx drop agreement protocol with auto-accept balance guard | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy, BalanceRepo |
 | `ChainOperationsService` | Centralized chain verification/repair | SyncService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
 | `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo (uses EventDispatcher for sync notifications) |
@@ -330,6 +330,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `BackupService` | Encrypted backup and restore | TransactionRepo |
 | `WalletService` | Wallet information access | UserContext |
 | `PaymentRequestService` | Payment request lifecycle — create, approve (triggers sendEiou), decline, cancel, handle incoming request/response messages | PaymentRequestRepo, TransactionService, MessageDeliveryService, ContactRepo, TransportUtility |
+| `PaymentRequestArchivalService` | Nightly batch move of resolved payment requests from `payment_requests` → `payment_requests_archive` once `responded_at` is older than `paymentRequestsArchiveRetentionDays`. Invoked by `payment-request-archive-cron.php` at 01:00 UTC. Supports `--dry-run` (count only). After any successful move (moved > 0) calls `BackupService::createArchiveBackup()` + `cleanupOldBackups()` so the cold backup is refreshed; backup failures are logged but never fail archival | PaymentRequestArchiveRepo, UserContext, BackupService (optional) |
 | `MessageService` | Incoming message routing | ContactRepo, BalanceRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncTriggerProxy, ChainDropService, PaymentRequestService |
 | `ApiAuthService` | API authentication (HMAC-SHA256) | ApiKeyRepo |
 | `ApiKeyService` | API key management | ApiKeyRepo |
@@ -379,7 +380,7 @@ $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServicePro
 $this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
 
-// MessageService handles sync requests and chain drop messages
+// MessageService handles sync requests and tx drop messages
 $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
 $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
 
@@ -486,11 +487,11 @@ events instead of direct dependencies.
 
 | Event | When Dispatched |
 |-------|-----------------|
-| `CHAIN_DROP_PROPOSED` | When a chain drop is proposed to a contact |
-| `CHAIN_DROP_ACCEPTED` | When a chain drop proposal is accepted |
-| `CHAIN_DROP_REJECTED` | When a chain drop proposal is rejected |
-| `CHAIN_DROP_EXECUTED` | When a chain drop has been fully executed locally |
-| `TRANSACTION_RECOVERED_FROM_BACKUP` | When a missing transaction is recovered from a database backup instead of requiring a chain drop |
+| `CHAIN_DROP_PROPOSED` | When a tx drop is proposed to a contact |
+| `CHAIN_DROP_ACCEPTED` | When a tx drop proposal is accepted |
+| `CHAIN_DROP_REJECTED` | When a tx drop proposal is rejected |
+| `CHAIN_DROP_EXECUTED` | When a tx drop has been fully executed locally |
+| `TRANSACTION_RECOVERED_FROM_BACKUP` | When a missing transaction is recovered from a database backup instead of requiring a tx drop |
 
 **DeliveryEvents Constants:**
 
@@ -692,7 +693,7 @@ public function wireCircularDependencies(): void {
     $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['ContactStatusService']->setChainDropService($this->services['ChainDropService']);
 
-    // Message service handles sync and chain drop routing
+    // Message service handles sync and tx drop routing
     $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
 
@@ -977,7 +978,7 @@ chains. Operates in 5-minute cycles.
 - Updates contact online status (online/partial/offline/unknown)
 - Validates per-currency transaction chain integrity (`prevTxidsByCurrency` maps)
 - Triggers sync if any currency's chain heads don't match
-- Auto-proposes chain drop if sync detects mutual gaps (both sides missing same transaction)
+- Auto-proposes tx drop if sync detects mutual gaps (both sides missing the same transaction(s))
 - Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
 
@@ -1164,7 +1165,7 @@ Claimed entries are re-sent through the normal delivery pipeline.
 
 **Transaction DLQ payload refresh:** Messages can sit in the DLQ for hours
 or days. For `message_type='transaction'` entries, the chain may have
-advanced (new outbound txs) or had a chain drop re-wire the link past a
+advanced (new outbound txs) or had a tx drop re-wire the link past a
 missing transaction since the original send — replaying the stored payload
 verbatim would ship a stale `previousTxid`.
 `MessageDeliveryService::retryFromDlq` therefore runs a refresh step before
@@ -1234,7 +1235,7 @@ Each node maintains a MariaDB database with these primary tables:
 | `api_keys` | API authentication keys |
 | `api_request_log` | API request audit trail |
 | `rate_limits` | Rate limiting state |
-| `chain_drop_proposals` | Mutual chain drop agreement tracking |
+| `chain_drop_proposals` | Mutual tx drop agreement tracking |
 | `p2p_senders` | Multi-path upstream sender tracking for RP2P forwarding |
 | `p2p_relayed_contacts` | Contacts that returned `already_relayed` during P2P broadcast (used by two-phase relay selection in best-fee mode) |
 | `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
@@ -1242,6 +1243,31 @@ Each node maintains a MariaDB database with these primary tables:
 | `contact_currencies` | Per-contact, per-currency config (fee, credit limit) with direction tracking (`incoming`/`outgoing` = who initiated the relationship) |
 | `capacity_reservations` | Credit reserved at each relay hop during P2P routing (base_amount and total_amount including fees), status: active/released/committed |
 | `route_cancellations` | Audit trail for route cancellation messages sent to unselected P2P candidates after best-fee selection |
+| `payment_requests` | Live payment request lifecycle: pending + recently-resolved rows. Resolved rows older than `paymentRequestsArchiveRetentionDays` move to `payment_requests_archive` via the nightly archival cron |
+| `payment_requests_archive` | Cold storage for resolved payment requests. Schema mirrors `payment_requests` + an `archived_at` timestamp. Read paths (`getResolvedHistoryPage`, `searchResolvedHistory`, `getByRequestId`) UNION across live + archive transparently; pending reads never touch the archive. Created at schema version 9 (fresh installs via `DatabaseSetup.php`, existing nodes via `runMigrations()`). Pilot for `transactions_archive` below — establishes the batch-move, UNION-shim, and split-backup patterns on a table without chain semantics |
+| `transactions_archive` | Cold storage for completed transactions older than `transactionsArchiveRetentionDays` AND belonging to a bilateral pair that verified gap-free at the moment of archival. Schema mirrors `transactions` + an `archived_at` timestamp. Populated by `TransactionArchivalService` (cron at 01:30 UTC) — pairs with a detected chain gap are skipped, not archived. Created at schema version 10. See [Archive-aware read paths](#archive-aware-read-paths) below for how the chain walk, balances, statistics, and sync protocol all consult both tables |
+| `transaction_chain_checkpoints` | Per-bilateral-pair metadata recording the gap-free-at-archival proof. One row per {user_public_key_hash, contact_public_key_hash} (canonicalized LEAST/GREATEST so direction doesn't matter). Columns: `archived_count`, `archived_txid_hash` (SHA-256 over the sorted archived-txid list — tamper detection), `highest_archived_timestamp`, `highest_archived_time`, `last_verified_gap_free_at`. Written by `TransactionArchivalService::upsertCheckpointAfterMove` after a successful batch; `archived_count` + `archived_txid_hash` are absolute values (recomputed from the archive each time) so the checkpoint is self-healing. **Read path:** `TransactionChainRepository::verifyChainIntegrityByHashes()` (called on every outbound send via the public-key variant) consults this row in the default `useCheckpoint=true` mode — a missing `previous_txid` from live is trusted as an archived row if a checkpoint exists, collapsing verify from O(all history) to O(live tail) + 1 indexed row lookup. `ChainAuditService` (invoked by `eiou verify-chain`) is the safety net: it calls verify with `useCheckpoint=false` (walks live + archive end-to-end) and additionally recomputes each pair's `archived_txid_hash` against the stored value, detecting any post-archival tampering that the hot path trusts past by design |
+
+#### Archive-aware read paths
+
+With an archive in place, every code path that asks a yes/no or SUM/COUNT question about transactions must consider both tables or risk treating archived history as if it vanished. Hot paths take a fast route via the per-pair checkpoint; other paths query both tables directly.
+
+Hot path — `verifyChainIntegrity` on every outbound send: live query + indexed checkpoint lookup, O(live tail) + 1 row. Missing `previous_txid` from live is trusted as archived iff a checkpoint exists. Set `$useCheckpoint=false` to force the paranoid walk (both tables fully scanned + hash recomputed) — used by `eiou verify-chain`.
+
+Non-hot paths UNION across both tables: `getChainStateSummary` (sync negotiation needs the complete txid list, not just a count), `getContactBalance` / `getAllContactBalances` (per-contact balances survive archival), `getSentUserTransactions` / `getReceivedUserTransactions` and the `*Address` variants (CLI `eiou history` output), `getTransactionsByType` (API `GET /api/transactions?type=X`), and every aggregate in `TransactionStatisticsRepository` (overall stats use a UNION ALL subquery so `COUNT(DISTINCT sender_address)` / `COUNT(DISTINCT receiver_address)` deduplicate naturally across the combined set).
+
+Sync protocol lookups consult both tables to prevent counterparty re-sync from inflating our live table with txids we've already archived. Four methods:
+
+| Call site | Method | Why archive lookup is needed |
+|---|---|---|
+| Sync dedup (incoming) | `TransactionRepository::transactionExistsTxid` | Short-circuit on live hit; fall through to archive on miss so we don't re-insert archived txids a counterparty still has in their live |
+| Sync response (outgoing) | `TransactionRepository::getByTxid` | An archived tx a remote is missing must be returned so we can re-push it — a null return would silently drop it from the sync response |
+| Peer status inquiry | `TransactionRepository::getStatusByTxid` | Archive rows are `status='completed'` by construction — answering `TransactionNotFound` for an archived tx would make the peer think it evaporated |
+| Chain conflict detection | `TransactionChainRepository::getLocalTransactionByPreviousTxid` | A remote tx claiming `previous_txid = X` where X is archived is still a conflict; the archive-hit row is tagged with `_source='archive'` so `resolveChainConflict` can apply the archive-wins rule |
+
+All fall back defensively with a `PDOException` catch — during the v9→v10 migration moment where `transactions_archive` doesn't exist yet, the live-only path is correct and the archive check silently contributes nothing.
+
+**Archive-wins rule for chain conflicts**: narrow edge case where a remote tx arrives via sync claiming `previous_txid = X`, and we have an archived local tx also claiming `previous_txid = X`. `getLocalTransactionByPreviousTxid` returns the archived partner tagged with `_source='archive'`. `SyncService::resolveChainConflict` recognises the sentinel and forces `winner=local`, bypassing the usual lexicographic txid tiebreak. The remote tx is still inserted into live (both have valid signatures; chain ordering resolves at read time via the deterministic tiebreak) — only the `resignLocalTransaction` path is skipped, so the archive is never modified. A `WARNING` log entry captures the occurrence for operator investigation. The edge case itself shouldn't happen under normal operation (archival moves only `completed` rows; chain conflicts happen between `pending` txs), but the rule makes stale-pending-tx / misconfigured-counterparty / adversarial scenarios safe.
 
 ### Amount Storage: SplitAmount
 
@@ -2200,14 +2226,82 @@ invisible to the chain walk, to sync, and to new-tx linking. This closes a
 class of permanent chain gap where a cancel-while-pending on the sender would
 leave the peer unable to verify any subsequent transaction.
 
+#### Self-healing on failed delivery (core strength)
+
+A transaction that never reaches the recipient — whether the send times out,
+the transport is down, or all retries exhaust and the user Abandons the DLQ
+entry — **does not create a sync gap**. The mechanism is deliberately
+asymmetric between the two sides:
+
+- **Sender side**: keeps the failed tx as a local `cancelled` row for audit
+  and accounting. The row has a valid `previous_txid` pointing into the chain
+  but nothing ever points *at* it — it's a leaf, not a link. The sender's
+  chain walker (`TransactionChainRepository::getTransactionChain`) filters
+  `status NOT IN ('cancelled', 'rejected')`, so the chain walk skips right
+  past it. `verifyChainIntegrity` only inspects `completed`/`accepted`/`paid`,
+  so the cancelled row doesn't trip the verifier either. `valid_chain`
+  stays `true` on the sender.
+- **Recipient side**: never heard of the tx at all, so there's nothing to
+  reconcile. The next tx the recipient DOES receive already has a rewritten
+  `previous_txid` pointing at the last *completed* predecessor — a direct
+  link across the gap the cancelled tx left behind on the sender's side.
+  `valid_chain` stays `true` on the recipient too.
+
+**The DLQ retry path actively participates in this self-healing.**
+`MessageDeliveryService::refreshTransactionDlqPayload` (`files/src/services/MessageDeliveryService.php`)
+re-queries `getPreviousTxid` before every retry and rewrites the pending
+tx's `previousTxid` to the *current* chain head. If intervening cancelled
+siblings accumulated while the retry was queued, the rewritten payload
+points past them. If a retry eventually succeeds, the delivered tx's
+`previous_txid` reflects the chain as it existed at delivery time — not
+at original-send time. If the retry is abandoned, the dormant payload's
+`previousTxid` is irrelevant because nothing references its txid.
+
+#### Concrete example
+
+Three consecutive sends on Alice's side: `TX_A` completes, `TX_B` never
+reaches Bob and ends up `cancelled`, `TX_C` is sent afterwards. Abbreviated
+txids for readability:
+
+```
+Alice's DB:
+  TX_A   prev=TX_0   completed     ← last known-good before the run
+  TX_B   prev=TX_A   CANCELLED     ← leaf: signed pointing at TX_A, but
+                                     nothing ever points back at TX_B
+  TX_C   prev=TX_A   completed     ← skipped past TX_B on send; its
+                                     previous_txid references TX_A directly,
+                                     because getPreviousTxid() filters out
+                                     cancelled rows when picking the parent
+
+Bob's DB (same window):
+  TX_A   prev=TX_0   completed
+  TX_C   prev=TX_A   completed     ← links cleanly to TX_A; Bob has no
+                                     record of TX_B at all (COUNT = 0)
+```
+
+The key detail: `TX_C` on Alice's side has `previous_txid = TX_A`, NOT
+`TX_B`. The cancelled `TX_B` is a dangling leaf — it points backwards
+into the chain but no subsequent row points at it. Both sides' chain
+walks start from the same head and follow the same `TX_C → TX_A → TX_0`
+path. Both sides' `valid_chain = true`.
+
+**User-facing consequence**: Abandoning a stuck-in-DLQ transaction is
+safe — it's a bookkeeping action, not a chain surgery. No tx drop
+proposal is needed. The "Failed Messages" queue exists to tell the user
+the send didn't land; once they've acknowledged that (Abandon) or the
+retry eventually succeeded (auto-resolve on tx completion — see
+`DeadLetterQueueRepository::markResolvedByTxid`), there is nothing
+else for the chain-integrity subsystem to do.
+
 When a chain gap is detected during sync, the `SyncService` attempts backup
-recovery before falling through to a chain drop:
+recovery before falling through to a tx drop:
 1. **Local self-repair** — checks local database backups for missing transactions
 2. **Remote backup request** — sends remaining missing txids to the contact via the
    `missingTxids` field in the sync request; the contact checks its DB and backups
-3. **Chain drop fallback** — only if neither side has the transaction in any backup,
-   the `ChainDropService` coordinates mutual agreement to drop the missing transaction
-   and relink the chain
+3. **Tx drop fallback** — only if neither side has the missing transactions in any backup,
+   the `ChainDropService` coordinates mutual agreement to drop the missing transaction(s)
+   and re-wire the chain around the drop. A single tx drop spans one or more *consecutive*
+   missing transactions; non-consecutive gaps require a separate tx drop per run
 
 ### Send Flow (SendOperationService)
 
@@ -2228,7 +2322,7 @@ sendEiou()
   |     +-- Return success if chain repaired, failure if gaps remain
   |
   +-- If chain verification failed:
-  |     +-- Auto-propose chain drop (if sync completed but gaps remain)
+  |     +-- Auto-propose tx drop (if sync completed but gaps remain)
   |     +-- Return error to user (transaction NOT created)
   |
   +-- If chain valid -> prepareStandardTransactionData() (tx created here)
@@ -2313,7 +2407,7 @@ HTTP Request (from sender)
 
 The proactive sync in the `checkPreviousTxid` step uses the same backup recovery
 mechanism described in the [Chain Integrity](#chain-integrity) section: local backup
-check, then remote backup request via `missingTxids`, then chain drop as last resort.
+check, then remote backup request via `missingTxids`, then tx drop as last resort.
 
 ### Sync Flow (SyncService)
 
@@ -2369,10 +2463,13 @@ handleTransactionSyncRequest(request)  [Contact's side]
   +-- 5. Return filtered transactions (oldest first)
 ```
 
-### Chain Drop Agreement Flow
+### Tx Drop Agreement Flow
 
-When neither side has a missing transaction in their database or backups, the chain
-drop protocol coordinates mutual agreement to remove the gap and relink the chain:
+When neither side has the missing transactions in their database or backups, the
+tx drop protocol coordinates mutual agreement to drop the missing transaction(s)
+and re-wire the chain around the drop. A single tx drop handles one or more
+*consecutive* missing transactions in a single run; non-consecutive gaps require
+a separate proposal per run of consecutive missing txs:
 
 ```
       PROPOSER (A)                                     RECEIVER (B)
@@ -2432,7 +2529,7 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
          (done -- gap remains unresolved)
 ```
 
-**Auto-Propose:** The `send` command and `ping` (Check Status) both auto-propose a chain drop
+**Auto-Propose:** The `send` command and `ping` (Check Status) both auto-propose a tx drop
 when sync detects mutual gaps. The `ContactStatusService` calls `proposeChainDrop()` after
 `syncTransactionChain()` returns with unresolved `chain_gaps`. Controlled by
 `Constants::isAutoChainDropProposeEnabled()` (env: `EIOU_AUTO_CHAIN_DROP_PROPOSE`, default: `true`).
@@ -2444,7 +2541,7 @@ optionally run before auto-accepting, controlled by `Constants::isAutoChainDropA
 stored balances (from `BalanceRepository`) against balances calculated from existing transactions.
 If the missing transactions include net payments TO us (`net_missing > 0`), auto-accept is blocked
 and the proposal requires manual review. This prevents a malicious proposer from erasing debt by
-forcing a chain drop on transactions where they owed us money. When the guard is disabled
+forcing a tx drop on transactions where they owed us money. When the guard is disabled
 (`EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=false`), auto-accept proceeds unconditionally.
 
 **Post-Drop Actions:** After successful execution, `ChainDropService` recalculates the contact
@@ -2902,7 +2999,7 @@ BasePayload (abstract)
     +-- ContactStatusPayload  # Ping/pong status messages (per-currency chain validation and credit exchange)
     +-- P2pPayload            # P2P routing request messages
     +-- Rp2pPayload           # Return P2P response messages
-    +-- MessagePayload        # General inter-node messages (sync, chain drop)
+    +-- MessagePayload        # General inter-node messages (sync, tx drop)
     +-- UtilPayload           # Utility messages (debug, test)
 ```
 

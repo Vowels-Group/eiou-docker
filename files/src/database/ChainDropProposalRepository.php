@@ -10,7 +10,7 @@ use PDO;
 use PDOException;
 
 /**
- * Chain Drop Proposal Repository
+ * Tx Drop Proposal Repository
  *
  * Manages proposals for dropping missing transactions from the chain
  * by mutual agreement between two contacts.
@@ -49,7 +49,7 @@ class ChainDropProposalRepository extends AbstractRepository {
     }
 
     /**
-     * Create a new chain drop proposal
+     * Create a new tx drop proposal
      *
      * @param array $data Proposal data with keys:
      *   - proposal_id: string - Unique proposal identifier

@@ -565,6 +565,158 @@ class ApiKeyRepositoryTest extends TestCase
     }
 
     // =========================================================================
+    // updateKey Tests
+    // =========================================================================
+
+    /**
+     * Test updateKey updates all three fields when all are non-null.
+     */
+    public function testUpdateKeyUpdatesAllFields(): void
+    {
+        $keyId = 'eiou_test123';
+        $name = 'new label';
+        $rateLimit = 250;
+        $expiresAt = '2030-01-01 00:00:00';
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains('name = :name'))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->with([
+                ':key_id' => $keyId,
+                ':name' => $name,
+                ':rate' => $rateLimit,
+                ':expires' => $expiresAt,
+            ]);
+
+        $this->stmt->expects($this->once())
+            ->method('rowCount')
+            ->willReturn(1);
+
+        $this->assertTrue($this->repository->updateKey($keyId, $name, $rateLimit, $expiresAt));
+    }
+
+    /**
+     * Test updateKey skips columns whose parameter is null and only
+     * includes the non-null ones in the generated SET clause.
+     */
+    public function testUpdateKeyOnlyUpdatesNonNullFields(): void
+    {
+        $keyId = 'eiou_test123';
+
+        $capturedSql = null;
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturnCallback(function (string $sql) use (&$capturedSql) {
+                $capturedSql = $sql;
+                return $this->stmt;
+            });
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->with([
+                ':key_id' => $keyId,
+                ':rate' => 500,
+            ]);
+
+        $this->stmt->expects($this->once())
+            ->method('rowCount')
+            ->willReturn(1);
+
+        $this->assertTrue($this->repository->updateKey($keyId, null, 500, null));
+
+        $this->assertStringContainsString('rate_limit_per_minute = :rate', $capturedSql);
+        $this->assertStringNotContainsString(':name', $capturedSql);
+        $this->assertStringNotContainsString(':expires', $capturedSql);
+    }
+
+    /**
+     * Test updateKey returns false without hitting the database when every
+     * mutable field is null (no-op update — guard against a malformed
+     * `UPDATE api_keys SET  WHERE …`).
+     */
+    public function testUpdateKeyReturnsFalseWhenAllFieldsNull(): void
+    {
+        $this->pdo->expects($this->never())->method('prepare');
+        $this->assertFalse($this->repository->updateKey('eiou_test123', null, null, null));
+    }
+
+    /**
+     * Test updateKey returns false when no row matched the key_id.
+     */
+    public function testUpdateKeyReturnsFalseWhenKeyNotFound(): void
+    {
+        $this->pdo->expects($this->once())->method('prepare')->willReturn($this->stmt);
+        $this->stmt->expects($this->once())->method('execute');
+        $this->stmt->expects($this->once())->method('rowCount')->willReturn(0);
+
+        $this->assertFalse($this->repository->updateKey('eiou_nonexistent', 'x', null, null));
+    }
+
+    // =========================================================================
+    // disableAllKeys Tests
+    // =========================================================================
+
+    /**
+     * Test disableAllKeys returns the affected row count.
+     */
+    public function testDisableAllKeysReturnsAffectedCount(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('query')
+            ->with($this->stringContains('UPDATE api_keys SET enabled = 0 WHERE enabled = 1'))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())->method('rowCount')->willReturn(4);
+
+        $this->assertSame(4, $this->repository->disableAllKeys());
+    }
+
+    /**
+     * Test disableAllKeys returns 0 when no keys were enabled.
+     */
+    public function testDisableAllKeysReturnsZeroWhenNoneEnabled(): void
+    {
+        $this->pdo->expects($this->once())->method('query')->willReturn($this->stmt);
+        $this->stmt->expects($this->once())->method('rowCount')->willReturn(0);
+
+        $this->assertSame(0, $this->repository->disableAllKeys());
+    }
+
+    // =========================================================================
+    // deleteAllKeys Tests
+    // =========================================================================
+
+    /**
+     * Test deleteAllKeys returns the affected row count.
+     */
+    public function testDeleteAllKeysReturnsAffectedCount(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('query')
+            ->with($this->stringContains('DELETE FROM api_keys'))
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())->method('rowCount')->willReturn(7);
+
+        $this->assertSame(7, $this->repository->deleteAllKeys());
+    }
+
+    /**
+     * Test deleteAllKeys returns 0 when the table was already empty.
+     */
+    public function testDeleteAllKeysReturnsZeroWhenEmpty(): void
+    {
+        $this->pdo->expects($this->once())->method('query')->willReturn($this->stmt);
+        $this->stmt->expects($this->once())->method('rowCount')->willReturn(0);
+
+        $this->assertSame(0, $this->repository->deleteAllKeys());
+    }
+
+    // =========================================================================
     // logRequest Tests
     // =========================================================================
 

@@ -40,15 +40,21 @@ use Eiou\Gui\Includes\SessionKeys;
 // so the unauthenticated login page can use them too. The require_once below
 // is idempotent; the functions have already been defined by the time we get
 // here on the authenticated path.
+//
+// WalletTemplateHelpers is the post-auth counterpart — helpers that reach
+// into `Application::getInstance()` / the repository factory and therefore
+// can't safely run from the login page. Kept split so the purity contract
+// on TemplateHelpers.php stays honest.
 // =========================================================================
 require_once __DIR__ . '/TemplateHelpers.php';
+require_once __DIR__ . '/WalletTemplateHelpers.php';
 
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
     // Contact actions
-    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
+    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'declineCurrency', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
         $contactController->routeAction();
     }
 
@@ -63,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // Settings actions
-    if (in_array($action, ['updateSettings', 'clearDebugLogs', 'sendDebugReport'])) {
+    if (in_array($action, ['updateSettings', 'resetToDefaults', 'clearDebugLogs', 'sendDebugReport'])) {
         $settingsController->routeAction();
     }
 
@@ -129,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit; // Ensure we don't continue to render HTML
     }
 
-    // AJAX-only chain drop actions (returns JSON, exits immediately)
+    // AJAX-only tx drop actions (returns JSON, exits immediately)
     if (in_array($action, ['proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop'])) {
         try {
             $contactController->routeAction();
@@ -219,6 +225,509 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
+    // AJAX-only API keys actions (returns JSON, exits immediately)
+    if (in_array($action, [
+        'apiKeysStatus',
+        'apiKeysVerify',
+        'apiKeysClearAccess',
+        'apiKeysList',
+        'apiKeysCreate',
+        'apiKeysToggle',
+        'apiKeysDelete',
+        'apiKeysUpdate',
+        'apiKeysDisableAll',
+        'apiKeysDeleteAll',
+    ], true)) {
+        try {
+            $apiKeysController->routeAction();
+        } catch (\Eiou\Gui\Controllers\ApiKeysControllerResponseSent $e) {
+            // Response body + status were already written; unwind to here
+            // and exit cleanly so the wallet.html template does not render.
+        }
+        exit;
+    }
+
+    // AJAX-only "Search entire database" handlers for Recent Transactions
+    // and Payment Requests history. The client-side search + filter on
+    // these tables only inspects already-rendered rows; this lets the
+    // user ask the server to walk the full table for a match without
+    // having to Load-older until the match shows up locally. Contacts
+    // is intentionally omitted — that table is almost always fully
+    // loaded on first render, so the local filter already covers it.
+    if (in_array($action, ['searchTransactions', 'searchPaymentRequests'], true)) {
+        header('Content-Type: application/json');
+        try {
+            if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
+                echo json_encode(['success' => false, 'error' => 'csrf_error']);
+                exit;
+            }
+            $term = isset($_POST['q']) ? (string)$_POST['q'] : '';
+            if (trim($term) === '') {
+                echo json_encode(['success' => false, 'error' => 'empty_term', 'message' => 'Enter a search term first.']);
+                exit;
+            }
+
+            $dirFilter    = isset($_POST['direction']) ? trim((string)$_POST['direction']) : '';
+            $statusFilter = isset($_POST['status'])    ? trim((string)$_POST['status'])    : '';
+            $typeFilter   = isset($_POST['tx_type'])   ? trim((string)$_POST['tx_type'])   : '';
+            // Ceiling configurable via user setting later; 500 is enough
+            // to comfortably cover a search result with client-side
+            // paginator slicing on top.
+            $maxResults = 500;
+
+            if ($action === 'searchTransactions') {
+                $transactions = $transactionService->searchTransactions(
+                    $term,
+                    $dirFilter !== '' ? $dirFilter : null,
+                    $typeFilter !== '' ? $typeFilter : null,
+                    $statusFilter !== '' ? $statusFilter : null,
+                    $maxResults
+                );
+                $capped = count($transactions) >= $maxResults;
+
+                // Lookup maps + dlq ids so the row partial renders with
+                // avatar resolution identical to the initial page render.
+                $contactsByStatus = $contactService->getContactsGroupedByStatus();
+                $acceptedEnriched    = $transactionService->contactBalanceConversion($contactsByStatus['accepted']     ?? [], 0);
+                $pendingUserEnriched = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'] ?? [], 0);
+                $blockedEnriched     = $transactionService->contactBalanceConversion($contactsByStatus['blocked']      ?? [], 0);
+                $lookups = buildTxContactLookupMaps($acceptedEnriched, $pendingUserEnriched, $blockedEnriched);
+                $txContactsByAddress   = $lookups['byAddress'];
+                $txContactsByName      = $lookups['byName'];
+                $txContactsByHash      = $lookups['byHash'];
+                $txAvatarStyle         = $user->getContactAvatarStyle();
+                $dlqActiveTxMessageIds = fetchDlqActiveTxMessageIds($serviceContainer);
+                $statusIcons = [
+                    'pending'   => 'fa-hourglass-half',
+                    'sending'   => 'fa-paper-plane',
+                    'sent'      => 'fa-check',
+                    'accepted'  => 'fa-check',
+                    'completed' => 'fa-check-double',
+                    'rejected'  => 'fa-times',
+                    'cancelled' => 'fa-ban',
+                ];
+
+                // Search results replace (not append to) the table body,
+                // so indices restart at 0. `transactionData` on the
+                // client is rewritten to the same shape the initial
+                // render uses, which keeps openTransactionModal(index)
+                // working against the replacement row set.
+                $rowDataOut = [];
+                ob_start();
+                foreach ($transactions as $i => $tx) {
+                    $index = $i;
+                    require __DIR__ . '/../layout/walletSubParts/_transactionHistoryRow.html';
+
+                    $inDlq = false;
+                    if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                        foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                            if (strpos($dlqMsgId, $tx['txid']) !== false) { $inDlq = true; break; }
+                        }
+                    }
+                    $isTxSent = (($tx['type'] ?? '') === 'sent');
+                    $cpAddr2 = $isTxSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+                    $cpHash2 = $isTxSent ? ($tx['receiver_public_key_hash'] ?? '') : ($tx['sender_public_key_hash'] ?? '');
+                    $cpName2 = $tx['counterparty_name'] ?? '';
+                    $cpContact2 = null;
+                    if ($cpName2 && isset($txContactsByName[strtolower($cpName2)])) {
+                        $cpContact2 = $txContactsByName[strtolower($cpName2)];
+                    } elseif ($cpAddr2 && isset($txContactsByAddress[$cpAddr2])) {
+                        $cpContact2 = $txContactsByAddress[$cpAddr2];
+                    } elseif ($cpHash2 && isset($txContactsByHash[$cpHash2])) {
+                        $cpContact2 = $txContactsByHash[$cpHash2];
+                    }
+                    $endAddr2 = $isTxSent ? ($tx['end_recipient_address'] ?? '') : ($tx['initial_sender_address'] ?? '');
+                    $endContact2 = ($endAddr2 && isset($txContactsByAddress[$endAddr2])) ? $txContactsByAddress[$endAddr2] : null;
+
+                    $rowDataOut[] = [
+                        'txid' => $tx['txid'] ?? '',
+                        'tx_type' => $tx['tx_type'] ?? 'standard',
+                        'direction' => $tx['direction'] ?? $tx['type'],
+                        'status' => $tx['status'] ?? 'completed',
+                        'date' => !empty($tx['date']) ? formatTimestamp($tx['date']) : '',
+                        'type' => $tx['type'] ?? '',
+                        'amount' => $tx['amount'] ?? 0,
+                        'currency' => $tx['currency'] ?? 'USD',
+                        'counterparty' => $tx['counterparty'] ?? '',
+                        'counterparty_address' => $tx['counterparty_address'] ?? '',
+                        'counterparty_name' => $tx['counterparty_name'] ?? '',
+                        'counterparty_contact_id' => $cpContact2['contact_id'] ?? null,
+                        'sender_address' => $tx['sender_address'] ?? '',
+                        'receiver_address' => $tx['receiver_address'] ?? '',
+                        'memo' => $tx['memo'] ?? '',
+                        'description' => $tx['description'] ?? '',
+                        'previous_txid' => $tx['previous_txid'] ?? '',
+                        'initial_sender_address' => $tx['initial_sender_address'] ?? null,
+                        'end_recipient_address' => $tx['end_recipient_address'] ?? null,
+                        'p2p_destination' => $tx['p2p_destination'] ?? null,
+                        'p2p_destination_contact_id' => $endContact2['contact_id'] ?? null,
+                        'p2p_destination_contact_name' => $endContact2['name'] ?? null,
+                        'p2p_amount' => $tx['p2p_amount'] ?? null,
+                        'p2p_fee' => $tx['p2p_fee'] ?? null,
+                        'in_dlq' => $inDlq,
+                    ];
+                }
+                $html = ob_get_clean();
+
+                echo json_encode([
+                    'success' => true,
+                    'html'    => $html,
+                    'rows'    => $rowDataOut,
+                    'total'   => count($transactions),
+                    'capped'  => $capped,
+                    'cap'     => $maxResults,
+                ]);
+                exit;
+            }
+
+            if ($action === 'searchPaymentRequests') {
+                $prService = $serviceContainer->getPaymentRequestService();
+                $rows = $prService->searchResolvedHistory(
+                    $term,
+                    $dirFilter !== '' ? $dirFilter : null,
+                    $statusFilter !== '' ? $statusFilter : null,
+                    $maxResults
+                );
+                $capped = count($rows) >= $maxResults;
+
+                $contactsByStatus = $contactService->getContactsGroupedByStatus();
+                $prContactsByHash = [];
+                foreach ([$contactsByStatus['blocked'] ?? [], $contactsByStatus['user_pending'] ?? [], $contactsByStatus['accepted'] ?? []] as $bucket) {
+                    foreach ($bucket as $tc) {
+                        if (!empty($tc['pubkey_hash'])) {
+                            $prContactsByHash[$tc['pubkey_hash']] = $tc;
+                        }
+                    }
+                }
+                $prAvatarStyle = $user->getContactAvatarStyle();
+                $prStatusIcons = [
+                    'approved'  => 'fa-check',
+                    'declined'  => 'fa-times-circle',
+                    'cancelled' => 'fa-ban',
+                    'pending'   => 'fa-clock',
+                ];
+
+                ob_start();
+                foreach ($rows as $row) {
+                    $row['_direction'] = $row['direction'] ?? '';
+                    $req = $row;
+                    require __DIR__ . '/../layout/walletSubParts/_paymentRequestRow.html';
+                }
+                $html = ob_get_clean();
+
+                echo json_encode([
+                    'success' => true,
+                    'html'    => $html,
+                    'total'   => count($rows),
+                    'capped'  => $capped,
+                    'cap'     => $maxResults,
+                ]);
+                exit;
+            }
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'search_handler',
+                'action'  => $action,
+            ]);
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+            exit;
+        }
+    }
+
+    // AJAX-only "Load older" handlers for the three paginated tables
+    // (Recent Transactions, Contacts, Payment Requests). Each renders the
+    // next chunk of rows as an HTML fragment so the client can append
+    // directly to the existing <tbody> without duplicating the row
+    // template in JS.
+    if (in_array($action, ['loadMoreTransactions', 'loadMoreContacts', 'loadMorePaymentRequests'], true)) {
+        header('Content-Type: application/json');
+        try {
+            if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
+                echo json_encode(['success' => false, 'error' => 'csrf_error']);
+                exit;
+            }
+            $offset = max(0, (int) ($_POST['offset'] ?? 0));
+            $limit  = (int) $user->getDisplayRecentTransactionsLimit();
+            if ($limit <= 0) { $limit = 10; }
+
+            if ($action === 'loadMoreTransactions') {
+                $transactions = $transactionService->getTransactionHistory($limit, $offset);
+                $exhausted = count($transactions) < $limit;
+
+                // Rebuild the same lookup maps the full template uses so
+                // avatar resolution, contact names, and counterparty links
+                // match the initial server render 1:1. Must pass the
+                // *enriched* arrays (after contactBalanceConversion) — the
+                // raw contacts table has no http/https/tor columns (those
+                // live in the addresses table and are merged in by
+                // contactBalanceConversion), so passing the raw arrays
+                // would leave byAddress empty and break avatar lookup for
+                // any tx whose counterparty_name is NULL.
+                $contactsByStatus = $contactService->getContactsGroupedByStatus();
+                $contactTxLimit   = 0; // Don't need transactions here; set 0 to avoid batch fetching.
+                $acceptedEnriched     = $transactionService->contactBalanceConversion($contactsByStatus['accepted']     ?? [], $contactTxLimit);
+                $pendingUserEnriched  = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'] ?? [], $contactTxLimit);
+                $blockedEnriched      = $transactionService->contactBalanceConversion($contactsByStatus['blocked']      ?? [], $contactTxLimit);
+                $lookups = buildTxContactLookupMaps(
+                    $acceptedEnriched,
+                    $pendingUserEnriched,
+                    $blockedEnriched
+                );
+                $txContactsByAddress   = $lookups['byAddress'];
+                $txContactsByName      = $lookups['byName'];
+                $txContactsByHash      = $lookups['byHash'];
+                $txAvatarStyle         = $user->getContactAvatarStyle();
+                $dlqActiveTxMessageIds = fetchDlqActiveTxMessageIds($serviceContainer);
+                $statusIcons = [
+                    'pending'   => 'fa-hourglass-half',
+                    'sending'   => 'fa-paper-plane',
+                    'sent'      => 'fa-check',
+                    'accepted'  => 'fa-check',
+                    'completed' => 'fa-check-double',
+                    'rejected'  => 'fa-times',
+                    'cancelled' => 'fa-ban',
+                ];
+
+                // Build the JSON row array that matches transactionData[] —
+                // the client will concat() this onto the in-memory array so
+                // openTransactionModal(index) keeps working for newly
+                // appended rows.
+                $rowDataOut = [];
+                ob_start();
+                foreach ($transactions as $i => $tx) {
+                    $index = $offset + $i;
+                    require __DIR__ . '/../layout/walletSubParts/_transactionHistoryRow.html';
+
+                    $inDlq = false;
+                    if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+                        foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                            if (strpos($dlqMsgId, $tx['txid']) !== false) { $inDlq = true; break; }
+                        }
+                    }
+                    $isTxSent = (($tx['type'] ?? '') === 'sent');
+                    $cpAddr2 = $isTxSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+                    $cpHash2 = $isTxSent ? ($tx['receiver_public_key_hash'] ?? '') : ($tx['sender_public_key_hash'] ?? '');
+                    $cpName2 = $tx['counterparty_name'] ?? '';
+                    $cpContact2 = null;
+                    if ($cpName2 && isset($txContactsByName[strtolower($cpName2)])) {
+                        $cpContact2 = $txContactsByName[strtolower($cpName2)];
+                    } elseif ($cpAddr2 && isset($txContactsByAddress[$cpAddr2])) {
+                        $cpContact2 = $txContactsByAddress[$cpAddr2];
+                    } elseif ($cpHash2 && isset($txContactsByHash[$cpHash2])) {
+                        $cpContact2 = $txContactsByHash[$cpHash2];
+                    }
+                    $endAddr2 = $isTxSent ? ($tx['end_recipient_address'] ?? '') : ($tx['initial_sender_address'] ?? '');
+                    $endContact2 = ($endAddr2 && isset($txContactsByAddress[$endAddr2])) ? $txContactsByAddress[$endAddr2] : null;
+
+                    $rowDataOut[] = [
+                        'txid' => $tx['txid'] ?? '',
+                        'tx_type' => $tx['tx_type'] ?? 'standard',
+                        'direction' => $tx['direction'] ?? $tx['type'],
+                        'status' => $tx['status'] ?? 'completed',
+                        'date' => !empty($tx['date']) ? formatTimestamp($tx['date']) : '',
+                        'type' => $tx['type'] ?? '',
+                        'amount' => $tx['amount'] ?? 0,
+                        'currency' => $tx['currency'] ?? 'USD',
+                        'counterparty' => $tx['counterparty'] ?? '',
+                        'counterparty_address' => $tx['counterparty_address'] ?? '',
+                        'counterparty_name' => $tx['counterparty_name'] ?? '',
+                        'counterparty_contact_id' => $cpContact2['contact_id'] ?? null,
+                        'sender_address' => $tx['sender_address'] ?? '',
+                        'receiver_address' => $tx['receiver_address'] ?? '',
+                        'memo' => $tx['memo'] ?? '',
+                        'description' => $tx['description'] ?? '',
+                        'previous_txid' => $tx['previous_txid'] ?? '',
+                        'initial_sender_address' => $tx['initial_sender_address'] ?? null,
+                        'end_recipient_address' => $tx['end_recipient_address'] ?? null,
+                        'p2p_destination' => $tx['p2p_destination'] ?? null,
+                        'p2p_destination_contact_id' => $endContact2['contact_id'] ?? null,
+                        'p2p_destination_contact_name' => $endContact2['name'] ?? null,
+                        'p2p_amount' => $tx['p2p_amount'] ?? null,
+                        'p2p_fee' => $tx['p2p_fee'] ?? null,
+                        'in_dlq' => $inDlq,
+                    ];
+                }
+                $html = ob_get_clean();
+
+                echo json_encode([
+                    'success'   => true,
+                    'html'      => $html,
+                    'rows'      => $rowDataOut,
+                    'exhausted' => $exhausted,
+                ]);
+                exit;
+            }
+
+            if ($action === 'loadMorePaymentRequests') {
+                $prService = $serviceContainer->getPaymentRequestService();
+                $more = $prService->getResolvedHistoryPage($limit, $offset);
+                // `exhausted` lets the client hide the Load older button
+                // once it's done. Short-page → exhausted; exact-fit page →
+                // not exhausted yet (next click will return 0 rows +
+                // exhausted=true). Matches the Recent Transactions handler.
+                $exhausted = count($more) < $limit;
+
+                // Same lookup maps the full template builds so avatars /
+                // display names resolve identically between initial render
+                // and appended rows. Prefer enriched contacts (with
+                // transport columns merged in via contactBalanceConversion)
+                // so both hash-based lookup (primary for PRs) and future
+                // address-based lookups succeed.
+                $contactsByStatus = $contactService->getContactsGroupedByStatus();
+                $acceptedEnriched    = $transactionService->contactBalanceConversion($contactsByStatus['accepted']     ?? [], 0);
+                $pendingUserEnriched = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'] ?? [], 0);
+                $blockedEnriched     = $transactionService->contactBalanceConversion($contactsByStatus['blocked']      ?? [], 0);
+                $prContactsByHash = [];
+                // Accepted last so it wins on key collisions (restored /
+                // re-accepted contacts keep their current display state).
+                foreach ([$blockedEnriched, $pendingUserEnriched, $acceptedEnriched] as $bucket) {
+                    foreach ($bucket as $tc) {
+                        if (!empty($tc['pubkey_hash'])) {
+                            $prContactsByHash[$tc['pubkey_hash']] = $tc;
+                        }
+                    }
+                }
+                $prAvatarStyle = $user->getContactAvatarStyle();
+                $prStatusIcons = [
+                    'approved'  => 'fa-check',
+                    'declined'  => 'fa-times-circle',
+                    'cancelled' => 'fa-ban',
+                    'pending'   => 'fa-clock',
+                ];
+
+                ob_start();
+                foreach ($more as $row) {
+                    // Tag direction onto `_direction` — the partial reads
+                    // that field (the usort block in the full template
+                    // does the same tagging).
+                    $row['_direction'] = $row['direction'] ?? '';
+                    $req = $row;
+                    require __DIR__ . '/../layout/walletSubParts/_paymentRequestRow.html';
+                }
+                $html = ob_get_clean();
+
+                echo json_encode([
+                    'success'   => true,
+                    'html'      => $html,
+                    'exhausted' => $exhausted,
+                ]);
+                exit;
+            }
+
+            if ($action === 'loadMoreContacts') {
+                // Only accepted contacts paginate — pending + blocked
+                // are bounded and always rendered up-front in the
+                // initial template, so the paginator append path stays
+                // pure "more accepted rows".
+                $rawAccepted = $contactService->getAcceptedContactsPage($limit, $offset);
+                $exhausted = count($rawAccepted) < $limit;
+
+                if (empty($rawAccepted)) {
+                    echo json_encode([
+                        'success'   => true,
+                        'html'      => '',
+                        'exhausted' => true,
+                    ]);
+                    exit;
+                }
+
+                // Enrich: same pipeline as the main Functions.php view-
+                // data initialization, scoped to just this page's rows
+                // so we don't re-fetch per-contact credit for contacts
+                // we already showed.
+                $moreWithBalances = $transactionService->contactBalanceConversion(
+                    $rawAccepted,
+                    (int) $user->getMaxOutput()
+                );
+
+                // Credit + currency enrichment (mirrors the
+                // $contactArraysForCredit loop further down in this file).
+                $contactCreditRepo   = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCreditRepository::class);
+                $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
+
+                foreach ($moreWithBalances as &$contact) {
+                    $hash = $contact['pubkey_hash'] ?? '';
+                    $contact['my_available_credit']    = null;
+                    $contact['their_available_credit'] = null;
+
+                    try {
+                        $creditData = $hash ? $contactCreditRepo->getAvailableCredit($hash) : null;
+                        if ($creditData !== null) {
+                            $contact['my_available_credit'] = $creditData['available_credit']->toMajorUnits();
+                        }
+
+                        $allCredits = $hash ? $contactCreditRepo->getAvailableCreditAllCurrencies($hash) : [];
+                        $creditMap = [];
+                        foreach ($allCredits as $cr) {
+                            $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
+                            $creditMap[$cur] = $cr['available_credit']->toMajorUnits();
+                        }
+
+                        $currencyConfigs = $hash ? $contactCurrencyRepo->getContactCurrencies($hash) : [];
+                        $contactBalancesByCurrency = $contact['balances_by_currency'] ?? [];
+                        $acceptedCurrencies = [];
+                        foreach ($currencyConfigs as $cc) {
+                            if (($cc['status'] ?? 'accepted') !== 'accepted') { continue; }
+                            $cur = $cc['currency'];
+                            $ccDirection = $cc['direction'] ?? 'outgoing';
+                            $creditLimitMajor = ($cc['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $cc['credit_limit']->toMajorUnits() : 0;
+                            $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
+                            $entry = [
+                                'currency' => $cur,
+                                'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
+                                'credit_limit' => $creditLimitMajor,
+                                'my_available_credit' => $creditMap[$cur] ?? null,
+                                'their_available_credit' => ($creditLimitMajor > 0 || $balanceForCur != 0) ? round($creditLimitMajor - $balanceForCur, 2) : null,
+                                'status' => 'accepted',
+                                'direction' => $ccDirection,
+                            ];
+                            // Deduplicate per currency (prefer outgoing — has our fee/credit)
+                            if (!isset($acceptedCurrencies[$cur]) || $ccDirection === 'outgoing') {
+                                $acceptedCurrencies[$cur] = $entry;
+                            }
+                        }
+                        $contact['currencies'] = array_values($acceptedCurrencies);
+                    } catch (\Throwable $e) {
+                        // Non-critical — row renders with empty currencies,
+                        // which the partial handles (falls back to `USD`).
+                        $contact['currencies'] = [];
+                    }
+                }
+                unset($contact);
+
+                // Partial dependencies the template pulls from scope.
+                // $addressTypes is set further down in Functions.php for
+                // the main render; duplicate the lookup here so we can
+                // construct ContactDataBuilder at handler time.
+                $addressTypesForBuilder = $serviceContainer->getRepositoryFactory()
+                    ->get(\Eiou\Database\AddressRepository::class)
+                    ->getAllAddressTypes();
+                $contactDataBuilder = new \Eiou\Gui\Helpers\ContactDataBuilder($addressTypesForBuilder);
+                $contactAvatarStyle = $user->getContactAvatarStyle();
+
+                ob_start();
+                foreach ($moreWithBalances as $contact) {
+                    require __DIR__ . '/../layout/walletSubParts/_contactRow.html';
+                }
+                $html = ob_get_clean();
+
+                echo json_encode([
+                    'success'   => true,
+                    'html'      => $html,
+                    'exhausted' => $exhausted,
+                ]);
+                exit;
+            }
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'load_more_handler',
+                'action'  => $action,
+            ]);
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+            exit;
+        }
+    }
+
     // AJAX-only DLQ actions (returns JSON, exits immediately)
     if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
         try {
@@ -241,6 +750,184 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // Handle GET requests for update checking
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_updates'])) {
     $transactionController->routeAction();
+}
+
+// Live-notifications poll endpoint — returns JSON deltas (no page reload).
+// Distinct from check_updates (which is the Tor-Browser "anything changed?"
+// probe that triggers a full page reload). This endpoint returns the
+// actual new rows so the client can toast them individually and update tab
+// badges without reloading.
+//
+// Shape:
+//   GET ?check_incoming=1&since=<unix_ts>
+//     → { now: <unix_ts>, settings: {...}, new: { payment_requests, contact_requests, transactions, dlq } }
+//
+// Session lock released early (session_write_close) so concurrent polls
+// don't serialize behind the main request on a slow page render.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+
+    // Snapshot user-scoped settings before releasing the session lock — we
+    // need these for the response body, and once session_write_close()
+    // fires the $user object's backing store may be shadowed by a stale
+    // read on subsequent access. Cheap to capture up front.
+    $liveEnabled = $user->getLiveNotificationsEnabled();
+    $verbosity = $user->getLiveNotificationsVerbosity();
+    $toastDuration = $user->getLiveNotificationsToastDurationMs();
+    $pollIntervalMs = \Eiou\Core\Constants::LIVE_NOTIFICATIONS_POLL_INTERVAL_MS;
+    $maxPerKind = \Eiou\Core\Constants::LIVE_NOTIFICATIONS_MAX_PER_KIND;
+
+    // Release the session lock ASAP so a page render in the same tab
+    // (or another poll from the same session) doesn't queue behind us.
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+
+    $now = time();
+    $since = isset($_GET['since']) && ctype_digit((string) $_GET['since']) ? (int) $_GET['since'] : 0;
+    // Guard against unreasonable since values (e.g. client clock skew past
+    // server). Clamp to a 24h look-back — older-than-that is effectively
+    // "first poll" and we still bound by $maxPerKind anyway.
+    if ($since <= 0 || $since > $now) {
+        $since = $now - 86400;
+    }
+
+    // Known limitation — burst overflow: if >$maxPerKind events of the
+    // same kind arrive inside one poll window, the surplus is silently
+    // dropped from the toast stream (the data is still in the tables,
+    // just not notified). A complete fix would need (a) deterministic
+    // ASC ordering across all four kinds — getPendingIncoming and
+    // getPendingContactRequests currently rely on MySQL's undefined row
+    // order — and (b) an effective_now cursor of min($now, newest_returned)
+    // when any kind hits its cap, so the next poll backfills. Scope
+    // judged not worth it for ALPHA: bursts >25 events/10s are unusual
+    // for a wallet, and the UI tables remain complete.
+    //
+    // If the master toggle is off, return an empty delta but still echo
+    // the current settings so the client can keep them in sync without a
+    // page reload (user flips the toggle via a separate save → reload —
+    // this is just defense-in-depth).
+    $payload = [
+        'now' => $now,
+        'settings' => [
+            'enabled' => $liveEnabled,
+            'verbosity' => $verbosity,
+            'toast_duration_ms' => $toastDuration,
+            'poll_interval_ms' => $pollIntervalMs,
+        ],
+        'new' => [
+            'payment_requests' => [],
+            'contact_requests' => [],
+            'transactions' => [],
+            'dlq' => [],
+        ],
+    ];
+
+    if ($liveEnabled) {
+        try {
+            // Payment requests — small working set, filter in PHP by created_at.
+            // getPendingIncoming() lives on the repository, not the service
+            // (the service only exposes countPendingIncoming). Pulling the
+            // repo directly is the existing pattern for DLQ access below.
+            $prRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestRepository::class);
+            $pendingPr = $prRepo->getPendingIncoming() ?: [];
+            foreach ($pendingPr as $pr) {
+                $createdAt = isset($pr['created_at']) ? strtotime((string) $pr['created_at']) : 0;
+                if ($createdAt > $since) {
+                    // $pr['amount'] is hydrated by PaymentRequestRepository's
+                    // splitAmountColumns → a SplitAmount object. Collapse to a
+                    // display float here; serializing the object directly would
+                    // ship `{whole, frac}` to the client, which the JS toast
+                    // template string-concats into "[object Object] USD".
+                    $prAmount = $pr['amount'] ?? null;
+                    if ($prAmount instanceof \Eiou\Core\SplitAmount) {
+                        $prAmount = $prAmount->toMajorUnits();
+                    }
+                    $payload['new']['payment_requests'][] = [
+                        'id' => $pr['request_id'] ?? ($pr['id'] ?? null),
+                        'amount' => $prAmount,
+                        'currency' => $pr['currency'] ?? null,
+                        'requester_pubkey_hash' => $pr['requester_pubkey_hash'] ?? null,
+                        'description' => $pr['description'] ?? null,
+                        'created_at' => $createdAt,
+                    ];
+                }
+                if (count($payload['new']['payment_requests']) >= $maxPerKind) {
+                    break;
+                }
+            }
+
+            // Contact requests. Address types are discovered dynamically from
+            // the `addresses` schema via AddressRepository::getAllAddressTypes()
+            // — the same INFORMATION_SCHEMA-backed helper ApiController already
+            // uses throughout. Adding a future transport column (say `i2p`) to
+            // the addresses table flows through to the live-notif payload with
+            // zero changes here, and the client iterates whatever keys arrive
+            // under `addresses`.
+            $addressRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\AddressRepository::class);
+            $addressTypes = $addressRepo->getAllAddressTypes();
+            $pendingContacts = $contactService->getPendingContactRequests() ?: [];
+            foreach ($pendingContacts as $c) {
+                $createdAt = isset($c['created_at']) ? strtotime((string) $c['created_at']) : 0;
+                if ($createdAt > $since) {
+                    $addresses = [];
+                    foreach ($addressTypes as $type) {
+                        if (!empty($c[$type])) {
+                            $addresses[$type] = $c[$type];
+                        }
+                    }
+                    $payload['new']['contact_requests'][] = [
+                        'pubkey_hash' => $c['pubkey_hash'] ?? null,
+                        'addresses' => $addresses,
+                        'created_at' => $createdAt,
+                    ];
+                }
+                if (count($payload['new']['contact_requests']) >= $maxPerKind) {
+                    break;
+                }
+            }
+
+            // Transactions — dedicated SQL time-filter, bounded.
+            $txRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
+            $txRows = $txRepo->getIncomingSince($since, $maxPerKind);
+            foreach ($txRows as $tx) {
+                $tsEpoch = isset($tx['timestamp']) ? strtotime((string) $tx['timestamp']) : 0;
+                $payload['new']['transactions'][] = [
+                    'txid' => $tx['txid'] ?? null,
+                    'type' => $tx['type'] ?? null,
+                    'status' => $tx['status'] ?? null,
+                    'amount' => $tx['amount'] ?? null,
+                    'currency' => $tx['currency'] ?? null,
+                    'sender_address' => $tx['sender_address'] ?? null,
+                    'receiver_address' => $tx['receiver_address'] ?? null,
+                    'description' => $tx['description'] ?? null,
+                    'timestamp' => $tsEpoch,
+                ];
+            }
+
+            // DLQ — dedicated SQL time-filter, bounded.
+            $dlqRepoPoll = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
+            $dlqRows = $dlqRepoPoll->getItemsSince($since, $maxPerKind);
+            foreach ($dlqRows as $d) {
+                $createdAt = isset($d['created_at']) ? strtotime((string) $d['created_at']) : 0;
+                $payload['new']['dlq'][] = [
+                    'id' => $d['id'] ?? null,
+                    'message_type' => $d['message_type'] ?? null,
+                    'message_id' => $d['message_id'] ?? null,
+                    'status' => $d['status'] ?? null,
+                    'created_at' => $createdAt,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, ['context' => 'check_incoming_handler']);
+            // Don't leak internals; return empty deltas so the client
+            // backs off gracefully on transient server errors.
+        }
+    }
+
+    echo json_encode($payload);
+    exit;
 }
 
 // Get message from session flash messages (set by controllers, read-once)
@@ -328,13 +1015,23 @@ usort($knownCurrencies, function($a, $b) use ($allowedCurrenciesOrder) {
 
 $recentTransactionsLimit = $user->getDisplayRecentTransactionsLimit();
 $transactions = $transactionService->getTransactionHistory($recentTransactionsLimit);
-$inProgressTransactions = $transactionService->getInProgressTransactions(5);
+// Scope the In-Progress banner to the same user-configured row limit as
+// the Recent Transactions view. Was hard-coded at 5, which undercounted
+// whenever a bulk batch or chain-gap backlog produced more in-flight
+// sends than that — users saw "5" on the badge with no way to see the
+// rest without opening the DB. getMaxOutput() already caps the Recent
+// Transactions table, the contact modal transactions list, and payment
+// request history, so the three views stay consistent.
+$inProgressTransactions = $transactionService->getInProgressTransactions($recentTransactionsLimit);
 
 // Update check status (reads cache only — never triggers a new check on page load)
 $updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
 
-// "What's New" notification (shown after version upgrade until dismissed)
-$showWhatsNew = \Eiou\Services\UpdateCheckService::shouldShowWhatsNew();
+// "What's New" notification (shown after version upgrade until dismissed).
+// `fresh`    — node is on the version it was first installed on
+// `upgraded` — node has seen a previous version's banner and is now newer
+// null       — no banner (already dismissed this version, or pre-setup)
+$whatsNewVariant = \Eiou\Services\UpdateCheckService::getWhatsNewVariant();
 
 // Analytics status (reads cache only — never triggers a new submission on page load)
 try {
@@ -430,7 +1127,7 @@ if (!empty($pendingContacts) && $user->has('public')) {
         // Get the contact transaction description (message sent with the request)
         $contactTx = $txContactRepo->getContactTransactionByParties($pc['pubkey'], $myPubkey);
         $desc = $contactTx['description'] ?? null;
-        if ($desc !== null && $desc !== 'Contact request transaction') {
+        if ($desc !== null && $desc !== 'Contact request' && $desc !== 'Contact request transaction') {
             $pc['contact_description'] = $desc;
         }
     }
@@ -486,7 +1183,7 @@ $blockedContacts     = $transactionService->contactBalanceConversion($contactsBy
 
 // Count accepted contacts with a chain state that requires user attention, so
 // the Contacts tab can show a count badge (like Activity's DLQ badge). Includes
-// incoming chain drop proposals to accept/reject, rejected proposals still
+// incoming tx drop proposals to accept/reject, rejected proposals still
 // blocking the chain, and raw chain gaps that need resolution. Waiting
 // (outgoing proposal not yet answered) is not counted — nothing for the user
 // to do on their side while the peer deliberates.
@@ -570,21 +1267,20 @@ foreach ($pendingUserContacts as $puc) {
     }
 }
 
-// Also add accepted contacts with pending incoming currencies to $pendingContacts
-// (they stay in $acceptedContacts too — grid shows them as accepted, standalone section shows accept form)
-foreach ($acceptedContacts as $c) {
-    if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
-        $c['is_existing_contact'] = true;
-        $pendingContacts[] = $c;
-    }
-}
+// "Accepted contacts with pending incoming currencies get re-added to
+// $pendingContacts" — deferred until after the $acceptedContacts entries
+// have had $contact['currencies'] populated (that happens in the
+// merge-credit loop ~250 lines below). Doing it here would capture
+// entries with no `currencies` key, which would make the
+// has_no_active_currencies detection always think the contact has no
+// active lines — wrong for a partially-accepted contact.
 // $pendingCurrencyContacts no longer needed for separate notification
 $pendingCurrencyContacts = [];
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
 
-// Chain drop proposals - fetch both directions, index by contact hash
+// Tx drop proposals - fetch both directions, index by contact hash
 $chainDropProposalsByContact = [];
 try {
     $chainDropService = $serviceContainer->getChainDropService();
@@ -617,7 +1313,7 @@ try {
     $chainDropProposalsByContact = [];
 }
 
-// Merge chain drop proposals into contact arrays by pubkey_hash
+// Merge tx drop proposals into contact arrays by pubkey_hash
 $contactArrays = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
 foreach ($contactArrays as &$contacts) {
     foreach ($contacts as &$contact) {
@@ -642,7 +1338,7 @@ if ($tcRepo && $user->has('public')) {
     $myPubkey = $user->getPublicKey();
     foreach ($acceptedContacts as &$contact) {
         // Compute gap details when the chain is known-invalid OR when there is an
-        // active chain-drop proposal (covers the window between proposal creation and
+        // active tx-drop proposal (covers the window between proposal creation and
         // the first "Check Status" ping that would set valid_chain = 0 in the DB).
         $hasInvalidChain = (int)($contact['valid_chain'] ?? -1) === 0;
         $hasActiveProposal = !empty($contact['chain_drop_proposal'])
@@ -830,6 +1526,28 @@ foreach ($contactArraysForCredit as &$contacts) {
     unset($contact);
 }
 unset($contacts);
+
+// Re-add accepted contacts with pending incoming currencies to
+// $pendingContacts so the standalone section shows the accept form.
+// Placed here (after the merge-credit loop populates $c['currencies']
+// with accepted-status-only rows) so has_no_active_currencies is
+// computed against the true count of active currency lines — not
+// against a null/unset field.
+foreach ($acceptedContacts as $c) {
+    if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
+        $c['is_existing_contact'] = true;
+        // Flag: contact.status='accepted' but ZERO rows in
+        // contact_currencies are status='accepted'. Most common after
+        // unblockContact() (which only flips contact status, not
+        // currency rows). The UI shows a louder yellow warning in
+        // this case — a contact with no active currency lines can't
+        // send, receive, or P2P-relay until at least one is accepted.
+        // `currencies` here is the accepted-only list set above.
+        $c['has_no_active_currencies'] = empty($c['currencies']);
+        $pendingContacts[] = $c;
+        $pendingContactHashes[$c['pubkey_hash'] ?? ''] = true;
+    }
+}
 
 // Load payment requests for display in the Send tab
 $paymentRequests = ['incoming' => [], 'outgoing' => []];

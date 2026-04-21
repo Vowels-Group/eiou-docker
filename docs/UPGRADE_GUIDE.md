@@ -105,6 +105,12 @@ On startup, `startup.sh` creates a lockfile (`/tmp/eiou_maintenance.lock`) befor
 - Requests hitting a mid-migration database schema
 - Incoming P2P messages being processed before the node is fully initialized
 
+The response body is content-negotiated from the request's `Accept` header:
+- **Browsers** (`Accept: text/html...`) receive a styled, self-contained HTML page ("Under Maintenance — Your eIOU node is starting up or going through an update. Check back in a little bit.") with a `<meta http-equiv="refresh" content="15">` so it auto-recovers without requiring JavaScript (Tor Browser friendly). The page is fully inlined — no external CSS/JS/fonts — since `/app/eiou/` may be mid-rebuild and none of the app's own assets are guaranteed resolvable.
+- **API clients** (`Accept: application/json`, `*/*`, or missing) receive the existing JSON response (`{"success": false, "status": "maintenance", "error": {"message": "...", "code": "maintenance_mode"}}`).
+
+Both paths set HTTP 503 and `Retry-After: 30`.
+
 The lockfile is removed after all initialization is complete (composer install, migrations, processor startup).
 
 ### 7. Data-at-Rest Encryption (MariaDB TDE)
@@ -367,9 +373,9 @@ fixed `getPreviousTxid` skips cancelled/rejected rows when picking the
 predecessor. Pre-upgrade broken chains are not automatically migrated because
 re-signing a peer-received transaction requires the sender's private key;
 the receiver can't fix it locally. Resolve a pre-existing broken chain by
-accepting the chain-drop proposal the sender will auto-propose on the next
+accepting the tx-drop proposal the sender will auto-propose on the next
 sync, or manually from the contact's detail panel. This is exactly what the
-chain-drop flow was originally designed for.
+tx-drop flow was originally designed for.
 
 ### Permissions errors in logs
 
@@ -412,10 +418,12 @@ Database migrations run automatically on startup (step 8 above) and are idempote
 
 | Schema version | Change | Released |
 |----------------|--------|---------|
+| v10 | Added `transactions_archive` table — cold storage for completed transactions older than `transactionsArchiveRetentionDays`, schema mirrors `transactions` + an `archived_at` timestamp. Added `transaction_chain_checkpoints` table — records gap-free-at-archival proof per bilateral pair (`archived_count`, `archived_txid_hash` [SHA-256 over sorted archived txids], `highest_archived_timestamp`, `highest_archived_time`, `last_verified_gap_free_at`). Populated by the nightly archival cron (`transaction-archive-cron.php` at 01:30 UTC). The checkpoint is consumed by `verifyChainIntegrity()` on every outbound send so the send hot-path stays O(recent tail); `eiou verify-chain` does the full O(all history) walk on demand | Unreleased |
+| v9 | Added `payment_requests_archive` table — cold storage for resolved (non-pending) payment requests older than `paymentRequestsArchiveRetentionDays`. Schema mirrors `payment_requests` + an `archived_at` timestamp. Populated by the nightly archival cron (`payment-request-archive-cron.php` at 01:00 UTC). Read paths UNION across live + archive, so archived rows stay queryable via GUI/CLI | Unreleased |
 | v5 | Added `payment_requests` table — stores both outgoing requests you sent and incoming requests from contacts, with direction, status, amount, currency, description, requester address, timestamps, and resulting txid on approval | Unreleased |
 | v4 and earlier | Prior tables (transactions, contacts, balances, P2P, DLQ, etc.) | — |
 
-If you are upgrading from any version with schema ≤ v4, the `payment_requests` table is created automatically on first boot. No data is lost.
+If you are upgrading from any version with schema ≤ v4, the `payment_requests` table is created automatically on first boot. No data is lost. Upgrading from schema ≤ v8 adds the new `payment_requests_archive` table (empty on first boot) — the archival cron starts moving rows once any resolved request is older than the configured retention window. Upgrading from schema ≤ v9 additionally adds `transactions_archive` and `transaction_chain_checkpoints` (both empty on first boot) — the transaction archival cron starts moving completed rows once any bilateral pair has rows older than the retention window AND the pair verifies gap-free at that moment.
 
 ### Version Compatibility
 

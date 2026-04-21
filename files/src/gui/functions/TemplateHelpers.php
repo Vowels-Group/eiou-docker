@@ -51,6 +51,66 @@ function transactionMinimumFee(): float {
     return \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE;
 }
 
+/**
+ * Build the three contact lookup maps used by the transaction history
+ * row template (name/address/pubkey_hash → contact row). Duplicates the
+ * inline construction in transactionHistory.html so the load-more AJAX
+ * handler can resolve avatars and names the same way.
+ *
+ * @param array $acceptedContacts
+ * @param array $pendingUserContacts
+ * @param array $blockedContacts
+ * @return array { byAddress, byName, byHash }
+ */
+function buildTxContactLookupMaps(array $acceptedContacts, array $pendingUserContacts, array $blockedContacts): array
+{
+    $byAddress = [];
+    $byName = [];
+    $byHash = [];
+    // Order matters: accepted is indexed LAST so it wins on key collisions
+    // (a contact who was blocked and later re-accepted under the same address).
+    foreach ([$blockedContacts, $pendingUserContacts, $acceptedContacts] as $bucket) {
+        foreach ($bucket as $tc) {
+            if (!empty($tc['name'])) {
+                $byName[strtolower($tc['name'])] = $tc;
+            }
+            if (!empty($tc['pubkey_hash'])) {
+                $byHash[$tc['pubkey_hash']] = $tc;
+            }
+            foreach (validTransportIndices() as $addrField) {
+                if (!empty($tc[$addrField])) {
+                    $byAddress[$tc[$addrField]] = $tc;
+                }
+            }
+        }
+    }
+    return ['byAddress' => $byAddress, 'byName' => $byName, 'byHash' => $byHash];
+}
+
+/**
+ * Fetch the DLQ message-ids of active (pending/retrying) transaction
+ * deliveries, so the row renderer can draw the DLQ marker. Returns an
+ * empty array on any error so the caller can render rows without DLQ
+ * metadata rather than fail outright.
+ */
+function fetchDlqActiveTxMessageIds($serviceContainer): array
+{
+    try {
+        $dlqRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
+        $active = array_merge(
+            $dlqRepo->getByMessageType('transaction', 'pending',  \Eiou\Core\Constants::DLQ_BATCH_SIZE),
+            $dlqRepo->getByMessageType('transaction', 'retrying', \Eiou\Core\Constants::DLQ_BATCH_SIZE)
+        );
+        $ids = [];
+        foreach ($active as $entry) {
+            $ids[] = $entry['message_id'];
+        }
+        return $ids;
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
 function validTransportIndices(): array {
     return \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
 }
@@ -386,11 +446,16 @@ function renderContactGradientAvatar(string $seedHex, string $name): string {
     $d = $dirs[ord($bytes[2]) % 4];
 
     $letter = htmlspecialchars(strtoupper(mb_substr($name !== '' ? $name : '?', 0, 1)));
-    // Unique gradient ID per SVG instance — same contact can appear in multiple
-    // tables (contacts + transactions), so a per-hash ID causes duplicate-ID
-    // collisions that break fill="url(#…)" resolution in inline SVGs.
+    // Unique gradient ID per SVG instance — same contact can appear in
+    // multiple tables (contacts + transactions) AND the same page can
+    // receive more rows mid-session (paginator's "Load older"), which
+    // runs in a *separate* PHP process and restarts the static counter
+    // from 0. Without random entropy the first load-older row's
+    // gradient collides with the first initially-rendered row; the
+    // <circle fill="url(#...)"> then resolves to the earlier (wrong)
+    // gradient and some avatars render with no fill at all.
     static $cagCounter = 0;
-    $gid = 'cag' . substr(bin2hex($bytes), 0, 8) . dechex(++$cagCounter);
+    $gid = 'cag' . substr(bin2hex($bytes), 0, 8) . dechex(++$cagCounter) . bin2hex(random_bytes(4));
 
     $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">'
          . '<defs><linearGradient id="' . $gid . '" x1="' . $d[0] . '%" y1="' . $d[1] . '%" x2="' . $d[2] . '%" y2="' . $d[3] . '%">'
@@ -414,4 +479,88 @@ function renderContactAvatar(string $seedHex, string $name, string $style): stri
         'pixel' => renderContactPixelAvatar($seedHex),
         default => renderContactGradientAvatar($seedHex, $name),
     };
+}
+
+/**
+ * Render a standardized announcement banner used at the top of the wallet
+ * view (release notes, pending requests, connectivity issues, etc.). One
+ * layout, one set of classes — each banner varies only by colour variant,
+ * icon, title, body copy, and the optional right-side action button.
+ *
+ * $config keys:
+ *   variant    — 'success' | 'info' | 'warning' | 'danger'.
+ *                Drives .alert-{variant} (bg), .alert-icon-*, .alert-title-*,
+ *                and the action button's .btn-{variant}. `info` maps to the
+ *                `primary` text/icon/button colour family.
+ *   icon       — Font Awesome class of the left-side icon (e.g. 'fa-gift').
+ *   title      — raw HTML of the heading; caller escapes untrusted content.
+ *   body       — raw HTML of the body paragraph; caller escapes.
+ *   action     — optional associative array describing the right-side action:
+ *                  ['label' => 'View', 'icon' => 'fa-eye',
+ *                   'href' => '#pending-contacts']              (renders <a>)
+ *                  ['label' => 'Dismiss', 'icon' => 'fa-check',
+ *                   'data' => ['action' => 'dismissWhatsNew']]  (renders <button>)
+ *                A non-empty `href` implies a link; otherwise a <button>.
+ *   id         — optional id on the outer <div>.
+ *   extraClass — optional extra class (e.g. 'alert-border-danger').
+ *   spinner    — truthy to render the left icon with `fa-spin`.
+ */
+function renderAlertBanner(array $config): string {
+    $variant = $config['variant'] ?? 'info';
+    // `info` uses the `primary` colour family for its text/icon/button.
+    $colorFamily = ($variant === 'info') ? 'primary' : $variant;
+    // Historical naming: .alert-error is the danger background.
+    $alertClass = ($variant === 'danger') ? 'alert-error' : 'alert-' . $variant;
+
+    $idAttr = !empty($config['id'])
+        ? ' id="' . htmlspecialchars((string)$config['id'], ENT_QUOTES) . '"'
+        : '';
+    $extra = !empty($config['extraClass'])
+        ? ' ' . htmlspecialchars((string)$config['extraClass'])
+        : '';
+    $icon = htmlspecialchars($config['icon'] ?? 'fa-info-circle');
+    $spinClass = !empty($config['spinner']) ? ' fa-spin' : '';
+    $iconHtml = '<i class="fas ' . $icon . $spinClass . ' alert-icon-' . $colorFamily . '"></i>';
+
+    $title = $config['title'] ?? '';
+    $body = $config['body'] ?? '';
+    $bodyHtml = $body !== '' ? '<p class="alert-body-text">' . $body . '</p>' : '';
+
+    $actionHtml = '';
+    if (!empty($config['action']) && is_array($config['action'])) {
+        $a = $config['action'];
+        $label = htmlspecialchars($a['label'] ?? 'Action');
+        $actionIcon = !empty($a['icon'])
+            ? '<i class="fas ' . htmlspecialchars($a['icon']) . '"></i> '
+            : '';
+        $class = 'btn btn-' . $colorFamily . ' btn-compact btn-nowrap alert-banner-action';
+        $dataAttrs = '';
+        if (!empty($a['data']) && is_array($a['data'])) {
+            foreach ($a['data'] as $k => $v) {
+                $dataAttrs .= ' data-' . htmlspecialchars((string)$k)
+                    . '="' . htmlspecialchars((string)$v, ENT_QUOTES) . '"';
+            }
+        }
+        if (!empty($a['href'])) {
+            $href = htmlspecialchars($a['href'], ENT_QUOTES);
+            $actionHtml = '<a href="' . $href . '" class="' . $class . '"' . $dataAttrs . '>'
+                . $actionIcon . $label . '</a>';
+        } else {
+            $actionHtml = '<button type="button" class="' . $class . '"' . $dataAttrs . '>'
+                . $actionIcon . $label . '</button>';
+        }
+    }
+
+    return '<div' . $idAttr . ' class="alert ' . $alertClass . ' fade-in-up mb-lg' . $extra . '">'
+        . '<div class="alert-banner-row">'
+            . '<div class="alert-banner-content">'
+                . $iconHtml
+                . '<div class="flex-1">'
+                    . '<h4 class="alert-title-' . $colorFamily . '">' . $title . '</h4>'
+                    . $bodyHtml
+                . '</div>'
+            . '</div>'
+            . $actionHtml
+        . '</div>'
+    . '</div>';
 }

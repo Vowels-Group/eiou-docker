@@ -1565,7 +1565,7 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
 
         try {
             // Transaction DLQ entries may have gone stale while sitting in DLQ:
-            // the chain can have advanced (new outbound txs) or a chain drop
+            // the chain can have advanced (new outbound txs) or a tx drop
             // may have re-wired the link past a missing transaction since the
             // original send. Refresh previousTxid + time against current DB
             // state so the retry signs and ships the correct chain link.

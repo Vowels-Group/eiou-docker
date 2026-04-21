@@ -190,8 +190,8 @@ Increase these for WSL2 or resource-constrained environments.
 | `EIOU_TEST_MODE` | `false` | Enable manual message processing (`eiou in`/`eiou out`) and bypass rate limiting. **Development only** |
 | `EIOU_CONTACT_STATUS_ENABLED` | `true` | Background processor that pings contacts for online/offline status. Disable to reduce network traffic |
 | `EIOU_BACKUP_AUTO_ENABLED` | `true` | Automatic encrypted database backups at midnight. Keeps 3 most recent |
-| `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | Auto-propose chain drops when mutual gaps are detected that sync cannot repair |
-| `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | Auto-accept chain drop proposals (with balance guard). Default is off — proposals require manual review |
+| `EIOU_AUTO_CHAIN_DROP_PROPOSE` | `true` | Auto-propose tx drops when mutual gaps are detected that sync cannot repair |
+| `EIOU_AUTO_CHAIN_DROP_ACCEPT` | `false` | Auto-accept tx drop proposals (with balance guard). Default is off — proposals require manual review |
 | `EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD` | `true` | Balance guard for auto-accept: compares stored vs calculated balances before accepting. Set to `false` to accept unconditionally |
 | `EIOU_DEFAULT_TRANSPORT_MODE` | `tor` | Default transport when sending to a contact by name. Options: `tor`, `http`, `https` |
 | `EIOU_TOR_FORCE_FAST` | `true` | Force fast mode (first response wins) for Tor routes. Set to `false` to allow best-fee mode over Tor |
@@ -245,13 +245,51 @@ Adjust in the `deploy.resources` section of `docker-compose.yml` if needed.
 
 Enabled by default (`EIOU_BACKUP_AUTO_ENABLED=true`). Runs at midnight, encrypts with AES-256-GCM, retains 3 most recent backups.
 
+Backups are split by type so the hot (live) cadence doesn't evict the rarely-written cold (archive) backups:
+
+| Filename prefix | Contents | When written |
+|-----------------|----------|--------------|
+| `backup_YYYYMMDD_HHmmss.eiou.enc` | Live tables (archive tables excluded via `mysqldump --ignore-table`) | Nightly at midnight, and on demand |
+| `archive_backup_YYYYMMDD_HHmmss.eiou.enc` | Archive tables only (`payment_requests_archive`) | After the nightly archival cron moves any rows |
+
+Each prefix is rotated independently — the 3-most-recent retention applies per type.
+
+### Payment Request Archival
+
+Resolved (non-pending) payment requests older than `paymentRequestsArchiveRetentionDays` (default: 180 days) are moved to a separate `payment_requests_archive` table by a nightly cron (`payment-request-archive-cron.php` at 01:00 UTC). Archived rows stay queryable via the GUI and CLI — the history/search paths UNION across live + archive transparently. Pending requests are never archived.
+
+Tune the retention window (and the per-batch move size) the same way as any other setting:
+
+```bash
+docker exec eiou-node eiou changesettings paymentRequestsArchiveRetentionDays 90
+docker exec eiou-node eiou changesettings paymentRequestsArchiveBatchSize 1000
+```
+
+Preview what would move without touching the DB:
+
+```bash
+docker exec eiou-node php /app/eiou/scripts/payment-request-archive-cron.php --dry-run
+```
+
+### Transactions Archival
+
+Completed transactions older than `transactionsArchiveRetentionDays` (default: 30 days) move nightly to a separate `transactions_archive` table via `transaction-archive-cron.php` (01:30 UTC, offset 30m from payment-request archival). Unlike payment requests, transactions form per-pair chains linked by `previous_txid`, so archival is gated per bilateral pair on `verifyChainIntegrityByHashes()` returning `valid=true` — pairs with a detected chain gap are **skipped** (not archived) so the gap stays inspectable. Clean pairs get a row in `transaction_chain_checkpoints` recording the gap-free-at-archival proof (SHA-256 over the sorted archived-txid list + highest archived timestamp + count). `verifyChainIntegrity()` (on every outbound send) consults this checkpoint in its default mode and collapses from O(all history) to O(recent tail). Audit any time with `eiou verify-chain` — walks every pair end-to-end and recomputes each archive hash to catch tampering that the hot path trusts past.
+
+**Archive-aware sync**: counterparty nodes with different archival states sync cleanly — dedup checks (`transactionExistsTxid`), outgoing-response lookups (`getByTxid`), peer status queries (`getStatusByTxid`), and chain-conflict detection all consult both live and archive. If a conflict somehow arrives against an archived tx, the archive always wins (settled history) and the remote tx is still inserted with chain-tiebreak ordering at read time — the archive is never modified.
+
+```bash
+docker exec eiou-node eiou changesettings transactionsArchiveRetentionDays 90
+docker exec eiou-node php /app/eiou/scripts/transaction-archive-cron.php --dry-run
+docker exec eiou-node eiou verify-chain  # full-walk audit + tamper detection; exits 1 on any finding
+```
+
 ### Manual Backup Commands
 
 ```bash
-docker exec eiou-node eiou backup create                              # Create backup now
-docker exec eiou-node eiou backup list                                # List available backups
+docker exec eiou-node eiou backup create                              # Create live backup now
+docker exec eiou-node eiou backup list                                # List all backups (both prefixes)
 docker exec eiou-node eiou backup restore <backup-file> --confirm     # Restore from backup
-docker exec eiou-node eiou backup cleanup                             # Delete old backups (keeps 3)
+docker exec eiou-node eiou backup cleanup                             # Delete old backups (keeps 3 per prefix)
 ```
 
 ### Volume-Level Backup

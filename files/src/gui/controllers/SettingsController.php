@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
 use Eiou\Utils\InputValidator;
+use Eiou\Utils\Logger;
 use Eiou\Utils\Security;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
@@ -195,12 +196,49 @@ class SettingsController
         // Checkbox only posts value when checked, so we need to handle both cases
         $settings['autoRefreshEnabled'] = isset($_POST['autoRefreshEnabled']) && $_POST['autoRefreshEnabled'] === '1';
 
+        // Live event notifications — master on/off. When ON, the 15s
+        // autoRefreshEnabled reload is suppressed client-side (see
+        // startAutoRefresh in script.js) so a just-fired toast isn't
+        // clobbered by a page reload.
+        $settings['liveNotificationsEnabled'] = isset($_POST['liveNotificationsEnabled']) && $_POST['liveNotificationsEnabled'] === '1';
+
+        // Live notifications verbosity (quiet | balanced | live)
+        if (isset($_POST['liveNotificationsVerbosity'])) {
+            $verbosity = strtolower(Security::sanitizeInput($_POST['liveNotificationsVerbosity']));
+            if (in_array($verbosity, Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS, true)) {
+                $settings['liveNotificationsVerbosity'] = $verbosity;
+            } else {
+                $errors[] = 'Invalid live notifications verbosity: must be one of '
+                    . implode(', ', Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS);
+            }
+        }
+
+        // Toast duration — must be one of the allowed options (5s / 10s / 20s / 0 = until-dismissed)
+        if (isset($_POST['liveNotificationsToastDurationMs'])) {
+            $raw = trim($_POST['liveNotificationsToastDurationMs']);
+            if ($raw !== '' && ctype_digit($raw)) {
+                $duration = (int) $raw;
+                if (in_array($duration, Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS, true)) {
+                    $settings['liveNotificationsToastDurationMs'] = $duration;
+                } else {
+                    $errors[] = 'Invalid toast duration: must be one of '
+                        . implode(', ', Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS) . ' ms';
+                }
+            } elseif ($raw !== '') {
+                $errors[] = 'Invalid toast duration: must be a non-negative integer';
+            }
+        }
+
         // Auto-Backup Enabled (boolean toggle, default: true/on)
         // Checkbox only posts value when checked, so we need to handle both cases
         $settings['autoBackupEnabled'] = isset($_POST['autoBackupEnabled']) && $_POST['autoBackupEnabled'] === '1';
 
         // Auto-Accept Transaction (boolean toggle, default: true/on)
         $settings['autoAcceptTransaction'] = isset($_POST['autoAcceptTransaction']) && $_POST['autoAcceptTransaction'] === '1';
+
+        // GUI-only: hide empty Failed Messages / Payment Requests / Pending
+        // Contact Requests sections (default off — see Constants comment).
+        $settings['hideEmptyGuiSections'] = isset($_POST['hideEmptyGuiSections']) && $_POST['hideEmptyGuiSections'] === '1';
 
         // Feature toggles (boolean checkboxes)
         $settings['contactStatusEnabled'] = isset($_POST['contactStatusEnabled']) && $_POST['contactStatusEnabled'] === '1';
@@ -294,6 +332,8 @@ class SettingsController
             'cleanupHeldTxRetentionDays' => 'held TX retention',
             'cleanupRp2pRetentionDays' => 'RP2P retention',
             'cleanupMetricsRetentionDays' => 'metrics retention',
+            'paymentRequestsArchiveRetentionDays' => 'payment requests archive retention',
+            'transactionsArchiveRetentionDays' => 'transactions archive retention',
         ];
         foreach ($retentionFields as $field => $label) {
             if (isset($_POST[$field])) {
@@ -535,6 +575,28 @@ class SettingsController
     }
 
     /**
+     * Handle the destructive "Reset to Defaults" action — wipes every saved
+     * wallet setting back to the values this build considers default (see
+     * UserContext::resetToDefaults()). Contacts, transactions, backups,
+     * and API keys are untouched.
+     *
+     * @return void
+     */
+    public function handleResetToDefaults(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+            Logger::getInstance()->info('settings_reset_to_defaults_via_gui', []);
+            MessageHelper::redirectMessage('All settings have been reset to defaults', 'success');
+        } catch (Exception $e) {
+            Logger::getInstance()->logException($e, ['context' => 'settings_reset_to_defaults_via_gui']);
+            MessageHelper::redirectMessage('Reset failed: ' . $e->getMessage(), 'error');
+        }
+    }
+
+    /**
      * Handle send debug report action
      *
      * @return void
@@ -646,6 +708,9 @@ class SettingsController
         switch ($action) {
             case 'updateSettings':
                 $this->handleUpdateSettings();
+                break;
+            case 'resetToDefaults':
+                $this->handleResetToDefaults();
                 break;
             case 'clearDebugLogs':
                 $this->handleClearDebugLogs();

@@ -281,28 +281,76 @@ class UpdateCheckServiceTest extends TestCase
     // ==================== shouldShowWhatsNew / dismissWhatsNew tests ====================
 
     /**
-     * Test shouldShowWhatsNew returns false and seeds the file on fresh install
+     * Test shouldShowWhatsNew returns true on first run for a set-up node
+     * whose seen-file doesn't exist yet (upgraded from a pre-feature
+     * version, or freshly set up).
      */
-    public function testShouldShowWhatsNewReturnsFalseAndSeedsOnFreshInstall(): void
+    public function testShouldShowWhatsNewReturnsTrueWhenSeenFileMissingButNodeSetUp(): void
     {
         $seenFile = '/etc/eiou/config/whats-new-seen.json';
-        if (file_exists($seenFile)) {
-            $this->markTestSkipped('Seen file already exists (running in Docker with prior state)');
-        }
+        $userConfig = '/etc/eiou/config/userconfig.json';
         if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
             $this->markTestSkipped('Config directory not writable (not running in Docker)');
         }
+        if (!file_exists($userConfig)) {
+            $this->markTestSkipped('userconfig.json not present (node not set up in this test environment)');
+        }
 
-        // Fresh install — file doesn't exist
-        $this->assertFalse(UpdateCheckService::shouldShowWhatsNew());
-        // File should now be created (seeded)
-        $this->assertFileExists($seenFile);
-
-        $data = json_decode(file_get_contents($seenFile), true);
-        $this->assertSame(Constants::APP_VERSION, $data['dismissed_version']);
-
-        // Clean up
+        $hadSeen = file_exists($seenFile);
+        $backup = $hadSeen ? file_get_contents($seenFile) : null;
         @unlink($seenFile);
+
+        try {
+            $this->assertTrue(UpdateCheckService::shouldShowWhatsNew());
+            // Must not auto-seed — that would hide the banner immediately
+            $this->assertFileDoesNotExist($seenFile);
+        } finally {
+            if ($hadSeen && $backup !== null) {
+                file_put_contents($seenFile, $backup);
+            } else {
+                @unlink($seenFile);
+            }
+        }
+    }
+
+    /**
+     * Test shouldShowWhatsNew returns false for a pre-setup container
+     * (neither the seen-file nor userconfig.json exist).
+     */
+    public function testShouldShowWhatsNewReturnsFalseWhenPreSetup(): void
+    {
+        $seenFile = '/etc/eiou/config/whats-new-seen.json';
+        $userConfig = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+        if (file_exists($userConfig) && !is_writable($userConfig)) {
+            $this->markTestSkipped('userconfig.json not writable');
+        }
+
+        $hadSeen = file_exists($seenFile);
+        $seenBackup = $hadSeen ? file_get_contents($seenFile) : null;
+        $hadUserConfig = file_exists($userConfig);
+        $userConfigBackup = $hadUserConfig ? file_get_contents($userConfig) : null;
+
+        @unlink($seenFile);
+        if ($hadUserConfig) {
+            @unlink($userConfig);
+        }
+
+        try {
+            $this->assertFalse(UpdateCheckService::shouldShowWhatsNew());
+            // Must not silently seed the seen-file either
+            $this->assertFileDoesNotExist($seenFile);
+        } finally {
+            @unlink($seenFile);
+            if ($hadSeen && $seenBackup !== null) {
+                file_put_contents($seenFile, $seenBackup);
+            }
+            if ($hadUserConfig && $userConfigBackup !== null) {
+                file_put_contents($userConfig, $userConfigBackup);
+            }
+        }
     }
 
     /**
@@ -386,6 +434,143 @@ class UpdateCheckServiceTest extends TestCase
 
         // Clean up
         @unlink($seenFile);
+    }
+
+    // ==================== getWhatsNewVariant tests ====================
+
+    /**
+     * Test getWhatsNewVariant returns 'fresh' when no seen file exists and
+     * userconfig is present (node has never dismissed a banner).
+     */
+    public function testGetWhatsNewVariantReturnsFreshOnFirstRun(): void
+    {
+        $seenFile = '/etc/eiou/config/whats-new-seen.json';
+        $userConfig = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+        if (!file_exists($userConfig)) {
+            $this->markTestSkipped('userconfig.json not present (node not set up in this test environment)');
+        }
+
+        $hadSeen = file_exists($seenFile);
+        $backup = $hadSeen ? file_get_contents($seenFile) : null;
+        @unlink($seenFile);
+
+        try {
+            $this->assertSame('fresh', UpdateCheckService::getWhatsNewVariant());
+            // Must stay a pure read — no side-effect file write.
+            $this->assertFileDoesNotExist($seenFile);
+        } finally {
+            if ($hadSeen && $backup !== null) {
+                file_put_contents($seenFile, $backup);
+            } else {
+                @unlink($seenFile);
+            }
+        }
+    }
+
+    /**
+     * Test getWhatsNewVariant returns 'upgraded' when first_seen_version
+     * predates the current APP_VERSION (node dismissed a previous version's
+     * banner, now on a newer version).
+     */
+    public function testGetWhatsNewVariantReturnsUpgradedWhenFirstSeenOlder(): void
+    {
+        $seenFile = '/etc/eiou/config/whats-new-seen.json';
+        $userConfig = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+        if (!file_exists($userConfig)) {
+            $this->markTestSkipped('userconfig.json not present');
+        }
+
+        $hadSeen = file_exists($seenFile);
+        $backup = $hadSeen ? file_get_contents($seenFile) : null;
+
+        file_put_contents($seenFile, json_encode([
+            'first_seen_version' => '0.0.1-fake-old',
+            'dismissed_version' => '0.0.1-fake-old',
+            'dismissed_at' => date('c'),
+        ]));
+
+        try {
+            $this->assertSame('upgraded', UpdateCheckService::getWhatsNewVariant());
+        } finally {
+            if ($hadSeen && $backup !== null) {
+                file_put_contents($seenFile, $backup);
+            } else {
+                @unlink($seenFile);
+            }
+        }
+    }
+
+    /**
+     * Test getWhatsNewVariant returns null when the current version's
+     * banner has already been dismissed.
+     */
+    public function testGetWhatsNewVariantReturnsNullWhenDismissed(): void
+    {
+        $seenFile = '/etc/eiou/config/whats-new-seen.json';
+        $userConfig = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+        if (!file_exists($userConfig)) {
+            $this->markTestSkipped('userconfig.json not present');
+        }
+
+        $hadSeen = file_exists($seenFile);
+        $backup = $hadSeen ? file_get_contents($seenFile) : null;
+
+        file_put_contents($seenFile, json_encode([
+            'first_seen_version' => Constants::APP_VERSION,
+            'dismissed_version' => Constants::APP_VERSION,
+            'dismissed_at' => date('c'),
+        ]));
+
+        try {
+            $this->assertNull(UpdateCheckService::getWhatsNewVariant());
+        } finally {
+            if ($hadSeen && $backup !== null) {
+                file_put_contents($seenFile, $backup);
+            } else {
+                @unlink($seenFile);
+            }
+        }
+    }
+
+    /**
+     * Test dismissWhatsNew backfills first_seen_version on a file that was
+     * written by a pre-variant version of the code (no first_seen field).
+     * This keeps later upgrades classifiable as 'upgraded' rather than
+     * misclassified as 'fresh'.
+     */
+    public function testDismissWhatsNewBackfillsFirstSeenVersion(): void
+    {
+        $seenFile = '/etc/eiou/config/whats-new-seen.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+
+        $hadSeen = file_exists($seenFile);
+        $backup = $hadSeen ? file_get_contents($seenFile) : null;
+
+        @unlink($seenFile);
+
+        try {
+            UpdateCheckService::dismissWhatsNew();
+            $data = json_decode(file_get_contents($seenFile), true);
+            $this->assertSame(Constants::APP_VERSION, $data['first_seen_version']);
+            $this->assertSame(Constants::APP_VERSION, $data['dismissed_version']);
+        } finally {
+            if ($hadSeen && $backup !== null) {
+                file_put_contents($seenFile, $backup);
+            } else {
+                @unlink($seenFile);
+            }
+        }
     }
 
     // ==================== getReleaseNotes tests ====================

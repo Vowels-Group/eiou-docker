@@ -44,7 +44,7 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.12-alpha';
+    const APP_VERSION = '0.1.13-alpha';
     const MIN_COMPATIBLE_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
@@ -52,7 +52,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 8;
+    const SCHEMA_VERSION = 10;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -257,6 +257,35 @@ class Constants {
     const DEFAULT_TRANSPORT_MODE = 'tor';
     const VALID_TRANSPORT_INDICES = ['tor', 'https', 'http'];
 
+    // Address-type display registry — label + FontAwesome icon per known
+    // transport. Consumed by the contact modal's address dropdown (script.js)
+    // and the pending-contact modal's address pills (contactSection.html).
+    //
+    // Lookups go through `getAddressTypeDisplay()` which falls back to an
+    // uppercased column name + `fa-question` icon when a new transport is
+    // added to the `addresses` schema before its entry lands here — so the
+    // UI never breaks on a schema-only change, it just renders the new
+    // type with a placeholder icon until someone fills in the entry.
+    const ADDRESS_TYPE_DISPLAY = [
+        'tor'   => ['label' => 'Tor',   'icon' => 'fa-user-secret'],
+        'https' => ['label' => 'HTTPS', 'icon' => 'fa-lock'],
+        'http'  => ['label' => 'HTTP',  'icon' => 'fa-globe'],
+    ];
+
+    /**
+     * Get the display metadata for an address type, with a fall-back for
+     * types that exist in the `addresses` schema but don't yet have an entry
+     * in ADDRESS_TYPE_DISPLAY. Keeps the GUI from breaking when a new
+     * transport column is added before the display map is updated.
+     *
+     * @param string $type Schema column name (e.g. 'http', 'tor', 'i2p')
+     * @return array{label: string, icon: string}
+     */
+    public static function getAddressTypeDisplay(string $type): array {
+        return self::ADDRESS_TYPE_DISPLAY[$type]
+            ?? ['label' => strtoupper($type), 'icon' => 'fa-question'];
+    }
+
     /**
      * Get the default transport mode, with env override support
      *
@@ -457,6 +486,21 @@ class Constants {
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 10;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
+    // Live event notifications — non-reloading XHR poll that surfaces new
+    // incoming payment requests / contact requests / transactions / DLQ
+    // entries as toasts, and keeps tab badges fresh. Supersedes the page
+    // reload path: when LIVE_NOTIFICATIONS_ENABLED is true, the
+    // AUTO_REFRESH_ENABLED 15s reload is suppressed at runtime (both can be
+    // ON in settings; live-notifs wins to avoid reloading the page out from
+    // under a just-fired toast).
+    const LIVE_NOTIFICATIONS_ENABLED = true;                    // Default ON — unobtrusive by design (visibility-gated, idle-backoff, modal-suppressed)
+    const LIVE_NOTIFICATIONS_POLL_INTERVAL_MS = 10000;          // Base poll cadence; loop backs off when idle
+    const LIVE_NOTIFICATIONS_VERBOSITY = 'balanced';            // quiet | balanced | live — see matrix in GUI settings
+    const LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS = ['quiet', 'balanced', 'live'];
+    const LIVE_NOTIFICATIONS_TOAST_DURATION_MS = 10000;         // 0 = until-dismissed
+    const LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS = [5000, 10000, 20000, 0];
+    const LIVE_NOTIFICATIONS_MAX_PER_KIND = 25;                 // Hard cap on deltas returned per kind per poll (keeps payload bounded)
+
     // Session
     const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
     const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes
@@ -529,13 +573,14 @@ class Constants {
     const DISPLAY_RECENT_CONTACTS_LIMIT = 5;       // Max recent contacts shown in lists (default: 5)
     const CONTACT_TRANSACTIONS_LIMIT = 10;         // Max transactions per contact in combined queries (default: 10)
     const BALANCE_TRANSACTION_LIMIT = 5;           // Max transactions used for balance conversion (default: 5)
-    const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max chain drop proposals per contact query (default: 20)
-    const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose chain drops when mutual gaps detected
-    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming chain drop proposals - default OFF for safety
+    const CHAIN_DROP_PROPOSALS_LIMIT = 20;         // Max tx drop proposals per contact query (default: 20)
+    const AUTO_CHAIN_DROP_PROPOSE = true;          // Auto-propose tx drops when mutual gaps detected
+    const AUTO_CHAIN_DROP_ACCEPT = false;          // Auto-accept incoming tx drop proposals - default OFF for safety
     const AUTO_CHAIN_DROP_ACCEPT_GUARD = true;     // Balance guard for auto-accept: compares stored vs calculated balances to block acceptance when missing transactions would erase debt owed to us. Disable to accept unconditionally.
     const AUTO_ACCEPT_RESTORED_CONTACT = true;     // Auto-accept contacts on wallet restore when transaction history proves prior relationship - default ON; when OFF, restored contacts stay pending for manual review
     const AUTO_ACCEPT_TRANSACTION = true;          // Auto-accept P2P transactions when route found - default ON for backward compatibility
-    const AUTO_REJECT_UNKNOWN_CURRENCY = true;    // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default ON; when OFF, requests arrive as pending for manual review (accepting auto-adds the currency)
+    const HIDE_EMPTY_GUI_SECTIONS = false;         // GUI-only: when true, hide the Failed Messages / Payment Requests / Pending Contact Requests sections when they have nothing in them. Default OFF (discoverability over tidiness — users see the empty panels and know the feature exists)
+    const AUTO_REJECT_UNKNOWN_CURRENCY = false;   // Auto-reject incoming contact requests with currencies not in allowedCurrencies - default OFF; requests arrive as pending for manual review (accepting auto-adds the currency). Operators who only ever want the currencies they've explicitly allowed can flip this ON.
     const UPDATE_CHECK_ENABLED = true;            // Check Docker Hub for newer image versions daily - default ON; when OFF, no external API calls are made
     const ANALYTICS_ENABLED = false;              // Share anonymous usage statistics - default OFF (opt-in only); when ON, sends aggregate counts to analytics.eiou.org daily
     const ANALYTICS_OPT_IN_AT = null;             // ISO 8601 timestamp written when the user flips analyticsEnabled from off to on. Bounds the heartbeat rollup window so catch-up submissions after an outage never pull pre-consent data. Null = never opted in (legacy or currently OFF)
@@ -560,6 +605,10 @@ class Constants {
     const CLEANUP_P2P_SENDER_RETENTION_DAYS = 1;   // Days to keep P2P sender records (default: 1)
     const CLEANUP_P2P_RELAYED_RETENTION_DAYS = 1;  // Days to keep P2P relayed contact records (default: 1)
     const CLEANUP_METRICS_RETENTION_DAYS = 90;     // Days to keep delivery metrics (default: 90)
+    const PAYMENT_REQUESTS_ARCHIVE_RETENTION_DAYS = 180; // Days after resolution before a payment request is archived (default: 180)
+    const PAYMENT_REQUESTS_ARCHIVE_BATCH_SIZE = 500; // Rows moved per transaction in the archival job (default: 500)
+    const TRANSACTIONS_ARCHIVE_RETENTION_DAYS = 30; // Days after completion before a transaction is archived (default: 30). Only applies to bilateral chains that verify gap-free at the moment of archival. Shorter than the payment-requests default because chain-integrity verification runs on every outbound send — moving settled txs out of the live table sooner keeps the hot path tight.
+    const TRANSACTIONS_ARCHIVE_BATCH_SIZE = 500; // Rows moved per transaction in the transactions archival job (default: 500)
     const CLEANUP_RATE_LIMIT_SECONDS = 3600;       // Seconds before expired rate limit entries are cleaned (default: 3600)
 
     // Database locking
@@ -590,11 +639,11 @@ class Constants {
     }
 
     /**
-     * Check if automatic chain drop proposals are enabled
+     * Check if automatic tx drop proposals are enabled
      * Supports runtime override via EIOU_AUTO_CHAIN_DROP_PROPOSE env variable
      *
      * @deprecated Use UserContext::getAutoChainDropPropose() instead
-     * @return bool Whether automatic chain drop proposals are enabled
+     * @return bool Whether automatic tx drop proposals are enabled
      */
     public static function isAutoChainDropProposeEnabled(): bool {
         $envValue = getenv('EIOU_AUTO_CHAIN_DROP_PROPOSE');
@@ -605,11 +654,11 @@ class Constants {
     }
 
     /**
-     * Check if automatic chain drop acceptance is enabled
+     * Check if automatic tx drop acceptance is enabled
      * Supports runtime override via EIOU_AUTO_CHAIN_DROP_ACCEPT env variable
      *
      * @deprecated Use UserContext::getAutoChainDropAccept() instead
-     * @return bool Whether automatic chain drop acceptance is enabled
+     * @return bool Whether automatic tx drop acceptance is enabled
      */
     public static function isAutoChainDropAcceptEnabled(): bool {
         $envValue = getenv('EIOU_AUTO_CHAIN_DROP_ACCEPT');

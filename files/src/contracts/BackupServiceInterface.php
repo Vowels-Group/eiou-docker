@@ -24,6 +24,19 @@ interface BackupServiceInterface
     public function createBackup(?string $customFilename = null): array;
 
     /**
+     * Create a backup of archive tables only (currently just payment_requests_archive).
+     *
+     * Separate from createBackup() so operators/jobs can snapshot cold data
+     * independently of the daily live backup cadence. Live backups exclude
+     * archive tables, so the two methods are complementary — together they
+     * cover the whole database.
+     *
+     * @param string|null $customFilename Optional custom filename (without extension)
+     * @return array Result with 'success', 'filename', 'size', 'path'
+     */
+    public function createArchiveBackup(?string $customFilename = null): array;
+
+    /**
      * Restore database from a backup file
      *
      * Decrypts the backup file and restores to MariaDB.

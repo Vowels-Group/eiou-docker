@@ -98,6 +98,7 @@ function freshInstall(){
 
                 // Payment Requests
                 $dbConn->exec(getPaymentRequestsTableSchema());
+                $dbConn->exec(getPaymentRequestsArchiveTableSchema());
 
                 // Message Delivery
                 $dbConn->exec(getMessageDeliveryTableSchema());
@@ -191,8 +192,11 @@ function runMigrations(PDO $pdo): array {
     // List of migration tables to create (added after initial release)
     // Use fully-qualified names since dynamic calls don't use namespace resolution
     $migrations = [
-        'payment_requests' => 'Eiou\Database\getPaymentRequestsTableSchema',
-        'remember_tokens'  => 'Eiou\Database\getRememberTokensTableSchema',
+        'payment_requests'               => 'Eiou\Database\getPaymentRequestsTableSchema',
+        'payment_requests_archive'       => 'Eiou\Database\getPaymentRequestsArchiveTableSchema',
+        'remember_tokens'                => 'Eiou\Database\getRememberTokensTableSchema',
+        'transactions_archive'           => 'Eiou\Database\getTransactionsArchiveTableSchema',
+        'transaction_chain_checkpoints'  => 'Eiou\Database\getTransactionChainCheckpointsTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {

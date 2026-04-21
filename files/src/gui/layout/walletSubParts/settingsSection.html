@@ -7,7 +7,61 @@
         <input type="hidden" name="action" value="updateSettings">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
-        <div class="settings-grid">
+        <details class="section-intro text-muted">
+            <summary>
+                <i class="fas fa-info-circle"></i>
+                <span>How saving works</span>
+            </summary>
+            <div class="section-intro-body">
+                <strong>One form, one Save button.</strong> Switch between sections
+                using the <strong>Section</strong> dropdown below — flip toggles,
+                change dropdowns, edit numbers in any section in any order. Your
+                edits stick as you move between sections (nothing is lost when you
+                switch view). When you're done, hit <strong>Save Settings</strong>
+                once at the bottom and every change across every section is
+                persisted in a single write.
+                <br><br>
+                <strong>Reset</strong> only reverts your current unsaved edits — it
+                does <em>not</em> wipe your saved settings. To throw every saved
+                setting back to the defaults this node ships with, pick
+                <strong>Reset to Defaults</strong> from the Section dropdown.
+            </div>
+        </details>
+
+        <!-- Unified section selector — the whole settings page is a single
+             view at a time, driven by this dropdown. Hidden sections stay in
+             the DOM (so their inputs still post on Save); display is toggled
+             in JS by switchAdvancedSection(). -->
+        <div class="adv-section-nav">
+            <label for="advancedSectionSelect">Section:</label>
+            <select id="advancedSectionSelect" data-action-change="switchAdvancedSection">
+                <!-- Disabled header-style options replace <optgroup> — optgroup
+                     labels render as muted italic and browsers sometimes clip
+                     them on narrow selects. Explicit disabled rows are more
+                     robustly visible and work identically across browsers. -->
+                <option disabled>────── Main ──────</option>
+                <option value="appearance" selected>Appearance</option>
+                <option value="identity">Identity</option>
+                <option value="payments">Payments</option>
+                <option value="network-basic">Network</option>
+                <option value="notifications">Notifications</option>
+                <option disabled>──── Advanced ────</option>
+                <option value="feature-toggles">Feature Toggles</option>
+                <option value="currency">Currency</option>
+                <option value="display">Display</option>
+                <option value="backup-logging">Backup &amp; Logging</option>
+                <option value="data-retention">Data Retention</option>
+                <option value="sync">Sync</option>
+                <option value="network">Network (advanced)</option>
+                <option value="rate-limiting">Rate Limiting</option>
+                <option value="gui-security">GUI Security</option>
+                <option value="reset">Reset to Defaults</option>
+            </select>
+        </div>
+
+        <div id="adv-section-appearance" class="adv-section">
+            <h4 class="settings-subsection-title"><i class="fas fa-palette"></i> Appearance</h4>
+            <div class="settings-grid">
             <!-- Contact Avatar Style -->
             <div class="form-group">
                 <label>Contact Avatar Style:</label>
@@ -100,38 +154,31 @@
                 </div>
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
-                    Color for accepted/completed/resolved vs rejected/blocked/failed badges. Sent/Received direction labels are always neutral to avoid conflicting semantics.
+                    Color for accepted/completed/resolved vs rejected/blocked/failed badges and success/error toast messages. Sent/Received direction labels are always neutral to avoid conflicting semantics.
                 </small>
             </div>
+        </div>
 
-            <!-- Display Name -->
-            <div class="form-group">
-                <label for="settingsName">Display Name:</label>
-                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Your display name shown in the GUI and shared when contacts scan your QR code
-                </small>
+        </div><!-- /adv-section-appearance -->
+
+        <div id="adv-section-identity" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-id-card"></i> Identity</h4>
+            <div class="settings-grid">
+                <!-- Display Name -->
+                <div class="form-group">
+                    <label for="settingsName">Display Name:</label>
+                    <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Your display name shown in the GUI and shared when contacts scan your QR code
+                    </small>
+                </div>
             </div>
+        </div><!-- /adv-section-identity -->
 
-            <!-- Session Timeout -->
-            <div class="form-group">
-                <label for="sessionTimeoutMinutes">Session Timeout:</label>
-                <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
-                    <?php
-                    $currentTimeout = $user->getSessionTimeoutMinutes();
-                    foreach (sessionTimeoutOptions() as $minutes): ?>
-                        <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
-                            <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Auto-logout after this period of inactivity
-                </small>
-            </div>
-
+        <div id="adv-section-payments" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-coins"></i> Payments</h4>
+            <div class="settings-grid">
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>
@@ -163,7 +210,7 @@
             <!-- Minimum Fee -->
             <div class="form-group">
                 <label for="minFee">Minimum Fee Amount:</label>
-                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.00000001" min="0" class="default-value">
+                <input type="number" id="minFee" name="minFee" value="<?php echo number_format((float) $user->getMinimumFee(), internalPrecision(), '.', ''); ?>" step="0.00000001" min="0" class="default-value">
                 <small class="form-hint">
                     <i class="fas fa-info-circle"></i>
                     Minimum fee amount in default currency. Set to 0 for free relaying (e.g. for friends and family). Default: <?php echo number_format(transactionMinimumFee(), internalPrecision()); ?>
@@ -189,58 +236,85 @@
                     Default credit limit for new contacts
                 </small>
             </div>
-
-            <!-- Default Transport Mode -->
-            <div class="form-group">
-                <label for="defaultTransportMode">Default Transport Mode:</label>
-                <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
-                    <?php
-                    // Dynamically generate transport options from available types
-                    $transportTypes = validTransportIndices();
-                    $currentTransport = $user->getDefaultTransportMode();
-                    foreach ($transportTypes as $type):
-                        $displayName = strtoupper($type);
-                        $selected = ($currentTransport === $type) ? 'selected' : '';
-                    ?>
-                    <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($displayName); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Preferred network transport for communications (Tor is most secure, HTTP is least secure)
-                </small>
-            </div>
         </div>
+        </div><!-- /adv-section-payments -->
 
-        <!-- Advanced Settings (Collapsible) -->
-        <div class="settings-advanced-divider">
-            <h3 class="settings-advanced-title" data-action="toggleConfigSection" data-section="advanced-settings-content" data-arrow="advanced-settings-arrow">
-                <i class="fas fa-sliders-h"></i> Advanced Settings
-                <i id="advanced-settings-arrow" class="fas fa-chevron-down settings-collapsible-arrow"></i>
-            </h3>
-            <div id="advanced-settings-content" class="d-none">
-
-                <!-- Category selector -->
-                <div class="adv-section-nav">
-                    <label for="advancedSectionSelect">Category:</label>
-                    <select id="advancedSectionSelect" data-action-change="switchAdvancedSection">
-                        <option value="feature-toggles">Feature Toggles</option>
-                        <option value="currency">Currency</option>
-                        <option value="display">Display</option>
-                        <option value="backup-logging">Backup &amp; Logging</option>
-                        <option value="data-retention">Data Retention</option>
-                        <option value="sync">Sync</option>
-                        <option value="network">Network</option>
-                        <option value="rate-limiting">Rate Limiting</option>
-                        <option value="gui-security">GUI Security</option>
+        <div id="adv-section-network-basic" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-network-wired"></i> Network</h4>
+            <div class="settings-grid">
+                <!-- Default Transport Mode -->
+                <div class="form-group">
+                    <label for="defaultTransportMode">Default Transport Mode:</label>
+                    <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
+                        <?php
+                        // Dynamically generate transport options from available types
+                        $transportTypes = validTransportIndices();
+                        $currentTransport = $user->getDefaultTransportMode();
+                        foreach ($transportTypes as $type):
+                            $displayName = strtoupper($type);
+                            $selected = ($currentTransport === $type) ? 'selected' : '';
+                        ?>
+                        <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($displayName); ?></option>
+                        <?php endforeach; ?>
                     </select>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Preferred network transport for communications (Tor is most secure, HTTP is least secure)
+                    </small>
+                </div>
+            </div>
+        </div><!-- /adv-section-network-basic -->
+
+        <!-- Notifications — dedicated subsection for live event notifications.
+             Grouped together because the verbosity + duration dropdowns don't
+             belong under Feature Toggles (which is toggle-switches only). -->
+        <div id="adv-section-notifications" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-bell"></i> Notifications</h4>
+            <p class="text-muted mb-lg">
+                Fine-tune live event notifications. The master on/off switch lives under
+                <strong>Feature Toggles → GUI → Live Event Notifications</strong>.
+                Values below are saved either way, but only take effect while the master
+                toggle is on.
+            </p>
+            <div class="settings-grid">
+                <div class="form-group">
+                    <label for="liveNotificationsVerbosity">Notification Verbosity:</label>
+                    <select id="liveNotificationsVerbosity" name="liveNotificationsVerbosity" class="default-value">
+                        <?php $curVerbosity = $user->getLiveNotificationsVerbosity(); ?>
+                        <option value="quiet" <?php echo ($curVerbosity === 'quiet') ? 'selected' : ''; ?>>Quiet — only money events toast</option>
+                        <option value="balanced" <?php echo ($curVerbosity === 'balanced') ? 'selected' : ''; ?>>Balanced — money events + delivery failures toast</option>
+                        <option value="live" <?php echo ($curVerbosity === 'live') ? 'selected' : ''; ?>>Live — everything toasts, including status updates</option>
+                    </select>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i> Quiet = received payments, payment requests, and contact requests toast; in-flight status churn and delivery failures stay badge-only. Balanced adds delivery failures. Live adds in-flight status updates (pending → sent → completed).
+                    </small>
                 </div>
 
-                <!-- Feature Toggles -->
-                <div id="adv-section-feature-toggles" class="adv-section">
+                <div class="form-group">
+                    <label for="liveNotificationsToastDurationMs">Toast Duration:</label>
+                    <select id="liveNotificationsToastDurationMs" name="liveNotificationsToastDurationMs" class="default-value">
+                        <?php $curDuration = $user->getLiveNotificationsToastDurationMs(); ?>
+                        <option value="5000" <?php echo ($curDuration === 5000) ? 'selected' : ''; ?>>5 seconds</option>
+                        <option value="10000" <?php echo ($curDuration === 10000) ? 'selected' : ''; ?>>10 seconds (default)</option>
+                        <option value="20000" <?php echo ($curDuration === 20000) ? 'selected' : ''; ?>>20 seconds</option>
+                        <option value="0" <?php echo ($curDuration === 0) ? 'selected' : ''; ?>>Until dismissed</option>
+                    </select>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i> How long live-event toasts stay on screen before auto-dismissing. Hovering or clicking to expand always pauses the timer.
+                    </small>
+                </div>
+            </div>
+        </div><!-- /adv-section-notifications -->
+
+                <!-- Feature Toggles — grouped by domain (Transactions /
+                     Contacts / GUI / System) since the flat list was
+                     getting long and the options bucket naturally. -->
+                <div id="adv-section-feature-toggles" class="adv-section d-none">
                     <h4 class="settings-subsection-title">
                         <i class="fas fa-toggle-on"></i> Feature Toggles
                     </h4>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-address-book"></i> Contacts</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="contactStatusEnabled">Contact Status:</label>
@@ -275,54 +349,6 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="autoChainDropPropose">Auto Chain-Drop Propose:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="autoChainDropPropose" name="autoChainDropPropose" value="1" <?php echo $user->getAutoChainDropPropose() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="autoChainDropProposeStatus" class="toggle-status <?php echo $user->getAutoChainDropPropose() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoChainDropPropose() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Automatically propose chain-drop operations
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="autoChainDropAccept">Auto Chain-Drop Accept:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="autoChainDropAccept" name="autoChainDropAccept" value="1" <?php echo $user->getAutoChainDropAccept() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="autoChainDropAcceptStatus" class="toggle-status <?php echo $user->getAutoChainDropAccept() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoChainDropAccept() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Automatically accept incoming chain-drop proposals
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="autoChainDropAcceptGuard">Auto Chain-Drop Accept Guard:</label>
-                            <div class="toggle-row">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="autoChainDropAcceptGuard" name="autoChainDropAcceptGuard" value="1" <?php echo $user->getAutoChainDropAcceptGuard() ? 'checked' : ''; ?>>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span id="autoChainDropAcceptGuardStatus" class="toggle-status <?php echo $user->getAutoChainDropAcceptGuard() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoChainDropAcceptGuard() ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                            <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> When enabled, checks balance consistency before auto-accepting chain-drops
-                            </small>
-                        </div>
-
-                        <div class="form-group">
                             <label for="autoAcceptRestoredContact">Auto-Accept Restored Contacts:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
@@ -335,6 +361,41 @@
                             </div>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> When enabled, contacts are auto-accepted on wallet restore if transaction history proves a prior relationship (with default fee/credit). When disabled, restored contacts stay pending for manual review.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
+                            </small>
+                        </div>
+                    </div>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-exchange-alt"></i> Transactions</h5>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="autoAcceptTransaction">Auto-Accept P2P Transactions:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoAcceptTransaction" name="autoAcceptTransaction" value="1" <?php echo $user->getAutoAcceptTransaction() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoAcceptTransactionStatus" class="toggle-status <?php echo $user->getAutoAcceptTransaction() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoAcceptTransaction() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
                             </small>
                         </div>
 
@@ -355,21 +416,56 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="apiEnabled">API Access:</label>
+                            <label for="autoChainDropPropose">Auto Tx Drop Propose:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="apiEnabled" name="apiEnabled" value="1" <?php echo $user->getApiEnabled() ? 'checked' : ''; ?>>
+                                    <input type="checkbox" id="autoChainDropPropose" name="autoChainDropPropose" value="1" <?php echo $user->getAutoChainDropPropose() ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
-                                <span id="apiEnabledStatus" class="toggle-status <?php echo $user->getApiEnabled() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getApiEnabled() ? 'Enabled' : 'Disabled'; ?>
+                                <span id="autoChainDropProposeStatus" class="toggle-status <?php echo $user->getAutoChainDropPropose() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoChainDropPropose() ? 'Enabled' : 'Disabled'; ?>
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Enable the REST API endpoint
+                                <i class="fas fa-info-circle"></i> Automatically propose tx drops
                             </small>
                         </div>
 
+                        <div class="form-group">
+                            <label for="autoChainDropAccept">Auto Tx Drop Accept:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoChainDropAccept" name="autoChainDropAccept" value="1" <?php echo $user->getAutoChainDropAccept() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoChainDropAcceptStatus" class="toggle-status <?php echo $user->getAutoChainDropAccept() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoChainDropAccept() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Automatically accept incoming tx drop proposals
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="autoChainDropAcceptGuard">Auto Tx Drop Accept Guard:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoChainDropAcceptGuard" name="autoChainDropAcceptGuard" value="1" <?php echo $user->getAutoChainDropAcceptGuard() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="autoChainDropAcceptGuardStatus" class="toggle-status <?php echo $user->getAutoChainDropAcceptGuard() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getAutoChainDropAcceptGuard() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> When enabled, checks balance consistency before auto-accepting tx drops
+                            </small>
+                        </div>
+                    </div>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-desktop"></i> GUI</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="autoRefreshEnabled">Auto-Refresh Transactions:</label>
                             <div class="toggle-row">
@@ -387,34 +483,58 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="autoAcceptTransaction">Auto-Accept P2P Transactions:</label>
+                            <label for="hideEmptyGuiSections">Hide Empty Sections:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="autoAcceptTransaction" name="autoAcceptTransaction" value="1" <?php echo $user->getAutoAcceptTransaction() ? 'checked' : ''; ?>>
+                                    <input type="checkbox" id="hideEmptyGuiSections" name="hideEmptyGuiSections" value="1" <?php echo $user->getHideEmptyGuiSections() ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
-                                <span id="autoAcceptTransactionStatus" class="toggle-status <?php echo $user->getAutoAcceptTransaction() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoAcceptTransaction() ? 'Enabled' : 'Disabled'; ?>
+                                <span id="hideEmptyGuiSectionsStatus" class="toggle-status <?php echo $user->getHideEmptyGuiSections() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getHideEmptyGuiSections() ? 'Enabled' : 'Disabled'; ?>
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Automatically send P2P transactions when a route is found. When disabled, you'll be asked to approve each transaction before sending.
+                                <i class="fas fa-info-circle"></i> Hide Failed Messages, Payment Requests, and Pending Contact Requests sections when they have nothing in them. Default OFF — empty sections stay visible so you can see the feature exists and know there's nothing awaiting you.
                             </small>
                         </div>
 
+                        <!-- Live event notifications master toggle lives here
+                             (it IS a toggle) — the companion verbosity + toast
+                             duration dropdowns live in the dedicated
+                             Notifications subsection since they're not toggles. -->
                         <div class="form-group">
-                            <label for="autoRejectUnknownCurrency">Auto-Reject Unknown Currencies:</label>
+                            <label for="liveNotificationsEnabled">Live Event Notifications:</label>
                             <div class="toggle-row">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="autoRejectUnknownCurrency" name="autoRejectUnknownCurrency" value="1" <?php echo $user->getAutoRejectUnknownCurrency() ? 'checked' : ''; ?>>
+                                    <input type="checkbox" id="liveNotificationsEnabled" name="liveNotificationsEnabled" value="1" <?php echo $user->getLiveNotificationsEnabled() ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
-                                <span id="autoRejectUnknownCurrencyStatus" class="toggle-status <?php echo $user->getAutoRejectUnknownCurrency() ? 'enabled' : ''; ?>">
-                                    <?php echo $user->getAutoRejectUnknownCurrency() ? 'Enabled' : 'Disabled'; ?>
+                                <span id="liveNotificationsEnabledStatus" class="toggle-status <?php echo $user->getLiveNotificationsEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getLiveNotificationsEnabled() ? 'Enabled' : 'Disabled'; ?>
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> When enabled, incoming contact requests with currencies not in your allowed list are automatically rejected. When disabled, they arrive as pending — accepting them auto-adds the currency.
+                                <i class="fas fa-info-circle"></i> Show toasts + keep tab badges fresh when new payment requests, contact requests, transactions, or delivery failures arrive. Polls every ~10s, pauses when the tab is hidden or you're idle, never reloads the page. Suppresses Auto-Refresh Transactions while active. Configure verbosity + toast duration under <strong>Notifications</strong>.
+                            </small>
+                        </div>
+
+                    </div>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-server"></i> System</h5>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="apiEnabled">API Access:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="apiEnabled" name="apiEnabled" value="1" <?php echo $user->getApiEnabled() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="apiEnabledStatus" class="toggle-status <?php echo $user->getApiEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getApiEnabled() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Enable the REST API endpoint
                             </small>
                         </div>
 
@@ -447,17 +567,15 @@
                             </div>
                             <small class="form-hint">
                                 <i class="fas fa-info-circle"></i> Check Docker Hub daily for newer versions and show a notification when an update is available. No data is sent — only a read-only API call.
-                            </small>
-                            <?php if (!empty($updateCheckStatus['last_checked'])): ?>
-                            <small class="form-hint">
-                                <i class="fas fa-clock"></i> Last checked: <?php echo htmlspecialchars(formatTimestamp($updateCheckStatus['last_checked'])); ?>
-                                <?php if ($updateCheckStatus['available']): ?>
-                                    — <strong>v<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?> available</strong>
-                                <?php else: ?>
-                                    — up to date
+                                <?php if (!empty($updateCheckStatus['last_checked'])): ?>
+                                    Last checked: <?php echo htmlspecialchars(formatTimestamp($updateCheckStatus['last_checked'])); ?>
+                                    <?php if ($updateCheckStatus['available']): ?>
+                                        — <strong>v<?php echo htmlspecialchars($updateCheckStatus['latest_version']); ?> available</strong>.
+                                    <?php else: ?>
+                                        — up to date.
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </small>
-                            <?php endif; ?>
                         </div>
 
                         <div class="form-group">
@@ -472,15 +590,13 @@
                                 </span>
                             </div>
                             <small class="form-hint">
-                                <i class="fas fa-info-circle"></i> Share anonymous usage statistics to help improve eIOU. Only aggregate transaction counts are sent — no personal data, amounts, contacts, or addresses. <a href="https://eiou.org/privacy" target="_blank" rel="noopener noreferrer">Learn more</a>
+                                <i class="fas fa-info-circle"></i> Share anonymous usage statistics to help improve eIOU. Only aggregate transaction counts are sent — no personal data, amounts, contacts, or addresses.
+                                <?php if (!empty($analyticsStatus['last_submitted'])): ?>
+                                    Last submitted: <?php echo htmlspecialchars(formatTimestamp($analyticsStatus['last_submitted'])); ?>.
+                                <?php endif; ?>
+                                <a href="https://eiou.org/privacy" target="_blank" rel="noopener noreferrer">Learn more</a>
                             </small>
-                            <?php if (!empty($analyticsStatus['last_submitted'])): ?>
-                            <small class="form-hint">
-                                <i class="fas fa-clock"></i> Last submitted: <?php echo htmlspecialchars(formatTimestamp($analyticsStatus['last_submitted'])); ?>
-                            </small>
-                            <?php endif; ?>
                         </div>
-
                     </div>
                 </div>
 
@@ -489,6 +605,8 @@
                     <h4 class="settings-subsection-title">
                         <i class="fas fa-archive"></i> Backup &amp; Logging
                     </h4>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-save"></i> Backup</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="backupCronTime">Backup Time (UTC):</label>
@@ -505,7 +623,10 @@
                                 <i class="fas fa-info-circle"></i> Number of backup files to keep (minimum 1)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-file-alt"></i> Logging</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="logMaxEntries">Max Log Entries:</label>
                             <input type="number" id="logMaxEntries" name="logMaxEntries" value="<?php echo htmlspecialchars($user->getLogMaxEntries()); ?>" min="10" step="1" class="default-value">
@@ -541,6 +662,8 @@
                     <p class="settings-section-warning">
                         <i class="fas fa-exclamation-triangle"></i> Lowering retention values will permanently delete older records on next cleanup. Changes take effect at next scheduled cleanup run.
                     </p>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-broom"></i> Cleanup</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="cleanupDeliveryRetentionDays">Delivery Retention:</label>
@@ -582,6 +705,28 @@
                             </small>
                         </div>
                     </div>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-archive"></i> Archive</h5>
+                    <p class="form-hint">
+                        <i class="fas fa-info-circle"></i> Archive-based retention moves old records to an archive table instead of deleting them. Nothing is permanently removed — lowering the value just archives sooner.
+                    </p>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="paymentRequestsArchiveRetentionDays">Payment Requests Archive:</label>
+                            <input type="number" id="paymentRequestsArchiveRetentionDays" name="paymentRequestsArchiveRetentionDays" value="<?php echo htmlspecialchars($user->getPaymentRequestsArchiveRetentionDays()); ?>" min="1" step="1" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Days after resolution before a payment request is archived
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="transactionsArchiveRetentionDays">Transactions Archive:</label>
+                            <input type="number" id="transactionsArchiveRetentionDays" name="transactionsArchiveRetentionDays" value="<?php echo htmlspecialchars($user->getTransactionsArchiveRetentionDays()); ?>" min="1" step="1" class="default-value">
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Days after completion before a transaction is archived. Archival is additionally gated per bilateral pair on a gap-free chain-integrity check — pairs with a detected gap are skipped (not archived) so the gap stays inspectable.
+                            </small>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Rate Limiting (hidden by default) -->
@@ -592,6 +737,8 @@
                     <p class="settings-rate-desc">
                         <i class="fas fa-info-circle"></i> Two independent mechanisms: a P2P throughput cap (requests per minute), and an attempt-counting blocker (blocks IPs that exceed max attempts in a window). Rate limiting can only be disabled via CLI or API.
                     </p>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-wave-square"></i> Throughput</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="p2pRateLimitPerMinute">P2P Throughput Limit (per min):</label>
@@ -600,7 +747,10 @@
                                 <i class="fas fa-info-circle"></i> Maximum P2P requests allowed per minute (throughput cap)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-user-lock"></i> Attempt Blocking</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="rateLimitMaxAttempts">Max Attempts per Window:</label>
                             <input type="number" id="rateLimitMaxAttempts" name="rateLimitMaxAttempts" value="<?php echo htmlspecialchars($user->getRateLimitMaxAttempts()); ?>" min="1" step="1" class="default-value">
@@ -639,6 +789,23 @@
                         <i class="fas fa-user-secret"></i> <strong>Browser cookie-retention note:</strong> If your browser is configured to clear cookies on close, the duration set below is ignored by the browser — every restart looks like a fresh device. This is always the case with Tor Browser, and also applies to regular browsers with settings such as Firefox's "Delete cookies and site data when Firefox is closed", "Never remember history", strict Enhanced Tracking Protection, or any Private Browsing / Incognito window. In those cases each reopt into Remember Me adds a fresh entry to the Active Sessions list below (previous ones are already effectively dead because the cookie is gone). Use "Sign out everywhere" to clean up.
                     </p>
                     <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="sessionTimeoutMinutes">Session Timeout:</label>
+                            <select id="sessionTimeoutMinutes" name="sessionTimeoutMinutes" class="default-value">
+                                <?php
+                                $currentTimeout = $user->getSessionTimeoutMinutes();
+                                foreach (sessionTimeoutOptions() as $minutes): ?>
+                                    <option value="<?php echo $minutes; ?>" <?php echo ($minutes === $currentTimeout) ? 'selected' : ''; ?>>
+                                        <?php echo $minutes; ?> minute<?php echo $minutes > 1 ? 's' : ''; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i>
+                                Auto-logout after this period of inactivity
+                            </small>
+                        </div>
+
                         <div class="form-group">
                             <label for="rememberMeMaxDays">Remember Me Duration:</label>
                             <select id="rememberMeMaxDays" name="rememberMeMaxDays" class="default-value">
@@ -685,12 +852,14 @@
                         $activeSessions = [];
                     }
                     ?>
+                    <h5 class="settings-group-heading">
+                        <i class="fas fa-desktop"></i> Active Remembered Sessions
+                    </h5>
                     <div class="active-sessions-container">
-                        <h5 class="active-sessions-heading">
-                            <i class="fas fa-desktop"></i> Active Remembered Sessions
-                        </h5>
                         <?php if (empty($activeSessions)): ?>
-                            <p class="form-hint"><i class="fas fa-info-circle"></i> No remembered browsers yet. Tick "Remember this browser" at login to add this device to the list.</p>
+                            <div class="empty-panel text-muted">
+                                No remembered browsers yet. Tick "Remember this browser" at login to add this device to the list.
+                            </div>
                         <?php else: ?>
                             <div class="active-sessions-list">
                                 <?php foreach ($activeSessions as $s): ?>
@@ -726,6 +895,41 @@
                     </div>
                 </div>
 
+                <!-- Reset to Defaults (hidden by default) -->
+                <div id="adv-section-reset" class="adv-section d-none">
+                    <h4 class="settings-subsection-title">
+                        <i class="fas fa-undo-alt"></i> Reset to Defaults
+                    </h4>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-info-circle"></i>
+                        Throws every saved wallet setting back to the values this node
+                        ships with. Covers the main Wallet Settings fields <em>and</em>
+                        every Advanced Settings category (Feature Toggles, Currency,
+                        Display, Backup &amp; Logging, Data Retention, Sync, Network,
+                        Rate Limiting, GUI Security).
+                    </p>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Caveat:</strong> &ldquo;Defaults&rdquo; means whatever this
+                        build of the code considers default. If an operator has edited
+                        <code>Constants.php</code> on this node, this resets to the
+                        operator&rsquo;s edited values, not the upstream ship defaults.
+                        Your contacts, transactions, backups, and API keys are
+                        <strong>not</strong> touched.
+                    </p>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-terminal"></i>
+                        This is also exposed via the CLI —
+                        <code>eiou changesettings reset --yes</code> performs the same
+                        operation from inside the container.
+                    </p>
+                    <button type="button"
+                            class="btn btn-danger"
+                            data-action="openResetToDefaultsModal">
+                        <i class="fas fa-undo-alt"></i> Reset to Defaults&hellip;
+                    </button>
+                </div>
+
                 <!-- Network (hidden by default) -->
                 <div id="adv-section-network" class="adv-section d-none">
                     <h4 class="settings-subsection-title">
@@ -734,6 +938,8 @@
                     <p class="settings-section-warning">
                         <i class="fas fa-exclamation-triangle"></i> <strong>Expert setting.</strong> Incorrect timeout values can cause connectivity issues. Only change these if you know what you are doing.
                     </p>
+
+                    <h5 class="settings-group-heading"><i class="fas fa-stopwatch"></i> Transport Timeouts</h5>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label for="httpTransportTimeoutSeconds">HTTP Timeout (seconds):</label>
@@ -750,7 +956,10 @@
                                 <i class="fas fa-info-circle"></i> Tor transport timeout (10-300 seconds)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-shield-alt"></i> Tor Resilience</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="torCircuitMaxFailures">Tor Circuit Max Failures:</label>
                             <input type="number" id="torCircuitMaxFailures" name="torCircuitMaxFailures" value="<?php echo htmlspecialchars($user->getTorCircuitMaxFailures()); ?>" min="1" max="10" step="1" class="default-value">
@@ -788,7 +997,10 @@
                                 <i class="fas fa-info-circle"></i> When Tor fails, only fall back to HTTPS (never plain HTTP)
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-route"></i> Routing &amp; Delivery</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="maxP2pLevel">Max P2P Routing Level:</label>
                             <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo p2pMaxRoutingLevel(); ?>" class="default-value">
@@ -812,7 +1024,10 @@
                                 <i class="fas fa-info-circle"></i> How long to wait for delivery of a direct (non-P2P) transaction. 0 = no expiry. Failed deliveries appear in <a href="#dlq">Failed Messages</a> and can be retried.
                             </small>
                         </div>
+                    </div>
 
+                    <h5 class="settings-group-heading"><i class="fas fa-plug"></i> API</h5>
+                    <div class="settings-grid">
                         <div class="form-group">
                             <label for="apiCorsAllowedOrigins">API CORS Origins:</label>
                             <textarea id="apiCorsAllowedOrigins" name="apiCorsAllowedOrigins" rows="4" class="default-value" placeholder="https://example.com&#10;https://other.com"><?php
@@ -823,7 +1038,6 @@
                                 <i class="fas fa-info-circle"></i> Allowed CORS origins for API — one per line (empty = none)
                             </small>
                         </div>
-
                     </div>
                 </div>
 
@@ -929,13 +1143,44 @@
                     </div>
                 </div>
 
-            </div>
-        </div>
-
         <div class="form-actions settings-actions">
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Settings</button>
             <button type="reset" class="btn btn-secondary"><i class="fas fa-undo"></i> Reset</button>
         </div>
     </form>
+
+    <!-- Reset-to-Defaults confirmation modal. Its own form (POST outside the
+         main settings form), typed confirmation required, explicit CSRF. -->
+    <div id="settingsResetToDefaultsModal" class="modal d-none">
+        <div class="modal-content modal-content-sm">
+            <div class="modal-header">
+                <h3><i class="fas fa-undo-alt"></i> Reset to Defaults</h3>
+                <span class="close" data-action="closeResetToDefaultsModal">&times;</span>
+            </div>
+            <form method="POST" id="settingsResetToDefaultsForm">
+                <input type="hidden" name="action" value="resetToDefaults">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <div class="modal-body modal-body-padded">
+                    <p>
+                        This wipes every saved wallet setting back to the values this node
+                        ships with. Contacts, transactions, backups, and API keys are
+                        <strong>not</strong> affected.
+                    </p>
+                    <p class="text-muted">
+                        To confirm, type <code>reset</code> below.
+                    </p>
+                    <div class="form-group">
+                        <input type="text" id="settingsResetConfirm" autocomplete="off" placeholder="reset">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-compact" data-action="closeResetToDefaultsModal">Cancel</button>
+                    <button type="submit" id="settingsResetSubmit" class="btn btn-danger btn-compact" disabled>
+                        <i class="fas fa-undo-alt"></i> Reset all settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 

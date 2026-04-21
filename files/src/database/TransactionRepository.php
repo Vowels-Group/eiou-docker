@@ -225,6 +225,68 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Return recent transactions touching this user (sender OR receiver)
+     * with `timestamp > $sinceTs`. Thin projection — only the columns the
+     * live-notifications poll needs, so the payload stays small and we
+     * don't pay for the full join that getTransactionHistory does.
+     *
+     * Does NOT consult transactions_archive: by design this is a hot-tail
+     * query — if a row's already been archived (30d+ old under default
+     * retention) it's not "new" for toast purposes.
+     *
+     * @param int $sinceTs Unix timestamp (seconds) — return rows strictly newer than this
+     * @param int $limit   Hard cap on rows returned
+     * @return array<int, array<string, mixed>>
+     */
+    public function getIncomingSince(int $sinceTs, int $limit): array
+    {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null || $limit <= 0) {
+            return [];
+        }
+
+        $placeholders = $this->createPlaceholders($userAddresses);
+        // Schema stores amount as a SplitAmount pair (amount_whole / amount_frac);
+        // there is no single `amount` column. Select the pair and collapse to a
+        // display float via TransactionFormatter below — the live-notif endpoint
+        // consumer reads `amount` as a number for the toast body.
+        //
+        // `tx_type='contact'` rows are excluded: those are bilateral contact-
+        // establishment records with amount=0 by construction. Including them
+        // would fire "Payment received — 0 USD" toasts on every contact
+        // handshake at balanced/quiet verbosities, and "Transaction completed"
+        // at live, none of which represent money movement. The real money-
+        // carrying rows are `standard` and `p2p`, both of which stay in.
+        $query = "SELECT txid, type, status, amount_whole, amount_frac, currency,
+                         sender_address, receiver_address, timestamp, description
+                  FROM {$this->tableName}
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                    AND tx_type <> 'contact'
+                    AND timestamp > ?
+                  ORDER BY timestamp DESC
+                  LIMIT " . (int) $limit;
+
+        // Same DATETIME wire-format note as checkForNewTransactions() —
+        // DISPLAY_DATE_FORMAT is European presentation and MySQL rejects it
+        // as a DATETIME param.
+        $params = $this->buildInClauseParams($userAddresses, 2, [date('Y-m-d H:i:s', $sinceTs)]);
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            return array_map(function (array $row): array {
+                $row['amount'] = TransactionFormatter::convertAmount(
+                    TransactionFormatter::extractAmount($row)
+                );
+                return $row;
+            }, $rows);
+        } catch (\PDOException $e) {
+            Logger::getInstance()->log('getIncomingSince failed: ' . $e->getMessage(), 'WARNING');
+            return [];
+        }
+    }
+
+    /**
      * Check for new transactions since last check
      *
      * @param int $lastCheckTime
@@ -243,7 +305,10 @@ class TransactionRepository extends AbstractRepository {
                     WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
                     AND timestamp > ?";
 
-        $params = $this->buildInClauseParams($userAddresses, 2, [date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
+        // Use MySQL DATETIME wire format — DISPLAY_DATE_FORMAT is the European
+        // presentation format and MySQL 1292-errors when it's passed as a
+        // parameter to a DATETIME comparison.
+        $params = $this->buildInClauseParams($userAddresses, 2, [date('Y-m-d H:i:s', $lastCheckTime)]);
         try {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
@@ -261,18 +326,59 @@ class TransactionRepository extends AbstractRepository {
      * @param string $type
      * @return array
      */
-    public function getTransactionsByType(string $type): array
+    public function getTransactionsByType(string $type, int $limit = 10, int $offset = 0): array
     {
-        $allTransactions = $this->getTransactionHistory(PHP_INT_MAX);
-        $filtered = [];
+        // SQL-level $type filter + pagination across live AND archive.
+        // Fetches $limit + $offset rows from each side so the worst-case
+        // offset window (all matches from archive side, nothing live)
+        // still resolves correctly after the merge and slice.
+        //
+        // Previous behaviour loaded the entire joined history via
+        // getTransactionHistory(PHP_INT_MAX) and filtered in PHP — O(all
+        // history) every call. This version is O(limit + offset) per
+        // table. The API-level result shape is preserved: ApiController
+        // only reads txid / type / tx_type / status / amount / currency /
+        // addresses / description / memo / timestamp, none of which need
+        // the LEFT JOINs that getTransactionHistory assembles.
+        $cols = "id, txid, tx_type, type, status,
+                 sender_address, receiver_address,
+                 amount_whole, amount_frac, currency,
+                 timestamp, description, memo";
 
-        foreach ($allTransactions as $transaction) {
-            if ($transaction['type'] === $type) {
-                $filtered[] = $transaction;
-            }
+        $fetchSize = $limit + $offset;
+        $params = [$type, $fetchSize];
+
+        try {
+            $liveStmt = $this->pdo->prepare(
+                "SELECT {$cols} FROM transactions
+                 WHERE type = ?
+                 ORDER BY timestamp DESC
+                 LIMIT ?"
+            );
+            $liveStmt->execute($params);
+            $live = $liveStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to get transactions by type: ' . $e->getMessage(), 'WARNING');
+            return [];
         }
 
-        return $filtered;
+        $archive = [];
+        try {
+            $aStmt = $this->pdo->prepare(
+                "SELECT {$cols} FROM transactions_archive
+                 WHERE type = ?
+                 ORDER BY timestamp DESC
+                 LIMIT ?"
+            );
+            $aStmt->execute($params);
+            $archive = $aStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Archive missing — live-only result is correct.
+        }
+
+        $merged = array_merge($live, $archive);
+        usort($merged, fn($a, $b) => strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? ''));
+        return array_slice($merged, $offset, $limit);
     }
 
     /**
@@ -301,27 +407,18 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders)";
-
+        $selectCols = "receiver_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "sender_address IN ($placeholders)";
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
-        } else {
-            $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+            $where .= " AND currency = ?";
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $currency !== null ? [$currency] : []);
 
-        try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
-        } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get sent transactions: ' . $e->getMessage(), 'WARNING');
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get sent transactions'
+        );
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
     }
 
@@ -340,27 +437,18 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT sender_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders)";
-
+        $selectCols = "sender_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "receiver_address IN ($placeholders)";
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
-        } else {
-            $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+            $where .= " AND currency = ?";
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $currency !== null ? [$currency] : []);
 
-        try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
-        } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get received transactions: ' . $e->getMessage(), 'WARNING');
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get received transactions'
+        );
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
@@ -380,28 +468,20 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT sender_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders) AND LOWER(sender_address) = LOWER(?)";
-
-        $additionalParams = [$senderAddress];
+        $selectCols = "sender_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "receiver_address IN ($placeholders) AND LOWER(sender_address) = LOWER(?)";
+        $extraParams = [$senderAddress];
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $additionalParams[] = $currency;
+            $where .= " AND currency = ?";
+            $extraParams[] = $currency;
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
-        $additionalParams[] = $limit;
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $extraParams);
 
-        $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
-        try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
-        } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get received transactions by address: ' . $e->getMessage(), 'WARNING');
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get received transactions by address'
+        );
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
@@ -422,29 +502,85 @@ class TransactionRepository extends AbstractRepository {
 
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount_whole, amount_frac, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders) AND LOWER(receiver_address) = LOWER(?)";
-
-        $additionalParams = [$receiverAddress];
+        $selectCols = "receiver_address, amount_whole, amount_frac, currency, timestamp";
+        $where      = "sender_address IN ($placeholders) AND LOWER(receiver_address) = LOWER(?)";
+        $extraParams = [$receiverAddress];
         if ($currency !== null) {
-            $query .= " AND currency = ?";
-            $additionalParams[] = $currency;
+            $where .= " AND currency = ?";
+            $extraParams[] = $currency;
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ?";
-        $additionalParams[] = $limit;
+        $whereParams = $this->buildInClauseParams($userAddresses, 1, $extraParams);
 
-        $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
+        $transactions = $this->queryTransactionsUnionArchive(
+            $selectCols, $where, $whereParams, $limit,
+            'Failed to get sent transactions by address'
+        );
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
+    }
+
+    /**
+     * Private helper: run the same SELECT against `transactions` AND
+     * `transactions_archive`, merge + sort + limit in PHP. Used by the
+     * four sent/received methods above so a CLI history dump after
+     * archival shows the complete history (not just live rows).
+     *
+     * Semantics:
+     *   - Live query MUST succeed — it's the primary source of truth.
+     *     Failure returns `[]` and logs a WARNING.
+     *   - Archive query is best-effort. On PDOException (archive table
+     *     missing during v9→v10 transitional period, etc.) it
+     *     contributes zero rows and no error is surfaced.
+     *   - Each side's `LIMIT $limit` is applied independently before the
+     *     merge. This means we fetch up to 2 × $limit rows and then
+     *     re-sort / re-slice in PHP. For reasonable limits (tens to
+     *     hundreds) this is cheap; the archive's index on `timestamp`
+     *     keeps the per-side fetch fast.
+     *
+     * @param string $selectCols     The comma-separated SELECT list (no "FROM").
+     * @param string $where          WHERE clause body (with ?  placeholders).
+     * @param array  $whereParams    Parameters for the WHERE placeholders.
+     * @param int    $limit          Row cap after merge.
+     * @param string $errorContext   Log message prefix on failure.
+     * @return array Rows sorted by `timestamp` DESC, capped at $limit.
+     */
+    private function queryTransactionsUnionArchive(
+        string $selectCols,
+        string $where,
+        array $whereParams,
+        int $limit,
+        string $errorContext
+    ): array {
+        $liveQuery    = "SELECT {$selectCols} FROM transactions WHERE {$where} ORDER BY timestamp DESC LIMIT ?";
+        $archiveQuery = "SELECT {$selectCols} FROM transactions_archive WHERE {$where} ORDER BY timestamp DESC LIMIT ?";
+
+        $paramsWithLimit = array_merge($whereParams, [$limit]);
+
         try {
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
+            $stmt = $this->pdo->prepare($liveQuery);
+            $stmt->execute($paramsWithLimit);
+            $liveRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            Logger::getInstance()->log('Failed to get sent transactions by address: ' . $e->getMessage(), 'WARNING');
+            Logger::getInstance()->log("{$errorContext}: " . $e->getMessage(), 'WARNING');
             return [];
         }
 
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
+        $archiveRows = [];
+        try {
+            $stmt = $this->pdo->prepare($archiveQuery);
+            $stmt->execute($paramsWithLimit);
+            $archiveRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Archive table missing — live-only result is correct.
+        }
+
+        if ($archiveRows === []) {
+            return $liveRows;
+        }
+
+        $merged = array_merge($liveRows, $archiveRows);
+        usort($merged, fn($a, $b) => strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? ''));
+        return array_slice($merged, 0, $limit);
     }
 
     /**
@@ -489,7 +625,7 @@ class TransactionRepository extends AbstractRepository {
      * @param string|null $currency Optional currency filter
      * @return array
      */
-    public function getTransactionHistory(int $limit = 10, ?string $currency = null): array
+    public function getTransactionHistory(int $limit = 10, ?string $currency = null, int $offset = 0): array
     {
         $userAddresses = $this->getUserAddressesOrNull();
 
@@ -510,7 +646,9 @@ class TransactionRepository extends AbstractRepository {
                     t.sender_address,
                     t.receiver_address,
                     t.sender_public_key,
+                    t.sender_public_key_hash,
                     t.receiver_public_key,
+                    t.receiver_public_key_hash,
                     t.amount_whole,
                     t.amount_frac,
                     t.currency,
@@ -541,10 +679,11 @@ class TransactionRepository extends AbstractRepository {
             $additionalParams[] = $currency;
         }
 
-        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
+        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ? OFFSET ?";
         $additionalParams[] = $limit;
+        $additionalParams[] = max(0, $offset);
 
-        // Bind parameters - addresses twice for both IN clauses, then optional currency, then limit
+        // Bind parameters - addresses twice for both IN clauses, then optional currency, then limit, offset
         $params = $this->buildInClauseParams($userAddresses, 2, $additionalParams);
         try {
             $stmt = $this->pdo->prepare($query);
@@ -556,6 +695,152 @@ class TransactionRepository extends AbstractRepository {
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return TransactionFormatter::formatHistoryMany($transactions, $userAddresses);
+    }
+
+    /**
+     * Database-wide search across the user's transaction history. Backs
+     * the "Search entire database" button on the Recent Transactions
+     * table — lets users find old transactions (e.g. "Bob") without
+     * hammering the Load-older button until the match appears in the
+     * current page window.
+     *
+     * Search term matches (case-insensitive, substring) against:
+     *   - counterparty name (sender's contact.name or receiver's contact.name)
+     *   - transaction description
+     *   - sender address / receiver address
+     *
+     * Optional filter dimensions mirror the client-side filter select
+     * inputs so "search database" respects the same dropdowns the user
+     * already set. Empty filter = no restriction.
+     *
+     * Result capped at $maxResults (default 500) so a broad query like
+     * "USD" returns a bounded JSON response the GUI can paginate
+     * client-side. Callers can detect truncation when the result length
+     * equals $maxResults.
+     *
+     * @param string      $term        Lowercase substring search term (already lowercased by caller)
+     * @param string|null $direction   'sent' | 'received' | null
+     * @param string|null $txType      'direct' | 'p2p' | 'contact' | null (maps to tx_type column)
+     * @param string|null $status      'pending' | 'sent' | 'accepted' | 'completed' | 'rejected' | 'cancelled' | null
+     * @param int         $maxResults  Hard cap on returned rows
+     * @return array Formatted transactions (same shape as getTransactionHistory)
+     */
+    public function searchTransactions(
+        string $term,
+        ?string $direction = null,
+        ?string $txType = null,
+        ?string $status = null,
+        int $maxResults = 500
+    ): array {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
+            return [];
+        }
+        // Defensive: an empty term would match every row; short-circuit
+        // so a caller who accidentally submits "" doesn't ship the whole
+        // table over the wire.
+        if (trim($term) === '') {
+            return [];
+        }
+
+        $placeholders = $this->createPlaceholders($userAddresses);
+        $like = '%' . strtolower(trim($term)) . '%';
+
+        // Same SELECT + JOIN structure as getTransactionHistory — share
+        // the column list so the formatter + row partial see identical
+        // data shape between the history path and the search path.
+        // Extra JOINs for the P2P endpoint columns so a search for
+        // "carol" can match the tx's *ultimate* counterparty when Alice
+        // sent through Bob — end_recipient_address carries Carol's
+        // address on the sent-P2P side, initial_sender_address carries
+        // it on the received-P2P side. Without these JOINs the WHERE
+        // could only match direct neighbours, which missed every P2P tx
+        // where the search term names someone further down the chain.
+        $query = "SELECT
+                    t.id, t.txid, t.tx_type, t.type AS direction, t.status,
+                    t.sender_address, t.receiver_address,
+                    t.sender_public_key, t.sender_public_key_hash,
+                    t.receiver_public_key, t.receiver_public_key_hash,
+                    t.amount_whole, t.amount_frac, t.currency, t.timestamp,
+                    t.memo, t.description, t.previous_txid,
+                    t.end_recipient_address, t.initial_sender_address,
+                    sender_contact.name AS sender_name,
+                    receiver_contact.name AS receiver_name,
+                    p2p.destination_address AS p2p_destination,
+                    p2p.amount_whole AS p2p_amount_whole,
+                    p2p.amount_frac AS p2p_amount_frac,
+                    p2p.my_fee_amount_whole AS p2p_fee_whole,
+                    p2p.my_fee_amount_frac AS p2p_fee_frac
+                  FROM {$this->tableName} t
+                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
+                  LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
+                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
+                  LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
+                  LEFT JOIN addresses end_addr ON (t.end_recipient_address = end_addr.http OR t.end_recipient_address = end_addr.https OR t.end_recipient_address = end_addr.tor)
+                  LEFT JOIN contacts end_contact ON end_addr.pubkey_hash = end_contact.pubkey_hash
+                  LEFT JOIN addresses init_addr ON (t.initial_sender_address = init_addr.http OR t.initial_sender_address = init_addr.https OR t.initial_sender_address = init_addr.tor)
+                  LEFT JOIN contacts init_contact ON init_addr.pubkey_hash = init_contact.pubkey_hash
+                  LEFT JOIN p2p ON t.memo = p2p.hash
+                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
+                    AND (
+                         LOWER(COALESCE(sender_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(receiver_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(end_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(init_contact.name, '')) LIKE ?
+                      OR LOWER(COALESCE(t.description, '')) LIKE ?
+                      OR LOWER(COALESCE(t.sender_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.receiver_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.end_recipient_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.initial_sender_address, '')) LIKE ?
+                      OR LOWER(COALESCE(t.txid, '')) LIKE ?
+                    )";
+
+        $additional = [$like, $like, $like, $like, $like, $like, $like, $like, $like, $like];
+
+        // status is a direct column filter
+        if ($status !== null && $status !== '') {
+            $query .= " AND t.status = ?";
+            $additional[] = $status;
+        }
+        // tx_type: the client-side filter uses 'direct' / 'p2p' /
+        // 'contact' labels. DB stores 'standard' / 'p2p' / 'contact' —
+        // map 'direct' → '<'standard','direct'>' (historical
+        // transactions may carry either), others pass through.
+        if ($txType !== null && $txType !== '') {
+            if ($txType === 'direct') {
+                $query .= " AND t.tx_type IN ('standard', 'direct')";
+            } else {
+                $query .= " AND t.tx_type = ?";
+                $additional[] = $txType;
+            }
+        }
+
+        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
+        $additional[] = max(1, $maxResults);
+
+        // addresses twice for the two IN clauses, then the tail params
+        $params = $this->buildInClauseParams($userAddresses, 2, $additional);
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
+            Logger::getInstance()->log('Failed to search transactions: ' . $e->getMessage(), 'WARNING');
+            return [];
+        }
+
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formatted = TransactionFormatter::formatHistoryMany($rows, $userAddresses);
+
+        // Direction filter applied post-SQL because `direction` (sent /
+        // received) is computed from the user's addresses in the
+        // formatter — same pipeline the rest of the GUI uses.
+        if ($direction !== null && $direction !== '') {
+            $formatted = array_values(array_filter($formatted, function ($tx) use ($direction) {
+                return ($tx['type'] ?? '') === $direction;
+            }));
+        }
+
+        return $formatted;
     }
 
     /**
@@ -611,7 +896,24 @@ class TransactionRepository extends AbstractRepository {
      * @return bool True if exists
      */
     public function transactionExistsTxid(string $txid): bool {
-        return $this->exists('txid', $txid);
+        if ($this->exists('txid', $txid)) {
+            return true;
+        }
+        // Also check the archive — sync dedup correctness after archival.
+        // Without this, sync from a counterparty that still has an already-
+        // archived tx re-inserts it into live, causing duplicate-key
+        // violations on the next archival run AND inflating live with
+        // rows that the archive is the authoritative copy of.
+        try {
+            $stmt = $this->pdo->prepare("SELECT 1 FROM transactions_archive WHERE txid = :txid LIMIT 1");
+            $stmt->execute([':txid' => $txid]);
+            return $stmt->fetchColumn() !== false;
+        } catch (PDOException $e) {
+            // Archive table missing (v9→v10 transitional) — live check was
+            // already done above, treat as "not present" and let the caller
+            // proceed as if the archive isn't there.
+            return false;
+        }
     }
 
 
@@ -625,12 +927,28 @@ class TransactionRepository extends AbstractRepository {
         $query = "SELECT * FROM {$this->tableName} WHERE txid = :txid";
         $stmt = $this->execute($query, [':txid' => $txid]);
 
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+            if ($result) {
+                return $this->mapRows($result);
+            }
         }
 
-        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
-        return $result ? $this->mapRows($result) : null;
+        // Fall through to the archive so sync can re-send an archived tx
+        // to a counterparty that doesn't have it. Without this, our
+        // archived txs would never propagate to a restored or new peer —
+        // remote stays permanently missing them.
+        try {
+            $archiveStmt = $this->pdo->prepare("SELECT * FROM transactions_archive WHERE txid = :txid");
+            $archiveStmt->execute([':txid' => $txid]);
+            $archiveResult = $archiveStmt->fetchAll(PDO::FETCH_ASSOC);
+            if ($archiveResult) {
+                return $this->mapRows($archiveResult);
+            }
+        } catch (PDOException $e) {
+            // Archive missing (v9→v10 transitional) — fall through to null.
+        }
+        return null;
     }
 
     /**
@@ -643,12 +961,26 @@ class TransactionRepository extends AbstractRepository {
         $query = "SELECT status FROM {$this->tableName} WHERE txid = :txid";
         $stmt = $this->execute($query, [':txid' => $txid]);
 
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $result = $stmt->fetchColumn();
+            if ($result) {
+                return $result;
+            }
         }
 
-        $result = $stmt->fetchColumn();
-        return $result ?: null;
+        // Archive rows are status='completed' by construction (only
+        // completed txs get archived). Answer status queries from the
+        // archive so a peer asking "did tx X complete?" gets 'completed'
+        // rather than a TransactionNotFound — archive is not "not found",
+        // it's settled history.
+        try {
+            $archiveStmt = $this->pdo->prepare("SELECT status FROM transactions_archive WHERE txid = :txid");
+            $archiveStmt->execute([':txid' => $txid]);
+            $archiveResult = $archiveStmt->fetchColumn();
+            return $archiveResult ?: null;
+        } catch (PDOException $e) {
+            return null;
+        }
     }
 
     /**

@@ -1585,10 +1585,10 @@ class ApiControllerTest extends TestCase
         $this->assertEquals('validation_error', $response['error']['code']);
     }
 
-    // ==================== Chain Drop Tests ====================
+    // ==================== Tx Drop Tests ====================
 
     /**
-     * Test chain drop list requires wallet:read permission
+     * Test tx drop list requires wallet:read permission
      */
     public function testChainDropListRequiresPermission(): void
     {
@@ -1615,7 +1615,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop propose requires wallet:send permission
+     * Test tx drop propose requires wallet:send permission
      */
     public function testChainDropProposeRequiresPermission(): void
     {
@@ -1642,7 +1642,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop accept requires wallet:send permission
+     * Test tx drop accept requires wallet:send permission
      */
     public function testChainDropAcceptRequiresPermission(): void
     {
@@ -1669,7 +1669,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop reject requires wallet:send permission
+     * Test tx drop reject requires wallet:send permission
      */
     public function testChainDropRejectRequiresPermission(): void
     {
@@ -1696,7 +1696,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop propose returns 400 for invalid JSON
+     * Test tx drop propose returns 400 for invalid JSON
      */
     public function testChainDropProposeReturns400ForInvalidJson(): void
     {
@@ -1725,7 +1725,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop propose returns 400 for missing contact field
+     * Test tx drop propose returns 400 for missing contact field
      */
     public function testChainDropProposeReturns400ForMissingContact(): void
     {
@@ -1754,7 +1754,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop accept returns 400 for missing proposal_id
+     * Test tx drop accept returns 400 for missing proposal_id
      */
     public function testChainDropAcceptReturns400ForMissingProposalId(): void
     {
@@ -1783,7 +1783,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop reject returns 400 for missing proposal_id
+     * Test tx drop reject returns 400 for missing proposal_id
      */
     public function testChainDropRejectReturns400ForMissingProposalId(): void
     {
@@ -1841,7 +1841,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test chain drop list succeeds
+     * Test tx drop list succeeds
      */
     public function testChainDropListSucceeds(): void
     {

@@ -1802,6 +1802,23 @@ ANALYTICS_CRON_JOB="0 3 * * * $RUNUSER_BIN -u www-data -- /usr/bin/php /app/eiou
 (crontab -l 2>/dev/null | grep -v "analytics-cron.php"; echo "$ANALYTICS_CRON_JOB") | crontab -
 echo "Analytics cron job installed (daily, 3 AM UTC)"
 
+# Payment request archival (daily, 1 AM UTC)
+# Moves resolved requests older than paymentRequestsArchiveRetentionDays
+# (default 180) into payment_requests_archive. Runs between backup (midnight)
+# and update-check (2 AM) to keep cron load spread out.
+PR_ARCHIVE_CRON_JOB="0 1 * * * $RUNUSER_BIN -u www-data -- /usr/bin/php /app/eiou/scripts/payment-request-archive-cron.php >> /var/log/eiou/payment-request-archive.log 2>&1"
+(crontab -l 2>/dev/null | grep -v "payment-request-archive-cron.php"; echo "$PR_ARCHIVE_CRON_JOB") | crontab -
+echo "Payment request archival cron job installed (daily, 1 AM UTC)"
+
+# Transaction archival (daily, 1:30 AM UTC)
+# Moves completed transactions older than transactionsArchiveRetentionDays
+# (default 180) into transactions_archive, gated per-bilateral-pair on a
+# gap-free chain-integrity check. Offset 30m from payment-request archival
+# (1 AM) so the two don't contend for the shared archive-backup artefact.
+TX_ARCHIVE_CRON_JOB="30 1 * * * $RUNUSER_BIN -u www-data -- /usr/bin/php /app/eiou/scripts/transaction-archive-cron.php >> /var/log/eiou/transaction-archive.log 2>&1"
+(crontab -l 2>/dev/null | grep -v "transaction-archive-cron.php"; echo "$TX_ARCHIVE_CRON_JOB") | crontab -
+echo "Transaction archival cron job installed (daily, 1:30 AM UTC)"
+
 # Clear any stale shutdown flag from previous runs
 rm -f "$SHUTDOWN_FLAG" 2>/dev/null
 

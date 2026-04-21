@@ -205,6 +205,51 @@ class DeadLetterQueueRepositoryTest extends TestCase
         $this->assertCount(2, $result);
     }
 
+    public function testGetItemsSinceQueriesCreatedAfterAndReturnsRows(): void
+    {
+        $sinceTs = 1_700_000_000;
+        $rows = [
+            ['id' => 7, 'message_type' => 'transaction', 'message_id' => 'msg-7', 'status' => 'pending', 'payload' => '{}', 'created_at' => '2025-11-01 12:00:00'],
+        ];
+        $this->pdo->expects($this->once())->method('prepare')->willReturn($this->stmt);
+        $expectedBinds = [
+            [':created_after', date('Y-m-d H:i:s', $sinceTs)],
+            [':limit', 25, PDO::PARAM_INT],
+        ];
+        $this->stmt->expects($this->exactly(2))
+            ->method('bindValue')
+            ->willReturnCallback(function () use (&$expectedBinds) {
+                $args = func_get_args();
+                $expected = array_shift($expectedBinds);
+                self::assertSame($expected[0], $args[0]);
+                self::assertSame($expected[1], $args[1]);
+                if (isset($expected[2])) {
+                    self::assertSame($expected[2], $args[2]);
+                }
+                return true;
+            });
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+        $this->stmt->expects($this->once())->method('fetchAll')->with(PDO::FETCH_ASSOC)->willReturn($rows);
+
+        $result = $this->repository->getItemsSince($sinceTs, 25);
+        $this->assertCount(1, $result);
+        $this->assertSame(7, $result[0]['id']);
+    }
+
+    public function testGetItemsSinceReturnsEmptyArrayOnZeroLimit(): void
+    {
+        // Guard path: limit <= 0 skips PDO entirely.
+        $this->pdo->expects($this->never())->method('prepare');
+        $this->assertSame([], $this->repository->getItemsSince(1_700_000_000, 0));
+    }
+
+    public function testGetItemsSinceReturnsEmptyArrayOnException(): void
+    {
+        $this->pdo->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('execute')->willThrowException(new PDOException('boom'));
+        $this->assertSame([], $this->repository->getItemsSince(1_700_000_000, 25));
+    }
+
     /**
      * Test getPendingItems with custom limit
      */
@@ -484,6 +529,71 @@ class DeadLetterQueueRepositoryTest extends TestCase
         $result = $this->repository->markResolved(1);
 
         $this->assertFalse($result);
+    }
+
+    // =========================================================================
+    // markResolvedByTxid() Tests
+    // =========================================================================
+
+    /**
+     * Empty txid short-circuits — no DB call, returns 0.
+     *
+     * Prevents a `LIKE '%%'` sweep from marking EVERY pending
+     * transaction-type DLQ row resolved if the caller ever passes an empty
+     * string (e.g. tx with no txid populated, defensive edge).
+     */
+    public function testMarkResolvedByTxidSkipsEmptyTxid(): void
+    {
+        $this->pdo->expects($this->never())->method('prepare');
+
+        $result = $this->repository->markResolvedByTxid('');
+
+        $this->assertSame(0, $result);
+    }
+
+    /**
+     * Valid txid issues a single UPDATE with the LIKE pattern and returns
+     * the row count reported by PDO. Covers the happy path used by
+     * MessageService::resolveDlqForCompletedTxid().
+     */
+    public function testMarkResolvedByTxidReturnsRowCount(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->once())
+            ->method('bindValue')
+            ->with(':pattern', '%abc123%');
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('rowCount')
+            ->willReturn(2);
+
+        $result = $this->repository->markResolvedByTxid('abc123');
+
+        $this->assertSame(2, $result);
+    }
+
+    /**
+     * PDOException during prepare / execute is swallowed by
+     * AbstractRepository::execute() which returns false — markResolvedByTxid
+     * must then return 0 so callers can treat "nothing resolved" and
+     * "DB error" uniformly (both are non-fatal for the completion path).
+     */
+    public function testMarkResolvedByTxidReturnsZeroOnFailure(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willThrowException(new \PDOException('Database error'));
+
+        $result = $this->repository->markResolvedByTxid('abc123');
+
+        $this->assertSame(0, $result);
     }
 
     // =========================================================================

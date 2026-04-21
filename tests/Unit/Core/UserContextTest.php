@@ -702,6 +702,69 @@ class UserContextTest extends TestCase
         $this->assertEquals(Constants::AUTO_REFRESH_ENABLED, $instance->getAutoRefreshEnabled());
     }
 
+    public function testGetLiveNotificationsEnabledReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_ENABLED, $instance->getLiveNotificationsEnabled());
+    }
+
+    public function testGetLiveNotificationsEnabledReadsStoredValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['liveNotificationsEnabled' => false]);
+        $this->assertFalse($instance->getLiveNotificationsEnabled());
+
+        $instance->setUserData(['liveNotificationsEnabled' => true]);
+        $this->assertTrue($instance->getLiveNotificationsEnabled());
+    }
+
+    public function testGetLiveNotificationsVerbosityReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_VERBOSITY, $instance->getLiveNotificationsVerbosity());
+    }
+
+    public function testGetLiveNotificationsVerbosityAcceptsAllValidOptions(): void
+    {
+        $instance = UserContext::getInstance();
+        foreach (Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS as $mode) {
+            $instance->setUserData(['liveNotificationsVerbosity' => $mode]);
+            $this->assertSame($mode, $instance->getLiveNotificationsVerbosity());
+        }
+    }
+
+    public function testGetLiveNotificationsVerbosityFallsBackOnInvalidValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['liveNotificationsVerbosity' => 'not-a-mode']);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_VERBOSITY, $instance->getLiveNotificationsVerbosity());
+    }
+
+    public function testGetLiveNotificationsToastDurationReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS, $instance->getLiveNotificationsToastDurationMs());
+    }
+
+    public function testGetLiveNotificationsToastDurationAcceptsAllValidOptions(): void
+    {
+        $instance = UserContext::getInstance();
+        foreach (Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS as $ms) {
+            $instance->setUserData(['liveNotificationsToastDurationMs' => $ms]);
+            $this->assertSame($ms, $instance->getLiveNotificationsToastDurationMs());
+        }
+    }
+
+    public function testGetLiveNotificationsToastDurationFallsBackOnInvalidValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['liveNotificationsToastDurationMs' => 12345]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS, $instance->getLiveNotificationsToastDurationMs());
+    }
+
     /**
      * Test getAutoBackupEnabled returns default when not set
      */
@@ -722,6 +785,32 @@ class UserContextTest extends TestCase
         $instance->setUserData([]);
 
         $this->assertEquals(Constants::AUTO_ACCEPT_TRANSACTION, $instance->getAutoAcceptTransaction());
+    }
+
+    /**
+     * Test getHideEmptyGuiSections returns the Constants default when not set
+     */
+    public function testGetHideEmptyGuiSectionsReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+
+        $this->assertEquals(Constants::HIDE_EMPTY_GUI_SECTIONS, $instance->getHideEmptyGuiSections());
+    }
+
+    /**
+     * Test getHideEmptyGuiSections returns the user-set value when set
+     */
+    public function testGetHideEmptyGuiSectionsReturnsUserSetValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['hideEmptyGuiSections' => true]);
+
+        $this->assertTrue($instance->getHideEmptyGuiSections());
+
+        $instance->setUserData(['hideEmptyGuiSections' => false]);
+
+        $this->assertFalse($instance->getHideEmptyGuiSections());
     }
 
     /**
@@ -1435,6 +1524,16 @@ class UserContextTest extends TestCase
         $this->assertSame(Constants::SESSION_TIMEOUT_MINUTES, $defaults['sessionTimeoutMinutes']);
     }
 
+    public function testConfigurableDefaultsIncludesHideEmptyGuiSections(): void
+    {
+        // Guards against accidental drop from the defaults map — the
+        // resetToDefaults flow relies on this key being present so the
+        // "Reset to defaults" GUI action restores the shipped default.
+        $defaults = UserContext::getConfigurableDefaults();
+        $this->assertArrayHasKey('hideEmptyGuiSections', $defaults);
+        $this->assertSame(Constants::HIDE_EMPTY_GUI_SECTIONS, $defaults['hideEmptyGuiSections']);
+    }
+
     // =========================================================================
     // analyticsOptInAt — consent-boundary timestamp consumed by the
     // analytics cron to bound the heartbeat rollup window
@@ -1479,5 +1578,126 @@ class UserContextTest extends TestCase
         $defaults = UserContext::getConfigurableDefaults();
         $this->assertArrayHasKey('analyticsOptInAt', $defaults);
         $this->assertNull($defaults['analyticsOptInAt']);
+    }
+
+    // =========================================================================
+    // resetToDefaults Tests
+    //
+    // These hit the real /etc/eiou/config paths (the method hardcodes them),
+    // so they're skipped outside the Docker test environment. Each test backs
+    // up and restores the two files it touches.
+    // =========================================================================
+
+    /**
+     * Test resetToDefaults writes `{}` into defaultconfig.json so every
+     * setting getter falls back to its Constants-backed default.
+     */
+    public function testResetToDefaultsEmptiesDefaultConfig(): void
+    {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+
+        $defaultBackup = file_exists($defaultPath) ? file_get_contents($defaultPath) : null;
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+
+        file_put_contents($defaultPath, json_encode(['minFee' => 0.05, 'sessionTimeoutMinutes' => 120]));
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+
+            $this->assertFileExists($defaultPath);
+            $decoded = json_decode(file_get_contents($defaultPath), true);
+            $this->assertSame([], $decoded, 'defaultconfig.json should be an empty object');
+        } finally {
+            if ($defaultBackup !== null) {
+                file_put_contents($defaultPath, $defaultBackup);
+            } else {
+                @unlink($defaultPath);
+            }
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            }
+        }
+    }
+
+    /**
+     * Test resetToDefaults removes the `name` key from userconfig.json but
+     * preserves every other field (identity, hostname, keys, etc.).
+     */
+    public function testResetToDefaultsStripsNameFromUserConfigButPreservesIdentity(): void
+    {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+
+        $defaultBackup = file_exists($defaultPath) ? file_get_contents($defaultPath) : null;
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+
+        file_put_contents($userPath, json_encode([
+            'name' => 'Alice',
+            'public' => 'pubkey_abc',
+            'hostname' => 'http://alice.example',
+            'pubkey_hash' => 'hash_abc',
+        ]));
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+
+            $data = json_decode(file_get_contents($userPath), true);
+            $this->assertArrayNotHasKey('name', $data);
+            $this->assertSame('pubkey_abc', $data['public']);
+            $this->assertSame('http://alice.example', $data['hostname']);
+            $this->assertSame('hash_abc', $data['pubkey_hash']);
+        } finally {
+            if ($defaultBackup !== null) {
+                file_put_contents($defaultPath, $defaultBackup);
+            } else {
+                @unlink($defaultPath);
+            }
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            }
+        }
+    }
+
+    /**
+     * Test resetToDefaults leaves userconfig.json untouched when the
+     * `name` key is already absent (no spurious file rewrite).
+     */
+    public function testResetToDefaultsIsNoOpOnUserConfigWhenNameAbsent(): void
+    {
+        $defaultPath = '/etc/eiou/config/defaultconfig.json';
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+
+        $defaultBackup = file_exists($defaultPath) ? file_get_contents($defaultPath) : null;
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+
+        $originalUserJson = json_encode(['public' => 'pubkey_xyz', 'hostname' => 'http://x']);
+        file_put_contents($userPath, $originalUserJson);
+
+        try {
+            UserContext::getInstance()->resetToDefaults();
+            $this->assertSame(
+                json_decode($originalUserJson, true),
+                json_decode(file_get_contents($userPath), true)
+            );
+        } finally {
+            if ($defaultBackup !== null) {
+                file_put_contents($defaultPath, $defaultBackup);
+            } else {
+                @unlink($defaultPath);
+            }
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            }
+        }
     }
 }

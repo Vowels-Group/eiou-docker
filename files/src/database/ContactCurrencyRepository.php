@@ -187,6 +187,45 @@ class ContactCurrencyRepository extends AbstractRepository {
     }
 
     /**
+     * Stricter cousin of hasCurrency() — returns true only when a row
+     * exists AND its status is 'accepted'. Used by send/relay paths that
+     * must not route through a contact whose contact_currencies row for
+     * this currency is still pending (e.g. after Unblock, which flips
+     * contact.status back to 'accepted' but leaves pending currency rows
+     * untouched). hasCurrency() is still correct for row-management
+     * de-dup checks (existence only); only ROUTING callers should flip.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency Currency code (e.g. 'USD')
+     * @param string|null $direction 'incoming' | 'outgoing' | null for any
+     * @return bool
+     */
+    public function hasAcceptedCurrency(string $pubkeyHash, string $currency, ?string $direction = null): bool {
+        $params = [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency,
+        ];
+
+        $query = "SELECT 1 FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash
+                    AND currency = :currency
+                    AND status = 'accepted'";
+
+        if ($direction !== null) {
+            $query .= " AND direction = :direction";
+            $params[':direction'] = $direction;
+        }
+
+        $query .= " LIMIT 1";
+
+        $stmt = $this->execute($query, $params);
+        if (!$stmt) {
+            return false;
+        }
+        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    }
+
+    /**
      * Get credit limit for a specific contact and currency
      *
      * @param string $pubkeyHash Contact's public key hash
@@ -457,6 +496,34 @@ class ContactCurrencyRepository extends AbstractRepository {
             return false;
         }
 
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Decline a pending incoming currency request — removes the row so
+     * the GUI stops surfacing it in the Pending Contact Requests list.
+     * Narrowly targeted: matches only (pubkey, currency, direction=
+     * 'incoming', status='pending') so it cannot accidentally delete
+     * our own outgoing row (if we happened to request the same
+     * currency from them) or a previously-accepted row.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency Currency code (e.g. 'MXN')
+     * @return bool True if a row was deleted
+     */
+    public function declineIncomingCurrency(string $pubkeyHash, string $currency): bool {
+        $query = "DELETE FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash
+                    AND currency = :currency
+                    AND direction = 'incoming'
+                    AND status = 'pending'";
+        $stmt = $this->execute($query, [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency,
+        ]);
+        if (!$stmt) {
+            return false;
+        }
         return $stmt->rowCount() > 0;
     }
 }

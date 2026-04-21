@@ -78,7 +78,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?TransactionChainRepository $transactionChainRepository = null;
 
     /**
-     * @var ChainDropServiceInterface|null Chain drop service for auto-proposing drops on mutual gaps
+     * @var ChainDropServiceInterface|null Tx drop service for auto-proposing drops on mutual gaps
      */
     private ?ChainDropServiceInterface $chainDropService = null;
 
@@ -125,9 +125,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
     }
 
     /**
-     * Set the chain drop service (setter injection for circular dependency)
+     * Set the tx drop service (setter injection for circular dependency)
      *
-     * @param ChainDropServiceInterface $service Chain drop service
+     * @param ChainDropServiceInterface $service Tx drop service
      */
     public function setChainDropService(ChainDropServiceInterface $service): void {
         $this->chainDropService = $service;
@@ -720,7 +720,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             $syncResult = $this->triggerSync($contactAddress, $contact['pubkey']);
                         }
 
-                        // Auto-propose chain drop if sync completed but mutual gaps remain
+                        // Auto-propose tx drop if sync completed but mutual gaps remain
                         if ($syncResult && !($syncResult['chain_valid'] ?? true) && !empty($syncResult['chain_gaps'] ?? []) && $this->chainDropService && $this->currentUser->getAutoChainDropPropose()) {
                             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                             try {

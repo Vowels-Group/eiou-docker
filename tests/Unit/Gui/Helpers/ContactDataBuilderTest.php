@@ -441,7 +441,7 @@ class ContactDataBuilderTest extends TestCase
     }
 
     /**
-     * Test buildContactData includes chain drop proposal intact
+     * Test buildContactData includes tx drop proposal intact
      */
     public function testBuildContactDataIncludesChainDropProposal(): void
     {

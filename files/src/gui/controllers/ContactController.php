@@ -757,6 +757,47 @@ class ContactController
     }
 
     /**
+     * Handle declining a single pending incoming currency request.
+     * Silently deletes the pending contact_currencies row (same
+     * protocol-level behaviour as deleteContact — the sender isn't
+     * notified). Used when the user wants to remove a specific
+     * currency from the Pending Contact Requests modal without
+     * accepting it or blocking/deleting the whole contact.
+     *
+     * @return void
+     */
+    public function handleDeclineCurrency(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
+        $currency = strtoupper(Security::sanitizeInput($_POST['currency'] ?? ''));
+
+        if (empty($pubkeyHash) || empty($currency)) {
+            MessageHelper::redirectMessage('Contact and currency are required.', 'error');
+            return;
+        }
+
+        try {
+            $app = Application::getInstance();
+            $serviceContainer = $app->services;
+            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
+
+            $deleted = $contactCurrencyRepo->declineIncomingCurrency($pubkeyHash, $currency);
+            if ($deleted) {
+                MessageHelper::redirectMessage("Currency {$currency} request declined.", 'success');
+            } else {
+                // No-op is fine — the row might already be gone (double-submit,
+                // or the sender withdrew the request). Don't surface as error.
+                MessageHelper::redirectMessage("Currency {$currency} request not found — may already be resolved.", 'info');
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            MessageHelper::redirectMessage('An unexpected error occurred.', 'error');
+        }
+    }
+
+    /**
      * Handle accept all currencies for a contact in a single POST
      */
     public function handleAcceptAllCurrencies(): void
@@ -1017,6 +1058,10 @@ class ContactController
                 $this->handleAcceptAllCurrencies();
                 break;
 
+            case 'declineCurrency':
+                $this->handleDeclineCurrency();
+                break;
+
             case 'pingContact':
                 $this->handlePingContact();
                 break;
@@ -1035,7 +1080,7 @@ class ContactController
     }
 
     /**
-     * Handle propose chain drop request (AJAX - returns JSON)
+     * Handle propose tx drop request (AJAX - returns JSON)
      *
      * @return void
      */
@@ -1064,7 +1109,7 @@ class ContactController
     }
 
     /**
-     * Handle accept chain drop request (AJAX - returns JSON)
+     * Handle accept tx drop request (AJAX - returns JSON)
      *
      * @return void
      */
@@ -1093,7 +1138,7 @@ class ContactController
     }
 
     /**
-     * Handle reject chain drop request (AJAX - returns JSON)
+     * Handle reject tx drop request (AJAX - returns JSON)
      *
      * @return void
      */
@@ -1111,7 +1156,7 @@ class ContactController
             $chainDropService = $app->services->getChainDropService();
             $result = $chainDropService->rejectProposal($proposalId);
             if ($result['success']) {
-                $result['warning'] = 'The chain gap remains unresolved. Transactions with this contact are blocked until a new chain drop proposal is accepted.';
+                $result['warning'] = 'The chain gap remains unresolved. Transactions with this contact are blocked until a new tx drop proposal is accepted.';
             }
             echo json_encode($result);
         } catch (\Throwable $e) {

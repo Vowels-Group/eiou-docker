@@ -115,12 +115,12 @@ Optional for create: `description`, `address_type`
 | Auth form | `layout/authenticationForm.html` | — | Login form |
 | Banner | `layout/walletSubParts/banner.html` | — | Dynamic image banner carousel from `/gui/assets/banners/` |
 | Header | `layout/walletSubParts/header.html` | — | Page header |
-| Notifications | `layout/walletSubParts/notifications.html` | — | Toast/alert messages, pending contact/currency banners, Tor status, update available, chain drop proposal banners |
+| Notifications | `layout/walletSubParts/notifications.html` | — | Toast/alert messages, pending contact/currency banners, Tor status, update available, tx drop proposal banners |
 | Wallet info | `layout/walletSubParts/walletInformation.html` | Dashboard | Balance (blue), fee earnings (amber/gold), available credit (blue-purple); addresses with Copy + QR buttons; ⓘ icons open info modal on tap |
 | Send form | `layout/walletSubParts/eiouForm.html` | Send | Send transaction form; address type dropdown sorted Tor > HTTPS > HTTP; also contains the "Request Payment" button (changes form action to `createPaymentRequest`) |
 | Payment requests | `layout/walletSubParts/paymentRequestsSection.html` | Send | Incoming requests (Approve & Pay / Decline) and outgoing requests (Cancel); rendered below the Send form |
 | Contact form | `layout/walletSubParts/contactForm.html` | Contacts | Add contact form with QR scan button; placeholder "Enter Tor (.onion) or HTTP(S) address" |
-| Contact section | `layout/walletSubParts/contactSection.html` | Contacts | Contact lists; detail modal (4 tabs: Info, Transactions, Status, Settings) with Copy + QR on addresses, single-line pubkey, connection/chain drop in Status tab |
+| Contact section | `layout/walletSubParts/contactSection.html` | Contacts | Contact lists; detail modal (4 tabs: Info, Transactions, Status, Settings) with Copy + QR on addresses, single-line pubkey, connection/tx drop in Status tab |
 | Transaction history | `layout/walletSubParts/transactionHistory.html` | Activity | Transaction list |
 | DLQ section | `layout/walletSubParts/dlqSection.html` | Activity | Dead letter queue management |
 | Settings | `layout/walletSubParts/settingsSection.html` | Settings | Settings form |
@@ -169,9 +169,9 @@ fetch(window.location.href, {
 | `openContactModal(contact)` | Show contact detail modal | Contact card click |
 | `openContactByContactId(id, tab)` | Open modal by contact ID | Notification banner |
 | `pingContact()` | Check status + reload page | Contact modal button |
-| `proposeChainDrop()` | Propose dropping missing tx | Chain drop section |
-| `acceptChainDrop()` | Accept incoming proposal | Chain drop section |
-| `rejectChainDrop()` | Reject incoming proposal | Chain drop section |
+| `proposeChainDrop()` | Propose dropping missing tx | Tx drop section |
+| `acceptChainDrop()` | Accept incoming proposal | Tx drop section |
+| `rejectChainDrop()` | Reject incoming proposal | Tx drop section |
 | `reloadAndReopenContactModal()` | Reload page, reopen modal | After AJAX actions |
 | `safeStorageSet(key, value)` | Tor-safe sessionStorage | Store preferences |
 | `safeStorageGet(key)` | Tor-safe sessionStorage | Retrieve preferences |

@@ -614,7 +614,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'txid' => $txid,
             'time' => $time,
             'memo' => 'contact',
-            'description' => $description ?? 'Contact request transaction'
+            'description' => $description ?? 'Contact request'
             // NOTE: endRecipientAddress and initialSenderAddress are NOT included here
             // They are added via updateTrackingFields() after insert
         ];
@@ -682,7 +682,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'txid' => $txid,
             'time' => $time,
             'memo' => 'contact',
-            'description' => $description ?? 'Contact request transaction',
+            'description' => $description ?? 'Contact request',
             // Sender's signature data for future sync verification
             'signature' => $signature,
             'nonce' => $nonce

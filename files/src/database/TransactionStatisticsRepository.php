@@ -52,15 +52,21 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getTotalCount(): int
     {
-        $query = "SELECT COUNT(*) FROM {$this->tableName}";
-        $stmt = $this->pdo->prepare($query);
+        // Sum of counts across live + archive so stats don't drop archived
+        // rows. Archive missing (v9→v10 transitional) → live-only result.
         try {
-            $stmt->execute();
-            return (int) $stmt->fetchColumn();
+            $live = $this->pdo->query("SELECT COUNT(*) FROM {$this->tableName}")->fetchColumn();
         } catch (PDOException $e) {
-            $this->logError("Failed to retrieve total transaction count", $e);
+            $this->logError("Failed to retrieve total transaction count (live)", $e);
             return 0;
         }
+        $archive = 0;
+        try {
+            $archive = (int) $this->pdo->query("SELECT COUNT(*) FROM transactions_archive")->fetchColumn();
+        } catch (PDOException $e) {
+            // Archive missing — live count is correct on its own.
+        }
+        return (int) $live + $archive;
     }
 
     /**
@@ -70,23 +76,58 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getTypeStatistics(): array
     {
-        $query = "SELECT type, COUNT(*) as count,
-                    SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
-                  FROM {$this->tableName} GROUP BY type";
-        $stmt = $this->pdo->prepare($query);
-        try {
-            $stmt->execute();
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            return array_map(function ($row) {
-                return [
-                    'type' => $row['type'],
-                    'count' => $row['count'],
-                    'total' => self::sumCarry((int)$row['total_whole'], (int)$row['total_frac']),
-                ];
-            }, $rows);
-        } catch (PDOException $e) {
-            $this->logError("Failed to retrieve type statistics", $e);
+        // Per-type aggregates merged across live + archive. Each side
+        // groups independently; merge sums by `type` key in PHP.
+        $liveRows = $this->fetchTypeAggregate($this->tableName);
+        if ($liveRows === null) {
             return [];
+        }
+        $archiveRows = $this->fetchTypeAggregate('transactions_archive') ?? [];
+
+        $byType = [];
+        foreach ([$liveRows, $archiveRows] as $rows) {
+            foreach ($rows as $r) {
+                $t = $r['type'];
+                if (!isset($byType[$t])) {
+                    $byType[$t] = ['count' => 0, 'whole' => 0, 'frac' => 0];
+                }
+                $byType[$t]['count'] += (int) $r['count'];
+                $byType[$t]['whole'] += (int) $r['total_whole'];
+                $byType[$t]['frac']  += (int) $r['total_frac'];
+            }
+        }
+
+        return array_map(
+            fn($type, $agg) => [
+                'type'  => $type,
+                'count' => $agg['count'],
+                'total' => self::sumCarry($agg['whole'], $agg['frac']),
+            ],
+            array_keys($byType),
+            array_values($byType)
+        );
+    }
+
+    /**
+     * Private helper: run the per-type aggregate against a single table.
+     * Returns null on live-side failure (caller aborts), empty array on
+     * archive-side failure (caller just skips the archive contribution).
+     */
+    private function fetchTypeAggregate(string $table): ?array
+    {
+        $sql = "SELECT type, COUNT(*) as count,
+                    SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
+                FROM {$table} GROUP BY type";
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            if ($table === $this->tableName) {
+                $this->logError("Failed to retrieve type statistics (live)", $e);
+                return null;
+            }
+            return []; // archive missing — skip
         }
     }
 
@@ -98,23 +139,43 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getStatisticsByType(string $type): array
     {
-        $query = "SELECT type, COUNT(*) as count,
-                    SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
-                  FROM {$this->tableName} WHERE type = :type";
-        $stmt = $this->execute($query, [':type' => $type]);
-
-        if (!$stmt) {
+        $live    = $this->fetchByTypeRow($this->tableName, $type);
+        if ($live === null) {
             return [];
         }
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$result) {
+        $archive = $this->fetchByTypeRow('transactions_archive', $type) ?? ['count' => 0, 'total_whole' => 0, 'total_frac' => 0];
+
+        $count = (int) ($live['count'] ?? 0) + (int) ($archive['count'] ?? 0);
+        $whole = (int) ($live['total_whole'] ?? 0) + (int) ($archive['total_whole'] ?? 0);
+        $frac  = (int) ($live['total_frac']  ?? 0) + (int) ($archive['total_frac']  ?? 0);
+        if ($count === 0) {
             return [];
         }
         return [
-            'type' => $result['type'],
-            'count' => $result['count'],
-            'total' => self::sumCarry((int)($result['total_whole'] ?? 0), (int)($result['total_frac'] ?? 0)),
+            'type'  => $type,
+            'count' => $count,
+            'total' => self::sumCarry($whole, $frac),
         ];
+    }
+
+    /**
+     * Private helper: fetch the single aggregate row for a given type
+     * against a single table. Returns null on failure (archive missing
+     * etc.).
+     */
+    private function fetchByTypeRow(string $table, string $type): ?array
+    {
+        try {
+            $sql = "SELECT type, COUNT(*) as count,
+                        SUM(amount_whole) AS total_whole, SUM(amount_frac) AS total_frac
+                    FROM {$table} WHERE type = :type";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([':type' => $type]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $row === false ? null : $row;
+        } catch (PDOException $e) {
+            return null;
+        }
     }
 
     /**
@@ -125,14 +186,23 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getCountByType(string $type): int
     {
-        $query = "SELECT COUNT(*) FROM {$this->tableName} WHERE type = :type";
-        $stmt = $this->execute($query, [':type' => $type]);
-
-        if (!$stmt) {
-            return 0;
+        $live = 0;
+        $stmt = $this->execute(
+            "SELECT COUNT(*) FROM {$this->tableName} WHERE type = :type",
+            [':type' => $type]
+        );
+        if ($stmt) {
+            $live = (int) ($stmt->fetchColumn() ?: 0);
         }
-
-        return (int) ($stmt->fetchColumn() ?: 0);
+        $archive = 0;
+        try {
+            $archiveStmt = $this->pdo->prepare("SELECT COUNT(*) FROM transactions_archive WHERE type = :type");
+            $archiveStmt->execute([':type' => $type]);
+            $archive = (int) ($archiveStmt->fetchColumn() ?: 0);
+        } catch (PDOException $e) {
+            // Archive missing — live-only is correct.
+        }
+        return $live + $archive;
     }
 
     /**
@@ -142,19 +212,37 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getOverallStatistics(): array
     {
-        $query = "SELECT
-                    COUNT(*) as total_count,
-                    SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac,
-                    COUNT(DISTINCT sender_address) as unique_senders,
-                    COUNT(DISTINCT receiver_address) as unique_receivers,
-                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
-                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count
-                  FROM {$this->tableName}";
+        // Single aggregate against a UNION ALL of live + archive. The
+        // `COUNT(DISTINCT sender_address)` and `COUNT(DISTINCT receiver_address)`
+        // columns deduplicate naturally across the combined subquery —
+        // something the two-query PHP-merge approach can't do cheaply.
+        // Archive missing (v9→v10 transitional) → retry with live-only.
+        $inner = "SELECT amount_whole, amount_frac, sender_address, receiver_address, status FROM {$this->tableName}
+                  UNION ALL
+                  SELECT amount_whole, amount_frac, sender_address, receiver_address, status FROM transactions_archive";
+        $aggregate = "SELECT
+                        COUNT(*) as total_count,
+                        SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac,
+                        COUNT(DISTINCT sender_address) as unique_senders,
+                        COUNT(DISTINCT receiver_address) as unique_receivers,
+                        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
+                        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count
+                      FROM ({INNER}) AS combined";
 
-        $stmt = $this->execute($query);
-
-        if (!$stmt) {
-            return [];
+        $stmt = null;
+        try {
+            $stmt = $this->pdo->prepare(str_replace('{INNER}', $inner, $aggregate));
+            $stmt->execute();
+        } catch (PDOException $e) {
+            // Fall back to live-only if the UNION fails (archive missing or similar).
+            try {
+                $fallbackInner = "SELECT amount_whole, amount_frac, sender_address, receiver_address, status FROM {$this->tableName}";
+                $stmt = $this->pdo->prepare(str_replace('{INNER}', $fallbackInner, $aggregate));
+                $stmt->execute();
+            } catch (PDOException $e2) {
+                $this->logError("Failed to retrieve overall statistics", $e2);
+                return [];
+            }
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -179,22 +267,45 @@ class TransactionStatisticsRepository extends AbstractRepository
      */
     public function getStatisticsByStatus(string $status): array
     {
-        $query = "SELECT
-                    COUNT(*) as count,
+        // Sum live + archive (archive rows are all status='completed' by
+        // construction, so only the 'completed' call returns nonzero from
+        // archive; kept generic for consistency).
+        $liveStmt = $this->execute(
+            "SELECT COUNT(*) as count,
                     SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac
-                  FROM {$this->tableName}
-                  WHERE status = :status";
-
-        $stmt = $this->execute($query, [':status' => $status]);
-
-        if (!$stmt) {
+             FROM {$this->tableName} WHERE status = :status",
+            [':status' => $status]
+        );
+        if (!$liveStmt) {
             return [];
         }
+        $live = $liveStmt->fetch(PDO::FETCH_ASSOC) ?: ['count' => 0, 'total_amount_whole' => 0, 'total_amount_frac' => 0];
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$result) {
-            return [];
+        $archive = ['count' => 0, 'total_amount_whole' => 0, 'total_amount_frac' => 0];
+        try {
+            $aStmt = $this->pdo->prepare(
+                "SELECT COUNT(*) as count,
+                        SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac
+                 FROM transactions_archive WHERE status = :status"
+            );
+            $aStmt->execute([':status' => $status]);
+            $archive = $aStmt->fetch(PDO::FETCH_ASSOC) ?: $archive;
+        } catch (PDOException $e) {
+            // Archive missing — live-only is correct.
         }
+
+        $count = (int) $live['count'] + (int) $archive['count'];
+        $whole = (int) ($live['total_amount_whole'] ?? 0) + (int) ($archive['total_amount_whole'] ?? 0);
+        $frac  = (int) ($live['total_amount_frac']  ?? 0) + (int) ($archive['total_amount_frac']  ?? 0);
+
+        // Re-assemble in the shape the original query produced, so the
+        // caller's downstream code still reads $result['count'] /
+        // $result['total_amount_*'].
+        $result = [
+            'count' => $count,
+            'total_amount_whole' => $whole,
+            'total_amount_frac'  => $frac,
+        ];
         return [
             'count' => $result['count'],
             'total_amount' => self::sumCarry((int)($result['total_amount_whole'] ?? 0), (int)($result['total_amount_frac'] ?? 0)),

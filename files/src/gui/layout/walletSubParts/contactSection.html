@@ -6,6 +6,26 @@
         <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
         <button type="button" class="btn btn-success btn-nowrap" data-action="openAddContactModal"><i class="fas fa-user-plus"></i> New Contact</button>
     </div>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>About Your Contacts</span>
+        </summary>
+        <div class="section-intro-body">
+            Every peer this wallet knows about — accepted contacts you can transact
+            with, pending requests in either direction, and blocked parties. Search
+            by name or address, filter by status, chain state, or online state, or
+            click any row to open the contact detail.
+            <br><br>
+            <small>
+                <strong>Subnote on restored contacts.</strong>
+                <code>RestoredContact&lt;N&gt;</code> names are auto-assigned when a
+                contact reappears after deletion or when this node is re-seeded (the
+                number is just restore order, not an ID). Rename them anytime by
+                opening the contact and editing the Name field.
+            </small>
+        </div>
+    </details>
     <?php if (!empty($allContacts)): ?>
     <div class="contacts-search-bar mb-lg">
         <div class="search-icon-wrapper">
@@ -58,66 +78,9 @@
             </thead>
             <tbody id="contacts-grid">
             <!-- Accepted Contacts -->
+            <?php $contactAvatarStyle = $user->getContactAvatarStyle(); ?>
             <?php foreach ($acceptedContacts as $contact): ?>
-                <?php
-                    $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'accepted');
-                    $onlineStatus = $contact['online_status'] ?? 'unknown';
-                    $validChain = $contact['valid_chain'] ?? null;
-                    $primaryCur = !empty($contact['currencies']) ? $contact['currencies'][0] : null;
-                    $displayCurrency = $primaryCur['currency'] ?? 'USD';
-                    $myCredit = $primaryCur['my_available_credit'] ?? $contact['my_available_credit'] ?? null;
-                    $theirCredit = $primaryCur['their_available_credit'] ?? $contact['their_available_credit'] ?? null;
-                    $proposal = $contact['chain_drop_proposal'] ?? null;
-                    $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
-                    $isOutgoing = $proposal && $proposal['direction'] === 'outgoing' && $proposal['status'] === 'pending';
-                    $isRejected = $proposal && $proposal['status'] === 'rejected';
-                    // One-word chain state for filtering
-                    if ($isIncoming)            { $chainState = 'action'; }
-                    elseif ($isOutgoing)        { $chainState = 'waiting'; }
-                    elseif ($isRejected)        { $chainState = 'rejected'; }
-                    elseif ($validChain === 0)  { $chainState = 'warning'; }
-                    elseif ($validChain === 1)  { $chainState = 'valid'; }
-                    else                        { $chainState = 'none'; }
-                ?>
-                <tr class="contact-card contact-row cursor-pointer"
-                    data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
-                    data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
-                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
-                    data-status="accepted"
-                    data-chain-state="<?php echo $chainState; ?>"
-                    data-online="<?php echo htmlspecialchars($onlineStatus); ?>"
-                    data-balance="<?php echo (float) ($contact['balance'] ?? 0); ?>"
-                    data-your-credit="<?php echo $myCredit !== null ? (float) $myCredit : ''; ?>"
-                    data-their-credit="<?php echo $theirCredit !== null ? (float) $theirCredit : ''; ?>"
-                    data-action="openContactModal"
-                    data-contact="<?php echo $contactData; ?>">
-                    <td class="col-name">
-                        <div class="contact-name-cell">
-                            <?php echo renderContactAvatar($contact['pubkey_hash'] ?? '', $contact['name'] ?? '', $user->getContactAvatarStyle()); ?>
-                            <span class="contact-name-text"><?php echo htmlspecialchars($contact['name']); ?></span>
-                        </div>
-                    </td>
-                    <td class="col-number text-right <?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>"><?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], displayDecimals()); ?> <?php echo htmlspecialchars($displayCurrency); ?></td>
-                    <td class="col-number text-right"><?php echo $myCredit !== null ? number_format($myCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
-                    <td class="col-number text-right"><?php echo $theirCredit !== null ? number_format($theirCredit, displayDecimals()) . ' ' . htmlspecialchars($displayCurrency) : '—'; ?></td>
-                    <td class="col-status text-center"><span class="badge badge-accepted">Accepted</span></td>
-                    <td class="col-chain text-center">
-                        <?php if ($isIncoming): ?>
-                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-action" title="Proposal to drop missing transaction(s) received — action required" aria-label="Action required"></i>
-                        <?php elseif ($isOutgoing): ?>
-                        <i class="fas fa-clock chain-icon chain-icon-waiting" title="Awaiting contact's response" aria-label="Waiting"></i>
-                        <?php elseif ($isRejected): ?>
-                        <i class="fas fa-ban chain-icon chain-icon-blocked" title="Chain gap unresolved — proposal rejected" aria-label="Blocked"></i>
-                        <?php elseif ($validChain === 0): ?>
-                        <i class="fas fa-exclamation-triangle chain-icon chain-icon-warning" title="Transaction chain needs sync" aria-label="Chain needs sync"></i>
-                        <?php elseif ($validChain === 1): ?>
-                        <i class="fas fa-check chain-icon chain-icon-valid" title="Chain valid" aria-label="Chain valid"></i>
-                        <?php else: ?>
-                        <span class="text-muted">—</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="col-online text-center"><span class="contact-status-dot status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?>"></span></td>
-                </tr>
+                <?php require __DIR__ . '/_contactRow.html'; ?>
             <?php endforeach; ?>
 
             <!-- Pending Contacts -->
@@ -130,7 +93,7 @@
                 <tr class="contact-card contact-row contact-row-pending cursor-pointer"
                     data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
                     data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
-                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
+                    data-contact-address="<?php echo htmlspecialchars(contactAddressSearchAttr($contact)); ?>"
                     data-status="pending"
                     data-chain-state="none"
                     data-online="unknown"
@@ -171,7 +134,7 @@
                 <tr class="contact-card contact-row contact-row-blocked cursor-pointer"
                     data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
                     data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
-                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
+                    data-contact-address="<?php echo htmlspecialchars(contactAddressSearchAttr($contact)); ?>"
                     data-status="blocked"
                     data-chain-state="none"
                     data-online="unknown"
@@ -197,6 +160,8 @@
             </tbody>
         </table>
     </div>
+    <!-- Paginator controls — populated by Paginator.create('contacts', …) -->
+    <div id="contacts-paginator" class="paginator-container"></div>
     <?php endif; ?>
 </div>
 
@@ -321,28 +286,16 @@
         <!-- Transactions Tab -->
         <div id="transactions-tab" class="modal-tab-content">
             <div class="modal-tab-scroll">
-                <!-- Transaction List View -->
-                <div id="tx-list-view">
-                    <div class="tx-tab-header">
-                        <p>
-                            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
-                        </p>
-                        <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="modal_transactions" class="transactions-list">
-                        <p class="no-transactions">No recent transactions with this contact.</p>
-                    </div>
+                <div class="tx-tab-header">
+                    <p>
+                        <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
+                    </p>
+                    <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactModalTransactions">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
                 </div>
-                <!-- Transaction Detail View (card-style popup within the modal) -->
-                <div id="tx-detail-view" class="d-none">
-                    <div class="contact-tx-popup">
-                        <div class="text-right mb-sm">
-                            <span class="close position-static cursor-pointer" data-action="hideContactTxDetail" title="Back to transactions">&times;</span>
-                        </div>
-                        <div id="contact-tx-detail-content"></div>
-                    </div>
+                <div id="modal_transactions" class="contact-modal-tx-wrapper">
+                    <p class="no-transactions">No recent transactions with this contact.</p>
                 </div>
             </div>
         </div>
@@ -353,31 +306,37 @@
         <div id="status-tab" class="modal-tab-content">
             <div class="contact-info-section">
                 <h4><i class="fas fa-signal"></i> Connection Status</h4>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label><i class="fas fa-circle"></i> Online Status</label>
-                        <div class="info-value">
-                            <span id="modal_online_status" class="status-badge status-unknown">Unknown</span>
-                        </div>
-                    </div>
-                    <div class="info-item">
-                        <label><i class="fas fa-link"></i> Chain Status</label>
-                        <div class="info-value">
-                            <span id="modal_chain_status" class="chain-badge chain-unknown">Not Checked</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="ping-controls">
-                    <button id="ping_contact_btn" class="btn btn-sm btn-outline" data-action="pingContact" title="Check contact's online status">
+                <!-- Online + Chain badges and the Check Status button share
+                     one row; ping success/failure text falls to the row below. -->
+                <div class="connection-status-row">
+                    <span class="connection-status-item">
+                        <span class="connection-status-label"><i class="fas fa-circle"></i> Online:</span>
+                        <span id="modal_online_status" class="status-badge status-unknown">Unknown</span>
+                    </span>
+                    <span class="connection-status-item">
+                        <span class="connection-status-label"><i class="fas fa-link"></i> Chain:</span>
+                        <span id="modal_chain_status" class="chain-badge chain-unknown">Not Checked</span>
+                    </span>
+                    <button id="ping_contact_btn" class="btn btn-sm btn-outline connection-status-btn" data-action="pingContact" title="Check contact's online status">
                         <i class="fas fa-wifi" id="ping_icon"></i> <span id="ping_btn_text">Check Status</span>
                     </button>
+                </div>
+                <div class="ping-controls">
                     <span id="ping_result_message" class="ping-result-message"></span>
                 </div>
             </div>
 
-            <!-- Chain Gap Resolution — drop missing transaction(s) -->
-            <div id="chain_drop_section" class="contact-info-section d-none">
+            <!-- Chain Gap Resolution — drop missing transaction(s). Always
+                 visible: the empty-state row below shows when the chain is
+                 healthy, so users see there's no action to take. -->
+            <div id="chain_drop_section" class="contact-info-section">
                 <h4><i class="fas fa-unlink"></i> Chain Gap Resolution</h4>
+
+                <!-- Empty state — shown when no chain gap / proposal exists. -->
+                <div id="chain_drop_empty" class="chain-drop-empty text-muted">
+                    <i class="fas fa-check-circle"></i> No tx drops needed — the transaction chain with this contact is intact.
+                </div>
+
 
                 <!-- Chain gap details — shows which txids are valid before/after each gap -->
                 <div id="chain_gap_details" class="d-none mb-md">
@@ -398,8 +357,8 @@
                         <i class="fas fa-coins"></i>
                         <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
                     </p>
-                    <button id="chain_drop_propose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose dropping the missing transaction(s) to repair the chain">
-                        <i class="fas fa-handshake" id="chain_drop_propose_icon"></i> <span id="chain_drop_propose_text">Propose Dropping Missing Transaction(s)</span>
+                    <button id="chain_drop_propose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose a tx drop to repair the chain">
+                        <i class="fas fa-handshake" id="chain_drop_propose_icon"></i> <span id="chain_drop_propose_text">Propose Tx Drop(s)</span>
                     </button>
                     <span id="chain_drop_propose_result" class="ping-result-message"></span>
                 </div>
@@ -421,9 +380,9 @@
                 <div id="chain_drop_incoming" class="d-none">
                     <div class="alert alert-warning chain-drop-alert alert-border-danger">
                         <i class="fas fa-exclamation-triangle text-danger"></i>
-                        <strong>Drop Missing Transaction(s) — Action Required</strong>
+                        <strong>Tx Drop Proposed — Action Required</strong>
                         <p class="chain-drop-alert-body">
-                            This contact has proposed dropping the missing transaction(s) to repair the chain.
+                            This contact has proposed a tx drop to repair the chain.
                             <strong>Sending transactions is blocked</strong> until this proposal is accepted or rejected.
                         </p>
                         <p class="chain-drop-note">
@@ -449,7 +408,7 @@
                         <i class="fas fa-ban text-warning-dark"></i>
                         <strong>Proposal Rejected — Chain Gap Unresolved</strong>
                         <p class="chain-drop-alert-body">
-                            The previous proposal to drop missing transaction(s) was rejected.
+                            The previous tx drop proposal was rejected.
                             The chain gap still exists and <strong>sending transactions remains blocked</strong>.
                             A new proposal can be submitted to try again.
                         </p>
@@ -457,8 +416,8 @@
                             <i class="fas fa-coins"></i>
                             <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
                         </p>
-                        <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose dropping the missing transaction(s) to repair the chain">
-                            <i class="fas fa-handshake"></i> Propose Dropping Missing Transaction(s)
+                        <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" data-action="proposeChainDrop" title="Propose a tx drop to repair the chain">
+                            <i class="fas fa-handshake"></i> Propose Tx Drop(s)
                         </button>
                         <span id="chain_drop_repropose_result" class="ping-result-message"></span>
                     </div>
@@ -530,56 +489,273 @@
 </div>
 
 
-<!-- Pending Contacts Section -->
-<?php if (!empty($pendingContacts)): ?>
+<!-- Pending Contacts Section — always rendered so users with an
+     empty state can see there's nothing awaiting them (instead of
+     silently hiding the section, which made people wonder whether a
+     previously-pending request had vanished or been processed).
+     Users who prefer a shorter page can flip `hideEmptyGuiSections`
+     in Settings → Advanced → Display and the section hides when
+     there's nothing pending. -->
+<?php if (!$user->getHideEmptyGuiSections() || !empty($pendingContacts)): ?>
 <div id="pending-contacts" class="contacts-section fade-in-up">
-    <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
-    <p class="text-muted mb-lg">The following contacts have requested to connect with you:</p>
+    <div class="section-header">
+        <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
+    </div>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>About Pending Contact Requests</span>
+        </summary>
+        <div class="section-intro-body">
+            Incoming requests from other wallets that want to connect with you.
+            Accepting creates a bilateral contact record (and adds any currencies
+            they use if they aren't already in your <strong>Allowed Currencies</strong>
+            list). Rejecting silently drops the request — the other side isn't told.
+            Outgoing requests you've sent that are still waiting on the other party
+            also live here until they respond.
+            <br><br>
+            <small>
+                <strong>Subnote on currencies.</strong>
+                If a request carries a currency outside your Allowed Currencies list,
+                you'll see an explicit per-currency accept toggle so you can pick
+                which to allow rather than accepting everything blindly. The default
+                behaviour (accept what the contact offers) can be changed under
+                Settings → Feature Toggles → Contacts → <em>Auto-reject Unknown
+                Currency</em>.
+            </small>
+        </div>
+    </details>
+<?php if (empty($pendingContacts)): ?>
+    <!-- Big empty-state panel matching the Payment Requests / Your
+         Contacts / Recent Transactions style, so empty states feel
+         consistent across the wallet instead of mixing a small
+         one-liner here with big panels elsewhere. -->
+    <div class="empty-state">
+        <i class="fas fa-user-clock"></i>
+        <h3>No Pending Contact Requests</h3>
+        <p>Incoming requests from other contacts will appear here</p>
+    </div>
+<?php else: ?>
+    <p class="text-muted mb-lg">The following contacts have requested to connect with you — click a row for details and to accept or reject:</p>
 
+    <!-- Compact table of pending contact requests. Each row opens a modal
+         with the full accept/reject form for that request. Mirrors the
+         existing `.contacts-table` pattern (recent tx table, DLQ table,
+         payment requests table) so empty-state and row styling stay
+         consistent across the wallet. -->
+    <div class="contacts-table-wrapper">
+        <table class="contacts-table pending-contacts-table">
+            <thead>
+                <tr>
+                    <th class="pending-col-identifier">Identifier</th>
+                    <th class="pending-col-message">Message</th>
+                    <th class="pending-col-currencies">Currencies</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($pendingContacts as $index => $contact): ?>
+                <?php
+                    $hasName = !empty($contact['name']);
+                    // "Existing contact with still-pending currencies" —
+                    // distinct from a brand-new contact request. Landed
+                    // here via Functions.php:1233-1238 which re-adds
+                    // accepted contacts that have outstanding pending
+                    // incoming currency rows. Dangerous Delete/Block
+                    // actions are hidden for this case since they'd
+                    // nuke the whole (already-accepted) contact.
+                    $isExistingRow = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']);
+                    $pendingCurrenciesRow = $contact['pending_currencies'] ?? [];
+                    $outgoingCurrenciesRow = $contact['outgoing_currencies'] ?? [];
+                    // Message preview = first non-empty currency description,
+                    // truncated. Avoids breaking the row height on long text.
+                    $messagePreview = '';
+                    foreach ($pendingCurrenciesRow as $pc) {
+                        if (!empty($pc['description'])) {
+                            $messagePreview = $pc['description'];
+                            break;
+                        }
+                    }
+                    $messagePreviewTrunc = $messagePreview !== ''
+                        ? (mb_strlen($messagePreview) > 80 ? mb_substr($messagePreview, 0, 77) . '…' : $messagePreview)
+                        : '';
+                    // Identifier priority: name → Tor onion → HTTPS/HTTP
+                    // address → short pubkey hash. Tor onions are more
+                    // recognizable than a truncated hash and most pending
+                    // requests come in over Tor anyway.
+                    if ($hasName) {
+                        $identifier = htmlspecialchars($contact['name']);
+                    } elseif (!empty($contact['tor'])) {
+                        $torAddr = $contact['tor'];
+                        $torDisplay = mb_strlen($torAddr) > 32
+                            ? mb_substr($torAddr, 0, 10) . '…' . mb_substr($torAddr, -10)
+                            : $torAddr;
+                        $identifier = '<span class="monospace" title="' . htmlspecialchars($torAddr) . '">'
+                            . htmlspecialchars($torDisplay) . '</span>';
+                    } elseif (!empty($contact['https']) || !empty($contact['http'])) {
+                        $webAddr = $contact['https'] ?? $contact['http'];
+                        $identifier = '<span class="monospace" title="' . htmlspecialchars($webAddr) . '">'
+                            . htmlspecialchars($webAddr) . '</span>';
+                    } else {
+                        $identifier = '<span class="monospace text-muted">'
+                            . htmlspecialchars(substr($contact['pubkey_hash'] ?? '', 0, 20)) . '…</span>';
+                    }
+                ?>
+                <tr class="cursor-pointer pending-contact-row"
+                    data-action="openPendingContactModal"
+                    data-modal-id="pending-contact-modal-<?php echo $index; ?>"
+                    role="button"
+                    aria-label="Open pending contact request <?php echo $index + 1; ?>">
+                    <td class="pending-col-identifier">
+                        <?php echo $identifier; ?>
+                        <?php if ($isExistingRow): ?>
+                            <span class="badge badge-secondary ml-sm" title="You've already accepted this contact — these are additional currency requests from them. Accepting won't re-establish the contact, just opens the new currency line.">
+                                <i class="fas fa-coins"></i> +currencies
+                            </span>
+                        <?php endif; ?>
+                        <?php if (!empty($contact['has_prior_history'])): ?>
+                            <span class="badge badge-prior-contact ml-sm" title="This contact has prior transaction history — likely a previously known contact">
+                                <i class="fas fa-history"></i> Prior
+                            </span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="pending-col-message text-muted">
+                        <?php echo $messagePreviewTrunc !== '' ? htmlspecialchars($messagePreviewTrunc) : '—'; ?>
+                    </td>
+                    <td class="pending-col-currencies">
+                        <?php
+                            // Plain text list — the "unknown currency" warning
+                            // and the incoming/outgoing distinction both
+                            // surface in the detail modal, so the table stays
+                            // clean. Outgoing currencies get a "→" prefix so
+                            // you can still tell them apart at a glance.
+                            $incomingList = array_map(function ($pc) { return $pc['currency']; }, $pendingCurrenciesRow);
+                            $outgoingList = array_map(function ($oc) { return '→ ' . $oc['currency']; }, $outgoingCurrenciesRow);
+                            $allCurrencies = array_merge($incomingList, $outgoingList);
+                            echo htmlspecialchars(implode(', ', $allCurrencies));
+                        ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Per-request detail modals — one rendered inline per pending contact.
+         Each modal keeps the original accept/delete/block forms intact (same
+         action names, same POST targets, same CSRF + hidden fields) so the
+         server-side controllers need no changes. Only the visual wrapping
+         changed from card → modal. -->
     <?php foreach ($pendingContacts as $index => $contact): ?>
-        <?php $hasName = !empty($contact['name']); ?>
-        <div class="pending-contact-card">
-            <div class="pending-contact-header">
-                <div class="d-flex align-center gap-sm">
-                    <?php if ($hasName): ?>
-                        <strong class="text-primary"><?php echo htmlspecialchars($contact['name']); ?> — Currency Request</strong>
-                    <?php else: ?>
-                        <strong class="text-primary">Contact Request #<?php echo $index + 1; ?></strong>
-                    <?php endif; ?>
-                    <?php if (!empty($contact['has_prior_history'])): ?>
-                    <span class="badge badge-prior-contact" title="This contact has prior transaction history — likely a previously known contact">
-                        <i class="fas fa-history"></i> Prior Contact
-                    </span>
-                    <?php endif; ?>
+        <?php
+            $hasName = !empty($contact['name']);
+            // Mirror the row-level flag — used below to distinguish
+            // "new contact request" (default flow) from "currencies on
+            // an already-accepted contact" (arrived here via the
+            // line-1233 re-add in Functions.php).
+            $isExistingHeader = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']);
+        ?>
+        <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal>
+            <div class="modal-content modal-content-md">
+                <div class="modal-header">
+                    <div class="modal-header-content">
+                        <h3>
+                            <?php if ($isExistingHeader): ?>
+                                <i class="fas fa-coins"></i>
+                                Currency Request
+                                <?php if ($hasName): ?>
+                                    — <?php echo htmlspecialchars($contact['name']); ?>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <i class="fas fa-user-clock"></i>
+                                <?php if ($hasName): ?>
+                                    <?php echo htmlspecialchars($contact['name']); ?> — Contact Request
+                                <?php else: ?>
+                                    Contact Request #<?php echo $index + 1; ?>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </h3>
+                        <?php if (!empty($contact['has_prior_history'])): ?>
+                            <span class="badge badge-prior-contact" title="This contact has prior transaction history — likely a previously known contact">
+                                <i class="fas fa-history"></i> Prior Contact
+                            </span>
+                        <?php endif; ?>
+                        <?php if ($isExistingHeader): ?>
+                            <span class="badge badge-success">Contact accepted</span>
+                        <?php else: ?>
+                            <span class="badge badge-pending">Pending</span>
+                        <?php endif; ?>
+                    </div>
+                    <span class="close" data-action="closePendingContactModal" data-modal-id="pending-contact-modal-<?php echo $index; ?>">&times;</span>
                 </div>
-                <span class="badge badge-pending">Pending</span>
+                <div class="modal-body modal-body-padded">
+
+            <!-- Inline help — collapsed by default; mirrors the
+                 "About …" disclosures used on the contacts & pending
+                 list sections. Explains the flow for first-timers
+                 without eating vertical space for returning users. -->
+            <details class="section-intro text-muted mb-lg">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>How to handle this request</span>
+                </summary>
+                <div class="section-intro-body">
+                    <strong>Their addresses</strong> — the three pills up top
+                    (<em>Tor</em>, <em>HTTPS</em>, <em>HTTP</em>) are how your
+                    wallet reaches theirs. Click a pill to view the full address.
+                    Whichever of the three you've configured your wallet to prefer
+                    (Settings → Network → <em>Default Transport Mode</em>) is the
+                    one that'll be used for outgoing traffic.
+                    <br><br>
+                    <strong>Contact name</strong> — a local-only nickname for your
+                    wallet. The other side never sees it. Rename them anytime from
+                    the contact detail modal.
+                    <br><br>
+                    <strong>Each currency is a separate line of credit.</strong>
+                    Click the row to set the <em>Fee %</em> (what you charge to
+                    relay their transactions in that currency) and <em>Credit
+                    Limit</em> (the maximum you're willing to let them owe you in
+                    that currency). If you don't touch them, your wallet defaults
+                    apply (Settings → Payments → <em>Default Fee</em> and
+                    <em>Default Credit Limit</em>). A currency marked
+                    <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> new</span>
+                    is not in your <em>Allowed Currencies</em> yet — accepting
+                    will add it.
+                    <br><br>
+                    <strong>Accept All</strong> takes every currency at once with
+                    whatever fee + credit you've set (or the defaults). If any are
+                    still at defaults you'll get a confirmation first.
+                    <strong>Delete Request</strong> silently drops the request —
+                    the other side isn't told. <strong>Block Contact</strong>
+                    prevents future requests from them.
+                </div>
+            </details>
+
+            <!-- Addresses compacted to an icon row. Click opens a small
+                 info modal with the full address (see showInfoModal in
+                 script.js) — so touch users and anyone who wants to read
+                 it first get the full value, rather than the old click-
+                 to-copy that happened before they could verify what they
+                 were about to paste. -->
+            <div class="pending-addresses-compact mb-lg">
+                <?php foreach (getOrderedAddressSchemaTypes() as $_pillType):
+                    if (empty($contact[$_pillType])) continue;
+                    $_pillDisplay = \Eiou\Core\Constants::getAddressTypeDisplay($_pillType);
+                ?>
+                    <button type="button" class="pending-addr-icon address-<?php echo htmlspecialchars($_pillType); ?>"
+                            data-action="showInfoModal"
+                            title="<?php echo htmlspecialchars($_pillDisplay['label']); ?> address: <?php echo htmlspecialchars($contact[$_pillType]); ?>">
+                        <i class="fas <?php echo htmlspecialchars($_pillDisplay['icon']); ?>"></i>
+                        <span class="pending-addr-label"><?php echo htmlspecialchars($_pillDisplay['label']); ?></span>
+                    </button>
+                <?php endforeach; ?>
             </div>
 
-            <div class="pending-addresses">
-                <?php if (!empty($contact['tor'])): ?>
-                    <div class="address-line">
-                        <span class="address-icon address-tor" title="Tor Address"><i class="fas fa-user-secret"></i></span>
-                        <span class="monospace"><?php echo htmlspecialchars($contact['tor']); ?></span>
-                    </div>
-                <?php endif; ?>
-                <?php if (!empty($contact['https'])): ?>
-                    <div class="address-line">
-                        <span class="address-icon address-https" title="HTTPS Address"><i class="fas fa-globe"></i></span>
-                        <span class="monospace"><?php echo htmlspecialchars($contact['https']); ?></span>
-                    </div>
-                <?php endif; ?>
-                <?php if (!empty($contact['http'])): ?>
-                    <div class="address-line">
-                        <span class="address-icon address-http" title="HTTP Address"><i class="fas fa-globe"></i></span>
-                        <span class="monospace"><?php echo htmlspecialchars($contact['http']); ?></span>
-                    </div>
-                <?php endif; ?>
-            </div>
-
-            <div class="mb-lg">
-                <div class="info-label">Public Key:</div>
+            <!-- Public key collapsed — users rarely verify it at
+                 accept-time; keeping it inline blew out the modal. -->
+            <details class="pending-pubkey-disclosure mb-lg">
+                <summary><i class="fas fa-key"></i> Public key</summary>
                 <div class="pubkey-display monospace"><?php echo htmlspecialchars(trim($contact['pubkey'])); ?></div>
-            </div>
+            </details>
 
             <!-- Outgoing currency requests (we sent, waiting for their acceptance) -->
             <?php $outgoingCurrencies = $contact['outgoing_currencies'] ?? []; ?>
@@ -615,72 +791,123 @@
                     <?php else: ?>
                     <div class="mb-lg pending-contact-name-section">
                         <div class="form-group">
-                            <label for="contact_name_shared_<?php echo $index; ?>"><strong>Contact Name:</strong></label>
-                            <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter contact name" required class="shared-name-input">
+                            <label for="contact_name_shared_<?php echo $index; ?>">
+                                <strong>Contact Name:</strong>
+                                <i class="fas fa-info-circle info-tooltip-icon"
+                                   title="This name is local to your wallet only — a nickname so you can recognise this contact in your lists. The other side never sees it. Change it anytime from the contact's detail modal."
+                                   data-action="showInfoModal"
+                                   role="button"
+                                   aria-label="About contact name"></i>
+                            </label>
+                            <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter a nickname only you will see" required class="shared-name-input">
                         </div>
                     </div>
                     <?php endif; ?>
 
-                    <!-- Per-currency accept forms -->
+                    <!-- Per-currency accept forms — each in its own
+                         <details> accordion so the modal stays compact
+                         when there are many currencies. Summary row shows
+                         the currency code + optional unknown-currency
+                         flag; expanding reveals fee / credit / message /
+                         Accept. All start collapsed — user picks what to
+                         review. Accept-All is the single-click path for
+                         defaults; individual review expands on demand. -->
                     <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
-                    <?php if ($pcIdx > 0): ?><hr class="currency-separator"><?php endif; ?>
-                    <?php if (!in_array($pc['currency'], $user->getAllowedCurrencies())): ?>
-                    <div class="alert alert-warning mb-sm">
-                        <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($pc['currency']); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
-                    </div>
-                    <?php endif; ?>
-                    <form method="POST" class="mb-sm currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                        <?php if ($isExisting): ?>
-                            <input type="hidden" name="action" value="acceptCurrency">
-                            <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
-                            <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                        <?php else: ?>
-                            <input type="hidden" name="action" value="acceptContact">
-                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                            <?php if ($hasName): ?>
-                                <input type="hidden" name="contact_name" value="<?php echo htmlspecialchars($contact['name']); ?>">
+                    <?php
+                        $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
+                        $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
+                        $curUnknownModal = !in_array($pc['currency'], $user->getAllowedCurrencies());
+                    ?>
+                    <details class="pending-currency-accordion">
+                        <summary class="pending-currency-summary">
+                            <span class="pending-currency-code"><?php echo htmlspecialchars($pc['currency']); ?></span>
+                            <?php if ($curUnknownModal): ?>
+                                <span class="badge badge-warning" title="Not in your allowed currencies — accepting will add it">
+                                    <i class="fas fa-exclamation-triangle"></i> new
+                                </span>
                             <?php endif; ?>
-                            <?php if (!$hasName): ?>
-                                <input type="hidden" name="contact_name" class="shared-name-target" value="">
+                            <?php if (!empty($pc['description'])): ?>
+                                <span class="pending-currency-summary-msg text-muted">
+                                    — <?php echo htmlspecialchars(mb_strlen($pc['description']) > 50 ? mb_substr($pc['description'], 0, 47) . '…' : $pc['description']); ?>
+                                </span>
                             <?php endif; ?>
-                            <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                        <?php endif; ?>
+                        </summary>
+                        <div class="pending-currency-body">
+                            <?php if ($curUnknownModal): ?>
+                            <div class="alert alert-warning mb-sm">
+                                <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($pc['currency']); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
+                            </div>
+                            <?php endif; ?>
+                            <form method="POST" class="mb-sm currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <?php if ($isExisting): ?>
+                                    <input type="hidden" name="action" value="acceptCurrency">
+                                    <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
+                                    <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
+                                <?php else: ?>
+                                    <input type="hidden" name="action" value="acceptContact">
+                                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
+                                    <?php if ($hasName): ?>
+                                        <input type="hidden" name="contact_name" value="<?php echo htmlspecialchars($contact['name']); ?>">
+                                    <?php endif; ?>
+                                    <?php if (!$hasName): ?>
+                                        <input type="hidden" name="contact_name" class="shared-name-target" value="">
+                                    <?php endif; ?>
+                                    <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
+                                <?php endif; ?>
 
-                        <?php
-                            $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
-                            $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
-                        ?>
-                        <div class="form-row currency-form-row">
-                            <div class="form-group">
-                                <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo htmlspecialchars($pc['currency']); ?> Fee (%):</label>
-                                <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
-                            </div>
-                            <div class="form-group">
-                                <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo $hasRequestedCredit ? 'Requested Credit Limit:' : 'Credit Limit:'; ?></label>
-                                <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($creditValue); ?>" min="0" required class="<?php echo $hasRequestedCredit ? '' : 'default-value'; ?>">
-                            </div>
-                            <div class="form-group">
-                                <label class="currency-accept-spacer">&nbsp;</label>
-                                <button type="submit" class="btn btn-success btn-compact currency-accept-btn">
-                                    <i class="fas fa-check"></i> Accept
+                                <div class="form-row currency-form-row">
+                                    <div class="form-group">
+                                        <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%):</label>
+                                        <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo $hasRequestedCredit ? 'Requested Credit Limit:' : 'Credit Limit:'; ?></label>
+                                        <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($creditValue); ?>" min="0" required class="<?php echo $hasRequestedCredit ? '' : 'default-value'; ?>">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="currency-accept-spacer">&nbsp;</label>
+                                        <button type="submit" class="btn btn-success btn-compact currency-accept-btn">
+                                            <i class="fas fa-check"></i> Accept
+                                        </button>
+                                    </div>
+                                </div>
+                                <?php if (!empty($pc['description'])): ?>
+                                <div class="pending-contact-currency-message">
+                                    <label><i class="fas fa-comment"></i> Message:</label>
+                                    <div class="pending-message-text"><?php echo htmlspecialchars($pc['description']); ?></div>
+                                </div>
+                                <?php endif; ?>
+                            </form>
+
+                            <!-- Decline this specific currency. Separate form so
+                                 it doesn't submit the Accept's fee/credit fields.
+                                 Silent delete of the pending contact_currencies
+                                 row — matches the protocol-level behaviour of
+                                 deleteContact (sender isn't notified). -->
+                            <?php if (!empty($contact['pubkey_hash'])): ?>
+                            <form method="POST" class="currency-decline-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="action" value="declineCurrency">
+                                <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash']); ?>">
+                                <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
+                                <button type="submit" class="btn btn-secondary btn-sm currency-decline-btn"
+                                        data-confirm="Decline <?php echo htmlspecialchars($pc['currency']); ?> request from this contact? The request will be removed from your pending list. They can re-request later.">
+                                    <i class="fas fa-times"></i> Decline <?php echo htmlspecialchars($pc['currency']); ?>
                                 </button>
-                            </div>
+                            </form>
+                            <?php endif; ?>
                         </div>
-                        <?php if (!empty($pc['description'])): ?>
-                        <div class="pending-contact-currency-message">
-                            <label><i class="fas fa-comment"></i> Message:</label>
-                            <div class="pending-message-text"><?php echo htmlspecialchars($pc['description']); ?></div>
-                        </div>
-                        <?php endif; ?>
-                    </form>
+                    </details>
                     <?php endforeach; ?>
 
                     <!-- Accept All button (when multiple currencies) -->
                     <?php if (count($pendingCurrencies) > 1): ?>
                     <hr class="currency-separator-double">
                     <div class="mb-lg">
-                        <form method="POST" class="accept-all-form" data-contact-index="<?php echo $index; ?>">
+                        <form method="POST" class="accept-all-form" data-contact-index="<?php echo $index; ?>"
+                              data-default-fee="<?php echo htmlspecialchars($user->getDefaultFee()); ?>"
+                              data-default-credit="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                             <input type="hidden" name="action" value="acceptAllCurrencies">
                             <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
@@ -751,7 +978,44 @@
                 <?php endif; ?>
             </div>
 
-            <!-- Action Buttons -->
+            <!-- Action Buttons.
+                 Delete/Block hidden for existing (already-accepted)
+                 contacts since those actions operate on the WHOLE
+                 contact — clicking Delete here would erase the
+                 already-accepted currencies too, and Block would
+                 block the contact entirely. Neither matches the
+                 user's intent when they're just deciding whether
+                 to also add a new currency line. The unaddressed
+                 currency rows can safely stay pending forever —
+                 accept them when ready from this same modal. -->
+            <?php if ($isExistingHeader): ?>
+                <?php if (!empty($contact['has_no_active_currencies'])): ?>
+                <!-- Loud warning: contact.status='accepted' but NO rows
+                     in contact_currencies are status='accepted'. Most
+                     likely reached via Unblock, which only flips the
+                     contact status. Sends/receives/P2P won't work
+                     until the user accepts at least one currency. -->
+                <div class="alert alert-warning mb-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>No currency lines active yet.</strong>
+                    You can't send, receive, or P2P-relay with this contact until
+                    you accept at least one currency above. Unblocking restored
+                    the contact relationship but didn't open any currency lines —
+                    accept the ones you want (typically your default currency,
+                    <?php echo htmlspecialchars($user->getDefaultCurrency()); ?>, at minimum).
+                </div>
+                <?php else: ?>
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle"></i>
+                    You've already accepted this contact and have at least one
+                    active currency line with them. Accept any of the additional
+                    currencies above to open more lines, or ignore them — they'll
+                    stay pending on your side until you act. To end the
+                    relationship entirely, open the contact from Your Contacts
+                    and use Delete or Block there.
+                </div>
+                <?php endif; ?>
+            <?php else: ?>
             <div class="pending-contact-actions">
                 <form method="POST" class="pending-contact-action-col">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
@@ -771,8 +1035,13 @@
                     </button>
                 </form>
             </div>
-        </div>
+            <?php endif; ?>
+
+                </div><!-- /modal-body -->
+            </div><!-- /modal-content -->
+        </div><!-- /pending-contact-modal-<?php echo $index; ?> -->
     <?php endforeach; ?>
+<?php endif; ?>
 </div>
 <?php endif; ?>
 

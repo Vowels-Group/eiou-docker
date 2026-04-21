@@ -58,10 +58,41 @@ class TransactionChainRepository extends AbstractRepository
      *   - gaps: array - List of missing previous_txid values
      *   - broken_txids: array - Transactions with missing previous_txid
      */
-    public function verifyChainIntegrity(string $userPublicKey, string $contactPublicKey, ?string $currency = null): array {
+    public function verifyChainIntegrity(string $userPublicKey, string $contactPublicKey, ?string $currency = null, bool $useCheckpoint = true): array {
         $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+        return $this->verifyChainIntegrityByHashes($userPubkeyHash, $contactPubkeyHash, $currency, $useCheckpoint);
+    }
 
+    /**
+     * Variant of verifyChainIntegrity that accepts pre-computed pubkey hashes
+     * directly. Used by callers that already work in hash space (e.g. the
+     * transaction archival job, which finds bilateral pairs by hash and would
+     * otherwise have to re-fetch the public keys just to hash them again).
+     *
+     * Fast path (default, $useCheckpoint=true):
+     *   1. Query ONLY live rows for the pair.
+     *   2. Look up the pair's checkpoint in transaction_chain_checkpoints.
+     *   3. Walk settled live txs. A settled tx whose previous_txid is not in
+     *      the live lookup set is a real gap ONLY if no checkpoint exists for
+     *      the pair. If a checkpoint exists, the archival service already
+     *      verified gap-freeness at the moment of archival and wrote the
+     *      proof — subsequent verify calls trust that boundary.
+     *   Cost: O(live tail) + 1 indexed row lookup. Collapses from
+     *   O(all history) once any archival has happened for a pair.
+     *
+     * Paranoid path ($useCheckpoint=false) — used by `eiou verify-chain`:
+     *   1. Query live AND archive rows.
+     *   2. Walk all settled txs (live + archive) with a merged lookup set.
+     *   Cost: O(all history), but catches the case where something tampered
+     *   with the archive between the archival run and the verify — which the
+     *   checkpoint-trust path would miss by construction.
+     *
+     * transaction_count: settled live count + checkpoint.archived_count
+     * (when checkpoint is present), so the total reflects the whole chain
+     * history even though the walk only visits live in the fast path.
+     */
+    public function verifyChainIntegrityByHashes(string $userPubkeyHash, string $contactPubkeyHash, ?string $currency = null, bool $useCheckpoint = true): array {
         $result = [
             'valid' => true,
             'has_transactions' => false,
@@ -71,45 +102,57 @@ class TransactionChainRepository extends AbstractRepository
             'gap_context' => []
         ];
 
-        // Get ALL transactions between the two parties (including cancelled/rejected).
-        // Cancelled transactions are part of the chain — previous_txid can point to them
-        // (see commit 04239bc6: "Preserve transaction chain integrity via inclusion").
-        // Excluding them creates false-positive gaps when a cancelled transaction is the
-        // link between two active transactions.
-        $query = "SELECT txid, previous_txid, status FROM {$this->tableName}
-                  WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
-                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
-
-        $params = [
-            ':user_hash' => $userPubkeyHash,
-            ':contact_hash' => $contactPubkeyHash,
-            ':contact_hash2' => $contactPubkeyHash,
-            ':user_hash2' => $userPubkeyHash
-        ];
-
+        // Get all transactions between the two parties in live (including
+        // cancelled/rejected — see commit 04239bc6 "Preserve chain integrity
+        // via inclusion": previous_txid can legitimately point to a cancelled
+        // row, so filtering them out would create false-positive gaps).
+        $liveWhere = "((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
+                       OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
         if ($currency !== null) {
-            $query .= " AND currency = :currency";
-            $params[':currency'] = $currency;
+            $liveWhere .= " AND currency = :currency";
         }
 
-        $query .= " ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
+        $liveQuery = "SELECT txid, previous_txid, status FROM {$this->tableName}
+                      WHERE {$liveWhere}
+                      ORDER BY COALESCE(`time`, 0) ASC, timestamp ASC";
+        $liveParams = [
+            ':user_hash'     => $userPubkeyHash,
+            ':contact_hash'  => $contactPubkeyHash,
+            ':contact_hash2' => $contactPubkeyHash,
+            ':user_hash2'    => $userPubkeyHash,
+        ];
+        if ($currency !== null) {
+            $liveParams[':currency'] = $currency;
+        }
 
-        $stmt = $this->execute($query, $params);
-
+        $stmt = $this->execute($liveQuery, $liveParams);
         if (!$stmt) {
             return $result;
         }
-
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        if (count($transactions) === 0) {
-            return $result;
+        // Canonical (LEAST, GREATEST) pair for checkpoint lookup — matches
+        // what TransactionArchiveRepository::upsertCheckpoint wrote.
+        $pairA = $userPubkeyHash;
+        $pairB = $contactPubkeyHash;
+        if (strcmp($pairA, $pairB) > 0) {
+            [$pairA, $pairB] = [$pairB, $pairA];
         }
 
-        // Build a set of ALL active txids for lookup (including in-flight)
-        // This ensures a completed tx referencing a sending tx's txid won't false-gap
+        $checkpoint = null;
+        if ($useCheckpoint) {
+            // Fast path: trust the checkpoint as gap-free-at-archival proof.
+            $checkpoint = $this->fetchChainCheckpoint($pairA, $pairB);
+        } else {
+            // Paranoid path: actually merge archive rows in so the walk can
+            // detect post-archival tampering. See docblock.
+            $archived = $this->fetchArchiveTransactionsForPair($userPubkeyHash, $contactPubkeyHash, $currency);
+            if ($archived) {
+                $transactions = array_merge($transactions, $archived);
+            }
+        }
+
         $txidSet = [];
-        // Separate settled transactions for chain-link checking
         $settledStatuses = ['completed', 'accepted', 'paid'];
         $settledTransactions = [];
         foreach ($transactions as $tx) {
@@ -119,42 +162,120 @@ class TransactionChainRepository extends AbstractRepository
             }
         }
 
-        $result['transaction_count'] = count($settledTransactions);
-        $result['has_transactions'] = count($settledTransactions) > 0;
+        // Total count includes archived rows too — the transaction_count is
+        // "how many settled txs does this bilateral chain have", not "how
+        // many rows did we just scan". Fast path gets archived count from
+        // the checkpoint; paranoid path already has archive rows merged into
+        // $settledTransactions.
+        $archivedCount = ($useCheckpoint && $checkpoint !== null) ? (int) $checkpoint['archived_count'] : 0;
+        $result['transaction_count'] = count($settledTransactions) + $archivedCount;
+        $result['has_transactions'] = $result['transaction_count'] > 0;
 
         if (count($settledTransactions) === 0) {
             return $result;
         }
 
-        // Check each settled transaction's previous_txid exists in the full txid set
-        // Also build gap context: for each gap, identify the last valid txid before it
-        // and the first valid txid after it, so the GUI can show where gaps are in the chain
         $prevValidTxid = null;
         foreach ($settledTransactions as $tx) {
             $prevTxid = $tx['previous_txid'];
 
-            // Skip if previous_txid is null (first transaction in chain)
             if ($prevTxid === null) {
                 $prevValidTxid = $tx['txid'];
                 continue;
             }
-
-            // Check if previous_txid exists in our local chain (any active status)
-            if (!isset($txidSet[$prevTxid])) {
-                $result['valid'] = false;
-                $result['gaps'][] = $prevTxid;
-                $result['broken_txids'][] = $tx['txid'];
-                $result['gap_context'][] = [
-                    'missing_txid' => $prevTxid,
-                    'before_txid' => $prevValidTxid,
-                    'after_txid' => $tx['txid']
-                ];
+            if (isset($txidSet[$prevTxid])) {
+                $prevValidTxid = $tx['txid'];
+                continue;
             }
 
+            // prev_txid not in the live set. In the fast path, a checkpoint
+            // existing means the archival service already verified the
+            // archived portion was gap-free at archival time — trust that
+            // the missing prev_txid is an archived row. In the paranoid
+            // path, $checkpoint is null by construction (we never fetched
+            // it) and the archive rows are already in $txidSet, so missing
+            // here is a REAL gap regardless.
+            if ($useCheckpoint && $checkpoint !== null) {
+                $prevValidTxid = $tx['txid'];
+                continue;
+            }
+
+            $result['valid'] = false;
+            $result['gaps'][] = $prevTxid;
+            $result['broken_txids'][] = $tx['txid'];
+            $result['gap_context'][] = [
+                'missing_txid' => $prevTxid,
+                'before_txid'  => $prevValidTxid,
+                'after_txid'   => $tx['txid']
+            ];
             $prevValidTxid = $tx['txid'];
         }
 
         return $result;
+    }
+
+    /**
+     * Private helper: fetch the per-pair checkpoint row (or null). Silently
+     * returns null if the checkpoint table doesn't exist — happens on a
+     * freshly-migrated schema ≤ v9 node that hasn't applied v10 yet, or
+     * a test environment where only the live table is set up. A missing
+     * checkpoint is semantically the same as "no archive for this pair",
+     * and the caller handles it as "no gaps can be hidden in the archive,
+     * so a missing previous_txid is a real gap".
+     *
+     * Pair hashes MUST already be in canonical (LEAST, GREATEST) order —
+     * caller canonicalizes before invoking.
+     */
+    private function fetchChainCheckpoint(string $pairA, string $pairB): ?array
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT user_public_key_hash, contact_public_key_hash, archived_count,
+                        archived_txid_hash, highest_archived_timestamp,
+                        highest_archived_time, last_verified_gap_free_at
+                 FROM transaction_chain_checkpoints
+                 WHERE user_public_key_hash = :a AND contact_public_key_hash = :b
+                 LIMIT 1"
+            );
+            $stmt->execute([':a' => $pairA, ':b' => $pairB]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $row === false ? null : $row;
+        } catch (PDOException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Private helper: fetch archive rows for a bilateral pair. Used only
+     * by the paranoid ($useCheckpoint=false) verify path and by
+     * `eiou verify-chain` via the higher-level call. Silently returns
+     * an empty array if the archive table is missing.
+     */
+    private function fetchArchiveTransactionsForPair(string $userPubkeyHash, string $contactPubkeyHash, ?string $currency): array
+    {
+        try {
+            $where = "((sender_public_key_hash = :a AND receiver_public_key_hash = :b)
+                       OR (sender_public_key_hash = :b2 AND receiver_public_key_hash = :a2))";
+            $params = [
+                ':a'  => $userPubkeyHash,
+                ':b'  => $contactPubkeyHash,
+                ':a2' => $userPubkeyHash,
+                ':b2' => $contactPubkeyHash,
+            ];
+            if ($currency !== null) {
+                $where .= " AND currency = :currency";
+                $params[':currency'] = $currency;
+            }
+            $sql = "SELECT txid, previous_txid, status FROM transactions_archive WHERE {$where}";
+            $stmt = $this->pdo->prepare($sql);
+            foreach ($params as $k => $v) {
+                $stmt->bindValue($k, $v);
+            }
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            return [];
+        }
     }
 
     /**
@@ -221,32 +342,34 @@ class TransactionChainRepository extends AbstractRepository
         $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
-        // Get count and oldest/newest txids
-        // NOTE: Do NOT filter by status - chain state summary must include ALL transactions
-        // for accurate sync comparison.
-        $query = "SELECT
-                    COUNT(*) as transaction_count,
-                    MIN(txid) as oldest_txid,
-                    MAX(txid) as newest_txid
-                  FROM {$this->tableName}
-                  WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
-                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
-
+        // NOTE: Do NOT filter by status - chain state summary must include
+        // ALL transactions for accurate sync comparison.
+        //
+        // Scans live AND archive so the txid_list matches across nodes
+        // regardless of archival state — otherwise two nodes syncing where
+        // only one has archived part of the chain would compute different
+        // txid_lists and the sync negotiation would treat archived rows as
+        // missing. Can't use the per-pair checkpoint shortcut here because
+        // sync needs the full txid set to compare (not just a count).
+        $where = "((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
+                   OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
         $params = [
-            ':user_hash' => $userPubkeyHash,
-            ':contact_hash' => $contactPubkeyHash,
+            ':user_hash'     => $userPubkeyHash,
+            ':contact_hash'  => $contactPubkeyHash,
             ':contact_hash2' => $contactPubkeyHash,
-            ':user_hash2' => $userPubkeyHash
+            ':user_hash2'    => $userPubkeyHash,
         ];
-
         if ($currency !== null) {
-            $query .= " AND currency = :currency";
+            $where .= " AND currency = :currency";
             $params[':currency'] = $currency;
         }
 
-        $stmt = $this->execute($query, $params);
-
-        if (!$stmt) {
+        // Live side — primary source of truth (if this fails we bail).
+        $liveTxidStmt = $this->execute(
+            "SELECT txid FROM {$this->tableName} WHERE {$where} ORDER BY timestamp ASC",
+            $params
+        );
+        if (!$liveTxidStmt) {
             return [
                 'transaction_count' => 0,
                 'oldest_txid' => null,
@@ -254,42 +377,43 @@ class TransactionChainRepository extends AbstractRepository
                 'txid_list' => []
             ];
         }
-
-        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        // Get list of all txids for comparison
-        // NOTE: Do NOT filter by status - must match the count query above
-        $txidQuery = "SELECT txid FROM {$this->tableName}
-                      WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
-                             OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
-
-        $txidParams = [
-            ':user_hash' => $userPubkeyHash,
-            ':contact_hash' => $contactPubkeyHash,
-            ':contact_hash2' => $contactPubkeyHash,
-            ':user_hash2' => $userPubkeyHash
-        ];
-
-        if ($currency !== null) {
-            $txidQuery .= " AND currency = :currency";
-            $txidParams[':currency'] = $currency;
+        $txidList = [];
+        while ($row = $liveTxidStmt->fetch(PDO::FETCH_ASSOC)) {
+            $txidList[] = $row['txid'];
         }
 
-        $txidQuery .= " ORDER BY timestamp ASC";
-
-        $txidStmt = $this->execute($txidQuery, $txidParams);
-
-        $txidList = [];
-        if ($txidStmt) {
-            while ($row = $txidStmt->fetch(PDO::FETCH_ASSOC)) {
+        // Archive side — silently append if the table exists. On a fresh
+        // v9→v10 node or in tests without the archive table, this harmlessly
+        // contributes zero rows. Archive rows go AFTER live in the list
+        // since we assume archival moves the oldest first, but the sync
+        // protocol sorts before comparing anyway.
+        try {
+            $archiveStmt = $this->pdo->prepare(
+                "SELECT txid FROM transactions_archive WHERE {$where} ORDER BY timestamp ASC"
+            );
+            foreach ($params as $k => $v) {
+                $archiveStmt->bindValue($k, $v);
+            }
+            $archiveStmt->execute();
+            while ($row = $archiveStmt->fetch(PDO::FETCH_ASSOC)) {
                 $txidList[] = $row['txid'];
             }
+        } catch (PDOException $e) {
+            // Archive table missing — live-only result is correct.
+        }
+
+        // oldest/newest by lexical txid, matching the prior MIN/MAX semantics.
+        $oldest = null;
+        $newest = null;
+        foreach ($txidList as $t) {
+            if ($oldest === null || strcmp($t, $oldest) < 0) $oldest = $t;
+            if ($newest === null || strcmp($t, $newest) > 0) $newest = $t;
         }
 
         return [
-            'transaction_count' => (int)$summary['transaction_count'],
-            'oldest_txid' => $summary['oldest_txid'],
-            'newest_txid' => $summary['newest_txid'],
+            'transaction_count' => count($txidList),
+            'oldest_txid' => $oldest,
+            'newest_txid' => $newest,
             'txid_list' => $txidList
         ];
     }
@@ -332,10 +456,16 @@ class TransactionChainRepository extends AbstractRepository
         // NOTE: Do NOT filter by status here - chain conflict detection requires ALL transactions
         // to be included, even cancelled/rejected ones. The chain must be complete for proper
         // conflict resolution during sync operations.
-        $query = "SELECT * FROM {$this->tableName}
-                  WHERE previous_txid = :previous_txid
-                  AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
-                       OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))";
+        //
+        // Check the archive too: if we've archived a tx that shares the
+        // same previous_txid as an incoming remote tx, that's still a
+        // conflict we need to detect — without this check, sync would
+        // insert the remote tx into live even though the archive already
+        // has a tx claiming the same prev, leaving the chain permanently
+        // ambiguous.
+        $whereBody = "previous_txid = :previous_txid
+                      AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
+                           OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))";
 
         $params = [
             ':previous_txid' => $previousTxid,
@@ -346,20 +476,46 @@ class TransactionChainRepository extends AbstractRepository
         ];
 
         if ($currency !== null) {
-            $query .= " AND currency = :currency";
+            $whereBody .= " AND currency = :currency";
             $params[':currency'] = $currency;
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT 1";
-
+        $query = "SELECT * FROM {$this->tableName} WHERE {$whereBody} ORDER BY timestamp DESC LIMIT 1";
         $stmt = $this->execute($query, $params);
 
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                // Tag the row with its source so downstream conflict-resolution
+                // can recognise an archived local tx and apply the archive-wins
+                // rule (see SyncService::resolveChainConflict). Underscore
+                // prefix matches the existing `_direction` convention for
+                // transport-only metadata that never hits the DB.
+                $result['_source'] = 'live';
+                return $result;
+            }
         }
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        // Fall through to archive. Use direct PDO since AbstractRepository's
+        // execute() is scoped to `$this->tableName`.
+        try {
+            $archiveStmt = $this->pdo->prepare(
+                "SELECT * FROM transactions_archive WHERE {$whereBody} ORDER BY timestamp DESC LIMIT 1"
+            );
+            foreach ($params as $k => $v) {
+                $archiveStmt->bindValue($k, $v);
+            }
+            $archiveStmt->execute();
+            $archiveResult = $archiveStmt->fetch(PDO::FETCH_ASSOC);
+            if ($archiveResult) {
+                $archiveResult['_source'] = 'archive';
+                return $archiveResult;
+            }
+            return null;
+        } catch (PDOException $e) {
+            // Archive missing — live-side miss was authoritative.
+            return null;
+        }
     }
 
     /**

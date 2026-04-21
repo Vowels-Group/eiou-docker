@@ -2,8 +2,8 @@
 /**
  * Unit Tests for ChainDropService
  *
- * Tests the chain drop agreement service functionality including:
- * - Proposing chain drops to contacts
+ * Tests the tx drop agreement service functionality including:
+ * - Proposing tx drops to contacts
  * - Handling incoming proposals
  * - Accepting and rejecting proposals
  * - Expiring stale proposals
@@ -436,7 +436,7 @@ class ChainDropServiceTest extends TestCase
             ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
             ->willReturn($existingOutgoing);
 
-        // Verify no chain drop execution
+        // Verify no tx drop execution
         $this->transactionChainRepository->expects($this->never())
             ->method('updatePreviousTxid');
 
@@ -480,7 +480,7 @@ class ChainDropServiceTest extends TestCase
             ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
             ->willReturn($existingIncoming);
 
-        // Verify no chain drop execution
+        // Verify no tx drop execution
         $this->transactionChainRepository->expects($this->never())
             ->method('updatePreviousTxid');
 

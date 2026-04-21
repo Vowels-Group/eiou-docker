@@ -1,5 +1,13 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
+<?php
+// User opt-in: skip rendering the whole Failed Messages section when
+// the queue is empty. Default is OFF — empty sections double as
+// "this feature exists, you just have nothing here" cues.
+if ($user->getHideEmptyGuiSections() && empty($dlqItems)) {
+    return;
+}
+?>
 <!-- Dead Letter Queue Section -->
 <div id="dlq" class="dlq-section fade-in-up">
     <div class="section-header">
@@ -56,12 +64,17 @@
         </div>
     </div>
 
-    <p class="dlq-description">
-        <i class="fas fa-info-circle"></i>
-        Messages that could not be delivered after <?php echo deliveryMaxRetries(); ?> automatic attempts.
-        <strong>Transaction</strong> and <strong>Contact</strong> messages can be retried — they were initiated by you and remain valid.
-        <strong>P2P</strong> and <strong>Relay P2P</strong> messages are time-sensitive routing messages (<?php echo p2pDefaultExpirationSeconds(); ?>s expiry) that are stale by the time they reach this queue — abandon them to clear the backlog.
-    </p>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>What's in this queue?</span>
+        </summary>
+        <div class="section-intro-body">
+            Messages that could not be delivered after <?php echo deliveryMaxRetries(); ?> automatic attempts.
+            <strong>Transaction</strong> and <strong>Contact</strong> messages can be retried — they were initiated by you and remain valid.
+            <strong>P2P</strong> and <strong>Relay P2P</strong> messages are time-sensitive routing messages (<?php echo p2pDefaultExpirationSeconds(); ?>s expiry) that are stale by the time they reach this queue — abandon them to clear the backlog.
+        </div>
+    </details>
 
     <?php if (!empty($dlqStats)): ?>
     <div class="dlq-stats-bar">
@@ -81,10 +94,14 @@
     </div>
     <?php endif; ?>
 
+    <?php if (!empty($dlqItems)): ?>
     <!-- Search bar — rendered above the filter tabs to match the Contacts
-         section layout (Title → Search → Filter → Table). -->
-    <div class="dlq-search-bar">
-        <input type="text" id="dlq-search" placeholder="Search by recipient, reason, or type..." data-action-input="searchDlq">
+         section layout (Title → Search → Filter → Table). Gated on
+         non-empty queue so an empty DLQ doesn't show controls with
+         nothing to act on, matching Contacts / Payment Requests. -->
+    <div class="dlq-search-bar search-icon-wrapper">
+        <i class="fas fa-search search-icon-positioned"></i>
+        <input type="text" id="dlq-search" class="search-input-with-icon" placeholder="Search by recipient, reason, or type..." data-action-input="searchDlq">
     </div>
 
     <!-- Status filter — client-side dropdown, no page reload -->
@@ -97,6 +114,7 @@
             <option value="abandoned">Abandoned</option>
         </select>
     </div>
+    <?php endif; ?>
 
     <?php if (empty($dlqItems)): ?>
     <div class="empty-state">
@@ -111,16 +129,36 @@
         <p>No items match the selected filter.</p>
     </div>
 
+    <!-- Meta-info placed ABOVE the table to match Recent Transactions and
+         Payment Requests layout (info icon + count + retention note on a
+         single line). Was previously a trailing <p> under the table which
+         was inconsistent with the other paginated tables. -->
+    <div class="d-flex justify-between align-center mb-lg">
+        <p class="tx-meta-info">
+            <i class="fas fa-info-circle"></i>
+            Showing <span id="dlq-visible-count"><?php echo count($dlqItems); ?></span> item<?php echo count($dlqItems) !== 1 ? 's' : ''; ?>.
+            Resolved and abandoned items are automatically cleaned up after <?php echo cleanupDlqRetentionDays(); ?> days.
+        </p>
+    </div>
+
     <!-- DLQ table: uses contacts-table chrome for consistent styling -->
     <div class="contacts-table-wrapper">
         <table class="contacts-table dlq-table">
             <thead>
                 <tr>
+                    <!-- Status-icon column mirrors the leading column on
+                         the Recent Transactions table so every viewport
+                         distinguishes pending / retrying / resolved /
+                         abandoned at a glance. The dedicated "Status"
+                         column was removed once this icon replaced it:
+                         the Actions cell already shows "Delivered" /
+                         "Abandoned" text for terminal rows, and the
+                         icon + row-click detail modal cover the rest. -->
+                    <th class="col-dlq-status-icon" aria-label="Status"></th>
                     <th class="col-dlq-type text-center">Type</th>
                     <th class="col-name">Recipient</th>
                     <th class="col-dlq-reason">Failure Reason</th>
                     <th class="col-dlq-date text-right">Added</th>
-                    <th class="col-dlq-status text-center">Status</th>
                     <th class="col-dlq-actions text-center">Actions</th>
                 </tr>
             </thead>
@@ -143,10 +181,14 @@
                 ];
                 $typeInfo = $typeIcons[$msgType] ?? ['icon' => 'fa-envelope', 'label' => ucfirst($msgType), 'class' => ''];
 
+                // Resolved uses fa-check-double (double checkmark) to
+                // match the Recent Transactions "completed" icon — both
+                // states represent a fully-settled successful outcome,
+                // so the shared symbol helps users cross-recognise them.
                 $statusIcons = [
                     'pending'   => 'fa-hourglass-half',
                     'retrying'  => 'fa-sync-alt fa-spin',
-                    'resolved'  => 'fa-check',
+                    'resolved'  => 'fa-check-double',
                     'abandoned' => 'fa-ban',
                 ];
                 $statusIcon = $statusIcons[$status] ?? 'fa-circle';
@@ -154,13 +196,31 @@
                 $canAct      = in_array($status, ['pending', 'retrying'], true);
                 $canRetry    = $canAct && in_array($msgType, ['transaction', 'contact', 'payment_request'], true);
 
-                $dateDisplay = '';
-                if ($createdAt) {
-                    $ts = strtotime($createdAt);
-                    $dateDisplay = $ts ? date(displayDateFormat(), $ts) : $createdAt;
+                // Use formatTimestamp() so microseconds survive the
+                // display round-trip — strtotime() returns an integer
+                // Unix timestamp that strips fractional seconds, which
+                // is why the Added column was rendering `.000000` for
+                // every row even though `created_at` is TIMESTAMP(6)
+                // on disk.
+                $dateDisplay = $createdAt ? formatTimestamp($createdAt) : '';
+
+                // Pull the txid out of transaction-like payloads so the
+                // Failed Message Details modal can show it and let the
+                // user click through to the full tx. The DLQ repository
+                // already json_decodes payload into an array — don't
+                // re-decode (fatals with TypeError). Silent on any shape
+                // surprise so the DLQ table still renders.
+                $dlqTxid = '';
+                if (!empty($item['payload']) && is_array($item['payload']) && in_array($msgType, ['transaction', 'p2p', 'rp2p', 'payment_request'], true)) {
+                    $dlqTxid = $item['payload']['txid'] ?? '';
                 }
             ?>
-            <tr class="dlq-row cursor-pointer" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>" data-action="openDlqModal" data-dlq-type="<?php echo htmlspecialchars($typeInfo['label']); ?>" data-dlq-type-class="<?php echo htmlspecialchars($typeInfo['class']); ?>" data-dlq-type-icon="<?php echo htmlspecialchars($typeInfo['icon']); ?>" data-dlq-recipient="<?php echo htmlspecialchars($recipient); ?>" data-dlq-reason="<?php echo htmlspecialchars($reason); ?>" data-dlq-date="<?php echo htmlspecialchars($dateDisplay); ?>" data-dlq-can-retry="<?php echo $canRetry ? '1' : '0'; ?>" data-dlq-can-act="<?php echo $canAct ? '1' : '0'; ?>" title="Click for details">
+            <tr class="dlq-row cursor-pointer" id="dlq-row-<?php echo $dlqId; ?>" data-dlq-id="<?php echo $dlqId; ?>" data-status="<?php echo htmlspecialchars($status); ?>" data-action="openDlqModal" data-dlq-type="<?php echo htmlspecialchars($typeInfo['label']); ?>" data-dlq-type-class="<?php echo htmlspecialchars($typeInfo['class']); ?>" data-dlq-type-icon="<?php echo htmlspecialchars($typeInfo['icon']); ?>" data-dlq-recipient="<?php echo htmlspecialchars($recipient); ?>" data-dlq-reason="<?php echo htmlspecialchars($reason); ?>" data-dlq-date="<?php echo htmlspecialchars($dateDisplay); ?>" data-dlq-can-retry="<?php echo $canRetry ? '1' : '0'; ?>" data-dlq-can-act="<?php echo $canAct ? '1' : '0'; ?>" data-dlq-txid="<?php echo htmlspecialchars($dlqTxid); ?>" title="Click for details">
+                <td class="col-dlq-status-icon text-center">
+                    <span class="dlq-type-status-icon dlq-type-status-<?php echo htmlspecialchars($status); ?>" title="<?php echo ucfirst(htmlspecialchars($status)); ?>" aria-label="<?php echo ucfirst(htmlspecialchars($status)); ?>">
+                        <i class="fas <?php echo $statusIcon; ?>"></i>
+                    </span>
+                </td>
                 <td class="col-dlq-type text-center">
                     <span class="tx-type-badge <?php echo htmlspecialchars($typeInfo['class']); ?>">
                         <i class="fas <?php echo htmlspecialchars($typeInfo['icon']); ?>"></i>
@@ -177,12 +237,6 @@
                 </td>
                 <td class="col-dlq-date text-right">
                     <?php echo htmlspecialchars($dateDisplay); ?>
-                </td>
-                <td class="col-dlq-status text-center">
-                    <span class="dlq-status-badge dlq-badge-<?php echo htmlspecialchars($status); ?>">
-                        <i class="fas <?php echo $statusIcon; ?>"></i>
-                        <span class="dlq-status-label"><?php echo ucfirst(htmlspecialchars($status)); ?></span>
-                    </span>
                 </td>
                 <td class="col-dlq-actions text-center">
                     <?php if ($canRetry): ?>
@@ -205,11 +259,6 @@
             </tbody>
         </table>
     </div>
-
-    <p class="dlq-footer-count">
-        Showing <span id="dlq-visible-count"><?php echo count($dlqItems); ?></span> item<?php echo count($dlqItems) !== 1 ? 's' : ''; ?>.
-        Resolved and abandoned items are automatically cleaned up after <?php echo cleanupDlqRetentionDays(); ?> days.
-    </p>
 
     <?php endif; ?>
 </div>

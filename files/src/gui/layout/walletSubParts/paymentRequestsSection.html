@@ -48,7 +48,23 @@ $prStatusIcons = [
 ];
 ?>
 
-<?php if (!empty($incomingRequests) || !empty($outgoingRequests)): ?>
+<?php /* Section always renders — the existing inner empty-state
+         ("No Payment Requests" / "Payment requests you send or receive
+         will appear here") used to be gated behind a wrapper that
+         hid the whole section, so users wondered where the feature
+         lived. Keeping the section visible (with the empty-state
+         when all three buckets are empty) makes the absence of
+         requests explicit rather than invisible.
+         Users who prefer a shorter page can flip
+         `hideEmptyGuiSections` in Settings → Advanced → Display and
+         the whole section hides again when everything's empty. */
+if ($user->getHideEmptyGuiSections()
+    && empty($pendingIncoming)
+    && empty($pendingOutgoing)
+    && empty($resolvedAll)) {
+    return;
+}
+?>
 <div class="form-container fade-in-up" id="payment-requests-section">
     <div class="section-header">
         <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
@@ -226,8 +242,18 @@ $prStatusIcons = [
     <div class="contacts-search-bar mb-lg">
         <div class="search-icon-wrapper">
             <i class="fas fa-search search-icon-positioned"></i>
-            <input type="text" id="pr-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterPaymentRequests">
+            <input type="text" id="pr-search-input" class="search-input-with-icon" placeholder="Search by name, address, or description..." data-action-keyup="filterPaymentRequests" data-action-keypress-enter="searchPaymentRequestsDatabase">
         </div>
+        <button type="button" class="btn btn-sm btn-outline search-database-btn" data-action="searchPaymentRequestsDatabase" title="Server-side search across your entire payment-request history — finds matches older than what's currently loaded on this page. Respects the direction / status filters. Results capped at 500; refine the term to narrow further. Also triggers when you press Enter in the search box.">
+            <i class="fas fa-database"></i> Search database
+        </button>
+    </div>
+    <div id="pr-search-results-banner" class="search-results-banner d-none" role="status">
+        <i class="fas fa-database"></i>
+        <span id="pr-search-results-text">Searching…</span>
+        <button type="button" class="search-results-clear" data-action="clearSearchResults" data-search-key="payment-requests">
+            <i class="fas fa-times"></i> Clear search
+        </button>
     </div>
     <div class="contacts-filters mb-lg">
         <select id="pr-filter-status" class="contacts-filter-select" data-action-change="filterPaymentRequests" aria-label="Filter by status">
@@ -244,7 +270,7 @@ $prStatusIcons = [
     </div>
     <div class="d-flex justify-between align-center mb-lg">
         <p class="tx-meta-info">
-            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $paymentRequestLimit; ?> requests</strong>
+            <i class="fas fa-info-circle"></i> Showing the <strong>last <span id="pr-meta-loaded-count"><?php echo (int)$paymentRequestLimit; ?></span> requests</strong>
         </p>
     </div>
     <div class="contacts-table-wrapper">
@@ -261,80 +287,13 @@ $prStatusIcons = [
             </thead>
             <tbody id="pr-history-list">
             <?php foreach ($resolvedAll as $req): ?>
-                <?php
-                    $status   = $req['status'] ?? '';
-                    $dir      = $req['_direction'] ?? '';
-                    $txid     = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
-                    $amountRaw = isSplitAmount($req['amount']) ? $req['amount']->toMajorUnits() : (float)($req['amount_whole'] ?? 0);
-                    $amount   = number_format($amountRaw, displayDecimals());
-                    $currency = htmlspecialchars($req['currency'] ?? '');
-                    $desc     = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
-                    $dateRaw  = $req['responded_at'] ?? $req['created_at'] ?? '';
-                    $date     = !empty($dateRaw) ? formatTimestamp($dateRaw) : '';
-                    $dateTs   = !empty($dateRaw) ? (int) strtotime($dateRaw) : 0;
-
-                    // Counterparty name + lookup for avatar (prefer live name over stored snapshot)
-                    $cpHash = $dir === 'incoming' ? ($req['requester_pubkey_hash'] ?? '') : ($req['recipient_pubkey_hash'] ?? '');
-                    $cpContact = $prContactsByHash[$cpHash] ?? null;
-                    $cpName = $cpContact['name'] ?? $req['contact_name'] ?? substr($cpHash, 0, 12) . '…';
-
-                    $statusIcon = $prStatusIcons[$status] ?? 'fa-circle';
-                ?>
-                <tr class="pr-row contact-row cursor-pointer"
-                    data-action="<?php echo $txid ? 'openTransactionModalByTxid' : 'openPrHistoryModal'; ?>"
-                    <?php if ($txid): ?>data-txid="<?php echo $txid; ?>"<?php endif; ?>
-                    data-pr-name="<?php echo htmlspecialchars($cpName); ?>"
-                    data-pr-amount="<?php echo $amount . ' ' . $currency; ?>"
-                    data-pr-desc="<?php echo $desc; ?>"
-                    data-pr-date="<?php echo $date; ?>"
-                    data-pr-direction="<?php echo htmlspecialchars($dir); ?>"
-                    data-pr-status="<?php echo htmlspecialchars($status); ?>"
-                    title="Click for details"
-                    <?php
-                        $searchParts = strtolower($cpName . ' ' . $cpHash . ' ' . $desc);
-                        if (!empty($req['requester_address'])) $searchParts .= ' ' . strtolower($req['requester_address']);
-                        if ($cpContact) {
-                            foreach (validTransportIndices() as $_af) {
-                                if (!empty($cpContact[$_af])) $searchParts .= ' ' . strtolower($cpContact[$_af]);
-                            }
-                        }
-                    ?>
-                    data-pr-search="<?php echo htmlspecialchars($searchParts); ?>"
-                    data-status="<?php echo htmlspecialchars($status); ?>"
-                    data-direction="<?php echo htmlspecialchars($dir); ?>"
-                    data-amount="<?php echo $amountRaw; ?>"
-                    data-date="<?php echo $dateTs; ?>">
-                    <td class="col-pr-status text-center">
-                        <span class="pr-status-icon pr-status-<?php echo htmlspecialchars($status); ?>" title="<?php echo htmlspecialchars(ucfirst($status)); ?>">
-                            <i class="fas <?php echo $statusIcon; ?>"></i>
-                        </span>
-                    </td>
-                    <td class="col-name">
-                        <div class="contact-name-cell">
-                            <?php if ($cpContact): ?>
-                                <?php echo renderContactAvatar($cpHash, $cpName, $prAvatarStyle); ?>
-                            <?php endif; ?>
-                            <div>
-                                <span class="contact-name-text"><?php echo htmlspecialchars($cpName); ?></span>
-                                <span class="pr-direction-hint"><?php echo $dir === 'incoming' ? 'requested' : 'you requested'; ?></span>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="col-number col-pr-amount text-right"><?php echo $amount . ' ' . $currency; ?></td>
-                    <td class="col-tx-desc col-pr-desc" title="<?php echo $desc ?: 'No description'; ?>"><?php echo $desc ?: '—'; ?></td>
-                    <td class="col-pr-txid" title="<?php echo $txid; ?>">
-                        <?php if ($txid): ?>
-                            <span class="monospace"><?php echo substr($txid, 0, 10); ?>…</span>
-                        <?php else: ?>
-                            <span class="text-muted">—</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="col-tx-date col-pr-date text-right"><?php echo $date; ?></td>
-                </tr>
+                <?php require __DIR__ . '/_paymentRequestRow.html'; ?>
             <?php endforeach; ?>
             </tbody>
         </table>
     </div>
+    <!-- Paginator controls — populated by Paginator.create('payment-requests', …) -->
+    <div id="pr-paginator" class="paginator-container"></div>
     <?php endif; ?>
 
     <?php if (empty($pendingIncoming) && empty($pendingOutgoing) && empty($resolvedAll)): ?>
@@ -346,4 +305,3 @@ $prStatusIcons = [
     <?php endif; ?>
 
 </div>
-<?php endif; ?>

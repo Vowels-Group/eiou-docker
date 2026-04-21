@@ -1,14 +1,14 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
-########################## Chain Drop Test Suite ##########################
-# Tests the chain drop agreement protocol for resolving mutual
+########################## Tx Drop Test Suite ##########################
+# Tests the tx drop agreement protocol for resolving mutual
 # transaction chain gaps between two contacts.
 #
 # Test scenarios:
-# 1. Single gap: A->B->C, delete B -> A->?->C -> chain drop -> A->C
-# 2. Non-consecutive gaps: A->B->C->D->E, delete B,D -> requires 2 chain drops
-# 3. Consecutive gaps: A->B->C->D->E, delete B,C -> single chain drop
+# 1. Single gap: A->B->C, delete B -> A->?->C -> tx drop -> A->C
+# 2. Non-consecutive gaps: A->B->C->D->E, delete B,D -> requires 2 tx drops
+# 3. Consecutive gaps: A->B->C->D->E, delete B,C -> single tx drop
 # 4. Rejection flow: propose -> reject -> chain stays broken
 ##########################################################################
 
@@ -256,7 +256,7 @@ get_previous_txid() {
 }
 
 # Resolve all existing chain gaps between sender and receiver
-# Repeatedly proposes and accepts chain drops until the chain is valid
+# Repeatedly proposes and accepts tx drops until the chain is valid
 # Returns 0 on success, 1 if max iterations exceeded
 # Delete all transactions between sender and receiver on a specific node
 # Starting fresh ensures previous_txid=NULL for the first new transaction
@@ -293,7 +293,7 @@ clean_chain() {
     echo -e "\t   Deleted ${senderDeleted:-0} sender txs, ${receiverDeleted:-0} receiver txs"
 }
 
-# Clean up only chain drop proposals (not transactions, to avoid creating gaps)
+# Clean up only tx drop proposals (not transactions, to avoid creating gaps)
 cleanup_proposals() {
     docker exec ${sender} php -r "
         require_once('${BOOTSTRAP_PATH}');
@@ -422,7 +422,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 1.4: Propose chain drop from sender
+# Test 1.4: Propose tx drop from sender
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Proposing chain drop from sender"
 
@@ -591,7 +591,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 2.3: First chain drop (resolves first gap: tx2)
+# Test 2.3: First tx drop (resolves first gap: tx2)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> First chain drop: resolving gap for tx2"
 
@@ -648,7 +648,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 2.5: Second chain drop (resolves second gap: tx4)
+# Test 2.5: Second tx drop (resolves second gap: tx4)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Second chain drop: resolving gap for tx4"
 
@@ -789,7 +789,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 3.3: Single chain drop resolves the consecutive gap
+# Test 3.3: Single tx drop resolves the consecutive gap
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Chain drop: resolving consecutive gap"
 
@@ -936,7 +936,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 4.2: Propose chain drop
+# Test 4.2: Propose tx drop
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Proposing chain drop from sender"
 
@@ -1233,7 +1233,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 6.1: Send triggers gap detection and auto-proposes chain drop
+# Test 6.1: Send triggers gap detection and auto-proposes tx drop
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Attempting send (should fail and auto-propose chain drop)"
 
@@ -1440,7 +1440,7 @@ clean_chain > /dev/null
 
 #################### TEST 7: Ping-Triggered Full Flow (consecutive gaps) ####################
 # Full end-to-end: ping detects gap -> manual propose -> accept -> verify relink -> new send works
-# Uses consecutive gaps (tx2 + tx3 deleted) which result in a single chain drop
+# Uses consecutive gaps (tx2 + tx3 deleted) which result in a single tx drop
 ##############################################################################################
 
 echo -e "\n"
@@ -1530,7 +1530,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 7.2: Manual chain drop propose (triggered by user after seeing ping result)
+# Test 7.2: Manual tx drop propose (triggered by user after seeing ping result)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Manual chain drop propose after ping detection"
 
@@ -1700,7 +1700,7 @@ clean_chain > /dev/null
 
 #################### TEST 8: Sync-Triggered Full Flow (non-consecutive, 2 drops) ####################
 # Full end-to-end: sync detects gaps -> two propose/accept rounds -> verify relink -> new send works
-# Uses non-consecutive gaps (tx2 + tx4 deleted) requiring 2 sequential chain drops
+# Uses non-consecutive gaps (tx2 + tx4 deleted) requiring 2 sequential tx drops
 ######################################################################################################
 
 echo -e "\n"
@@ -1791,7 +1791,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 8.2: First chain drop round (resolves first gap)
+# Test 8.2: First tx drop round (resolves first gap)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Round 1: Propose and accept first chain drop"
 
@@ -1828,7 +1828,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 8.3: Second chain drop round (resolves second gap)
+# Test 8.3: Second tx drop round (resolves second gap)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Round 2: Propose and accept second chain drop"
 
@@ -2119,7 +2119,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 9.8: No chain drop proposal should have been created on receiver
+# Test 9.8: No tx drop proposal should have been created on receiver
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying no proposal was sent to receiver"
 
@@ -2533,7 +2533,7 @@ clean_chain > /dev/null
 cleanup_backups ${sender}
 cleanup_backups ${receiver}
 
-#################### TEST 13: No Backup -- Normal Chain Drop Fallback ####################
+#################### TEST 13: No Backup -- Normal Tx Drop Fallback ####################
 
 echo -e "\n"
 echo "========================================================================"
@@ -2607,7 +2607,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 13.3: Propose chain drop -- no backup, should fall through to normal proposal
+# Test 13.3: Propose tx drop -- no backup, should fall through to normal proposal
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Proposing chain drop (no backup, should propose normally)"
 
@@ -2654,7 +2654,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 13.5: Verify chain is valid after normal chain drop
+# Test 13.5: Verify chain is valid after normal tx drop
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying chain repaired via normal chain drop"
 

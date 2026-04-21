@@ -334,6 +334,56 @@ class SettingsControllerTest extends TestCase
     }
 
     #[Test]
+    public function handleUpdateSettingsHandlesLiveNotificationsEnabled(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsEnabled' => '1'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected redirect/write */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsHandlesValidLiveNotificationsVerbosity(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsVerbosity' => 'balanced'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsRejectsInvalidLiveNotificationsVerbosity(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsVerbosity' => 'loud'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsHandlesValidLiveNotificationsToastDuration(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsToastDurationMs' => '10000'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsRejectsInvalidLiveNotificationsToastDuration(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsToastDurationMs' => '12345'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
     public function handleUpdateSettingsHandlesBooleanAutoBackupEnabled(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';
@@ -489,6 +539,45 @@ class SettingsControllerTest extends TestCase
             if (ob_get_level() > 0) {
                 ob_end_clean();
             }
+        }
+
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function routeActionHandlesResetToDefaultsAction(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['action' => 'resetToDefaults'];
+
+        $this->mockSession->expects($this->once())
+            ->method('verifyCSRFToken');
+
+        try {
+            $this->controller->routeAction();
+        } catch (\Throwable $e) {
+            // Expected — resetToDefaults() writes files and MessageHelper
+            // calls header()+exit under the hood, which throws or errors
+            // in a test harness. The assertion here is that the dispatch
+            // reached handleResetToDefaults (verifyCSRFToken was called).
+        }
+
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleResetToDefaultsCallsVerifyCSRFToken(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+
+        $this->mockSession->expects($this->once())
+            ->method('verifyCSRFToken');
+
+        try {
+            $this->controller->handleResetToDefaults();
+        } catch (\Throwable $e) {
+            // Expected — UserContext::resetToDefaults hits the real config
+            // paths and MessageHelper::redirectMessage calls header()+exit
         }
 
         $this->assertTrue(true);

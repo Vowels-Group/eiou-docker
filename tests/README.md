@@ -98,7 +98,7 @@ tests/
     ├── apiInputValidationTest.sh     # API input validation (15+ test cases)
     ├── syncTestSuite.sh              # Chain synchronization
     ├── chunkedSyncTest.sh            # Chunked chain sync
-    ├── chainDropTestSuite.sh         # Chain drop agreement + backup recovery (13 sections)
+    ├── chainDropTestSuite.sh         # Tx drop agreement + backup recovery (13 sections)
     ├── gracefulShutdownTest.sh       # Graceful shutdown behavior
     ├── sigTermTest.sh                # SIGTERM signal handling
     ├── transactionRecoveryTest.sh    # Transaction recovery after failure

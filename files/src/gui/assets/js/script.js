@@ -138,6 +138,19 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) {}
 });
 
+// Relocate the Contact detail modal to document.body so it renders above
+// every tab-panel. The markup lives inside the Contacts tab partial
+// (#tab-panel-contacts), which is display:none when any other tab is
+// active — hiding the modal along with it. Lifting it once at page load
+// lets us open it from the Transaction Details modal (or anywhere else)
+// without first having to switch to the Contacts tab.
+document.addEventListener('DOMContentLoaded', function() {
+    var contactModalEl = document.getElementById('contactModal');
+    if (contactModalEl && contactModalEl.parentNode !== document.body) {
+        document.body.appendChild(contactModalEl);
+    }
+});
+
 /**
  * Escapes HTML special characters to prevent XSS attacks.
  *
@@ -163,6 +176,298 @@ function escapeHtml(text) {
     div.textContent = String(text);
     return div.innerHTML;
 }
+
+/**
+ * Display-time normalisation for transaction descriptions. Old contact-
+ * request txs stored their description as the long phrase "Contact request
+ * transaction"; the current default is the shorter "Contact request".
+ * Render the short form regardless of what's in the DB so the history looks
+ * consistent across old + new rows. Returns the input unchanged for any
+ * other description.
+ */
+function displayTxDescription(desc) {
+    if (desc === 'Contact request transaction') {
+        return 'Contact request';
+    }
+    return desc;
+}
+
+// ============================================================================
+// Paginator — shared pagination utility for server-rendered tables
+// ============================================================================
+//
+// The wallet has three tables (Recent Transactions, Contacts, Payment
+// Requests history) that server-render a capped slice of rows and then do
+// 100% client-side sort / filter / search on the rendered DOM. Paginator
+// layers on top of that so the user isn't presented with one long scroll.
+//
+// Row visibility is driven by two independent classes (both apply
+// `display: none`):
+//   - `.filter-hidden` — set by filter/search code; unrelated to pagination
+//   - `.paginator-hidden` — set by Paginator to hide rows outside current page
+// A row is visible iff neither class is present. Filter code doesn't touch
+// `.paginator-hidden`; Paginator doesn't touch `.filter-hidden`. Sort only
+// reorders DOM nodes, so the two hidden states stay consistent.
+//
+// Integration: after the filter or sort function runs, call
+// `Paginator.get(key).apply()` so Paginator recomputes which subset of the
+// currently-visible (unfiltered) rows falls in the active page.
+//
+// Phase 2 "Load older" is layered on via the `loadMore` config: Paginator
+// renders a button below the nav that triggers the configured fetcher,
+// appends the returned HTML fragment to the tbody, and re-runs `apply()`.
+
+var PAGINATOR_SIZE_OPTIONS = [25, 50, 100, 0]; // 0 = All
+var PAGINATOR_DEFAULT_SIZE = 25;
+
+var Paginator = (function () {
+    var instances = {};
+
+    function storageKey(key) {
+        return 'eiou_paginator_size_' + key;
+    }
+
+    function loadSize(key) {
+        try {
+            var v = safeStorageGet(storageKey(key));
+            if (v === null || v === undefined || v === '') return PAGINATOR_DEFAULT_SIZE;
+            var n = parseInt(v, 10);
+            if (isNaN(n)) return PAGINATOR_DEFAULT_SIZE;
+            // Sanity-clamp: reject sizes not in our option set to avoid an
+            // orphaned localStorage value surviving a future option change.
+            for (var i = 0; i < PAGINATOR_SIZE_OPTIONS.length; i++) {
+                if (PAGINATOR_SIZE_OPTIONS[i] === n) return n;
+            }
+            return PAGINATOR_DEFAULT_SIZE;
+        } catch (e) {
+            return PAGINATOR_DEFAULT_SIZE;
+        }
+    }
+
+    function saveSize(key, size) {
+        try { safeStorageSet(storageKey(key), String(size)); } catch (e) {}
+    }
+
+    function create(config) {
+        // config: { key, tbody, rowSelector, container, loadMore?: { button, onClick } }
+        if (!config || !config.tbody || !config.container) return null;
+        var state = {
+            key: config.key,
+            tbody: config.tbody,
+            rowSelector: config.rowSelector || 'tr',
+            container: config.container,
+            page: 0,
+            size: loadSize(config.key),
+            loadMoreFn: config.loadMore && config.loadMore.onClick ? config.loadMore.onClick : null,
+            // Per-table button label — contacts are alphabetically
+            // sorted, so "Load older" is wrong for them. Transactions
+            // and payment requests default to "Load older" because
+            // they're reverse-chronological. Callers can override.
+            loadMoreLabel: (config.loadMore && config.loadMore.label) ? config.loadMore.label : 'Load older',
+            loadMoreExhausted: false,
+            loadMoreBusy: false
+        };
+
+        function getRows() {
+            return state.tbody.querySelectorAll(state.rowSelector);
+        }
+
+        function getVisibleRows() {
+            // "Visible" here means "not filtered out" — i.e. the rows the
+            // paginator is allowed to page through. Paginator's own
+            // `.paginator-hidden` is ignored because we're about to
+            // recompute it.
+            var rows = getRows();
+            var out = [];
+            for (var i = 0; i < rows.length; i++) {
+                if (!rows[i].classList.contains('filter-hidden')) {
+                    out.push(rows[i]);
+                }
+            }
+            return out;
+        }
+
+        function pageCount(visibleLen) {
+            if (state.size === 0) return 1;
+            if (visibleLen <= 0) return 1;
+            return Math.ceil(visibleLen / state.size);
+        }
+
+        function apply() {
+            var visible = getVisibleRows();
+            var pages = pageCount(visible.length);
+            if (state.page >= pages) state.page = pages - 1;
+            if (state.page < 0) state.page = 0;
+
+            if (state.size === 0) {
+                // "All" — every visible row stays visible
+                for (var i = 0; i < visible.length; i++) {
+                    visible[i].classList.remove('paginator-hidden');
+                }
+            } else {
+                var start = state.page * state.size;
+                var end = start + state.size;
+                for (var j = 0; j < visible.length; j++) {
+                    if (j >= start && j < end) {
+                        visible[j].classList.remove('paginator-hidden');
+                    } else {
+                        visible[j].classList.add('paginator-hidden');
+                    }
+                }
+            }
+
+            renderControls(visible.length, pages);
+        }
+
+        function renderControls(visibleLen, pages) {
+            var sizeSelectId = 'paginator-size-' + state.key;
+            var html = '';
+            html += '<div class="paginator-row">';
+
+            // Page size selector
+            html += '<label class="paginator-size-label" for="' + sizeSelectId + '">';
+            html += 'Rows:&nbsp;';
+            html += '<select id="' + sizeSelectId + '" class="paginator-size-select">';
+            for (var i = 0; i < PAGINATOR_SIZE_OPTIONS.length; i++) {
+                var opt = PAGINATOR_SIZE_OPTIONS[i];
+                var label = opt === 0 ? 'All' : String(opt);
+                var sel = (opt === state.size) ? ' selected' : '';
+                html += '<option value="' + opt + '"' + sel + '>' + label + '</option>';
+            }
+            html += '</select>';
+            html += '</label>';
+
+            // Range summary
+            var rangeText;
+            if (visibleLen === 0) {
+                rangeText = '0 rows';
+            } else if (state.size === 0) {
+                rangeText = 'All ' + visibleLen + ' rows';
+            } else {
+                var from = state.page * state.size + 1;
+                var to = Math.min(from + state.size - 1, visibleLen);
+                rangeText = from + '–' + to + ' of ' + visibleLen;
+            }
+            html += '<span class="paginator-range">' + rangeText + '</span>';
+
+            // Page navigation (only when more than one page)
+            if (pages > 1) {
+                html += '<span class="paginator-nav">';
+                html += '<button type="button" class="paginator-btn paginator-prev" ' + (state.page === 0 ? 'disabled' : '') + ' data-paginator-action="prev" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>';
+                html += '<span class="paginator-page-indicator">Page ' + (state.page + 1) + ' / ' + pages + '</span>';
+                html += '<button type="button" class="paginator-btn paginator-next" ' + (state.page + 1 >= pages ? 'disabled' : '') + ' data-paginator-action="next" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Next page"><i class="fas fa-chevron-right"></i></button>';
+                html += '</span>';
+            }
+
+            // Load-older button (Phase 2)
+            if (state.loadMoreFn && !state.loadMoreExhausted) {
+                var busyIcon = state.loadMoreBusy ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt';
+                var busyLabel = state.loadMoreBusy ? 'Loading…' : state.loadMoreLabel;
+                html += '<button type="button" class="paginator-btn paginator-load-more" ' + (state.loadMoreBusy ? 'disabled' : '') + ' data-paginator-action="load-more" data-paginator-key="' + escapeHtml(state.key) + '"><i class="fas ' + busyIcon + '"></i> ' + escapeHtml(busyLabel) + '</button>';
+            }
+
+            html += '</div>';
+            state.container.innerHTML = html;
+        }
+
+        function goTo(page) {
+            state.page = page;
+            apply();
+        }
+
+        function setSize(size) {
+            state.size = size;
+            state.page = 0;
+            saveSize(state.key, size);
+            apply();
+        }
+
+        function appendFragment(html) {
+            // Parse and append — use a template so <tr> fragments are allowed
+            // outside of <tbody>'s normal context.
+            var template = document.createElement('template');
+            template.innerHTML = html.trim();
+            while (template.content.firstChild) {
+                state.tbody.appendChild(template.content.firstChild);
+            }
+        }
+
+        function setLoadMoreExhausted(exhausted) {
+            state.loadMoreExhausted = !!exhausted;
+        }
+
+        function setLoadMoreBusy(busy) {
+            state.loadMoreBusy = !!busy;
+            apply();
+        }
+
+        function getLoadedCount() {
+            return getRows().length;
+        }
+
+        var api = {
+            apply: apply,
+            goTo: goTo,
+            setSize: setSize,
+            appendFragment: appendFragment,
+            setLoadMoreExhausted: setLoadMoreExhausted,
+            setLoadMoreBusy: setLoadMoreBusy,
+            getLoadedCount: getLoadedCount,
+            state: state
+        };
+        instances[config.key] = api;
+        apply();
+        return api;
+    }
+
+    function get(key) {
+        return instances[key] || null;
+    }
+
+    // Delegated click/change handlers — bound once at DOMContentLoaded.
+    function handleClick(event) {
+        var el = event.target;
+        while (el && el !== document) {
+            var action = el.getAttribute && el.getAttribute('data-paginator-action');
+            if (action) {
+                var key = el.getAttribute('data-paginator-key');
+                var inst = instances[key];
+                if (!inst) return;
+                event.preventDefault();
+                if (action === 'prev') {
+                    inst.goTo(inst.state.page - 1);
+                } else if (action === 'next') {
+                    inst.goTo(inst.state.page + 1);
+                } else if (action === 'load-more') {
+                    if (inst.state.loadMoreFn && !inst.state.loadMoreBusy) {
+                        inst.setLoadMoreBusy(true);
+                        inst.state.loadMoreFn(inst);
+                    }
+                }
+                return;
+            }
+            el = el.parentNode;
+        }
+    }
+
+    function handleChange(event) {
+        var el = event.target;
+        if (!el || !el.classList || !el.classList.contains('paginator-size-select')) return;
+        var match = el.id.match(/^paginator-size-(.+)$/);
+        if (!match) return;
+        var inst = instances[match[1]];
+        if (!inst) return;
+        inst.setSize(parseInt(el.value, 10));
+    }
+
+    document.addEventListener('click', handleClick);
+    document.addEventListener('change', handleChange);
+
+    return {
+        create: create,
+        get: get
+    };
+})();
 
 // ============================================================================
 // Tab Navigation
@@ -663,6 +968,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Section-intros always ship closed (HTML has no `open` attribute). Users
+// expand on demand via the native <details>/<summary> toggle — works with
+// or without JS, any viewport.
+
 // Edit contact modal functions
 
 /**
@@ -704,15 +1013,18 @@ function openEditContactModal(address, name, fee, credit, currency) {
  * @returns {void}
  */
 function closeEditContactModal() {
-    document.getElementById('editContactModal').style.display = 'none';
+    var el = document.getElementById('editContactModal');
+    if (el) el.style.display = 'none';
 }
 
 function openAddContactModal() {
-    document.getElementById('add-contact-modal').style.display = 'flex';
+    var el = document.getElementById('add-contact-modal');
+    if (el) el.style.display = 'flex';
 }
 
 function closeAddContactModal() {
-    document.getElementById('add-contact-modal').style.display = 'none';
+    var el = document.getElementById('add-contact-modal');
+    if (el) el.style.display = 'none';
 }
 
 /**
@@ -805,11 +1117,23 @@ function renderTransactionModal(tx) {
     // Build HTML content
     var html = '';
 
-    // Header with amount
-    var headerClass = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
+    // Header with amount. Contact-request transactions carry amount=0 by
+    // definition (they only exist to establish a bilateral link) — showing
+    // "+0 USD" with a green/red sent/received tint misrepresents them as
+    // money movements. For contact reqs, promote the direction (Sent /
+    // Received with arrow icon) into the header's hero slot instead of a
+    // muted em-dash above a duplicate direction line.
+    var isContactReq = tx.tx_type === 'contact';
+    var headerClass = isContactReq
+        ? 'tx-modal-header-neutral'
+        : (tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received');
     html += '<div class="tx-modal-header ' + headerClass + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
-    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    if (isContactReq) {
+        html += '<div class="tx-modal-amount tx-modal-amount-placeholder"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    } else {
+        html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
+        html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    }
     html += '</div>';
 
     // Status, type, and role badges
@@ -830,17 +1154,31 @@ function renderTransactionModal(tx) {
     // Details section
     html += '<div class="tx-detail-section">';
 
-    // Counterparty (To/From)
+    // Counterparty (To/From) — clickable when the counterparty resolves to
+    // one of our contacts, so the user can jump straight from a transaction
+    // detail to that contact's modal.
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-    html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + escapeHtml(tx.counterparty_name) + '</strong><br>' : '') + '<span class="tx-modal-mono">' + escapeHtml(tx.counterparty_address) + '</span></div>';
+    var cpValueHtml = '';
+    if (tx.counterparty_name) {
+        cpValueHtml += '<strong>' + escapeHtml(tx.counterparty_name) + '</strong><br>';
+    }
+    cpValueHtml += '<span class="tx-modal-mono">' + escapeHtml(tx.counterparty_address) + '</span>';
+    if (tx.counterparty_contact_id) {
+        html += '<div class="tx-detail-value tx-detail-value-link cursor-pointer"'
+            + ' data-action="jumpToContactFromTxModal"'
+            + ' data-contact-id="' + escapeHtml(tx.counterparty_contact_id) + '"'
+            + ' title="Open contact">' + cpValueHtml + '</div>';
+    } else {
+        html += '<div class="tx-detail-value">' + cpValueHtml + '</div>';
+    }
     html += '</div>';
 
     // Description (moved up, right after To/From)
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description)) + '</div>';
         html += '</div>';
     }
 
@@ -855,6 +1193,22 @@ function renderTransactionModal(tx) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Transaction ID</div>';
         html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.txid) + '</div>';
+        html += '</div>';
+    }
+
+    // Previous Transaction — the immediately prior tx on the same chain
+    // with this counterparty. Clickable: openTransactionModalByTxid
+    // has a fast in-memory path and an AJAX fallback so chains can be
+    // traversed even when the prior tx isn't in the current view window.
+    if (tx.previous_txid) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Previous Tx</div>';
+        html += '<div class="tx-detail-value tx-modal-mono-sm tx-detail-value-link cursor-pointer"'
+             +  ' data-action="openTransactionModalByTxid"'
+             +  ' data-txid="' + escapeHtml(tx.previous_txid) + '"'
+             +  ' title="Open previous transaction">'
+             +  escapeHtml(tx.previous_txid)
+             +  '</div>';
         html += '</div>';
     }
 
@@ -875,10 +1229,24 @@ function renderTransactionModal(tx) {
         html += '<i class="fas fa-network-wired"></i> P2P Transaction Details';
         html += '</div>';
 
-        // End Recipient
+        // End Recipient — clickable when we recognise them as a contact
+        // (typical case: we P2P'd through someone else because we had no
+        // direct credit line with the end recipient).
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">End Recipient</div>';
-        html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(tx.p2p_destination) + '</div>';
+        var endValueHtml = '';
+        if (tx.p2p_destination_contact_name) {
+            endValueHtml += '<strong>' + escapeHtml(tx.p2p_destination_contact_name) + '</strong><br>';
+        }
+        endValueHtml += '<span class="tx-modal-mono">' + escapeHtml(tx.p2p_destination) + '</span>';
+        if (tx.p2p_destination_contact_id) {
+            html += '<div class="tx-detail-value tx-detail-value-link cursor-pointer"'
+                + ' data-action="jumpToContactFromTxModal"'
+                + ' data-contact-id="' + escapeHtml(tx.p2p_destination_contact_id) + '"'
+                + ' title="Open contact">' + endValueHtml + '</div>';
+        } else {
+            html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(tx.p2p_destination) + '</div>';
+        }
         html += '</div>';
 
         // Amount to Recipient
@@ -889,11 +1257,23 @@ function renderTransactionModal(tx) {
             html += '</div>';
         }
 
-        // Transaction Fee
+        // Routing Fee — always show when we can compute it (total amount −
+        // amount forwarded to the end recipient), so users see explicitly
+        // what the relay charged rather than having to subtract in their head.
+        var routingFee = null;
         if (tx.p2p_fee) {
+            routingFee = parseFloat(tx.p2p_fee);
+        } else if (tx.amount != null && tx.p2p_amount != null) {
+            var totalAmt = parseFloat(tx.amount);
+            var recipAmt = parseFloat(tx.p2p_amount);
+            if (!isNaN(totalAmt) && !isNaN(recipAmt)) {
+                routingFee = Math.abs(totalAmt - recipAmt);
+            }
+        }
+        if (routingFee !== null && !isNaN(routingFee)) {
             html += '<div class="tx-detail-row">';
-            html += '<div class="tx-detail-label">Transaction Fee</div>';
-            html += '<div class="tx-detail-value">' + parseFloat(tx.p2p_fee).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
+            html += '<div class="tx-detail-label">Routing Fee</div>';
+            html += '<div class="tx-detail-value">' + routingFee.toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -917,6 +1297,9 @@ function closeTransactionModal() {
     var modal = document.getElementById('transactionModal');
     if (modal) {
         modal.style.display = 'none';
+        // Clear the stack marker set when the tx modal was opened from
+        // within another modal (e.g. DLQ detail → tx details).
+        modal.classList.remove('modal-stack-top');
     }
 }
 
@@ -1006,17 +1389,65 @@ window.onclick = function(event) {
     if (event.target === whatsNewModal) {
         closeWhatsNewModal();
     }
+
+    var resetModal = document.getElementById('settingsResetToDefaultsModal');
+    if (resetModal && event.target === resetModal) {
+        resetModal.classList.add('d-none');
+    }
+
+    // Pending-contact modals are rendered one per request (id
+    // "pending-contact-modal-<index>"). Any click on the backdrop of any
+    // of them closes that specific modal.
+    if (event.target && event.target.matches && event.target.matches('[data-pending-contact-modal]')) {
+        event.target.classList.add('d-none');
+    }
+
+    // API-keys modals (all dispatch through the apiKeys IIFE so state
+    // gets cleaned up correctly; e.g. pendingEdit / pendingDelete are reset)
+    if (window.apiKeys) {
+        var ak = window.apiKeys;
+        if (event.target.id === 'apiKeysVerifyModal')      ak.closeVerifyModal();
+        else if (event.target.id === 'apiKeysCreateModal')     ak.closeCreateModal();
+        else if (event.target.id === 'apiKeysRevealModal')     ak.closeRevealModal();
+        else if (event.target.id === 'apiKeysDetailModal')     ak.closeDetailModal();
+        else if (event.target.id === 'apiKeysDeleteModal')     ak.closeDeleteModal();
+        else if (event.target.id === 'apiKeysDisableAllModal') ak.closeDisableAllModal();
+        else if (event.target.id === 'apiKeysDeleteAllModal')  ak.closeDeleteAllModal();
+    }
 }
 
 // Close modal with Escape key (Tor Browser compatible - uses keyCode fallback)
 document.addEventListener('keydown', function(event) {
     var isEscape = event.key === 'Escape' || event.keyCode === 27;
-    if (isEscape) {
-        closeEditContactModal();
-        closeTransactionModal();
+    if (!isEscape) return;
+    // Stacked-modal case: if a modal is currently flagged as stacked on
+    // top of another (e.g. contact modal opened from tx modal, or tx
+    // modal opened from DLQ modal via its Transaction ID link), Escape
+    // should dismiss only the top modal so the user returns to the
+    // underlying modal they were reading.
+    var contactModalEl = document.getElementById('contactModal');
+    if (contactModalEl
+        && contactModalEl.classList.contains('modal-stack-top')
+        && contactModalEl.style.display !== 'none') {
         closeContactModal();
-        closeAddContactModal();
-        closeWhatsNewModal();
+        return;
+    }
+    var txModalEl = document.getElementById('transactionModal');
+    if (txModalEl
+        && txModalEl.classList.contains('modal-stack-top')
+        && txModalEl.style.display !== 'none') {
+        closeTransactionModal();
+        return;
+    }
+    closeEditContactModal();
+    closeTransactionModal();
+    closeContactModal();
+    closeAddContactModal();
+    closeWhatsNewModal();
+    // Close any open pending-contact modal on Escape.
+    var openPending = document.querySelectorAll('[data-pending-contact-modal]:not(.d-none)');
+    for (var pi = 0; pi < openPending.length; pi++) {
+        openPending[pi].classList.add('d-none');
     }
 });
 
@@ -1093,6 +1524,299 @@ function showToast(title, message, type) {
         }
     }, 5000);
 }
+
+// ============================================================================
+// Event-toast system (extended showToast)
+//
+// Richer sibling of showToast() used by live event notifications. Keeps the
+// existing showToast() signature unchanged for all legacy callers (clipboard,
+// one-shot notices, etc.) — those don't need the extra machinery and 5s is
+// right for them.
+//
+// Features layered here:
+//   - pause-on-hover (timer freezes while mouse is over the toast)
+//   - click body to expand → shows `details`, becomes sticky (no auto-dismiss)
+//   - explicit × dismiss + optional action button ("View")
+//   - dedupKey: re-firing with same key updates the live toast in place
+//     instead of stacking (e.g. tx pending→sent→completed = 1 toast)
+//   - aggregation: ≥3 fires of same `kind` within AGGREGATE_WINDOW_MS collapse
+//     into a single "N new X" toast whose expanded state lists them
+//   - modal suppression: if any `.modal` resolves to a visible computed
+//     display (this app toggles via inline style / `d-none`, not `.show`),
+//     fires are queued and flushed as an aggregate when the modal closes
+//   - duration: user-preference in ms; 0 = until-dismissed
+// ============================================================================
+
+var EVENT_TOAST_DEFAULT_DURATION_MS = 10000; // overridden by user setting
+var AGGREGATE_WINDOW_MS = 3000;              // recent-fires window for aggregation
+var AGGREGATE_THRESHOLD = 3;                 // N same-kind fires → one aggregate
+var eventToastQueue = [];                    // holds events while a modal is open
+var eventToastRecentByKind = {};             // kind → [{ts, event}, ...]
+var eventToastsByDedupKey = {};              // dedupKey → live toast element
+
+function isBlockingModalOpen() {
+    // "Blocking" = anything that'd make a toast steal focus or overlap.
+    // This app's `.modal` CSS defaults to `display: flex`; visibility is
+    // toggled via inline `style.display` OR the `d-none` class, so the
+    // Bootstrap-style `.modal.show` check alone never matches here. Walk
+    // every `.modal` and ask the engine whether it resolves to a visible
+    // display — this captures both hiding patterns without hard-coding them.
+    var modals = document.querySelectorAll('.modal');
+    for (var i = 0; i < modals.length; i++) {
+        var disp = window.getComputedStyle(modals[i]).display;
+        if (disp && disp !== 'none') return true;
+    }
+    // Defensive: framework patterns that may appear in grafted-in partials.
+    return !!(
+        document.querySelector('[role="dialog"][aria-hidden="false"]') ||
+        document.querySelector('.modal-overlay.is-visible') ||
+        document.querySelector('.modal-overlay.active')
+    );
+}
+
+function kindIcon(kind) {
+    var map = {
+        payment_request: 'fa-file-invoice-dollar',
+        contact_request: 'fa-user-plus',
+        tx_received: 'fa-arrow-down',
+        tx_status: 'fa-exchange-alt',
+        dlq: 'fa-exclamation-triangle',
+    };
+    return map[kind] || 'fa-info-circle';
+}
+
+function kindType(kind) {
+    // Maps event kind → base toast colour variant (uses existing CSS).
+    var map = {
+        payment_request: 'info',
+        contact_request: 'info',
+        tx_received: 'success',
+        tx_status: 'info',
+        dlq: 'error',
+    };
+    return map[kind] || 'info';
+}
+
+function removeEventToast(toast) {
+    if (!toast || !toast.parentElement) return;
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100px)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(function() {
+        if (toast.parentElement) {
+            toast.parentElement.removeChild(toast);
+        }
+    }, 300);
+    // Drop any dedup-key pointer to this toast so a later fire re-creates.
+    var key = toast.getAttribute('data-dedup-key');
+    if (key && eventToastsByDedupKey[key] === toast) {
+        delete eventToastsByDedupKey[key];
+    }
+}
+
+function armToastAutoDismiss(toast, durationMs) {
+    // 0 = persist until user dismisses. Also applies while the toast is in
+    // "expanded/sticky" mode (user clicked the body).
+    if (!durationMs || durationMs <= 0) return;
+    if (toast._dismissTimer) clearTimeout(toast._dismissTimer);
+    toast._dismissTimer = setTimeout(function() {
+        removeEventToast(toast);
+    }, durationMs);
+}
+
+function attachHoverPause(toast, durationMs) {
+    if (!durationMs || durationMs <= 0) return;
+    toast.addEventListener('mouseenter', function() {
+        if (toast._dismissTimer) {
+            clearTimeout(toast._dismissTimer);
+            toast._dismissTimer = null;
+        }
+    });
+    toast.addEventListener('mouseleave', function() {
+        // Don't re-arm if user already expanded the toast (sticky mode).
+        if (toast.classList.contains('toast-expanded')) return;
+        armToastAutoDismiss(toast, durationMs);
+    });
+}
+
+function renderEventDetails(details) {
+    // Best-effort rendering: key/value pairs. Values are escaped; keys are
+    // humanized to Title Case from snake_case.
+    if (!details || typeof details !== 'object') return '';
+    var html = '<dl class="toast-details">';
+    for (var k in details) {
+        if (!Object.prototype.hasOwnProperty.call(details, k)) continue;
+        if (details[k] === null || details[k] === undefined || details[k] === '') continue;
+        var label = k.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        html += '<dt>' + escapeHtml(label) + '</dt>';
+        html += '<dd>' + escapeHtml(String(details[k])) + '</dd>';
+    }
+    html += '</dl>';
+    return html;
+}
+
+function showEventToast(opts) {
+    opts = opts || {};
+    // If a modal is blocking, queue and let the flush-on-close path pick it up.
+    if (isBlockingModalOpen()) {
+        eventToastQueue.push(opts);
+        return null;
+    }
+    // Safety net for modal close paths that don't fire `click` or `keydown:Escape`
+    // (programmatic close, navigation that doesn't redirect, code paths we
+    // didn't hook below) — drain any queue built up during the modal session
+    // BEFORE rendering the current event so earlier events replay in order.
+    // flushEventToastQueue splices the buffer to 0 on entry, so the recursive
+    // showEventToast calls it makes can't trigger this branch again.
+    if (eventToastQueue.length > 0) {
+        flushEventToastQueue();
+    }
+
+    // Aggregation check: if ≥AGGREGATE_THRESHOLD same-kind fires happened in
+    // the last AGGREGATE_WINDOW_MS, fold this + recent into one toast.
+    var kind = opts.kind || 'info';
+    var now = Date.now();
+    var recent = eventToastRecentByKind[kind] || [];
+    recent = recent.filter(function(e) { return now - e.ts <= AGGREGATE_WINDOW_MS; });
+    recent.push({ ts: now, event: opts });
+    eventToastRecentByKind[kind] = recent;
+    if (recent.length >= AGGREGATE_THRESHOLD) {
+        // Pop any individual toasts fired in this window so we don't
+        // duplicate. The aggregate toast supersedes them.
+        for (var i = 0; i < recent.length - 1; i++) {
+            var prevKey = recent[i].event && recent[i].event.dedupKey;
+            if (prevKey && eventToastsByDedupKey[prevKey]) {
+                removeEventToast(eventToastsByDedupKey[prevKey]);
+            }
+        }
+        var aggEvents = recent.map(function(e) { return e.event; });
+        // Clear the buffer so the next fire starts a fresh window.
+        eventToastRecentByKind[kind] = [];
+        return showEventToast({
+            kind: kind,
+            title: aggEvents.length + ' new ' + (kind === 'payment_request' ? 'payment requests' :
+                   kind === 'contact_request' ? 'contact requests' :
+                   kind === 'tx_received' ? 'received transactions' :
+                   kind === 'tx_status' ? 'transaction updates' :
+                   kind === 'dlq' ? 'delivery failures' : 'events'),
+            message: 'Click to expand.',
+            details: { items: aggEvents.map(function(e) { return e.title + (e.message ? ' — ' + e.message : ''); }).join('\n') },
+            dedupKey: 'agg:' + kind + ':' + now,
+            duration: opts.duration,
+            action: null,
+        });
+    }
+
+    // Dedup: if we already have a live toast for this key, mutate instead of
+    // stacking. Tx status churn (pending → sent → completed) flows through here.
+    if (opts.dedupKey && eventToastsByDedupKey[opts.dedupKey]) {
+        var live = eventToastsByDedupKey[opts.dedupKey];
+        var titleEl = live.querySelector('.toast-title');
+        var msgEl = live.querySelector('.toast-message');
+        if (titleEl) titleEl.textContent = opts.title || '';
+        if (msgEl) msgEl.textContent = opts.message || '';
+        // Refresh timer on update so user sees the latest long enough.
+        armToastAutoDismiss(live, opts.duration != null ? opts.duration : EVENT_TOAST_DEFAULT_DURATION_MS);
+        return live;
+    }
+
+    var container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    var type = kindType(kind);
+    var icon = kindIcon(kind);
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + type + ' toast-event';
+    if (opts.dedupKey) toast.setAttribute('data-dedup-key', opts.dedupKey);
+
+    var bodyHtml = '<i class="fas ' + icon + ' toast-icon"></i>' +
+        '<div class="toast-content">' +
+        '<div class="toast-title">' + escapeHtml(opts.title || '') + '</div>' +
+        '<div class="toast-message">' + escapeHtml(opts.message || '') + '</div>' +
+        '<div class="toast-details-wrap" style="display:none">' + renderEventDetails(opts.details) + '</div>' +
+        '</div>';
+    if (opts.action && opts.action.label) {
+        bodyHtml += '<button class="btn btn-sm btn-primary toast-action" type="button">' +
+            escapeHtml(opts.action.label) + '</button>';
+    }
+    bodyHtml += '<button class="toast-close" type="button" aria-label="Dismiss">&times;</button>';
+    toast.innerHTML = bodyHtml;
+
+    // Wire up handlers — close, action, click-to-expand.
+    toast.querySelector('.toast-close').addEventListener('click', function(e) {
+        e.stopPropagation();
+        removeEventToast(toast);
+    });
+    var actionBtn = toast.querySelector('.toast-action');
+    if (actionBtn && opts.action && typeof opts.action.onClick === 'function') {
+        actionBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            try { opts.action.onClick(); } catch (err) { /* swallow */ }
+            removeEventToast(toast);
+        });
+    }
+    toast.addEventListener('click', function() {
+        // Click body → expand + make sticky.
+        var wrap = toast.querySelector('.toast-details-wrap');
+        if (!wrap) return;
+        var alreadyExpanded = toast.classList.contains('toast-expanded');
+        if (alreadyExpanded) return;
+        toast.classList.add('toast-expanded');
+        wrap.style.display = 'block';
+        if (toast._dismissTimer) {
+            clearTimeout(toast._dismissTimer);
+            toast._dismissTimer = null;
+        }
+    });
+
+    container.appendChild(toast);
+    if (opts.dedupKey) eventToastsByDedupKey[opts.dedupKey] = toast;
+
+    var duration = opts.duration != null ? opts.duration : EVENT_TOAST_DEFAULT_DURATION_MS;
+    armToastAutoDismiss(toast, duration);
+    attachHoverPause(toast, duration);
+    return toast;
+}
+
+function flushEventToastQueue() {
+    // Called when a blocking modal closes — batch-flushes as a single
+    // aggregate to avoid a toast storm.
+    if (eventToastQueue.length === 0) return;
+    var batch = eventToastQueue.splice(0, eventToastQueue.length);
+    if (batch.length === 1) {
+        showEventToast(batch[0]);
+        return;
+    }
+    showEventToast({
+        kind: 'info',
+        title: batch.length + ' events while you were busy',
+        message: 'Click to expand.',
+        details: { items: batch.map(function(e) { return e.title; }).join('\n') },
+        dedupKey: 'flush:' + Date.now(),
+    });
+}
+// Watch for blocking modals closing so we can flush the queue. Listens on
+// BOTH click and `keydown:Escape` — a user who dismisses a modal via the
+// Escape key (handled by the document-level keydown listener further up
+// the file) would otherwise see their queued toasts sit buffered until
+// their next mouse click, since the keydown path never fires a click event.
+function checkFlushOnInteraction() {
+    // 50ms lets the actual modal-close handler (click dispatch / keydown
+    // close) run and update the DOM first, so isBlockingModalOpen() sees
+    // the post-close state rather than racing it.
+    setTimeout(function() {
+        if (!isBlockingModalOpen()) flushEventToastQueue();
+    }, 50);
+}
+document.addEventListener('click', checkFlushOnInteraction);
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.keyCode === 27) checkFlushOnInteraction();
+});
 
 /**
  * Initializes the transaction toast notification on form submission.
@@ -1612,6 +2336,37 @@ function initializeCurrencyAcceptHandlers() {
                     return;
                 }
 
+                // Defaults guard — if any currency is at both the default
+                // fee AND default credit, warn before accepting. User's
+                // defaults come from data attributes on the accept-all form
+                // (emitted by PHP from user settings). Skipped if all
+                // currencies were customized.
+                var defaultFee = form.getAttribute('data-default-fee');
+                var defaultCredit = form.getAttribute('data-default-credit');
+                if (defaultFee !== null && defaultCredit !== null) {
+                    var untouched = [];
+                    for (var m = 0; m < currencies.length; m++) {
+                        // Number comparison — the rendered value may have
+                        // trailing zeros etc. that string-compare would miss.
+                        if (parseFloat(currencies[m].fee) === parseFloat(defaultFee)
+                            && parseFloat(currencies[m].credit) === parseFloat(defaultCredit)) {
+                            untouched.push(currencies[m].currency);
+                        }
+                    }
+                    if (untouched.length > 0 && !form.dataset.guardConfirmed) {
+                        e.preventDefault();
+                        var msg = untouched.length === currencies.length
+                            ? 'You\'re accepting all ' + currencies.length + ' currencies with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
+                            : 'The following currencies are at your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
+                        if (!confirm(msg)) return;
+                        // One-shot bypass — set a flag, re-submit, skip the
+                        // guard on the second pass.
+                        form.dataset.guardConfirmed = '1';
+                        form.submit();
+                        return;
+                    }
+                }
+
                 // Set the JSON data into the hidden field
                 form.querySelector('.accept-all-currencies-data').value = JSON.stringify(currencies);
 
@@ -1860,7 +2615,6 @@ function scrollQuickActions(direction) {
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
 var currentContactPubkeyHash = null;
-var contactTransactionData = [];
 var currentContactCurrencies = [];
 var currentContactBalances = {};
 
@@ -1927,10 +2681,10 @@ function filterContacts() {
         var matches = matchesSearch && matchesStatus && matchesChain && matchesOnline;
 
         if (matches) {
-            card.style.display = '';
+            card.classList.remove('filter-hidden');
             visibleCount++;
         } else {
-            card.style.display = 'none';
+            card.classList.add('filter-hidden');
         }
     }
 
@@ -1943,6 +2697,10 @@ function filterContacts() {
             searchStatus.style.display = 'none';
         }
     }
+
+    // Re-cut paginator pages against the newly filtered row set.
+    var contactsPaginator = Paginator.get('contacts');
+    if (contactsPaginator) contactsPaginator.apply();
 }
 
 /**
@@ -2015,6 +2773,8 @@ function sortContacts(column) {
     }
 
     updateSortIndicators();
+    var contactsPaginator = Paginator.get('contacts');
+    if (contactsPaginator) contactsPaginator.apply();
 }
 
 /**
@@ -2116,7 +2876,23 @@ function filterTransactions() {
             var name = item.getAttribute('data-tx-name') || '';
             var desc = item.getAttribute('data-tx-desc') || '';
             var addr = item.getAttribute('data-tx-address') || '';
-            if (name.indexOf(term) === -1 && desc.indexOf(term) === -1 && addr.indexOf(term) === -1) {
+            // P2P endpoint — matches the chain's ultimate counterparty
+            // even when the direct neighbour is a relay. Without these,
+            // searching "carol" wouldn't match a sent-P2P tx routed
+            // through Bob to Carol.
+            var endName = item.getAttribute('data-tx-endpoint-name') || '';
+            var endAddr = item.getAttribute('data-tx-endpoint-address') || '';
+            // txid is lowercased on the attribute for case-insensitive
+            // paste-a-hash lookup. Stored on data-txid (not a dedicated
+            // search attr) because the row already carries it for the
+            // detail-modal / DLQ cross-link paths.
+            var txidAttr = (item.getAttribute('data-txid') || '').toLowerCase();
+            if (name.indexOf(term) === -1
+                && desc.indexOf(term) === -1
+                && addr.indexOf(term) === -1
+                && endName.indexOf(term) === -1
+                && endAddr.indexOf(term) === -1
+                && txidAttr.indexOf(term) === -1) {
                 matches = false;
             }
         }
@@ -2131,10 +2907,10 @@ function filterTransactions() {
         }
 
         if (matches) {
-            item.style.display = '';
+            item.classList.remove('filter-hidden');
             visible++;
         } else {
-            item.style.display = 'none';
+            item.classList.add('filter-hidden');
         }
     }
 
@@ -2146,6 +2922,9 @@ function filterTransactions() {
             searchStatus.style.display = 'none';
         }
     }
+
+    var txPaginator = Paginator.get('transactions');
+    if (txPaginator) txPaginator.apply();
 }
 
 // Independent sort state for the Recent Transactions table.
@@ -2203,6 +2982,8 @@ function sortTransactions(column) {
     }
 
     updateTransactionsSortIndicators();
+    var txPaginator = Paginator.get('transactions');
+    if (txPaginator) txPaginator.apply();
 }
 
 function updateTransactionsSortIndicators() {
@@ -2291,6 +3072,8 @@ function sortPaymentRequests(column) {
     }
 
     updatePrSortIndicators();
+    var prPaginator = Paginator.get('payment-requests');
+    if (prPaginator) prPaginator.apply();
 }
 
 function updatePrSortIndicators() {
@@ -2335,8 +3118,222 @@ function filterPaymentRequests() {
         if (term && (row.getAttribute('data-pr-search') || '').indexOf(term) === -1) show = false;
         if (show && statusFilter && (row.getAttribute('data-status') || '') !== statusFilter) show = false;
         if (show && dirFilter && (row.getAttribute('data-direction') || '') !== dirFilter) show = false;
-        row.style.display = show ? '' : 'none';
+        if (show) {
+            row.classList.remove('filter-hidden');
+        } else {
+            row.classList.add('filter-hidden');
+        }
     }
+
+    var prPaginator = Paginator.get('payment-requests');
+    if (prPaginator) prPaginator.apply();
+}
+
+// ============================================================================
+// "Search entire database" — server-side search for Recent Transactions and
+// Payment Requests history. The local filter functions above only inspect
+// already-rendered rows; these functions bypass them and ask the backend to
+// LIKE across the full table. Results replace the tbody contents and switch
+// the paginator into search mode (load-older suspended, banner visible).
+// ============================================================================
+
+function searchTransactionsDatabase() {
+    runDatabaseSearch({
+        action: 'searchTransactions',
+        paginatorKey: 'transactions',
+        inputId: 'tx-search-input',
+        filters: {
+            direction: 'tx-filter-direction',
+            tx_type:   'tx-filter-type',
+            status:    'tx-filter-status'
+        },
+        tbodyId: 'transaction-list',
+        bannerId: 'tx-search-results-banner',
+        bannerTextId: 'tx-search-results-text',
+        loadMoreLabel: 'Load older',
+        updateTransactionData: true
+    });
+}
+
+function searchPaymentRequestsDatabase() {
+    runDatabaseSearch({
+        action: 'searchPaymentRequests',
+        paginatorKey: 'payment-requests',
+        inputId: 'pr-search-input',
+        filters: {
+            direction: 'pr-filter-direction',
+            status:    'pr-filter-status'
+        },
+        tbodyId: 'pr-history-list',
+        bannerId: 'pr-search-results-banner',
+        bannerTextId: 'pr-search-results-text',
+        loadMoreLabel: 'Load older',
+        updateTransactionData: false
+    });
+}
+
+/**
+ * Shared server-side search runner. Reads the search term + filter dims from
+ * the specified inputs, POSTs to the GUI action router, replaces the
+ * paginator's tbody content with the returned HTML rows, and pops a banner
+ * summarising the result count. The paginator is moved back to page 0 and
+ * its load-older button is suspended so it doesn't compete with the search
+ * result set.
+ */
+function runDatabaseSearch(cfg) {
+    var inputEl = document.getElementById(cfg.inputId);
+    if (!inputEl) return;
+    var term = (inputEl.value || '').trim();
+    if (term === '') {
+        showToast('Search', 'Enter a search term first.', 'info');
+        return;
+    }
+
+    var tbody = document.getElementById(cfg.tbodyId);
+    var banner = document.getElementById(cfg.bannerId);
+    var bannerText = document.getElementById(cfg.bannerTextId);
+    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+    if (banner && bannerText) {
+        banner.classList.remove('d-none');
+        bannerText.textContent = 'Searching the database for “' + term + '”…';
+    }
+
+    var formData = new FormData();
+    formData.append('action', cfg.action);
+    formData.append('q', term);
+    formData.append('csrf_token', csrfToken);
+    Object.keys(cfg.filters || {}).forEach(function(key) {
+        var filterEl = document.getElementById(cfg.filters[key]);
+        if (filterEl) formData.append(key, filterEl.value || '');
+    });
+
+    fetch(window.location.pathname, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    }).then(function(res) {
+        return res.json();
+    }).then(function(data) {
+        if (!data || !data.success) {
+            var msg = (data && data.message) || 'Search failed.';
+            if (banner && bannerText) {
+                bannerText.textContent = 'Search failed: ' + msg;
+            } else {
+                showToast('Search', msg, 'error');
+            }
+            return;
+        }
+
+        if (tbody) {
+            tbody.innerHTML = data.html || '';
+        }
+
+        // For the transactions table, replace the page-level transactionData
+        // array so openTransactionModal(index) on an appended row resolves
+        // correctly against the search result set.
+        if (cfg.updateTransactionData && Array.isArray(data.rows) && typeof transactionData !== 'undefined') {
+            transactionData.length = 0;
+            for (var i = 0; i < data.rows.length; i++) {
+                transactionData.push(data.rows[i]);
+            }
+        }
+
+        // Banner copy — "N matches for 'term'" + cap disclosure if
+        // the server clipped the result set so the user knows there
+        // might be more beyond what's shown.
+        var total = Number(data.total || 0);
+        var capNote = data.capped ? ' (capped at ' + (data.cap || 500) + ' — refine the term to narrow further)' : '';
+        if (bannerText) {
+            if (total === 0) {
+                bannerText.textContent = 'No matches for “' + term + '” in the database.';
+            } else {
+                bannerText.textContent = total + ' match' + (total === 1 ? '' : 'es') + ' for “' + term + '”' + capNote;
+            }
+        }
+
+        // Reset paginator + suspend load-older — the result set is
+        // bounded by the server cap, so there's nothing older to fetch.
+        var inst = Paginator.get(cfg.paginatorKey);
+        if (inst) {
+            inst.state.page = 0;
+            inst.setLoadMoreExhausted(true);
+            inst.apply();
+        }
+        // Rewrite the "Showing the last N …" copy to reflect the search
+        // result count — e.g. "last 100 transactions" becomes "last 12
+        // transactions" while a search is active, then reverts on reload
+        // (clear-search triggers a page reload which restores the
+        // server-side count).
+        refreshMetaLoadedCount(cfg.paginatorKey, Number(data.total || 0));
+
+        // Re-run the local filter so the "X transactions found" counter
+        // next to the search input reflects the replaced row set.
+        // Otherwise it shows a stale count from the last live-typed
+        // keystroke, which doesn't know the DB search ran.
+        if (cfg.paginatorKey === 'transactions' && typeof filterTransactions === 'function') {
+            filterTransactions();
+        } else if (cfg.paginatorKey === 'payment-requests' && typeof filterPaymentRequests === 'function') {
+            filterPaymentRequests();
+        }
+    }).catch(function(err) {
+        if (banner && bannerText) {
+            bannerText.textContent = 'Network error while searching the database.';
+        } else {
+            showToast('Search', 'Network error while searching.', 'error');
+        }
+    });
+}
+
+/**
+ * Map of paginator key → DOM id of the "Showing the last N …" counter
+ * span. Kept here (rather than on each Paginator instance) so the
+ * lookup works from both the load-older path (appends rows) and the
+ * search-database path (replaces rows), without having to plumb an
+ * extra field through the Paginator config.
+ */
+var META_LOADED_COUNT_IDS = {
+    'transactions':     'tx-meta-loaded-count',
+    'payment-requests': 'pr-meta-loaded-count'
+};
+
+/**
+ * Rewrite the "Showing the last N …" count span for the given paginator
+ * to reflect the current DOM row count. Safe to call from either the
+ * load-older success path (which appended rows) or the search-database
+ * path (which replaced them). Accepts an optional explicit override so
+ * the search path can say "N matches" rather than re-counting rows
+ * after a filter/paginator reshuffle.
+ *
+ * @param {string} paginatorKey
+ * @param {number|null} [override]
+ */
+function refreshMetaLoadedCount(paginatorKey, override) {
+    var spanId = META_LOADED_COUNT_IDS[paginatorKey];
+    if (!spanId) return;
+    var span = document.getElementById(spanId);
+    if (!span) return;
+    if (typeof override === 'number') {
+        span.textContent = String(override);
+        return;
+    }
+    var inst = Paginator.get(paginatorKey);
+    if (!inst) return;
+    span.textContent = String(inst.getLoadedCount());
+}
+
+/**
+ * Clear an active server-side search and return the table to the default
+ * view. Simplest and most robust approach: reload the page. A more
+ * elaborate "restore original rows from memory" variant is possible but
+ * adds non-trivial state management for a rare user action.
+ */
+function clearSearchResults(_key) {
+    // Drop any transient search-mode URL fragments before reload so the
+    // user lands cleanly on the default view.
+    var target = window.location.pathname + window.location.search;
+    window.location.href = target;
 }
 
 /**
@@ -2353,12 +3350,17 @@ function showInfoModal(el) {
     overlay.className = 'modal';
     overlay.id = 'info-modal';
     overlay.innerHTML =
-        '<div class="modal-content" style="max-width:340px">' +
+        '<div class="modal-content" style="max-width:440px">' +
             '<div class="modal-header">' +
                 '<h3 style="font-size:1rem"><i class="fas fa-info-circle" style="color:#6c757d"></i> Info</h3>' +
                 '<span class="close" id="info-modal-close" title="Close">&times;</span>' +
             '</div>' +
-            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5">' +
+            // overflow-wrap:anywhere + word-break:break-word lets long
+            // unbreakable strings (Tor onions, pubkey hashes, URLs without
+            // spaces) wrap at any character rather than walking off the
+            // right edge. white-space:pre-line preserves intentional
+            // newlines in multi-line tooltips.
+            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5;white-space:pre-line;overflow-wrap:anywhere;word-break:break-word">' +
                 escapeHtml(text) +
             '</div>' +
         '</div>';
@@ -2415,26 +3417,44 @@ function showInfoModal(el) {
 function openContactModal(contact, openTab) {
     // Store current contact ID for refresh
     currentContactId = contact.contact_id;
-    // Store transactions for detail view
-    contactTransactionData = contact.transactions || [];
 
     // Set contact name in header
     document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
+
+    // Propagate contact name onto the QR toggle button so the exported PNG
+    // filename can include who it belongs to (see exportAddressQr).
+    var contactQrBtn = document.querySelector('[data-qr-target="contact-address-qr-display"]');
+    if (contactQrBtn) {
+        contactQrBtn.setAttribute('data-qr-name', contact.name || '');
+    }
 
     // Set addresses dropdown
     var addressSelector = document.getElementById('modal_address_selector');
     var addressDisplay = document.getElementById('modal_address_display');
     addressSelector.innerHTML = '';
 
+    // Address dropdown — iterate whatever transport columns the schema
+    // currently exposes (EIOU_ADDRESS_TYPE_DISPLAY is bootstrapped from
+    // AddressRepository::getAllAddressTypes + Constants::ADDRESS_TYPE_DISPLAY
+    // on page render, ordered by security priority). A new transport column
+    // picks up whatever display label the Constants registry has, falling
+    // back to UPPERCASE(type).
+    //
+    // Only `type` and `address` are consumed below (option value + data-
+    // attribute); the registry's icon metadata is used by the pending-
+    // contact pills, not this dropdown, so we don't carry it into the
+    // pushed object.
     var addresses = [];
-    if (contact.tor) {
-        addresses.push({ type: 'TOR', address: contact.tor, icon: 'fa-user-secret' });
-    }
-    if (contact.https) {
-        addresses.push({ type: 'HTTPS', address: contact.https, icon: 'fa-globe' });
-    }
-    if (contact.http) {
-        addresses.push({ type: 'HTTP', address: contact.http, icon: 'fa-globe' });
+    if (typeof EIOU_ADDRESS_TYPE_DISPLAY !== 'undefined' && EIOU_ADDRESS_TYPE_DISPLAY) {
+        for (var _t in EIOU_ADDRESS_TYPE_DISPLAY) {
+            if (!Object.prototype.hasOwnProperty.call(EIOU_ADDRESS_TYPE_DISPLAY, _t)) continue;
+            if (!contact[_t]) continue;
+            var _meta = EIOU_ADDRESS_TYPE_DISPLAY[_t];
+            addresses.push({
+                type: _meta.label || _t.toUpperCase(),
+                address: contact[_t],
+            });
+        }
     }
 
     if (addresses.length === 0) {
@@ -2620,7 +3640,7 @@ function openContactModal(contact, openTab) {
         chainStatusEl.textContent = chainText;
         chainStatusEl.className = 'chain-badge ' + chainClass + (isClickable ? ' chain-clickable' : '');
 
-        // Make clickable to scroll to chain drop section
+        // Make clickable to scroll to tx drop section
         if (isClickable) {
             chainStatusEl.onclick = function() {
                 showModalTab('status-tab', null);
@@ -2636,7 +3656,7 @@ function openContactModal(contact, openTab) {
         }
     }
 
-    // Show chain drop section if chain is invalid
+    // Show tx drop section if chain is invalid
     var chainDropSection = document.getElementById('chain_drop_section');
     var chainDropPropose = document.getElementById('chain_drop_propose');
     var chainDropAwaiting = document.getElementById('chain_drop_awaiting');
@@ -2649,10 +3669,15 @@ function openContactModal(contact, openTab) {
         if (chainDropAwaiting) chainDropAwaiting.style.display = 'none';
         if (chainDropIncoming) chainDropIncoming.style.display = 'none';
         if (chainDropRejected) chainDropRejected.style.display = 'none';
+        var chainDropEmpty = document.getElementById('chain_drop_empty');
         currentChainDropProposalId = null;
 
+        // Section is always visible; which sub-state shows depends on the
+        // chain/proposal state. Default is the empty placeholder.
+        chainDropSection.style.display = 'block';
+        var showEmpty = true;
+
         if (contact.chain_drop_proposal) {
-            chainDropSection.style.display = 'block';
             var proposal = contact.chain_drop_proposal;
             if (proposal.direction === 'incoming' && proposal.status === 'pending') {
                 if (chainDropIncoming) {
@@ -2663,6 +3688,7 @@ function openContactModal(contact, openTab) {
                     }
                 }
                 currentChainDropProposalId = proposal.proposal_id;
+                showEmpty = false;
             } else if (proposal.direction === 'outgoing' && proposal.status === 'pending') {
                 if (chainDropAwaiting) {
                     chainDropAwaiting.style.display = 'block';
@@ -2671,15 +3697,18 @@ function openContactModal(contact, openTab) {
                         awaitingIdEl.textContent = 'Proposal: ' + proposal.proposal_id;
                     }
                 }
+                showEmpty = false;
             } else if (proposal.status === 'rejected') {
                 if (chainDropRejected) chainDropRejected.style.display = 'block';
+                showEmpty = false;
             }
         } else if (contact.valid_chain === false || contact.valid_chain === 0) {
             // Chain is invalid but no proposal exists yet — show propose button
-            chainDropSection.style.display = 'block';
             if (chainDropPropose) chainDropPropose.style.display = 'block';
-        } else {
-            chainDropSection.style.display = 'none';
+            showEmpty = false;
+        }
+        if (chainDropEmpty) {
+            chainDropEmpty.style.display = showEmpty ? 'block' : 'none';
         }
 
         // Populate chain gap details if available
@@ -2747,7 +3776,7 @@ function openContactModal(contact, openTab) {
     // Store current contact address for ping function
     currentContactAddress = contact.address;
 
-    // Store current contact pubkey hash for chain drop
+    // Store current contact pubkey hash for tx drop
     currentContactPubkeyHash = contact.pubkey_hash || null;
 
     // Reset ping button state and result message
@@ -2781,31 +3810,64 @@ function openContactModal(contact, openTab) {
     if (transactions.length === 0) {
         transactionsEl.innerHTML = '<p class="no-transactions">No recent transactions with this contact.</p>';
     } else {
-        var html = '';
+        var statusIconMap = {
+            'pending':   'fa-hourglass-half',
+            'sending':   'fa-paper-plane',
+            'sent':      'fa-check',
+            'accepted':  'fa-check',
+            'completed': 'fa-check-double',
+            'rejected':  'fa-times',
+            'cancelled': 'fa-ban'
+        };
+        var html = '<table class="contacts-table tx-table contact-modal-tx-table">';
+        html += '<thead><tr>'
+             +  '<th class="col-tx-status-icon" aria-label="Status"></th>'
+             +  '<th class="col-tx-desc">Description</th>'
+             +  '<th class="col-tx-amount text-right">Amount</th>'
+             +  '</tr></thead>';
+        html += '<tbody>';
         for (var i = 0; i < transactions.length; i++) {
             var tx = transactions[i];
-            var typeClass = tx.type === 'sent' ? 'tx-sent' : 'tx-received';
-            var typeIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
-            var typeLabel = tx.type === 'sent' ? 'Sent' : 'Received';
-            var amountPrefix = tx.type === 'sent' ? '-' : '+';
+            var isSent = tx.type === 'sent';
+            var isContactReq = tx.tx_type === 'contact';
+            var amountClass = isContactReq ? 'text-muted' : (isSent ? 'transaction-sent' : 'transaction-received');
+            var amountPrefix = isSent ? '−' : '+';
+            var status = (tx.status || '').toLowerCase();
+            var inProgress = (status !== 'completed' && status !== 'rejected' && status !== 'cancelled');
+            var statusIcon = statusIconMap[status] || 'fa-circle';
+            var statusTitle = status ? (status.charAt(0).toUpperCase() + status.slice(1)) : 'Unknown';
+            var description = tx.description || '';
+            var rowClass = 'tx-row cursor-pointer' + (inProgress ? ' tx-item-in-progress' : '');
 
-            html += '<div class="transaction-item ' + typeClass + ' cursor-pointer" data-action="showContactTxDetail" data-index="' + i + '" title="Click for details">';
-            html += '<div class="tx-icon"><i class="fas ' + typeIcon + '"></i></div>';
-            html += '<div class="tx-details">';
-            html += '<div class="tx-type">' + typeLabel + '</div>';
-            html += '<div class="tx-date">' + escapeHtml(tx.date || 'Unknown date') + '</div>';
-            html += '</div>';
-            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '<i class="fas fa-chevron-right chevron-indicator"></i></div>';
-            html += '</div>';
+            // Open the main #transactionModal as a stacked overlay on top of
+            // the contact modal. Inherits the `modal-stack-top` pattern used
+            // by every other "drill into tx" path so click-outside + Escape
+            // dismiss only the tx modal and return the user here.
+            html += '<tr class="' + rowClass + '" data-action="openTransactionModalByTxid" data-txid="' + escapeHtml(tx.txid || '') + '" title="' + escapeHtml(tx.date || '') + ' — click for details">';
+            html += '<td class="col-tx-status-icon text-center">';
+            html += '<span class="tx-status-icon tx-status-' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">';
+            html += '<i class="fas ' + statusIcon + '"></i>';
+            html += '</span>';
+            html += '</td>';
+            var displayDesc = displayTxDescription(description);
+            html += '<td class="col-tx-desc" title="' + escapeHtml(displayDesc || 'No description') + '">';
+            html += escapeHtml(displayDesc || '—');
+            html += '</td>';
+            html += '<td class="col-number col-tx-amount text-right ' + amountClass + '">';
+            if (isContactReq) {
+                // Mobile shows the label instead of the em-dash (see
+                // `.tx-amount-contact-label` comment in page.css for why).
+                html += '<span class="tx-amount-contact-label">Contact request</span>';
+                html += '<span class="tx-amount-mdash">&mdash;</span>';
+            } else {
+                html += amountPrefix + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD');
+            }
+            html += '</td>';
+            html += '</tr>';
         }
+        html += '</tbody></table>';
         transactionsEl.innerHTML = html;
     }
-
-    // Reset transaction view to list (in case detail was open before)
-    var txListView = document.getElementById('tx-list-view');
-    var txDetailView = document.getElementById('tx-detail-view');
-    if (txListView) txListView.style.display = 'block';
-    if (txDetailView) txDetailView.style.display = 'none';
 
     // Open specified tab or default to info tab
     var tabToOpen = openTab || 'info-tab';
@@ -2825,7 +3887,13 @@ function openContactModal(contact, openTab) {
  * @returns {void}
  */
 function closeContactModal() {
-    document.getElementById('contactModal').style.display = 'none';
+    var el = document.getElementById('contactModal');
+    if (el) {
+        el.style.display = 'none';
+        // Clear the stack marker set by jumpToContactFromTxModal so the next
+        // time the contact modal opens standalone it isn't stuck on top.
+        el.classList.remove('modal-stack-top');
+    }
 }
 
 /**
@@ -3301,158 +4369,27 @@ function showModalTab(tabId, button) {
         targetTab.classList.add('active');
     }
 
-    // Activate the clicked button or find matching button
+    // Activate the clicked button or find matching button. The fallback
+    // lookup uses data-tab (the current markup); the old onclick= attribute
+    // lookup was a dead path since the tab buttons moved to data-action
+    // dispatch — that's why the Status tab lost its blue underline after
+    // the "Check Status" reload path called showModalTab(tabId, null).
     if (button) {
         button.classList.add('active');
     } else {
-        // Find the button that corresponds to this tab
-        var tabButtons = document.querySelectorAll('.modal-tab');
-        for (var k = 0; k < tabButtons.length; k++) {
-            var btn = tabButtons[k];
-            var onclickStr = btn.getAttribute('onclick') || '';
-            if (onclickStr.indexOf(tabId) !== -1) {
+        var matchTab = tabId.replace(/-tab$/, '');
+        var tabButtonsAll = document.querySelectorAll('.modal-tab');
+        for (var k = 0; k < tabButtonsAll.length; k++) {
+            var btn = tabButtonsAll[k];
+            var dataTab = btn.getAttribute('data-tab') || '';
+            // data-tab stores either "status-tab" or just "status" in older
+            // markup — accept both.
+            if (dataTab === tabId || dataTab === matchTab) {
                 btn.classList.add('active');
                 break;
             }
         }
     }
-}
-
-/**
- * Shows the detailed view for a specific transaction within the contact modal.
- *
- * Retrieves transaction data from the contactTransactionData array and renders
- * a detailed view with amount, status badges, transaction type, counterparty
- * address, description, date, and routing information for P2P transactions.
- * Hides the transaction list and shows the detail view.
- *
- * @param {number} index - Zero-based index into the contactTransactionData array
- * @returns {void}
- * @requires contactTransactionData - Global array set by openContactModal
- * @example
- * // Called from transaction item onclick in contact modal
- * <div onclick="showContactTxDetail(0)">Transaction 1</div>
- */
-function showContactTxDetail(index) {
-    if (!contactTransactionData || !contactTransactionData[index]) {
-        return;
-    }
-
-    var tx = contactTransactionData[index];
-    var content = document.getElementById('contact-tx-detail-content');
-
-    // Build direction info
-    var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
-    var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
-
-    // Build status badge (escapeHtml for defense-in-depth)
-    var status = tx.status || 'completed';
-    var statusBadge = '<span class="tx-status-badge tx-status-' + escapeHtml(status) + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span>';
-
-    // Build transaction type badge
-    var txType = tx.tx_type || 'standard';
-    var txTypeBadge;
-    if (txType === 'contact') {
-        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-contact"><i class="fas fa-user-plus"></i> Contact Request</span>';
-    } else if (txType === 'p2p') {
-        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-p2p"><i class="fas fa-network-wired"></i> P2P</span>';
-    } else {
-        txTypeBadge = '<span class="tx-modal-badge tx-modal-badge-direct"><i class="fas fa-exchange-alt"></i> Direct</span>';
-    }
-
-    // Build role badge (Sent/Received/Relay)
-    var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
-    var roleLabel = tx.type === 'sent' ? 'Sent' : 'Received';
-    var roleBadgeClass = tx.type === 'sent' ? 'tx-modal-badge-sent' : 'tx-modal-badge-received';
-    if (tx.direction === 'relay') {
-        roleIcon = 'fa-random';
-        roleLabel = 'Relay';
-        roleBadgeClass = 'tx-modal-badge-relay';
-    }
-    var roleBadge = '<span class="tx-modal-badge ' + roleBadgeClass + '"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
-
-    // Build HTML content
-    var html = '';
-
-    // Header with amount
-    var headerClass2 = tx.type === 'sent' ? 'tx-modal-header-sent' : 'tx-modal-header-received';
-    html += '<div class="tx-modal-header ' + headerClass2 + '">';
-    html += '<div class="tx-modal-amount">' + (tx.type === 'sent' ? '-' : '+') + parseFloat(tx.amount).toFixed(EIOU_DISPLAY_DECIMALS) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
-    html += '<div class="tx-modal-direction"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
-    html += '</div>';
-
-    // Status, type, and role badges
-    html += '<div class="tx-modal-badges">';
-    html += statusBadge;
-    html += txTypeBadge;
-    html += roleBadge;
-    html += '</div>';
-
-    // Details section
-    html += '<div class="tx-detail-section">';
-
-    // To/From address (shows which address the transaction was sent to/from)
-    var counterpartyAddress = tx.type === 'sent' ? tx.receiver_address : tx.sender_address;
-    if (counterpartyAddress) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-        html += '<div class="tx-detail-value tx-modal-mono">' + escapeHtml(counterpartyAddress) + '</div>';
-        html += '</div>';
-    }
-
-    // Description
-    if (tx.description) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
-        html += '</div>';
-    }
-
-    // Date/Time
-    html += '<div class="tx-detail-row">';
-    html += '<div class="tx-detail-label">Date & Time</div>';
-    html += '<div class="tx-detail-value">' + escapeHtml(tx.date || 'Unknown') + '</div>';
-    html += '</div>';
-
-    // Transaction ID
-    if (tx.txid) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Transaction ID</div>';
-        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.txid) + '</div>';
-        html += '</div>';
-    }
-
-    // Routing Hash (only for P2P transactions, not direct or contact)
-    if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Routing Hash</div>';
-        html += '<div class="tx-detail-value tx-modal-mono-sm">' + escapeHtml(tx.memo) + '</div>';
-        html += '</div>';
-    }
-
-    html += '</div>';
-
-    content.innerHTML = html;
-
-    // Show detail view, hide list view
-    document.getElementById('tx-list-view').style.display = 'none';
-    document.getElementById('tx-detail-view').style.display = 'block';
-}
-
-/**
- * Hides the transaction detail view and shows the transaction list.
- *
- * Switches the contact modal's transactions tab from the detailed single
- * transaction view back to the list of all transactions with this contact.
- *
- * @returns {void}
- * @example
- * // Called from "Back to list" button in transaction detail view
- * <button onclick="hideContactTxDetail()">Back to list</button>
- */
-function hideContactTxDetail() {
-    document.getElementById('tx-detail-view').style.display = 'none';
-    document.getElementById('tx-list-view').style.display = 'block';
 }
 
 /**
@@ -3494,13 +4431,158 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // Check if we need to reopen contact modal after refresh
     checkReopenContactModal();
+
+    initPaginators();
 });
 
-// Chain Drop Resolution state
+/**
+ * Attach Paginator instances to every paginated table on the current page.
+ * Re-runs safely if the tables aren't rendered (short-circuits on null
+ * tbody), so it's fine to call from the main DOMContentLoaded handler
+ * regardless of which server-rendered tab is active at load time.
+ */
+function initPaginators() {
+    var txBody = document.getElementById('transaction-list');
+    var txContainer = document.getElementById('tx-paginator');
+    if (txBody && txContainer) {
+        Paginator.create({
+            key: 'transactions',
+            tbody: txBody,
+            rowSelector: '.tx-row',
+            container: txContainer,
+            loadMore: { onClick: loadMoreTransactions }
+        });
+    }
+
+    // Contacts — Phase 1 (client slicing) AND Phase 2 (load-older). Only
+    // accepted contacts paginate via Phase 2; pending + blocked are always
+    // rendered up-front because they're small and operationally important.
+    var contactsBody = document.getElementById('contacts-grid');
+    var contactsContainer = document.getElementById('contacts-paginator');
+    if (contactsBody && contactsContainer) {
+        Paginator.create({
+            key: 'contacts',
+            tbody: contactsBody,
+            rowSelector: '.contact-card',
+            container: contactsContainer,
+            // Contacts are sorted alphabetically (name ASC), not
+            // chronologically, so "Load older" would be wrong here —
+            // use "Load more" for the name-ordered view.
+            loadMore: { onClick: loadMoreContacts, label: 'Load more' }
+        });
+    }
+
+    var prBody = document.getElementById('pr-history-list');
+    var prContainer = document.getElementById('pr-paginator');
+    if (prBody && prContainer) {
+        Paginator.create({
+            key: 'payment-requests',
+            tbody: prBody,
+            rowSelector: '.pr-row',
+            container: prContainer,
+            loadMore: { onClick: loadMorePaymentRequests }
+        });
+    }
+}
+
+/**
+ * Phase-2 Load-older callback for Recent Transactions. Fetches the next
+ * chunk via loadMoreTransactions AJAX action, appends the returned row
+ * HTML, extends the in-memory transactionData[] so openTransactionModal
+ * keeps working for newly appended rows, then asks the paginator to
+ * re-cut pages.
+ */
+function loadMoreTransactions(inst) {
+    loadMoreViaGuiAction('loadMoreTransactions', 'transactions', inst);
+}
+
+/**
+ * Phase-2 Load-older callback for Payment Requests history. Rows are
+ * server-rendered via the shared _paymentRequestRow.html partial; the
+ * appended HTML carries everything the row needs (data-* attributes for
+ * filter/search + click targets) so no in-memory JS array extension is
+ * required — unlike Recent Transactions, where transactionData[] has to
+ * grow to keep openTransactionModal(index) working.
+ */
+function loadMorePaymentRequests(inst) {
+    loadMoreViaGuiAction('loadMorePaymentRequests', 'payment-requests', inst);
+}
+
+/**
+ * Phase-2 Load-older callback for the Contacts table. Appends more
+ * accepted-contact rows rendered server-side via _contactRow.html. The
+ * row's data-contact JSON payload (built by ContactDataBuilder) is what
+ * openContactModal consumes, so the appended rows open a fully-
+ * populated contact modal without any in-memory JS array extension.
+ */
+function loadMoreContacts(inst) {
+    loadMoreViaGuiAction('loadMoreContacts', 'contacts', inst);
+}
+
+/**
+ * Shared fetcher for the three "Load older" buttons. Posts to the GUI
+ * action router with the current loaded count as the offset, appends the
+ * returned HTML fragment to the paginator's tbody, and marks the paginator
+ * exhausted when the server reports no more rows available.
+ *
+ * @param {string} action - GUI action name (e.g. 'loadMoreTransactions')
+ * @param {string} key    - Paginator key (for logging / debugging only)
+ * @param {Object} inst   - Paginator instance returned by Paginator.create
+ */
+function loadMoreViaGuiAction(action, key, inst) {
+    var offset = inst.getLoadedCount();
+    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+    var formData = new FormData();
+    formData.append('action', action);
+    formData.append('offset', String(offset));
+    formData.append('csrf_token', csrfToken);
+
+    fetch(window.location.pathname, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    }).then(function(res) {
+        return res.json();
+    }).then(function(data) {
+        if (!data || !data.success) {
+            showToast('Load failed', (data && data.error) || 'Could not load more rows.', 'error');
+            inst.setLoadMoreBusy(false);
+            return;
+        }
+        if (data.html) {
+            inst.appendFragment(data.html);
+        }
+        // Extend transactionData[] so openTransactionModal(index) keeps
+        // resolving for appended rows (their data-index attributes are
+        // set server-side from the POSTed offset, so they line up with
+        // the position we're about to extend the array to).
+        if (Array.isArray(data.rows) && typeof transactionData !== 'undefined') {
+            for (var i = 0; i < data.rows.length; i++) {
+                transactionData.push(data.rows[i]);
+            }
+        }
+        if (data.exhausted) {
+            inst.setLoadMoreExhausted(true);
+        }
+        inst.setLoadMoreBusy(false);
+        inst.apply();
+        // Refresh the "Showing the last N" copy so it reflects the
+        // newly-loaded row count — "last 100" becomes "last 125" after
+        // a Load-older click, matches what the paginator range shows.
+        refreshMetaLoadedCount(key);
+    }).catch(function() {
+        showToast('Network error', 'Could not load more rows.', 'error');
+        inst.setLoadMoreBusy(false);
+    });
+}
+
+// Tx Drop Resolution state
 var currentChainDropProposalId = null;
 
 /**
- * Proposes a chain drop to the current contact.
+ * Proposes a tx drop to the current contact.
  * Sends AJAX POST with the contact's pubkey hash.
  * @returns {void}
  */
@@ -3597,11 +4679,11 @@ function resetChainDropProposeButton() {
     var btnText = document.getElementById('chain_drop_propose_text');
     if (btn) btn.disabled = false;
     if (icon) icon.className = 'fas fa-handshake';
-    if (btnText) btnText.textContent = 'Propose Dropping Missing Transaction(s)';
+    if (btnText) btnText.textContent = 'Propose Tx Drop(s)';
 }
 
 /**
- * Accepts an incoming chain drop proposal.
+ * Accepts an incoming tx drop proposal.
  * @returns {void}
  */
 function acceptChainDrop() {
@@ -3686,7 +4768,7 @@ function acceptChainDrop() {
 }
 
 /**
- * Rejects an incoming chain drop proposal.
+ * Rejects an incoming tx drop proposal.
  * @returns {void}
  */
 function rejectChainDrop() {
@@ -3788,7 +4870,7 @@ function resetChainDropActionButtons() {
 
 /**
  * Reloads the page and reopens the current contact modal on the info tab.
- * Used after chain drop propose/accept/reject so all statuses refresh from
+ * Used after tx drop propose/accept/reject so all statuses refresh from
  * server data (badges, chain status, notification banner).
  * @returns {void}
  */
@@ -3923,33 +5005,22 @@ function toggleConfigSection(contentId, arrowId) {
     var content = document.getElementById(contentId);
     var arrow = document.getElementById(arrowId);
 
-    if (content && arrow) {
-        if (content.style.display === 'none') {
-            content.style.display = 'block';
-            arrow.style.transform = 'rotate(180deg)';
-        } else {
-            content.style.display = 'none';
-            arrow.style.transform = 'rotate(0deg)';
-        }
-    }
-}
+    if (!content || !arrow) { return; }
 
-/**
- * Toggles the P2P routing info alert between collapsed and expanded states.
- * Collapsed shows only the header; expanded reveals the description paragraph.
- *
- * @returns {void}
- */
-function toggleP2pInfo() {
-    var detail = document.getElementById('p2p-info-detail');
-    var chevron = document.getElementById('p2p-info-chevron');
-    if (!detail) return;
-    if (detail.style.display === 'block') {
-        detail.style.display = 'none';
-        if (chevron) chevron.className = 'fas fa-chevron-down p2p-info-chevron';
+    // A section that ships hidden uses the `d-none` utility class, not
+    // an inline `style.display = "none"`. Reading `content.style.display`
+    // alone returns "" in that case, so the first click would fall into
+    // the "else" branch, set `display = "none"` (already hidden), and
+    // *only* the second click would flip into the visible branch.
+    // Fix: treat the d-none class as hidden too, and clear it on show.
+    var isHidden = content.classList.contains('d-none') || content.style.display === 'none';
+    if (isHidden) {
+        content.classList.remove('d-none');
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
     } else {
-        detail.style.display = 'block';
-        if (chevron) chevron.className = 'fas fa-chevron-up p2p-info-chevron';
+        content.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
     }
 }
 
@@ -4422,14 +5493,95 @@ function toggleAddressQr(el) {
     if (!svg) {
         container.innerHTML = '<p style="color:#6c757d;font-size:0.85rem">QR code library not available</p>';
     } else {
+        var safeAddr = escapeHtml(address);
+        var safeName = escapeHtml(displayName);
         container.innerHTML = svg +
-            '<div style="text-align:center;margin-top:0.5rem">' +
+            '<div class="qr-action-row">' +
+                '<button class="btn btn-sm btn-outline" data-action="exportAddressQr" data-qr-container="' + escapeHtml(targetId) + '" data-qr-address="' + safeAddr + '" data-qr-name="' + safeName + '" title="Download this QR code as a PNG image">' +
+                    '<i class="fas fa-download"></i> Export QR' +
+                '</button>' +
                 '<button class="btn btn-sm btn-outline" data-action="scanContactQr" title="Scan a contact\'s QR code to add them">' +
-                    '<i class="fas fa-camera"></i> Scan Contact QR' +
+                    '<i class="fas fa-camera"></i> Scan QR' +
                 '</button>' +
             '</div>';
     }
     container.style.display = 'block';
+}
+
+/**
+ * Export the QR code inside the given container as a downloadable PNG.
+ * The QR is stored as an <svg> element (see generateQrSvg above). We
+ * serialise it to a blob, render it to a canvas at higher resolution for
+ * print/share quality, and trigger a browser download.
+ */
+function exportAddressQr(containerId, address, name) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var svgEl = container.querySelector('svg');
+    if (!svgEl) {
+        if (typeof showToast === 'function') {
+            showToast('Error', 'No QR code to export', 'error');
+        }
+        return;
+    }
+
+    var svgString = new XMLSerializer().serializeToString(svgEl);
+    var svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    var svgUrl = URL.createObjectURL(svgBlob);
+
+    var img = new Image();
+    img.onload = function() {
+        var exportSize = 600; // 3x the 200px on-screen size for crisp printing
+        var canvas = document.createElement('canvas');
+        canvas.width = exportSize;
+        canvas.height = exportSize;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, exportSize, exportSize);
+        ctx.drawImage(img, 0, 0, exportSize, exportSize);
+        URL.revokeObjectURL(svgUrl);
+
+        canvas.toBlob(function(pngBlob) {
+            if (!pngBlob) {
+                if (typeof showToast === 'function') {
+                    showToast('Error', 'Could not generate PNG', 'error');
+                }
+                return;
+            }
+            var pngUrl = URL.createObjectURL(pngBlob);
+            var a = document.createElement('a');
+            a.href = pngUrl;
+            // Filename: eiou-qr-<name>-<transport>.png — encodes the display
+            // name (so the user can tell their own QR from a contact's) plus
+            // the transport type (http / https / onion). The raw address is
+            // never embedded, so the filename can be shared without leaking
+            // the specific host/port/onion-hash. Falls back to just the
+            // transport when no name is available.
+            var transport = 'contact';
+            if (address) {
+                var addrLower = address.toLowerCase();
+                if (addrLower.indexOf('https://') === 0) transport = 'https';
+                else if (addrLower.indexOf('http://') === 0) transport = 'http';
+                else if (addrLower.indexOf('.onion') !== -1) transport = 'onion';
+            }
+            var nameSlug = (name || '').trim()
+                .replace(/[^a-zA-Z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 32);
+            a.download = 'eiou-qr-' + (nameSlug ? nameSlug + '-' : '') + transport + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(pngUrl);
+        }, 'image/png');
+    };
+    img.onerror = function() {
+        URL.revokeObjectURL(svgUrl);
+        if (typeof showToast === 'function') {
+            showToast('Error', 'Could not render QR for export', 'error');
+        }
+    };
+    img.src = svgUrl;
 }
 
 /**
@@ -4494,10 +5646,13 @@ function parseQrData(text) {
 //
 // iOS Safari notes for future maintainers — if iOS users still report
 // "QR scanner doesn't work" after the layered fixes below:
-//   1. The relaxed `{ facingMode: { ideal: 'environment' } }` constraint
-//      and the getCameras() fallback (Layer 2 below) should handle most
-//      iOS quirks within html5-qrcode. Check console.warn output from
-//      showCameraError() to find the exact err.name reported by the user.
+//   1. The plain-string `{ facingMode: 'environment' }` constraint plus the
+//      getCameras() fallback (Layer 2 below) should handle most iOS quirks
+//      within html5-qrcode. Check console.warn output from showCameraError()
+//      to find the exact err.name reported by the user. Do NOT switch back
+//      to `{ facingMode: { ideal: 'environment' } }` — html5-qrcode v2.3.8
+//      does not accept the `ideal` form and throws synchronously before
+//      getUserMedia is called, breaking the scanner for every user.
 //   2. html5-qrcode v2.3.8 is the last release (April 2023) — the library
 //      is essentially unmaintained. There is no upgrade path within it.
 //      That said, Snyk reports zero known vulnerabilities for 2.3.8 as of
@@ -4623,12 +5778,19 @@ function openQrScanner(targetInputId, opts) {
     var scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
     function noopFrameError() { /* ignore — fires continuously when no QR in frame */ }
 
-    // Use { ideal: 'environment' } instead of literal 'environment'. iOS Safari
-    // (and some Android browsers) reject the strict form on devices where the
-    // camera enumeration doesn't tag a camera as 'environment', and fail with
-    // OverconstrainedError instead of just picking another camera.
+    // Use the literal 'environment' string form — html5-qrcode v2.3.8 only
+    // accepts a plain string ('user' / 'environment') or the hard-constraint
+    // `{ exact: 'environment' }` object. It does NOT accept the standard
+    // MediaTrackConstraints `{ ideal: 'environment' }` form and throws
+    // synchronously ("'facingMode' should be string or object with 'exact'")
+    // before getUserMedia is even called. An earlier attempt at `{ ideal:
+    // 'environment' }` broke every Android/Pixel user because that throw
+    // wasn't an OverconstrainedError/NotFoundError and fell straight through
+    // to showCameraError with name='Unknown'. The Layer 2 deviceId fallback
+    // below still handles devices whose rear camera isn't tagged as
+    // 'environment' — OverconstrainedError from getUserMedia does trigger it.
     scanner.start(
-        { facingMode: { ideal: 'environment' } },
+        { facingMode: 'environment' },
         scanConfig,
         onScanSuccess,
         noopFrameError
@@ -4818,7 +5980,7 @@ function openPrPendingModal(el) {
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + escapeHtml(dirLabel) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
     if (desc) {
-        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(displayTxDescription(desc)) + '</div></div>';
     }
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
 
@@ -4895,7 +6057,7 @@ function openPrHistoryModal(el) {
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Direction</div><div class="tx-detail-value">' + (direction === 'incoming' ? 'Incoming — they requested' : 'Outgoing — you requested') + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Amount</div><div class="tx-detail-value"><strong>' + escapeHtml(amount) + '</strong></div></div>';
     if (desc) {
-        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(desc) + '</div></div>';
+        html += '<div class="tx-detail-row"><div class="tx-detail-label">Description</div><div class="tx-detail-value">' + escapeHtml(displayTxDescription(desc)) + '</div></div>';
     }
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Date</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value" style="color:' + statusColor + '">' + ucfirst(escapeHtml(status)) + '</div></div>';
@@ -4944,13 +6106,52 @@ function openDlqModal(el) {
     var status = row.getAttribute('data-status') || 'pending';
     var canRetry = row.getAttribute('data-dlq-can-retry') === '1';
     var canAct = row.getAttribute('data-dlq-can-act') === '1';
+    // Payload-extracted txid — populated server-side only for
+    // transaction-like message types. Empty for 'contact' / unknown types.
+    var dlqTxid = row.getAttribute('data-dlq-txid') || '';
 
     var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
     var typeBadge = '<span class="tx-type-badge ' + escapeHtml(typeClass) + '"><i class="fas ' + escapeHtml(typeIcon) + '"></i> ' + escapeHtml(type) + '</span>';
 
     var html = '<div class="tx-detail-row"><div class="tx-detail-label">Type</div><div class="tx-detail-value">' + typeBadge + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Recipient</div><div class="tx-detail-value tx-modal-mono">' + escapeHtml(recipient) + '</div></div>';
-    html += '<div class="tx-detail-row"><div class="tx-detail-label">Failure Reason</div><div class="tx-detail-value">' + escapeHtml(reason) + '</div></div>';
+
+    // Transaction ID — clickable so the user can jump straight into the
+    // full Transaction Details modal for amount/description/etc. Keeps
+    // the DLQ modal tight instead of duplicating transaction fields.
+    // openTransactionModalByTxid has an in-memory fast path and an AJAX
+    // fallback for older txids outside the current paginator window.
+    if (dlqTxid !== '') {
+        html += '<div class="tx-detail-row">' +
+                '<div class="tx-detail-label">Transaction ID</div>' +
+                '<div class="tx-detail-value tx-modal-mono-sm tx-detail-value-link cursor-pointer"' +
+                    ' data-action="openTransactionModalByTxid"' +
+                    ' data-txid="' + escapeHtml(dlqTxid) + '"' +
+                    ' title="Open transaction details">' +
+                    escapeHtml(dlqTxid) +
+                '</div>' +
+                '</div>';
+    }
+    // Failure Reason + info icon: the stored reason is the LAST error
+    // encountered, which is usually from the fallback transport rather
+    // than the primary. Without the note the pairing of a Tor-looking
+    // recipient with a non-Tor error is confusing (e.g. ".onion" address
+    // + "SSL certificate problem" from an HTTPS fallback attempt). The
+    // info icon opens the shared info modal so users see the full story.
+    // Plain-language copy — avoids jargon like "transport" / "primary"
+    // and spells out the *why* with short paragraphs separated by blank
+    // lines (the info modal uses white-space: pre-line so \n renders).
+    var fallbackNote =
+        'Why doesn\u2019t the error match the recipient\u2019s address?\n\n' +
+        'Your wallet tries more than one way to reach a contact — first over Tor, then HTTPS, then plain HTTP — and stops when one works.\n\n' +
+        'The reason shown above comes from the LAST attempt. So if the contact\u2019s address is a Tor (.onion) one but the error mentions HTTPS or HTTP, it means Tor was unreachable AND the other methods also failed.\n\n' +
+        'This usually clears up once the contact is back online. Tap Retry to try again now.';
+    html += '<div class="tx-detail-row">' +
+            '<div class="tx-detail-label">Failure Reason ' +
+                '<i class="fas fa-info-circle info-tooltip-icon" title="' + escapeHtml(fallbackNote) + '" data-action="showInfoModal" role="button" aria-label="About failure reasons"></i>' +
+            '</div>' +
+            '<div class="tx-detail-value">' + escapeHtml(reason) + '</div>' +
+            '</div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Added</div><div class="tx-detail-value">' + escapeHtml(date) + '</div></div>';
     html += '<div class="tx-detail-row"><div class="tx-detail-label">Status</div><div class="tx-detail-value"><span class="dlq-status-badge dlq-badge-' + escapeHtml(status) + '">' + escapeHtml(statusLabel) + '</span></div></div>';
 
@@ -5110,6 +6311,12 @@ function retryDlqItem(dlqId, btn) {
     if (dlqModal && document.body.contains(dlqModal)) { document.body.removeChild(dlqModal); }
 
     showLoader('Retrying delivery...', 'Attempting to re-send the message to the recipient.');
+    // Match the send / approve / add-contact flows — show the 15s refresh
+    // countdown so the user knows the page will refresh automatically.
+    // The server-side retry continues regardless; a reload just returns
+    // them to an interactive page. clearOperationTimeout fires on any
+    // terminal XHR callback below.
+    startOperationTimeout('dlqRetry', 'Still retrying delivery. The retry is continuing in the background — check Failed Messages for updates.');
 
     var formData = new FormData();
     formData.append('action',     'dlqRetry');
@@ -5121,17 +6328,20 @@ function retryDlqItem(dlqId, btn) {
     xhr.timeout = 90000; // 90s — Tor connections can be slow
 
     xhr.ontimeout = function() {
+        clearOperationTimeout();
         hideLoader();
         showToast('Timeout', 'Retry timed out — the recipient may be offline', 'warning');
     };
 
     xhr.onerror = function() {
+        clearOperationTimeout();
         hideLoader();
         showToast('Error', 'Network error — please try again', 'error');
     };
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) { return; }
+        clearOperationTimeout();
         hideLoader();
         try {
             var response = JSON.parse(xhr.responseText);
@@ -5463,8 +6673,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('autoChainDropPropose', 'autoChainDropProposeStatus');
     initToggleSwitch('autoChainDropAccept', 'autoChainDropAcceptStatus');
     initToggleSwitch('autoChainDropAcceptGuard', 'autoChainDropAcceptGuardStatus');
+    initToggleSwitch('autoAcceptTransaction', 'autoAcceptTransactionStatus');
     initToggleSwitch('autoAcceptRestoredContact', 'autoAcceptRestoredContactStatus');
+    initToggleSwitch('autoRejectUnknownCurrency', 'autoRejectUnknownCurrencyStatus');
     initToggleSwitch('hopBudgetRandomized', 'hopBudgetRandomizedStatus');
+    initToggleSwitch('hideEmptyGuiSections', 'hideEmptyGuiSectionsStatus');
+    initToggleSwitch('liveNotificationsEnabled', 'liveNotificationsEnabledStatus');
     initToggleSwitch('apiEnabled', 'apiEnabledStatus');
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
     initToggleSwitch('updateCheckEnabled', 'updateCheckEnabledStatus');
@@ -5669,6 +6883,10 @@ function startAutoRefresh() {
     // Only start if enabled in settings AND there are in-progress transactions
     if (!(typeof hasInProgressTx !== 'undefined' && hasInProgressTx)) return;
     if (!(typeof autoRefreshEnabled !== 'undefined' && autoRefreshEnabled)) return;
+    // Mutual exclusion: when live event notifications are active, skip the
+    // 15s full-page reload. Live notifications handle status changes
+    // toast-style without clobbering a just-fired toast via a reload.
+    if (typeof liveNotificationsEnabled !== 'undefined' && liveNotificationsEnabled) return;
     if (autoRefreshInterval) return;
 
     var indicator = document.getElementById('tx-auto-refresh-status');
@@ -5704,6 +6922,319 @@ window.stopAutoRefresh = function() {
         if (indicator) indicator.classList.remove('active');
     }
 };
+
+// ============================================================================
+// Live event notifications — non-reloading XHR poll.
+//
+// Separate from the 15s auto-refresh above. That one reloads the page; this
+// one never does. Hits /?check_incoming=1&since=<ts>, receives JSON deltas,
+// routes them to showEventToast() per the user's verbosity setting, and
+// updates tab badges in place.
+//
+// Activity gates (all layered together to keep the feature unobtrusive):
+//   - Visibility API: pause entirely when document.hidden (cursor preserved
+//     so resume catches everything that arrived while hidden)
+//   - Idle backoff: drop from base→3× after 60s no interaction, 6× after 5min
+//   - Dedup via sessionStorage: surviving a full reload won't re-toast the
+//     same ids
+//   - Cursor overlap: next-poll `since` is server `now - 1` so events whose
+//     DB timestamp rounds to the same integer second as the server's
+//     `time()` call aren't dropped when they land after the query ran
+// Settings are delivered by the server on each poll — we trust the server
+// over the bootstrap constants, so a settings save takes effect without
+// page reload.
+// ============================================================================
+
+var LIVE_POLL_BASE_MS = 10000;
+var LIVE_POLL_IDLE_1_MS = 30000;   // 3× base
+var LIVE_POLL_IDLE_2_MS = 60000;   // 6× base
+var LIVE_IDLE_THRESHOLD_1_MS = 60 * 1000;
+var LIVE_IDLE_THRESHOLD_2_MS = 5 * 60 * 1000;
+var LIVE_SEEN_IDS_KEY = 'eiou_live_seen_ids_v1';
+var LIVE_SEEN_IDS_MAX = 500; // bounded to avoid unbounded growth
+
+var liveTimer = null;
+var liveSinceTs = 0;
+var liveLastInteractionAt = Date.now();
+var liveInflight = false;
+var liveSettingsCache = null; // last-seen server settings (enabled, verbosity, toast_duration_ms, poll_interval_ms)
+
+function liveBumpInteraction() { liveLastInteractionAt = Date.now(); }
+['mousedown', 'keydown', 'touchstart', 'scroll'].forEach(function(evt) {
+    document.addEventListener(evt, liveBumpInteraction, { passive: true });
+});
+
+function liveLoadSeenIds() {
+    try {
+        var raw = sessionStorage.getItem(LIVE_SEEN_IDS_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+}
+function liveSaveSeenIds(map) {
+    try {
+        var keys = Object.keys(map);
+        if (keys.length > LIVE_SEEN_IDS_MAX) {
+            // FIFO trim — drop oldest half.
+            var pairs = keys.map(function(k) { return [k, map[k]]; });
+            pairs.sort(function(a, b) { return a[1] - b[1]; });
+            pairs = pairs.slice(pairs.length - Math.floor(LIVE_SEEN_IDS_MAX / 2));
+            map = {};
+            pairs.forEach(function(p) { map[p[0]] = p[1]; });
+        }
+        sessionStorage.setItem(LIVE_SEEN_IDS_KEY, JSON.stringify(map));
+    } catch (e) { /* quota / private mode — swallow */ }
+}
+function liveMarkSeen(key) {
+    var map = liveLoadSeenIds();
+    map[key] = Date.now();
+    liveSaveSeenIds(map);
+}
+function liveIsSeen(key) {
+    var map = liveLoadSeenIds();
+    return !!map[key];
+}
+
+function liveComputeInterval() {
+    var baseMs = (liveSettingsCache && liveSettingsCache.poll_interval_ms) || LIVE_POLL_BASE_MS;
+    var idleFor = Date.now() - liveLastInteractionAt;
+    if (idleFor >= LIVE_IDLE_THRESHOLD_2_MS) return Math.max(baseMs * 6, LIVE_POLL_IDLE_2_MS);
+    if (idleFor >= LIVE_IDLE_THRESHOLD_1_MS) return Math.max(baseMs * 3, LIVE_POLL_IDLE_1_MS);
+    return baseMs;
+}
+
+function liveTruncate(s, n) { s = String(s || ''); return s.length > n ? s.substring(0, n - 1) + '…' : s; }
+function liveShortHash(h) { if (!h) return ''; return String(h).substring(0, 8) + '…'; }
+function liveReloadToHash(hash) {
+    // The live-notif toast's "View" action navigates + reloads into the
+    // target hash rather than just switching the tab. The tab's content
+    // was rendered at page load; the event that fired the toast arrived
+    // after, so an in-place tab switch would land the user on stale
+    // content (empty pending-contacts list, missing transaction, etc).
+    // Hash values come from TAB_HASH_MAP above — payment-requests,
+    // pending-contacts, transactions, dlq — so the post-reload router
+    // also scrolls to the relevant section.
+    try {
+        window.location.href = window.location.pathname + '#' + hash;
+        window.location.reload();
+    } catch (e) { /* swallow — fallback is no navigation */ }
+}
+
+function liveBadgeBumpCount(selector, delta) {
+    // Best-effort: increments a numeric badge by delta if we can parse its
+    // current text. If not parseable, skip — a full page render will reconcile.
+    var el = document.querySelector(selector);
+    if (!el) return;
+    var m = /(\d+)/.exec(el.textContent || '');
+    if (!m) return;
+    var n = parseInt(m[1], 10) + delta;
+    el.textContent = (el.textContent || '').replace(/\d+/, String(n));
+}
+
+function liveDispatch(payload) {
+    var verbosity = (liveSettingsCache && liveSettingsCache.verbosity) || 'balanced';
+    var duration = (liveSettingsCache && liveSettingsCache.toast_duration_ms != null)
+        ? liveSettingsCache.toast_duration_ms
+        : EVENT_TOAST_DEFAULT_DURATION_MS;
+    EVENT_TOAST_DEFAULT_DURATION_MS = duration; // keep module-level in sync for any direct callers
+
+    var neu = payload && payload.new ? payload.new : {};
+
+    // Payment requests — always toast (all verbosities).
+    (neu.payment_requests || []).forEach(function(pr) {
+        var seenKey = 'pr:' + (pr.id || '');
+        if (!pr.id || liveIsSeen(seenKey)) return;
+        liveMarkSeen(seenKey);
+        liveBadgeBumpCount('[data-badge="payment-requests"]', 1);
+        showEventToast({
+            kind: 'payment_request',
+            title: 'New payment request',
+            message: (pr.amount != null ? pr.amount + ' ' : '') + (pr.currency || '') + (pr.description ? ' — ' + liveTruncate(pr.description, 40) : ''),
+            details: {
+                request_id: pr.id,
+                amount: pr.amount,
+                currency: pr.currency,
+                requester: liveShortHash(pr.requester_pubkey_hash),
+                description: pr.description,
+            },
+            dedupKey: seenKey,
+            duration: duration,
+            action: { label: 'View', onClick: function() { liveReloadToHash('payment-requests'); } },
+        });
+    });
+
+    // Contact requests — always toast. Address-type keys (http / https / tor
+    // and any future additions) arrive under `c.addresses` as a dict keyed by
+    // the schema column name — the server discovers these dynamically from
+    // INFORMATION_SCHEMA.COLUMNS on the `addresses` table, so new transports
+    // surface here without a client-side change.
+    (neu.contact_requests || []).forEach(function(c) {
+        var seenKey = 'c:' + (c.pubkey_hash || '');
+        if (!c.pubkey_hash || liveIsSeen(seenKey)) return;
+        liveMarkSeen(seenKey);
+        liveBadgeBumpCount('[data-badge="contact-requests"]', 1);
+        var details = { pubkey: liveShortHash(c.pubkey_hash) };
+        if (c.addresses && typeof c.addresses === 'object') {
+            for (var k in c.addresses) {
+                if (Object.prototype.hasOwnProperty.call(c.addresses, k)) {
+                    details[k] = c.addresses[k];
+                }
+            }
+        }
+        showEventToast({
+            kind: 'contact_request',
+            title: 'New contact request',
+            message: liveShortHash(c.pubkey_hash),
+            details: details,
+            dedupKey: seenKey,
+            duration: duration,
+            action: { label: 'View', onClick: function() { liveReloadToHash('pending-contacts'); } },
+        });
+    });
+
+    // Transactions — verbosity-gated.
+    //   Quiet:    only received-completed toasts
+    //   Balanced: same as Quiet for tx (+ dlq toasts; handled below)
+    //   Live:     everything toasts, including status churn on in-flight
+    (neu.transactions || []).forEach(function(tx) {
+        if (!tx.txid) return;
+        var status = (tx.status || '').toLowerCase();
+        var type = (tx.type || '').toLowerCase();
+        var isReceivedCompleted = type === 'received' && status === 'completed';
+        var shouldToast;
+        if (verbosity === 'live') {
+            shouldToast = true;
+        } else {
+            shouldToast = isReceivedCompleted;
+        }
+        // In-flight tx status updates always dedup to the same key so the
+        // pending→sent→completed progression is ONE toast, not three.
+        var seenKey = (isReceivedCompleted ? 'txc:' : 'tx:') + tx.txid;
+        var dedupKey = 'tx:' + tx.txid;
+        if (shouldToast) {
+            if (isReceivedCompleted && liveIsSeen(seenKey)) return;
+            if (isReceivedCompleted) liveMarkSeen(seenKey);
+            showEventToast({
+                kind: isReceivedCompleted ? 'tx_received' : 'tx_status',
+                title: isReceivedCompleted ? 'Payment received' : ('Transaction ' + status),
+                message: (tx.amount != null ? tx.amount + ' ' : '') + (tx.currency || ''),
+                details: {
+                    txid: liveShortHash(tx.txid),
+                    type: tx.type,
+                    status: tx.status,
+                    amount: tx.amount,
+                    currency: tx.currency,
+                    sender: liveShortHash(tx.sender_address),
+                    receiver: liveShortHash(tx.receiver_address),
+                    description: tx.description,
+                },
+                dedupKey: dedupKey,
+                duration: duration,
+                action: { label: 'View', onClick: function() { liveReloadToHash('transactions'); } },
+            });
+        }
+        // Badge bump only for brand-new received txs (not status churn).
+        if (isReceivedCompleted && !liveIsSeen('txb:' + tx.txid)) {
+            liveMarkSeen('txb:' + tx.txid);
+            liveBadgeBumpCount('[data-badge="recent-transactions"]', 1);
+        }
+    });
+
+    // DLQ — verbosity-gated. Balanced + Live toast; Quiet is badge-only.
+    (neu.dlq || []).forEach(function(d) {
+        if (!d.id) return;
+        var seenKey = 'dlq:' + d.id;
+        if (liveIsSeen(seenKey)) return;
+        liveMarkSeen(seenKey);
+        liveBadgeBumpCount('[data-badge="dlq"]', 1);
+        if (verbosity === 'quiet') return;
+        showEventToast({
+            kind: 'dlq',
+            title: 'Delivery failure',
+            message: (d.message_type || 'message') + ' — ' + (d.status || ''),
+            details: {
+                id: d.id,
+                message_type: d.message_type,
+                message_id: liveShortHash(d.message_id),
+                status: d.status,
+            },
+            dedupKey: seenKey,
+            duration: duration,
+            action: { label: 'View', onClick: function() { liveReloadToHash('dlq'); } },
+        });
+    });
+}
+
+function livePollOnce() {
+    if (liveInflight) return;
+    if (document.hidden) return;
+    liveInflight = true;
+    var url = window.location.pathname + '?check_incoming=1&since=' + encodeURIComponent(liveSinceTs) + '&_=' + Date.now();
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.timeout = 30000;
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        liveInflight = false;
+        if (xhr.status < 200 || xhr.status >= 300) return;
+        var data = null;
+        try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
+        if (!data) return;
+        if (data.settings) {
+            liveSettingsCache = data.settings;
+            // Server disabled the feature → stop polling. Client can re-enable
+            // on next page load.
+            if (liveSettingsCache.enabled === false) {
+                liveStopPolling();
+                return;
+            }
+        }
+        // Overlap the next cursor by 1 second so we don't silently drop
+        // events whose DB timestamp rounds to the same integer second as
+        // the server's `time()` call but which landed *after* the query
+        // ran. Client-side dedup (`liveIsSeen` + `eventToastsByDedupKey`)
+        // absorbs the redundant fire on the next poll.
+        if (data.now) liveSinceTs = Math.max(0, data.now - 1);
+        liveDispatch(data);
+    };
+    xhr.ontimeout = function() { liveInflight = false; };
+    xhr.onerror = function() { liveInflight = false; };
+    xhr.send();
+}
+
+function liveSchedule() {
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+    if (typeof liveNotificationsEnabled !== 'undefined' && !liveNotificationsEnabled) return;
+    liveTimer = setTimeout(function() {
+        livePollOnce();
+        liveSchedule();
+    }, liveComputeInterval());
+}
+
+function liveStartPolling() {
+    if (typeof liveNotificationsEnabled === 'undefined' || !liveNotificationsEnabled) return;
+    // First start: since = now - 60s so we don't re-toast anything rendered
+    // on first paint, but still catch any arrivals right after page load.
+    // Subsequent calls (e.g. tab coming back from `visibilitychange:hidden`)
+    // must PRESERVE the cursor — otherwise events accrued while the tab was
+    // hidden get silently dropped on resume.
+    if (!liveSinceTs) {
+        liveSinceTs = Math.floor(Date.now() / 1000) - 60;
+    }
+    liveSchedule();
+}
+function liveStopPolling() {
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+}
+
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        liveStopPolling();
+    } else {
+        liveStartPolling();
+    }
+});
+window.addEventListener('beforeunload', liveStopPolling);
 
 // P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
 function approveP2pTransaction(hash, candidateId) {
@@ -5828,6 +7359,10 @@ document.addEventListener('DOMContentLoaded', function() {
             showInProgressToasts();
         }
     }
+    // Start the live event notifications poll (independent of the 15s
+    // reload). Visibility-gated, idle-backoff, modal-suppressed — safe to
+    // kick off unconditionally when enabled.
+    liveStartPolling();
 
     // Load candidates for multi-candidate P2P approval rows on page load
     var candidateContainers = document.querySelectorAll('[id^="p2p-candidates-"]');
@@ -5874,6 +7409,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 }
             });
         },
+        'exportAddressQr': function(el) {
+            exportAddressQr(
+                el.getAttribute('data-qr-container'),
+                el.getAttribute('data-qr-address') || '',
+                el.getAttribute('data-qr-name') || ''
+            );
+        },
 
         // Navigation & reload
         'reloadWithHash': function(el) {
@@ -5905,9 +7447,44 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openTransactionModal(index);
         },
         'openTransactionModalByTxid': function(el) {
+            // Preserve the current stack state whenever the click
+            // originates *inside* the tx modal itself (e.g. the Previous
+            // Tx link chaining from one tx to the prior one) — otherwise
+            // we'd strip `modal-stack-top` mid-traversal and drop the tx
+            // modal behind whichever modal it was stacked on top of.
+            //
+            // Only opt in / out of the stack when the click came from a
+            // *different* modal. DLQ detail modal → Transaction ID adds
+            // the class; a click from outside any modal clears it so a
+            // stale flag from a previous session doesn't survive.
+            var txModalEl = document.getElementById('transactionModal');
+            if (txModalEl) {
+                var originModal = el.closest ? el.closest('.modal') : null;
+                var originatedInTxModal = (originModal && originModal.id === 'transactionModal');
+                if (!originatedInTxModal) {
+                    if (originModal
+                        && originModal.style.display !== 'none'
+                        && (originModal.offsetParent !== null || originModal.classList.contains('active'))) {
+                        txModalEl.classList.add('modal-stack-top');
+                    } else {
+                        txModalEl.classList.remove('modal-stack-top');
+                    }
+                }
+            }
             openTransactionModalByTxid(el.getAttribute('data-txid'));
         },
         'closeTransactionModal': function() { closeTransactionModal(); },
+        // Jump from the Transaction Details modal to a contact's detail modal
+        // (e.g. clicking the "To" / "From" party, or a P2P end recipient).
+        // The contact modal is stacked on top of the tx modal so closing it
+        // returns the user to the transaction they were investigating.
+        'jumpToContactFromTxModal': function(el) {
+            var cid = el.getAttribute('data-contact-id');
+            if (!cid) return;
+            var contactModalEl = document.getElementById('contactModal');
+            if (contactModalEl) contactModalEl.classList.add('modal-stack-top');
+            openContactByContactId(cid);
+        },
 
         // P2P transaction approval
         'approveP2pTransaction': function(el) {
@@ -5960,7 +7537,16 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'acceptChainDrop': function() { acceptChainDrop(); },
         'rejectChainDrop': function() { rejectChainDrop(); },
         'refreshContactModalTransactions': function() { refreshContactModalTransactions(); },
-        'hideContactTxDetail': function() { hideContactTxDetail(); },
+
+        // Server-side "Search entire database" actions — bypass the
+        // local-filter loop and ask the backend to LIKE across the full
+        // table so old rows not yet Load-older'd into the DOM surface.
+        'searchTransactionsDatabase':    function() { searchTransactionsDatabase(); },
+        'searchPaymentRequestsDatabase': function() { searchPaymentRequestsDatabase(); },
+        'clearSearchResults': function(el) {
+            var key = el.getAttribute('data-search-key') || '';
+            clearSearchResults(key);
+        },
 
         // Contact list
 
@@ -5990,7 +7576,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         // Wallet
         'refreshWalletData': function() { refreshWalletData(); },
-        'toggleP2pInfo': function() { toggleP2pInfo(); },
 
         // Payment request modals
         'openPrPendingModal': function(el) { openPrPendingModal(el); },
@@ -6018,6 +7603,40 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'revokeAllRememberSessions': function(el) {
             if (!confirm('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.')) return;
             revokeAllRememberSessions(el);
+        },
+        'openPendingContactModal': function(el) {
+            // Row-click handler for the pending-contacts table. Reads the
+            // target modal id from data-modal-id and un-hides it. Each
+            // pending contact gets its own inline modal so the existing
+            // form PHP doesn't need to be JS-serialized.
+            var modalId = el.getAttribute('data-modal-id');
+            if (!modalId) return;
+            var modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.remove('d-none');
+        },
+        'closePendingContactModal': function(el) {
+            var modalId = el.getAttribute('data-modal-id');
+            if (!modalId) return;
+            var modal = document.getElementById(modalId);
+            if (modal) modal.classList.add('d-none');
+        },
+        'openResetToDefaultsModal': function() {
+            var modal = document.getElementById('settingsResetToDefaultsModal');
+            var input = document.getElementById('settingsResetConfirm');
+            var btn = document.getElementById('settingsResetSubmit');
+            if (!modal || !input || !btn) return;
+            input.value = '';
+            btn.disabled = true;
+            input.oninput = function() {
+                btn.disabled = input.value.trim().toLowerCase() !== 'reset';
+            };
+            modal.classList.remove('d-none');
+            setTimeout(function() { input.focus(); }, 50);
+        },
+        'closeResetToDefaultsModal': function() {
+            var modal = document.getElementById('settingsResetToDefaultsModal');
+            if (modal) modal.classList.add('d-none');
         },
         'toggleDlqDropdown': function(el) {
             var targetId = el.getAttribute('data-target');
@@ -6051,12 +7670,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (toast && toast.parentNode) { toast.parentNode.removeChild(toast); }
         },
 
-        // Contact modal transaction detail
-        'showContactTxDetail': function(el) {
-            var index = parseInt(el.getAttribute('data-index'), 10);
-            showContactTxDetail(index);
-        },
-
         // Analytics consent modal
         'analyticsConsentEnable': function() { submitAnalyticsConsent(true); },
         'analyticsConsentSkip': function() { submitAnalyticsConsent(false); },
@@ -6084,7 +7697,38 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             showLoader('Sending payment request...', 'Connecting to contact server. The message processor will continue retrying in the background.');
             startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
             form.submit();
-        }
+        },
+
+        // API Keys
+        'openApiKeyCreateModal': function() { window.apiKeys.openCreateModal(); },
+        'closeApiKeyCreateModal': function() { window.apiKeys.closeCreateModal(); },
+        'submitApiKeyCreate': function() { window.apiKeys.submitCreate(); },
+        'applyApiKeyPreset': function(el) { window.apiKeys.applyPreset(el.getAttribute('data-preset')); },
+        'toggleApiKey': function(el) { window.apiKeys.toggle(el.getAttribute('data-key-id'), el.getAttribute('data-enable') === '1'); },
+        'deleteApiKeyPrompt': function(el) {
+            window.apiKeys.openDeleteModal(el.getAttribute('data-key-id'), el.getAttribute('data-label') || '');
+        },
+        'closeApiKeyDeleteModal': function() { window.apiKeys.closeDeleteModal(); },
+        'submitApiKeyDelete': function() { window.apiKeys.submitDelete(); },
+        'submitApiKeyEdit': function() { window.apiKeys.submitEdit(); },
+        'disableAllApiKeysPrompt': function() { window.apiKeys.openDisableAllModal(); },
+        'closeApiKeysDisableAllModal': function() { window.apiKeys.closeDisableAllModal(); },
+        'submitApiKeysDisableAll': function() { window.apiKeys.submitDisableAll(); },
+        'deleteAllApiKeysPrompt': function() { window.apiKeys.openDeleteAllModal(); },
+        'closeApiKeysDeleteAllModal': function() { window.apiKeys.closeDeleteAllModal(); },
+        'submitApiKeysDeleteAll': function() { window.apiKeys.submitDeleteAll(); },
+        'sortApiKeys': function(el) { window.apiKeys.sort(el.getAttribute('data-sort-column')); },
+        'filterApiKeys': function() { window.apiKeys.applyFilters(); },
+        'copyApiKeyId': function(el) { window.apiKeys.copyKeyId(el.getAttribute('data-key-id')); },
+        'openApiKeyDetail': function(el) { window.apiKeys.openDetailModal(el.getAttribute('data-key-id')); },
+        'closeApiKeysDetailModal': function() { window.apiKeys.closeDetailModal(); },
+        'detailToggleApiKey': function() { window.apiKeys.detailToggle(); },
+        'detailDeleteApiKey': function() { window.apiKeys.detailDelete(); },
+        'copyApiKeyIdFromDetail': function() { window.apiKeys.copyDetailKeyId(); },
+        'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
+        'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
+        'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
+        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -6146,6 +7790,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'filterTransactions') { filterTransactions(); }
         else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         else if (action === 'setDlqFilter') { setDlqFilter(); }
+        else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
@@ -6182,5 +7827,878 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         if (action === 'filterContacts') { filterContacts(); }
         if (action === 'filterTransactions') { filterTransactions(); }
         if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
+        if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
     }, false);
+
+    // Delegated Enter-keypress handler — lets an input opt into "pressing
+    // Enter runs X" without hand-rolling a listener per field. Used by
+    // the search inputs to trigger the server-side database search, so
+    // the user can just type a term and hit Enter.
+    document.addEventListener('keydown', function(event) {
+        if (event.key !== 'Enter' && event.keyCode !== 13) return;
+        var el = event.target;
+        var action = el.getAttribute && el.getAttribute('data-action-keypress-enter');
+        if (!action) return;
+        event.preventDefault();
+        if (action === 'searchTransactionsDatabase') { searchTransactionsDatabase(); }
+        if (action === 'searchPaymentRequestsDatabase') { searchPaymentRequestsDatabase(); }
+    }, false);
+
+    // ========================================================================
+    // API Keys GUI module
+    //
+    // Backs the "API Keys" section in the Settings tab. All mutating calls
+    // (create / enable / disable / delete) round-trip through an additional
+    // sensitive-action gate: the server answers 401 sensitive_access_required
+    // when the grant is missing or expired, and the module re-prompts for the
+    // auth code before retrying the original action. This is independent of
+    // "Remember me" — a remembered session is still prompted here.
+    // ========================================================================
+    window.apiKeys = (function() {
+        var pendingAction = null;   // { fn: Function, label: string } to retry after verify
+        var pendingDelete = null;   // { keyId, label }
+        var pendingEdit = null;     // keyId currently being edited
+        var detailKeyId = null;     // keyId of the key in the detail modal
+        var lastCreated = null;     // { keyId, secret } for copy-to-clipboard
+        var keysById = {};          // cache of last rendered keys so Edit can prefill
+        var loaded = false;
+        // Table sort state: column name + asc/desc; null = unsorted (use stored order)
+        var sortState = { column: null, direction: null };
+        // Persistent order used when sort is cleared (server returns newest-first)
+        var originalOrder = [];
+
+        function csrfToken() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return (el && el.value) ? el.value : '';
+        }
+
+        function post(payload) {
+            var body = new FormData();
+            Object.keys(payload).forEach(function(k) {
+                var v = payload[k];
+                if (Array.isArray(v)) {
+                    v.forEach(function(item) { body.append(k + '[]', item); });
+                } else if (v !== null && v !== undefined) {
+                    body.append(k, v);
+                }
+            });
+            if (!body.has('csrf_token')) { body.append('csrf_token', csrfToken()); }
+            return fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) {
+                    return { status: res.status, data: data };
+                });
+            });
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatWhen(ts) {
+            if (!ts) return 'Never';
+            // Backend returns SQL datetime strings. Parse as UTC then show local.
+            var d = new Date(ts.replace(' ', 'T') + 'Z');
+            if (isNaN(d.getTime())) return escapeHtml(ts);
+            return d.toLocaleString();
+        }
+
+        function renderAccessState(secondsRemaining) {
+            var el = document.getElementById('api-keys-access-state');
+            if (!el) return;
+            if (secondsRemaining > 0) {
+                el.textContent = 'Edits unlocked for ' + Math.ceil(secondsRemaining / 60) + ' min';
+            } else {
+                el.textContent = '';
+            }
+        }
+
+        function renderList(keys) {
+            keys = keys || [];
+            keysById = {};
+            originalOrder = [];
+            keys.forEach(function(k) {
+                keysById[k.key_id] = k;
+                originalOrder.push(k.key_id);
+            });
+
+            // Bulk-action button visibility based on what's actually present
+            var activeCount = keys.filter(function(k) { return k.enabled; }).length;
+            var disableAllBtn = document.getElementById('apiKeysDisableAllBtn');
+            var deleteAllBtn  = document.getElementById('apiKeysDeleteAllBtn');
+            if (disableAllBtn) disableAllBtn.classList.toggle('d-none', activeCount === 0);
+            if (deleteAllBtn)  deleteAllBtn.classList.toggle('d-none', keys.length === 0);
+
+            var emptyEl  = document.getElementById('api-keys-empty');
+            var tableEl  = document.getElementById('api-keys-table-wrapper');
+            var filterEl = document.getElementById('api-keys-filters');
+
+            if (keys.length === 0) {
+                if (emptyEl) {
+                    emptyEl.innerHTML = 'No API keys yet. Create one to let an external application connect to this wallet.';
+                    emptyEl.classList.remove('d-none');
+                }
+                if (tableEl)  tableEl.classList.add('d-none');
+                if (filterEl) filterEl.classList.add('d-none');
+                return;
+            }
+
+            if (emptyEl)  emptyEl.classList.add('d-none');
+            if (tableEl)  tableEl.classList.remove('d-none');
+            if (filterEl) filterEl.classList.remove('d-none');
+
+            // Repopulate permission dropdown with the union of perms actually in use
+            populatePermissionFilter(keys);
+
+            // Render the body according to current sort state, then apply filters
+            renderTableBody(sortedKeys());
+            applyTableFilters();
+            renderSortIndicators();
+        }
+
+        function sortedKeys() {
+            var arr = originalOrder.map(function(id) { return keysById[id]; }).filter(Boolean);
+            if (!sortState.column) return arr;
+            var col = sortState.column;
+            var dir = sortState.direction === 'desc' ? -1 : 1;
+            arr.sort(function(a, b) {
+                var av = a[col], bv = b[col];
+                // Nulls always sink to the bottom regardless of direction
+                if (av == null && bv == null) return 0;
+                if (av == null) return 1;
+                if (bv == null) return -1;
+                if (col === 'rate_limit_per_minute') {
+                    return (Number(av) - Number(bv)) * dir;
+                }
+                // timestamps: lexical compare works for ISO/SQL strings
+                return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
+            });
+            return arr;
+        }
+
+        // Collapse permissions by category for display only. Given
+        //   ['wallet:read', 'wallet:send', 'contacts:read', 'admin']
+        // returns ['wallet:read/send', 'contacts:read', 'admin']. Wildcards
+        // (wallet:*) and scopeless entries (admin) are never folded since
+        // they'd misrepresent scope. The underlying data row stays the raw
+        // list so filter/search/sort are unaffected.
+        function groupPermissionsForDisplay(perms) {
+            if (!perms || !perms.length) return [];
+            var buckets = {};
+            var order = [];
+            var standalone = [];
+            perms.forEach(function(p) {
+                var parts = String(p).split(':');
+                if (parts.length !== 2) { standalone.push(p); return; }
+                var cat = parts[0], action = parts[1];
+                if (action === '*') {
+                    var wKey = '__w_' + cat;
+                    buckets[wKey] = [p];
+                    if (order.indexOf(wKey) === -1) order.push(wKey);
+                    return;
+                }
+                if (!buckets[cat]) { buckets[cat] = []; order.push(cat); }
+                buckets[cat].push(action);
+            });
+            return order.map(function(key) {
+                var vals = buckets[key];
+                if (key.indexOf('__w_') === 0) return vals[0];
+                return key + ':' + vals.join('/');
+            }).concat(standalone);
+        }
+
+        function renderTableBody(keys) {
+            var tbody = document.getElementById('api-keys-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = keys.map(function(k) {
+                var perms = k.permissions || [];
+                var displayPerms = groupPermissionsForDisplay(perms);
+                var permChips = displayPerms.length
+                    ? displayPerms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted">—</span>';
+                var statusDot = k.enabled
+                    ? '<i class="fas fa-circle api-keys-status-dot api-keys-status-dot--active" title="Active"></i>'
+                    : '<i class="fas fa-circle api-keys-status-dot api-keys-status-dot--disabled" title="Disabled"></i>';
+                var toggleLabel = k.enabled ? 'Disable' : 'Enable';
+                var toggleClass = k.enabled ? 'btn-secondary' : 'btn-primary';
+                var enableFlag = k.enabled ? '0' : '1';
+                var shortId = k.key_id.length > 14 ? k.key_id.slice(0, 13) + '…' : k.key_id;
+                var permData = perms.join(',').toLowerCase();
+                var searchHay = (k.name + ' ' + k.key_id).toLowerCase();
+
+                return '' +
+                    '<tr class="api-keys-row"' +
+                        ' data-action="openApiKeyDetail"' +
+                        ' data-key-id="' + escapeHtml(k.key_id) + '"' +
+                        ' data-search="' + escapeHtml(searchHay) + '"' +
+                        ' data-perms="' + escapeHtml(permData) + '"' +
+                        ' data-status="' + (k.enabled ? 'active' : 'disabled') + '">' +
+                        '<td class="col-api-keys-status text-center">' + statusDot + '</td>' +
+                        '<td><div class="api-keys-label-truncate" title="' + escapeHtml(k.name) + '"><strong>' + escapeHtml(k.name) + '</strong></div></td>' +
+                        '<td>' +
+                            '<div class="api-keys-id-cell">' +
+                                '<code title="' + escapeHtml(k.key_id) + '">' + escapeHtml(shortId) + '</code>' +
+                                '<button type="button" class="api-keys-id-copy" title="Copy full key ID" ' +
+                                    'data-action="copyApiKeyId" data-key-id="' + escapeHtml(k.key_id) + '" ' +
+                                    'data-stop-propagation="true">' +
+                                    '<i class="fas fa-copy"></i>' +
+                                '</button>' +
+                            '</div>' +
+                        '</td>' +
+                        '<td><div class="api-keys-perm-cell">' + permChips + '</div></td>' +
+                        '<td class="text-right">' + (k.rate_limit_per_minute || 0) + '</td>' +
+                        '<td>' + formatWhen(k.last_used_at) + '</td>' +
+                        '<td>' + (k.expires_at ? formatWhen(k.expires_at) : '<span class="text-muted">Never</span>') + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        function populatePermissionFilter(keys) {
+            var sel = document.getElementById('api-keys-filter-permission');
+            if (!sel) return;
+            var prev = sel.value || 'all';
+            var seen = {};
+            keys.forEach(function(k) {
+                (k.permissions || []).forEach(function(p) { seen[p] = true; });
+            });
+            var perms = Object.keys(seen).sort();
+            sel.innerHTML = '<option value="all">All permissions</option>' +
+                perms.map(function(p) {
+                    return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>';
+                }).join('');
+            // Preserve the user's selection across refreshes if it's still a valid option
+            sel.value = (prev === 'all' || seen[prev]) ? prev : 'all';
+        }
+
+        function applyTableFilters() {
+            var q      = (document.getElementById('api-keys-search') || {}).value || '';
+            var perm   = (document.getElementById('api-keys-filter-permission') || {}).value || 'all';
+            var status = (document.getElementById('api-keys-filter-status') || {}).value || 'all';
+            q = q.trim().toLowerCase();
+
+            var rows = document.querySelectorAll('#api-keys-tbody .api-keys-row');
+            var visible = 0;
+            rows.forEach(function(row) {
+                var show = true;
+                if (q && (row.getAttribute('data-search') || '').indexOf(q) === -1) show = false;
+                if (show && perm !== 'all') {
+                    var perms = (row.getAttribute('data-perms') || '').split(',');
+                    if (perms.indexOf(perm.toLowerCase()) === -1) show = false;
+                }
+                if (show && status !== 'all' && row.getAttribute('data-status') !== status) show = false;
+                row.classList.toggle('d-none', !show);
+                if (show) visible++;
+            });
+
+            var noMatches = document.getElementById('api-keys-no-matches');
+            if (noMatches) noMatches.classList.toggle('d-none', visible !== 0 || rows.length === 0);
+        }
+
+        function renderSortIndicators() {
+            document.querySelectorAll('.api-keys-table thead th.sortable').forEach(function(th) {
+                var col = th.getAttribute('data-sort-column');
+                var icon = th.querySelector('.sort-indicator');
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (icon) icon.className = 'fas fa-sort sort-indicator';
+                if (col === sortState.column && sortState.direction) {
+                    th.classList.add('sort-' + sortState.direction);
+                    if (icon) {
+                        icon.className = 'fas fa-sort-' + (sortState.direction === 'asc' ? 'up' : 'down') +
+                                         ' sort-indicator';
+                    }
+                }
+            });
+        }
+
+        function handleSort(column) {
+            if (!column) return;
+            if (sortState.column !== column) {
+                sortState = { column: column, direction: 'asc' };
+            } else if (sortState.direction === 'asc') {
+                sortState.direction = 'desc';
+            } else {
+                sortState = { column: null, direction: null };  // third click clears
+            }
+            renderTableBody(sortedKeys());
+            applyTableFilters();
+            renderSortIndicators();
+        }
+
+        // --- Row-click combined detail + edit modal ---------------------
+        // Populates read-only reference fields AND prefills the editable
+        // inputs (label / rate limit / expiry) so the user can adjust in one
+        // place. Shares pendingEdit + the existing submitEdit() flow.
+        function openDetailModal(keyId) {
+            var k = keysById[keyId];
+            if (!k) {
+                showToast('Error', 'Key details unavailable — refresh and try again', 'error');
+                return;
+            }
+            detailKeyId = keyId;
+            pendingEdit = keyId;  // enables the shared submitEdit()
+
+            document.getElementById('apiKeysDetailLabel').textContent = k.name || '';
+            document.getElementById('apiKeysDetailKeyId').textContent = k.key_id;
+            document.getElementById('apiKeysDetailStatus').innerHTML = k.enabled
+                ? '<span class="tx-status-badge tx-status-completed">Active</span>'
+                : '<span class="tx-status-badge tx-status-rejected">Disabled</span>';
+            document.getElementById('apiKeysDetailCreated').textContent = formatWhen(k.created_at);
+            document.getElementById('apiKeysDetailLastUsed').textContent = formatWhen(k.last_used_at);
+
+            // Editable fields — same IDs as the (now-retired) standalone edit
+            // modal, so submitEdit() works unchanged
+            var perms = k.permissions || [];
+            var displayPerms = groupPermissionsForDisplay(perms);
+            var permsEl = document.getElementById('apiKeysEditPermissions');
+            if (permsEl) {
+                permsEl.innerHTML = displayPerms.length
+                    ? displayPerms.map(function(p) { return '<span class="perm-chip">' + escapeHtml(p) + '</span>'; }).join('')
+                    : '<span class="text-muted">(none)</span>';
+            }
+
+            document.getElementById('apiKeyEditLabel').value = k.name || '';
+            var rateInput = document.getElementById('apiKeyEditRateLimit');
+            rateInput.value = k.rate_limit_per_minute || 100;
+            rateInput.oninput = function() { updateRateLimitWarning(k.rate_limit_per_minute); };
+            updateRateLimitWarning(k.rate_limit_per_minute);
+
+            // Expires select — "Keep current" default, disable presets that would
+            // extend a currently-finite expiry
+            var daysLeft = daysUntil(k.expires_at);
+            var select = document.getElementById('apiKeyEditExpires');
+            select.innerHTML = '';
+            var opts = [
+                { v: '', label: k.expires_at ? 'Keep current (expires ' + formatWhen(k.expires_at) + ')' : 'Keep current (never expires)' },
+                { v: '30',  label: '30 days from now' },
+                { v: '90',  label: '90 days from now' },
+                { v: '365', label: '1 year from now' }
+            ];
+            opts.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.v;
+                opt.textContent = o.label;
+                if (o.v !== '' && daysLeft !== null && Number(o.v) > daysLeft) {
+                    opt.disabled = true;
+                    opt.textContent += ' — would extend, blocked';
+                }
+                select.appendChild(opt);
+            });
+            select.value = '';
+
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+
+            // Footer toggle button — label + color reflect current state
+            var toggleBtn = document.getElementById('apiKeysDetailToggleBtn');
+            toggleBtn.innerHTML = k.enabled
+                ? '<i class="fas fa-ban"></i> Disable'
+                : '<i class="fas fa-play"></i> Enable';
+            toggleBtn.className = 'btn btn-compact ' + (k.enabled ? 'btn-secondary' : 'btn-primary');
+            toggleBtn.setAttribute('data-enable', k.enabled ? '0' : '1');
+
+            showModal('apiKeysDetailModal');
+        }
+
+        function closeDetailModal() {
+            detailKeyId = null;
+            pendingEdit = null;
+            hideModal('apiKeysDetailModal');
+        }
+
+        function detailToggle() {
+            if (!detailKeyId) return;
+            var k = keysById[detailKeyId];
+            if (!k) return;
+            var keyId = detailKeyId;
+            var enable = !k.enabled;
+            closeDetailModal();
+            toggle(keyId, enable);
+        }
+
+        function detailDelete() {
+            if (!detailKeyId) return;
+            var k = keysById[detailKeyId];
+            if (!k) return;
+            var keyId = detailKeyId;
+            var label = k.name || '';
+            closeDetailModal();
+            openDeleteModal(keyId, label);
+        }
+
+        function copyDetailKeyId() {
+            if (detailKeyId) copyKeyId(detailKeyId);
+        }
+
+        function copyKeyId(keyId) {
+            if (!keyId) return;
+            var ok = function() { showToast('Copied', 'Key ID copied to clipboard', 'success'); };
+            var fail = function() { showToast('Copy failed', 'Select and copy manually', 'error'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(keyId).then(ok, fail);
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = keyId;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); ok(); } catch (e) { fail(); }
+                document.body.removeChild(ta);
+            }
+        }
+
+        function refresh() {
+            return post({ action: 'apiKeysList' }).then(function(r) {
+                if (r.data && r.data.success) {
+                    renderList(r.data.keys || []);
+                    renderAccessState(r.data.seconds_remaining || 0);
+                    loaded = true;
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not load API keys', 'error');
+                }
+            }).catch(function() {
+                showToast('Error', 'Network error while loading API keys', 'error');
+            });
+        }
+
+        function ensureLoadedOnTab() {
+            // Lazy-load the list the first time the user switches to the
+            // Settings tab, so we don't fire an AJAX call on every page load
+            // for users who never open this section.
+            var settingsPanel = document.getElementById('tab-panel-settings');
+            if (!settingsPanel) return;
+            var observer = new MutationObserver(function() {
+                if (settingsPanel.style.display !== 'none' && !loaded) {
+                    refresh();
+                }
+            });
+            observer.observe(settingsPanel, { attributes: true, attributeFilter: ['style'] });
+            // Handle initial render (tab already visible, e.g. deep link)
+            if (settingsPanel.style.display !== 'none' && !loaded) {
+                refresh();
+            }
+        }
+
+        function showModal(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.remove('d-none');
+        }
+        function hideModal(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.add('d-none');
+        }
+
+        // --- Create -------------------------------------------------------
+        function openCreateModal() {
+            var form = document.getElementById('apiKeysCreateForm');
+            if (form) form.reset();
+            var err = document.getElementById('apiKeysCreateError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+            showModal('apiKeysCreateModal');
+        }
+
+        function closeCreateModal() { hideModal('apiKeysCreateModal'); }
+
+        function applyPreset(preset) {
+            var boxes = document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]');
+            if (preset === 'clear') {
+                boxes.forEach(function(b) { b.checked = false; });
+                return;
+            }
+            var presets = {
+                'read_only': ['wallet:read', 'contacts:read', 'system:read', 'backup:read'],
+                'full_access': ['admin']
+            };
+            var target = presets[preset] || [];
+            boxes.forEach(function(b) { b.checked = target.indexOf(b.value) !== -1; });
+        }
+
+        function collectPermissions() {
+            var out = [];
+            document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]:checked').forEach(function(b) {
+                out.push(b.value);
+            });
+            return out;
+        }
+
+        function submitCreate() {
+            var name = document.getElementById('apiKeyName').value.trim();
+            var permissions = collectPermissions();
+            var rate = document.getElementById('apiKeyRateLimit').value;
+            var expires = document.getElementById('apiKeyExpires').value;
+            var err = document.getElementById('apiKeysCreateError');
+
+            if (!name) { showCreateError('Please give the key a label.'); return; }
+            if (permissions.length === 0) { showCreateError('Select at least one permission.'); return; }
+
+            withSensitiveAccess(function() {
+                return post({
+                    action: 'apiKeysCreate',
+                    name: name,
+                    permissions: permissions,
+                    rate_limit_per_minute: rate,
+                    expires_in_days: expires
+                });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    closeCreateModal();
+                    showRevealModal(r.data.key);
+                    refresh();
+                } else {
+                    showCreateError((r.data && (r.data.message || r.data.error)) || 'Could not create key');
+                }
+            }, 'Create API key');
+        }
+
+        function showCreateError(msg) {
+            var err = document.getElementById('apiKeysCreateError');
+            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+        }
+
+        // --- Reveal (one-time) -------------------------------------------
+        function showRevealModal(key) {
+            lastCreated = { keyId: key.key_id, secret: key.secret };
+            document.getElementById('apiKeysRevealKeyId').textContent = key.key_id;
+            document.getElementById('apiKeysRevealSecret').textContent = key.secret;
+            var ack = document.getElementById('apiKeysRevealAck');
+            var err = document.getElementById('apiKeysRevealAckError');
+            ack.checked = false;
+            if (err) err.classList.add('d-none');
+            ack.onchange = function() {
+                if (ack.checked && err) err.classList.add('d-none');
+            };
+            showModal('apiKeysRevealModal');
+        }
+
+        function closeRevealModal() {
+            var ack = document.getElementById('apiKeysRevealAck');
+            var err = document.getElementById('apiKeysRevealAckError');
+            if (ack && !ack.checked) {
+                if (err) err.classList.remove('d-none');
+                return;
+            }
+            // Clear the secret from memory and from the DOM the moment the
+            // user closes. The server has no way to re-show this.
+            document.getElementById('apiKeysRevealSecret').textContent = '';
+            document.getElementById('apiKeysRevealKeyId').textContent = '';
+            lastCreated = null;
+            hideModal('apiKeysRevealModal');
+        }
+
+        function copyToClipboard(targetId) {
+            var el = document.getElementById(targetId);
+            if (!el) return;
+            var text = el.textContent || '';
+            if (!text) return;
+            var ok = function() { showToast('Copied', 'Copied to clipboard', 'success'); };
+            var fail = function() { showToast('Copy failed', 'Select and copy manually', 'error'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(ok, fail);
+            } else {
+                // Fallback — works over non-HTTPS and older browsers.
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); ok(); } catch (e) { fail(); }
+                document.body.removeChild(ta);
+            }
+        }
+
+        // --- Toggle / delete ---------------------------------------------
+        function toggle(keyId, enable) {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysToggle', key_id: keyId, enable: enable ? '1' : '0' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Saved', enable ? 'API key enabled' : 'API key disabled', 'success');
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not update key', 'error');
+                }
+            }, enable ? 'Enable API key' : 'Disable API key');
+        }
+
+        function openDeleteModal(keyId, label) {
+            pendingDelete = { keyId: keyId, label: label };
+            document.getElementById('apiKeysDeleteLabel').textContent = label;
+            var confirmInput = document.getElementById('apiKeysDeleteConfirm');
+            var submitBtn = document.getElementById('apiKeysDeleteSubmit');
+            confirmInput.value = '';
+            submitBtn.disabled = true;
+            confirmInput.oninput = function() {
+                submitBtn.disabled = confirmInput.value.trim() !== label;
+            };
+            showModal('apiKeysDeleteModal');
+        }
+
+        function closeDeleteModal() {
+            pendingDelete = null;
+            hideModal('apiKeysDeleteModal');
+        }
+
+        function submitDelete() {
+            if (!pendingDelete) return;
+            var keyId = pendingDelete.keyId;
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDelete', key_id: keyId });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Deleted', 'API key deleted', 'success');
+                    closeDeleteModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not delete key', 'error');
+                }
+            }, 'Delete API key');
+        }
+
+        // --- Edit ---------------------------------------------------------
+        // Compute how many days remain on the key's current expiry so we
+        // can disable any preset option in the dropdown that would EXTEND
+        // it. The backend enforces this too; the UI hides extensions so
+        // the user doesn't pick an option that just errors.
+        function daysUntil(isoOrSqlTimestamp) {
+            if (!isoOrSqlTimestamp) return null;
+            var d = new Date(String(isoOrSqlTimestamp).replace(' ', 'T') + 'Z');
+            if (isNaN(d.getTime())) return null;
+            return Math.max(0, Math.floor((d.getTime() - Date.now()) / 86400000));
+        }
+
+        function updateRateLimitWarning(original) {
+            var input = document.getElementById('apiKeyEditRateLimit');
+            var warn  = document.getElementById('apiKeysEditRateLimitWarning');
+            if (!input || !warn) return;
+            var current = Number(input.value) || 0;
+            var was     = Number(original) || 0;
+            if (current > was) {
+                warn.textContent = 'Raising rate limit from ' + was + ' to ' + current +
+                    ' — existing callers can now send more traffic. Confirm this is intended.';
+                warn.classList.remove('d-none');
+            } else {
+                warn.classList.add('d-none');
+            }
+        }
+
+        function submitEdit() {
+            if (!pendingEdit) {
+                showToast('Error', 'Edit session lost — reopen the Edit dialog', 'error');
+                return;
+            }
+            var keyId = pendingEdit;
+            var original = keysById[keyId] || {};
+
+            // Clear any stale error from a prior click so the user sees the
+            // result of THIS attempt rather than yesterday's "Nothing changed."
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+
+            var name = document.getElementById('apiKeyEditLabel').value.trim();
+            var rate = document.getElementById('apiKeyEditRateLimit').value;
+            var expiresDays = document.getElementById('apiKeyEditExpires').value;
+
+            if (!name) { showEditError('Please give the key a label.'); return; }
+
+            var payload = { action: 'apiKeysUpdate', key_id: keyId };
+            var changed = false;
+            if (name !== original.name) { payload.name = name; changed = true; }
+            if (String(rate) !== String(original.rate_limit_per_minute)) {
+                payload.rate_limit_per_minute = rate;
+                changed = true;
+            }
+            if (expiresDays !== '') {
+                payload.expires_in_days = expiresDays;
+                changed = true;
+            }
+
+            if (!changed) {
+                showEditError('Nothing changed.');
+                return;
+            }
+
+            withSensitiveAccess(function() {
+                return post(payload);
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Saved', 'API key updated', 'success');
+                    closeDetailModal();
+                    refresh();
+                } else {
+                    showEditError((r.data && (r.data.message || r.data.error)) || 'Could not update key');
+                }
+            }, 'Edit API key');
+        }
+
+        function showEditError(msg) {
+            var err = document.getElementById('apiKeysEditError');
+            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+        }
+
+        // --- Bulk Disable / Delete ---------------------------------------
+        function openDisableAllModal() {
+            var active = Object.values(keysById).filter(function(k) { return k.enabled; }).length;
+            if (active === 0) {
+                showToast('Nothing to do', 'No active keys to disable', 'info');
+                return;
+            }
+            document.getElementById('apiKeysDisableAllCount').textContent = active;
+            showModal('apiKeysDisableAllModal');
+        }
+        function closeDisableAllModal() { hideModal('apiKeysDisableAllModal'); }
+        function submitDisableAll() {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDisableAll' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Disabled', 'Disabled ' + (r.data.count || 0) + ' key(s)', 'success');
+                    closeDisableAllModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not disable all keys', 'error');
+                }
+            }, 'Disable all API keys');
+        }
+
+        function openDeleteAllModal() {
+            var total = Object.keys(keysById).length;
+            if (total === 0) {
+                showToast('Nothing to do', 'No keys to delete', 'info');
+                return;
+            }
+            document.getElementById('apiKeysDeleteAllCount').textContent = total;
+            var input = document.getElementById('apiKeysDeleteAllConfirm');
+            var btn   = document.getElementById('apiKeysDeleteAllSubmit');
+            input.value = '';
+            btn.disabled = true;
+            input.oninput = function() {
+                btn.disabled = input.value.trim().toLowerCase() !== 'delete all';
+            };
+            showModal('apiKeysDeleteAllModal');
+        }
+        function closeDeleteAllModal() { hideModal('apiKeysDeleteAllModal'); }
+        function submitDeleteAll() {
+            withSensitiveAccess(function() {
+                return post({ action: 'apiKeysDeleteAll' });
+            }, function(r) {
+                if (r.data && r.data.success) {
+                    showToast('Deleted', 'Deleted ' + (r.data.count || 0) + ' key(s)', 'success');
+                    closeDeleteAllModal();
+                    refresh();
+                } else {
+                    showToast('Error', (r.data && r.data.message) || 'Could not delete all keys', 'error');
+                }
+            }, 'Delete all API keys');
+        }
+
+        // --- Sensitive-access gate ---------------------------------------
+        // On 401 sensitive_access_required, opens the verify modal and
+        // retries `requestFn` after the user re-auths — only then calls onResponse.
+        // A rejected request (network / JSON parse / server returning HTML for an
+        // unrouted action) surfaces as a toast instead of dying silently.
+        function withSensitiveAccess(requestFn, onResponse, label) {
+            var attempt = function() {
+                return requestFn().then(function(r) {
+                    if (r && r.status === 401 && r.data && r.data.error === 'sensitive_access_required') {
+                        pendingAction = { fn: attempt, label: label };
+                        openVerifyModal(r.data.message);
+                        return;
+                    }
+                    if (typeof onResponse === 'function') onResponse(r);
+                    return r;
+                }).catch(function(e) {
+                    showToast('Error', (label || 'Request') + ' failed — ' + (e && e.message ? e.message : 'network / server error'), 'error');
+                });
+            };
+            return attempt();
+        }
+
+        function openVerifyModal(message) {
+            var input = document.getElementById('apiKeysVerifyAuthcode');
+            var err = document.getElementById('apiKeysVerifyError');
+            input.value = '';
+            if (err) { err.classList.add('d-none'); err.textContent = ''; }
+            showModal('apiKeysVerifyModal');
+            setTimeout(function() { input.focus(); }, 50);
+        }
+
+        function closeVerifyModal() {
+            pendingAction = null;
+            hideModal('apiKeysVerifyModal');
+        }
+
+        function submitVerify() {
+            var input = document.getElementById('apiKeysVerifyAuthcode');
+            var err = document.getElementById('apiKeysVerifyError');
+            var code = input.value;
+            if (!code) { return; }
+
+            post({ action: 'apiKeysVerify', authcode: code }).then(function(r) {
+                if (r.data && r.data.success) {
+                    hideModal('apiKeysVerifyModal');
+                    input.value = '';
+                    renderAccessState(r.data.seconds_remaining || 0);
+                    if (pendingAction) {
+                        var fn = pendingAction.fn;
+                        pendingAction = null;
+                        fn();
+                    }
+                } else {
+                    if (err) {
+                        err.textContent = (r.data && r.data.error === 'invalid_authcode')
+                            ? 'Invalid auth code. Please try again.'
+                            : 'Could not verify. Please try again.';
+                        err.classList.remove('d-none');
+                    }
+                }
+            }).catch(function() {
+                if (err) {
+                    err.textContent = 'Network error. Please try again.';
+                    err.classList.remove('d-none');
+                }
+            });
+        }
+
+        // --- Init ---------------------------------------------------------
+        document.addEventListener('DOMContentLoaded', ensureLoadedOnTab);
+
+        return {
+            refresh: refresh,
+            openCreateModal: openCreateModal,
+            closeCreateModal: closeCreateModal,
+            submitCreate: submitCreate,
+            applyPreset: applyPreset,
+            toggle: toggle,
+            openDeleteModal: openDeleteModal,
+            closeDeleteModal: closeDeleteModal,
+            submitDelete: submitDelete,
+            submitEdit: submitEdit,
+            openDisableAllModal: openDisableAllModal,
+            closeDisableAllModal: closeDisableAllModal,
+            submitDisableAll: submitDisableAll,
+            openDeleteAllModal: openDeleteAllModal,
+            closeDeleteAllModal: closeDeleteAllModal,
+            submitDeleteAll: submitDeleteAll,
+            sort: handleSort,
+            applyFilters: applyTableFilters,
+            copyKeyId: copyKeyId,
+            openDetailModal: openDetailModal,
+            closeDetailModal: closeDetailModal,
+            detailToggle: detailToggle,
+            detailDelete: detailDelete,
+            copyDetailKeyId: copyDetailKeyId,
+            closeRevealModal: closeRevealModal,
+            copyToClipboard: copyToClipboard,
+            closeVerifyModal: closeVerifyModal,
+            submitVerify: submitVerify
+        };
+    })();
+
 })();
