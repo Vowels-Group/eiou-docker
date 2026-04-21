@@ -257,6 +257,67 @@ class UpdateCheckServiceTest extends TestCase
     }
 
     /**
+     * Wrapped bullet — continuation lines must fold into the preceding <li>
+     * rather than breaking off into their own paragraphs (which would also
+     * close the enclosing <ul> prematurely).
+     */
+    public function testMarkdownToHtmlFoldsLazyContinuationIntoListItem(): void
+    {
+        $md = "- First bullet that wraps onto\n"
+            . "  a second line of prose\n"
+            . "- Second bullet";
+
+        $result = UpdateCheckService::markdownToHtml($md);
+
+        $this->assertSame(
+            '<ul>'
+            . '<li>First bullet that wraps onto a second line of prose</li>'
+            . '<li>Second bullet</li>'
+            . '</ul>',
+            $result
+        );
+    }
+
+    /**
+     * Multi-line continuation — a long bullet with several wrapped lines stays
+     * a single <li>; the <ul> is not closed until a real list-terminator
+     * (blank line, heading, hr, end of input) is reached.
+     */
+    public function testMarkdownToHtmlFoldsMultipleContinuationLines(): void
+    {
+        $md = "- Payment requests archival — resolved payment requests older than\n"
+            . "  the retention window move nightly to a payment_requests_archive table.\n"
+            . "  Nightly backup excludes archive tables via mysqldump --ignore-table\n"
+            . "- Next bullet";
+
+        $result = UpdateCheckService::markdownToHtml($md);
+
+        $this->assertStringContainsString(
+            '<li>Payment requests archival — resolved payment requests older than '
+            . 'the retention window move nightly to a payment_requests_archive table. '
+            . 'Nightly backup excludes archive tables via mysqldump --ignore-table</li>',
+            $result
+        );
+        $this->assertStringContainsString('<li>Next bullet</li>', $result);
+        $this->assertSame(1, substr_count($result, '<ul>'));
+        $this->assertSame(1, substr_count($result, '</ul>'));
+    }
+
+    /**
+     * Blank line still terminates the list — a continuation line separated
+     * from the bullet by an empty line is a new paragraph, not a fold.
+     */
+    public function testMarkdownToHtmlBlankLineEndsListBeforeContinuation(): void
+    {
+        $md = "- Bullet\n\nNext paragraph";
+
+        $result = UpdateCheckService::markdownToHtml($md);
+
+        $this->assertStringContainsString('<li>Bullet</li></ul>', $result);
+        $this->assertStringContainsString('<p>Next paragraph</p>', $result);
+    }
+
+    /**
      * Test list type switch (ul → ol) closes the previous list
      */
     public function testMarkdownToHtmlHandlesListTypeSwitch(): void
