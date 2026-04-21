@@ -457,6 +457,21 @@ class Constants {
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 10;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
+    // Live event notifications — non-reloading XHR poll that surfaces new
+    // incoming payment requests / contact requests / transactions / DLQ
+    // entries as toasts, and keeps tab badges fresh. Supersedes the page
+    // reload path: when LIVE_NOTIFICATIONS_ENABLED is true, the
+    // AUTO_REFRESH_ENABLED 15s reload is suppressed at runtime (both can be
+    // ON in settings; live-notifs wins to avoid reloading the page out from
+    // under a just-fired toast).
+    const LIVE_NOTIFICATIONS_ENABLED = true;                    // Default ON — unobtrusive by design (visibility-gated, idle-backoff, modal-suppressed)
+    const LIVE_NOTIFICATIONS_POLL_INTERVAL_MS = 10000;          // Base poll cadence; loop backs off when idle
+    const LIVE_NOTIFICATIONS_VERBOSITY = 'balanced';            // quiet | balanced | live — see matrix in GUI settings
+    const LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS = ['quiet', 'balanced', 'live'];
+    const LIVE_NOTIFICATIONS_TOAST_DURATION_MS = 10000;         // 0 = until-dismissed
+    const LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS = [5000, 10000, 20000, 0];
+    const LIVE_NOTIFICATIONS_MAX_PER_KIND = 25;                 // Hard cap on deltas returned per kind per poll (keeps payload bounded)
+
     // Session
     const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes
     const SESSION_TIMEOUT_OPTIONS = [5, 10, 15, 30, 60]; // Allowed session timeout values in minutes

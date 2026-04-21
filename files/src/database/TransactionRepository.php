@@ -225,6 +225,50 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Return recent transactions touching this user (sender OR receiver)
+     * with `timestamp > $sinceTs`. Thin projection — only the columns the
+     * live-notifications poll needs, so the payload stays small and we
+     * don't pay for the full join that getTransactionHistory does.
+     *
+     * Does NOT consult transactions_archive: by design this is a hot-tail
+     * query — if a row's already been archived (30d+ old under default
+     * retention) it's not "new" for toast purposes.
+     *
+     * @param int $sinceTs Unix timestamp (seconds) — return rows strictly newer than this
+     * @param int $limit   Hard cap on rows returned
+     * @return array<int, array<string, mixed>>
+     */
+    public function getIncomingSince(int $sinceTs, int $limit): array
+    {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null || $limit <= 0) {
+            return [];
+        }
+
+        $placeholders = $this->createPlaceholders($userAddresses);
+        $query = "SELECT txid, type, status, amount, currency,
+                         sender_address, receiver_address, timestamp, description
+                  FROM {$this->tableName}
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                    AND timestamp > ?
+                  ORDER BY timestamp DESC
+                  LIMIT " . (int) $limit;
+
+        // Same DATETIME wire-format note as checkForNewTransactions() —
+        // DISPLAY_DATE_FORMAT is European presentation and MySQL rejects it
+        // as a DATETIME param.
+        $params = $this->buildInClauseParams($userAddresses, 2, [date('Y-m-d H:i:s', $sinceTs)]);
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        } catch (\PDOException $e) {
+            Logger::getInstance()->log('getIncomingSince failed: ' . $e->getMessage(), 'WARNING');
+            return [];
+        }
+    }
+
+    /**
      * Check for new transactions since last check
      *
      * @param int $lastCheckTime

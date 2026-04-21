@@ -1513,6 +1513,270 @@ function showToast(title, message, type) {
     }, 5000);
 }
 
+// ============================================================================
+// Event-toast system (extended showToast)
+//
+// Richer sibling of showToast() used by live event notifications. Keeps the
+// existing showToast() signature unchanged for all legacy callers (clipboard,
+// one-shot notices, etc.) — those don't need the extra machinery and 5s is
+// right for them.
+//
+// Features layered here:
+//   - pause-on-hover (timer freezes while mouse is over the toast)
+//   - click body to expand → shows `details`, becomes sticky (no auto-dismiss)
+//   - explicit × dismiss + optional action button ("View")
+//   - dedupKey: re-firing with same key updates the live toast in place
+//     instead of stacking (e.g. tx pending→sent→completed = 1 toast)
+//   - aggregation: ≥3 fires of same `kind` within AGGREGATE_WINDOW_MS collapse
+//     into a single "N new X" toast whose expanded state lists them
+//   - modal suppression: if a .modal.show is visible, fires are queued and
+//     flushed as an aggregate when the modal closes
+//   - duration: user-preference in ms; 0 = until-dismissed
+// ============================================================================
+
+var EVENT_TOAST_DEFAULT_DURATION_MS = 10000; // overridden by user setting
+var AGGREGATE_WINDOW_MS = 3000;              // recent-fires window for aggregation
+var AGGREGATE_THRESHOLD = 3;                 // N same-kind fires → one aggregate
+var eventToastQueue = [];                    // holds events while a modal is open
+var eventToastRecentByKind = {};             // kind → [{ts, event}, ...]
+var eventToastsByDedupKey = {};              // dedupKey → live toast element
+
+function isBlockingModalOpen() {
+    // "Blocking" = anything that'd make a toast steal focus or overlap. Covers
+    // the common modal patterns in this codebase without enumerating each one.
+    return !!(
+        document.querySelector('.modal.show') ||
+        document.querySelector('[role="dialog"][aria-hidden="false"]') ||
+        document.querySelector('.modal-overlay.is-visible')
+    );
+}
+
+function kindIcon(kind) {
+    var map = {
+        payment_request: 'fa-file-invoice-dollar',
+        contact_request: 'fa-user-plus',
+        tx_received: 'fa-arrow-down',
+        tx_status: 'fa-exchange-alt',
+        dlq: 'fa-exclamation-triangle',
+    };
+    return map[kind] || 'fa-info-circle';
+}
+
+function kindType(kind) {
+    // Maps event kind → base toast colour variant (uses existing CSS).
+    var map = {
+        payment_request: 'info',
+        contact_request: 'info',
+        tx_received: 'success',
+        tx_status: 'info',
+        dlq: 'error',
+    };
+    return map[kind] || 'info';
+}
+
+function removeEventToast(toast) {
+    if (!toast || !toast.parentElement) return;
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100px)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(function() {
+        if (toast.parentElement) {
+            toast.parentElement.removeChild(toast);
+        }
+    }, 300);
+    // Drop any dedup-key pointer to this toast so a later fire re-creates.
+    var key = toast.getAttribute('data-dedup-key');
+    if (key && eventToastsByDedupKey[key] === toast) {
+        delete eventToastsByDedupKey[key];
+    }
+}
+
+function armToastAutoDismiss(toast, durationMs) {
+    // 0 = persist until user dismisses. Also applies while the toast is in
+    // "expanded/sticky" mode (user clicked the body).
+    if (!durationMs || durationMs <= 0) return;
+    if (toast._dismissTimer) clearTimeout(toast._dismissTimer);
+    toast._dismissTimer = setTimeout(function() {
+        removeEventToast(toast);
+    }, durationMs);
+}
+
+function attachHoverPause(toast, durationMs) {
+    if (!durationMs || durationMs <= 0) return;
+    toast.addEventListener('mouseenter', function() {
+        if (toast._dismissTimer) {
+            clearTimeout(toast._dismissTimer);
+            toast._dismissTimer = null;
+        }
+    });
+    toast.addEventListener('mouseleave', function() {
+        // Don't re-arm if user already expanded the toast (sticky mode).
+        if (toast.classList.contains('toast-expanded')) return;
+        armToastAutoDismiss(toast, durationMs);
+    });
+}
+
+function renderEventDetails(details) {
+    // Best-effort rendering: key/value pairs. Values are escaped; keys are
+    // humanized to Title Case from snake_case.
+    if (!details || typeof details !== 'object') return '';
+    var html = '<dl class="toast-details">';
+    for (var k in details) {
+        if (!Object.prototype.hasOwnProperty.call(details, k)) continue;
+        if (details[k] === null || details[k] === undefined || details[k] === '') continue;
+        var label = k.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        html += '<dt>' + escapeHtml(label) + '</dt>';
+        html += '<dd>' + escapeHtml(String(details[k])) + '</dd>';
+    }
+    html += '</dl>';
+    return html;
+}
+
+function showEventToast(opts) {
+    opts = opts || {};
+    // If a modal is blocking, queue and let the flush-on-close path pick it up.
+    if (isBlockingModalOpen()) {
+        eventToastQueue.push(opts);
+        return null;
+    }
+
+    // Aggregation check: if ≥AGGREGATE_THRESHOLD same-kind fires happened in
+    // the last AGGREGATE_WINDOW_MS, fold this + recent into one toast.
+    var kind = opts.kind || 'info';
+    var now = Date.now();
+    var recent = eventToastRecentByKind[kind] || [];
+    recent = recent.filter(function(e) { return now - e.ts <= AGGREGATE_WINDOW_MS; });
+    recent.push({ ts: now, event: opts });
+    eventToastRecentByKind[kind] = recent;
+    if (recent.length >= AGGREGATE_THRESHOLD) {
+        // Pop any individual toasts fired in this window so we don't
+        // duplicate. The aggregate toast supersedes them.
+        for (var i = 0; i < recent.length - 1; i++) {
+            var prevKey = recent[i].event && recent[i].event.dedupKey;
+            if (prevKey && eventToastsByDedupKey[prevKey]) {
+                removeEventToast(eventToastsByDedupKey[prevKey]);
+            }
+        }
+        var aggEvents = recent.map(function(e) { return e.event; });
+        // Clear the buffer so the next fire starts a fresh window.
+        eventToastRecentByKind[kind] = [];
+        return showEventToast({
+            kind: kind,
+            title: aggEvents.length + ' new ' + (kind === 'payment_request' ? 'payment requests' :
+                   kind === 'contact_request' ? 'contact requests' :
+                   kind === 'tx_received' ? 'received transactions' :
+                   kind === 'tx_status' ? 'transaction updates' :
+                   kind === 'dlq' ? 'delivery failures' : 'events'),
+            message: 'Click to expand.',
+            details: { items: aggEvents.map(function(e) { return e.title + (e.message ? ' — ' + e.message : ''); }).join('\n') },
+            dedupKey: 'agg:' + kind + ':' + now,
+            duration: opts.duration,
+            action: null,
+        });
+    }
+
+    // Dedup: if we already have a live toast for this key, mutate instead of
+    // stacking. Tx status churn (pending → sent → completed) flows through here.
+    if (opts.dedupKey && eventToastsByDedupKey[opts.dedupKey]) {
+        var live = eventToastsByDedupKey[opts.dedupKey];
+        var titleEl = live.querySelector('.toast-title');
+        var msgEl = live.querySelector('.toast-message');
+        if (titleEl) titleEl.textContent = opts.title || '';
+        if (msgEl) msgEl.textContent = opts.message || '';
+        // Refresh timer on update so user sees the latest long enough.
+        armToastAutoDismiss(live, opts.duration != null ? opts.duration : EVENT_TOAST_DEFAULT_DURATION_MS);
+        return live;
+    }
+
+    var container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    var type = kindType(kind);
+    var icon = kindIcon(kind);
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + type + ' toast-event';
+    if (opts.dedupKey) toast.setAttribute('data-dedup-key', opts.dedupKey);
+
+    var bodyHtml = '<i class="fas ' + icon + ' toast-icon"></i>' +
+        '<div class="toast-content">' +
+        '<div class="toast-title">' + escapeHtml(opts.title || '') + '</div>' +
+        '<div class="toast-message">' + escapeHtml(opts.message || '') + '</div>' +
+        '<div class="toast-details-wrap" style="display:none">' + renderEventDetails(opts.details) + '</div>' +
+        '</div>';
+    if (opts.action && opts.action.label) {
+        bodyHtml += '<button class="btn btn-sm btn-primary toast-action" type="button">' +
+            escapeHtml(opts.action.label) + '</button>';
+    }
+    bodyHtml += '<button class="toast-close" type="button" aria-label="Dismiss">&times;</button>';
+    toast.innerHTML = bodyHtml;
+
+    // Wire up handlers — close, action, click-to-expand.
+    toast.querySelector('.toast-close').addEventListener('click', function(e) {
+        e.stopPropagation();
+        removeEventToast(toast);
+    });
+    var actionBtn = toast.querySelector('.toast-action');
+    if (actionBtn && opts.action && typeof opts.action.onClick === 'function') {
+        actionBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            try { opts.action.onClick(); } catch (err) { /* swallow */ }
+            removeEventToast(toast);
+        });
+    }
+    toast.addEventListener('click', function() {
+        // Click body → expand + make sticky.
+        var wrap = toast.querySelector('.toast-details-wrap');
+        if (!wrap) return;
+        var alreadyExpanded = toast.classList.contains('toast-expanded');
+        if (alreadyExpanded) return;
+        toast.classList.add('toast-expanded');
+        wrap.style.display = 'block';
+        if (toast._dismissTimer) {
+            clearTimeout(toast._dismissTimer);
+            toast._dismissTimer = null;
+        }
+    });
+
+    container.appendChild(toast);
+    if (opts.dedupKey) eventToastsByDedupKey[opts.dedupKey] = toast;
+
+    var duration = opts.duration != null ? opts.duration : EVENT_TOAST_DEFAULT_DURATION_MS;
+    armToastAutoDismiss(toast, duration);
+    attachHoverPause(toast, duration);
+    return toast;
+}
+
+function flushEventToastQueue() {
+    // Called when a blocking modal closes — batch-flushes as a single
+    // aggregate to avoid a toast storm.
+    if (eventToastQueue.length === 0) return;
+    var batch = eventToastQueue.splice(0, eventToastQueue.length);
+    if (batch.length === 1) {
+        showEventToast(batch[0]);
+        return;
+    }
+    showEventToast({
+        kind: 'info',
+        title: batch.length + ' events while you were busy',
+        message: 'Click to expand.',
+        details: { items: batch.map(function(e) { return e.title; }).join('\n') },
+        dedupKey: 'flush:' + Date.now(),
+    });
+}
+// Watch for blocking modals closing so we can flush the queue.
+document.addEventListener('click', function(e) {
+    // Cheap heuristic: any click outside a modal that isn't itself a modal
+    // open-trigger → re-check on the next tick.
+    setTimeout(function() {
+        if (!isBlockingModalOpen()) flushEventToastQueue();
+    }, 50);
+});
+
 /**
  * Initializes the transaction toast notification on form submission.
  *
@@ -6324,6 +6588,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initToggleSwitch('autoRejectUnknownCurrency', 'autoRejectUnknownCurrencyStatus');
     initToggleSwitch('hopBudgetRandomized', 'hopBudgetRandomizedStatus');
     initToggleSwitch('hideEmptyGuiSections', 'hideEmptyGuiSectionsStatus');
+    initToggleSwitch('liveNotificationsEnabled', 'liveNotificationsEnabledStatus');
     initToggleSwitch('apiEnabled', 'apiEnabledStatus');
     initToggleSwitch('rateLimitEnabled', 'rateLimitEnabledStatus');
     initToggleSwitch('updateCheckEnabled', 'updateCheckEnabledStatus');
@@ -6528,6 +6793,10 @@ function startAutoRefresh() {
     // Only start if enabled in settings AND there are in-progress transactions
     if (!(typeof hasInProgressTx !== 'undefined' && hasInProgressTx)) return;
     if (!(typeof autoRefreshEnabled !== 'undefined' && autoRefreshEnabled)) return;
+    // Mutual exclusion: when live event notifications are active, skip the
+    // 15s full-page reload. Live notifications handle status changes
+    // toast-style without clobbering a just-fired toast via a reload.
+    if (typeof liveNotificationsEnabled !== 'undefined' && liveNotificationsEnabled) return;
     if (autoRefreshInterval) return;
 
     var indicator = document.getElementById('tx-auto-refresh-status');
@@ -6563,6 +6832,289 @@ window.stopAutoRefresh = function() {
         if (indicator) indicator.classList.remove('active');
     }
 };
+
+// ============================================================================
+// Live event notifications — non-reloading XHR poll.
+//
+// Separate from the 15s auto-refresh above. That one reloads the page; this
+// one never does. Hits /?check_incoming=1&since=<ts>, receives JSON deltas,
+// routes them to showEventToast() per the user's verbosity setting, and
+// updates tab badges in place.
+//
+// Activity gates (all layered together to keep the feature unobtrusive):
+//   - Visibility API: pause entirely when document.hidden
+//   - Idle backoff: drop from base→2× after 60s no interaction, 6× after 5min
+//   - Dedup via sessionStorage: surviving a full reload won't re-toast the
+//     same ids
+// Settings are delivered by the server on each poll — we trust the server
+// over the bootstrap constants, so a settings save takes effect without
+// page reload.
+// ============================================================================
+
+var LIVE_POLL_BASE_MS = 10000;
+var LIVE_POLL_IDLE_1_MS = 30000;   // 3× base
+var LIVE_POLL_IDLE_2_MS = 60000;   // 6× base
+var LIVE_IDLE_THRESHOLD_1_MS = 60 * 1000;
+var LIVE_IDLE_THRESHOLD_2_MS = 5 * 60 * 1000;
+var LIVE_SEEN_IDS_KEY = 'eiou_live_seen_ids_v1';
+var LIVE_SEEN_IDS_MAX = 500; // bounded to avoid unbounded growth
+
+var liveTimer = null;
+var liveSinceTs = 0;
+var liveLastInteractionAt = Date.now();
+var liveInflight = false;
+var liveSettingsCache = null; // last-seen server settings (enabled, verbosity, toast_duration_ms, poll_interval_ms)
+
+function liveBumpInteraction() { liveLastInteractionAt = Date.now(); }
+['mousedown', 'keydown', 'touchstart', 'scroll'].forEach(function(evt) {
+    document.addEventListener(evt, liveBumpInteraction, { passive: true });
+});
+
+function liveLoadSeenIds() {
+    try {
+        var raw = sessionStorage.getItem(LIVE_SEEN_IDS_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+}
+function liveSaveSeenIds(map) {
+    try {
+        var keys = Object.keys(map);
+        if (keys.length > LIVE_SEEN_IDS_MAX) {
+            // FIFO trim — drop oldest half.
+            var pairs = keys.map(function(k) { return [k, map[k]]; });
+            pairs.sort(function(a, b) { return a[1] - b[1]; });
+            pairs = pairs.slice(pairs.length - Math.floor(LIVE_SEEN_IDS_MAX / 2));
+            map = {};
+            pairs.forEach(function(p) { map[p[0]] = p[1]; });
+        }
+        sessionStorage.setItem(LIVE_SEEN_IDS_KEY, JSON.stringify(map));
+    } catch (e) { /* quota / private mode — swallow */ }
+}
+function liveMarkSeen(key) {
+    var map = liveLoadSeenIds();
+    map[key] = Date.now();
+    liveSaveSeenIds(map);
+}
+function liveIsSeen(key) {
+    var map = liveLoadSeenIds();
+    return !!map[key];
+}
+
+function liveComputeInterval() {
+    var baseMs = (liveSettingsCache && liveSettingsCache.poll_interval_ms) || LIVE_POLL_BASE_MS;
+    var idleFor = Date.now() - liveLastInteractionAt;
+    if (idleFor >= LIVE_IDLE_THRESHOLD_2_MS) return Math.max(baseMs * 6, LIVE_POLL_IDLE_2_MS);
+    if (idleFor >= LIVE_IDLE_THRESHOLD_1_MS) return Math.max(baseMs * 3, LIVE_POLL_IDLE_1_MS);
+    return baseMs;
+}
+
+function liveTruncate(s, n) { s = String(s || ''); return s.length > n ? s.substring(0, n - 1) + '…' : s; }
+function liveShortHash(h) { if (!h) return ''; return String(h).substring(0, 8) + '…'; }
+function liveSwitchTabIfExists(tabName) {
+    if (typeof switchTab === 'function') {
+        try { switchTab(tabName); } catch (e) { /* tab not present on this page */ }
+    }
+}
+
+function liveBadgeBumpCount(selector, delta) {
+    // Best-effort: increments a numeric badge by delta if we can parse its
+    // current text. If not parseable, skip — a full page render will reconcile.
+    var el = document.querySelector(selector);
+    if (!el) return;
+    var m = /(\d+)/.exec(el.textContent || '');
+    if (!m) return;
+    var n = parseInt(m[1], 10) + delta;
+    el.textContent = (el.textContent || '').replace(/\d+/, String(n));
+}
+
+function liveDispatch(payload) {
+    var verbosity = (liveSettingsCache && liveSettingsCache.verbosity) || 'balanced';
+    var duration = (liveSettingsCache && liveSettingsCache.toast_duration_ms != null)
+        ? liveSettingsCache.toast_duration_ms
+        : EVENT_TOAST_DEFAULT_DURATION_MS;
+    EVENT_TOAST_DEFAULT_DURATION_MS = duration; // keep module-level in sync for any direct callers
+
+    var neu = payload && payload.new ? payload.new : {};
+
+    // Payment requests — always toast (all verbosities).
+    (neu.payment_requests || []).forEach(function(pr) {
+        var seenKey = 'pr:' + (pr.id || '');
+        if (!pr.id || liveIsSeen(seenKey)) return;
+        liveMarkSeen(seenKey);
+        liveBadgeBumpCount('[data-badge="payment-requests"]', 1);
+        showEventToast({
+            kind: 'payment_request',
+            title: 'New payment request',
+            message: (pr.amount != null ? pr.amount + ' ' : '') + (pr.currency || '') + (pr.description ? ' — ' + liveTruncate(pr.description, 40) : ''),
+            details: {
+                request_id: pr.id,
+                amount: pr.amount,
+                currency: pr.currency,
+                requester: liveShortHash(pr.requester_pubkey_hash),
+                description: pr.description,
+            },
+            dedupKey: seenKey,
+            duration: duration,
+            action: { label: 'View', onClick: function() { liveSwitchTabIfExists('activity'); } },
+        });
+    });
+
+    // Contact requests — always toast.
+    (neu.contact_requests || []).forEach(function(c) {
+        var seenKey = 'c:' + (c.pubkey_hash || '');
+        if (!c.pubkey_hash || liveIsSeen(seenKey)) return;
+        liveMarkSeen(seenKey);
+        liveBadgeBumpCount('[data-badge="contact-requests"]', 1);
+        showEventToast({
+            kind: 'contact_request',
+            title: 'New contact request',
+            message: liveShortHash(c.pubkey_hash),
+            details: {
+                pubkey: liveShortHash(c.pubkey_hash),
+                http: c.http_address || '',
+                tor: c.tor_address || '',
+            },
+            dedupKey: seenKey,
+            duration: duration,
+            action: { label: 'View', onClick: function() { liveSwitchTabIfExists('contacts'); } },
+        });
+    });
+
+    // Transactions — verbosity-gated.
+    //   Quiet:    only received-completed toasts
+    //   Balanced: same as Quiet for tx (+ dlq toasts; handled below)
+    //   Live:     everything toasts, including status churn on in-flight
+    (neu.transactions || []).forEach(function(tx) {
+        if (!tx.txid) return;
+        var status = (tx.status || '').toLowerCase();
+        var type = (tx.type || '').toLowerCase();
+        var isReceivedCompleted = type === 'received' && status === 'completed';
+        var shouldToast;
+        if (verbosity === 'live') {
+            shouldToast = true;
+        } else {
+            shouldToast = isReceivedCompleted;
+        }
+        // In-flight tx status updates always dedup to the same key so the
+        // pending→sent→completed progression is ONE toast, not three.
+        var seenKey = (isReceivedCompleted ? 'txc:' : 'tx:') + tx.txid;
+        var dedupKey = 'tx:' + tx.txid;
+        if (shouldToast) {
+            if (isReceivedCompleted && liveIsSeen(seenKey)) return;
+            if (isReceivedCompleted) liveMarkSeen(seenKey);
+            showEventToast({
+                kind: isReceivedCompleted ? 'tx_received' : 'tx_status',
+                title: isReceivedCompleted ? 'Payment received' : ('Transaction ' + status),
+                message: (tx.amount != null ? tx.amount + ' ' : '') + (tx.currency || ''),
+                details: {
+                    txid: liveShortHash(tx.txid),
+                    type: tx.type,
+                    status: tx.status,
+                    amount: tx.amount,
+                    currency: tx.currency,
+                    sender: liveShortHash(tx.sender_address),
+                    receiver: liveShortHash(tx.receiver_address),
+                    description: tx.description,
+                },
+                dedupKey: dedupKey,
+                duration: duration,
+                action: { label: 'View', onClick: function() { liveSwitchTabIfExists('activity'); } },
+            });
+        }
+        // Badge bump only for brand-new received txs (not status churn).
+        if (isReceivedCompleted && !liveIsSeen('txb:' + tx.txid)) {
+            liveMarkSeen('txb:' + tx.txid);
+            liveBadgeBumpCount('[data-badge="recent-transactions"]', 1);
+        }
+    });
+
+    // DLQ — verbosity-gated. Balanced + Live toast; Quiet is badge-only.
+    (neu.dlq || []).forEach(function(d) {
+        if (!d.id) return;
+        var seenKey = 'dlq:' + d.id;
+        if (liveIsSeen(seenKey)) return;
+        liveMarkSeen(seenKey);
+        liveBadgeBumpCount('[data-badge="dlq"]', 1);
+        if (verbosity === 'quiet') return;
+        showEventToast({
+            kind: 'dlq',
+            title: 'Delivery failure',
+            message: (d.message_type || 'message') + ' — ' + (d.status || ''),
+            details: {
+                id: d.id,
+                message_type: d.message_type,
+                message_id: liveShortHash(d.message_id),
+                status: d.status,
+            },
+            dedupKey: seenKey,
+            duration: duration,
+            action: { label: 'View', onClick: function() { liveSwitchTabIfExists('activity'); } },
+        });
+    });
+}
+
+function livePollOnce() {
+    if (liveInflight) return;
+    if (document.hidden) return;
+    liveInflight = true;
+    var url = window.location.pathname + '?check_incoming=1&since=' + encodeURIComponent(liveSinceTs) + '&_=' + Date.now();
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.timeout = 30000;
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        liveInflight = false;
+        if (xhr.status < 200 || xhr.status >= 300) return;
+        var data = null;
+        try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
+        if (!data) return;
+        if (data.settings) {
+            liveSettingsCache = data.settings;
+            // Server disabled the feature → stop polling. Client can re-enable
+            // on next page load.
+            if (liveSettingsCache.enabled === false) {
+                liveStopPolling();
+                return;
+            }
+        }
+        if (data.now) liveSinceTs = data.now;
+        liveDispatch(data);
+    };
+    xhr.ontimeout = function() { liveInflight = false; };
+    xhr.onerror = function() { liveInflight = false; };
+    xhr.send();
+}
+
+function liveSchedule() {
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+    if (typeof liveNotificationsEnabled !== 'undefined' && !liveNotificationsEnabled) return;
+    liveTimer = setTimeout(function() {
+        livePollOnce();
+        liveSchedule();
+    }, liveComputeInterval());
+}
+
+function liveStartPolling() {
+    if (typeof liveNotificationsEnabled === 'undefined' || !liveNotificationsEnabled) return;
+    // Initial since = now - 60s so we don't re-toast anything rendered on
+    // first paint, but we still catch the first arrivals after the page
+    // loaded. Subsequent polls advance liveSinceTs via data.now.
+    liveSinceTs = Math.floor(Date.now() / 1000) - 60;
+    liveSchedule();
+}
+function liveStopPolling() {
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+}
+
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        liveStopPolling();
+    } else {
+        liveStartPolling();
+    }
+});
+window.addEventListener('beforeunload', liveStopPolling);
 
 // P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
 function approveP2pTransaction(hash, candidateId) {
@@ -6687,6 +7239,10 @@ document.addEventListener('DOMContentLoaded', function() {
             showInProgressToasts();
         }
     }
+    // Start the live event notifications poll (independent of the 15s
+    // reload). Visibility-gated, idle-backoff, modal-suppressed — safe to
+    // kick off unconditionally when enabled.
+    liveStartPolling();
 
     // Load candidates for multi-candidate P2P approval rows on page load
     var candidateContainers = document.querySelectorAll('[id^="p2p-candidates-"]');

@@ -746,6 +746,148 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_updates'])) {
     $transactionController->routeAction();
 }
 
+// Live-notifications poll endpoint — returns JSON deltas (no page reload).
+// Distinct from check_updates (which is the Tor-Browser "anything changed?"
+// probe that triggers a full page reload). This endpoint returns the
+// actual new rows so the client can toast them individually and update tab
+// badges without reloading.
+//
+// Shape:
+//   GET ?check_incoming=1&since=<unix_ts>
+//     → { now: <unix_ts>, settings: {...}, new: { payment_requests, contact_requests, transactions, dlq } }
+//
+// Session lock released early (session_write_close) so concurrent polls
+// don't serialize behind the main request on a slow page render.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+
+    // Snapshot user-scoped settings before releasing the session lock — we
+    // need these for the response body, and once session_write_close()
+    // fires the $user object's backing store may be shadowed by a stale
+    // read on subsequent access. Cheap to capture up front.
+    $liveEnabled = $user->getLiveNotificationsEnabled();
+    $verbosity = $user->getLiveNotificationsVerbosity();
+    $toastDuration = $user->getLiveNotificationsToastDurationMs();
+    $pollIntervalMs = \Eiou\Core\Constants::LIVE_NOTIFICATIONS_POLL_INTERVAL_MS;
+    $maxPerKind = \Eiou\Core\Constants::LIVE_NOTIFICATIONS_MAX_PER_KIND;
+
+    // Release the session lock ASAP so a page render in the same tab
+    // (or another poll from the same session) doesn't queue behind us.
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+
+    $now = time();
+    $since = isset($_GET['since']) && ctype_digit((string) $_GET['since']) ? (int) $_GET['since'] : 0;
+    // Guard against unreasonable since values (e.g. client clock skew past
+    // server). Clamp to a 24h look-back — older-than-that is effectively
+    // "first poll" and we still bound by $maxPerKind anyway.
+    if ($since <= 0 || $since > $now) {
+        $since = $now - 86400;
+    }
+
+    // If the master toggle is off, return an empty delta but still echo
+    // the current settings so the client can keep them in sync without a
+    // page reload (user flips the toggle via a separate save → reload —
+    // this is just defense-in-depth).
+    $payload = [
+        'now' => $now,
+        'settings' => [
+            'enabled' => $liveEnabled,
+            'verbosity' => $verbosity,
+            'toast_duration_ms' => $toastDuration,
+            'poll_interval_ms' => $pollIntervalMs,
+        ],
+        'new' => [
+            'payment_requests' => [],
+            'contact_requests' => [],
+            'transactions' => [],
+            'dlq' => [],
+        ],
+    ];
+
+    if ($liveEnabled) {
+        try {
+            // Payment requests — small working set, filter in PHP by created_at.
+            $prService = $serviceContainer->getPaymentRequestService();
+            $pendingPr = $prService->getPendingIncoming() ?: [];
+            foreach ($pendingPr as $pr) {
+                $createdAt = isset($pr['created_at']) ? strtotime((string) $pr['created_at']) : 0;
+                if ($createdAt > $since) {
+                    $payload['new']['payment_requests'][] = [
+                        'id' => $pr['request_id'] ?? ($pr['id'] ?? null),
+                        'amount' => $pr['amount'] ?? null,
+                        'currency' => $pr['currency'] ?? null,
+                        'requester_pubkey_hash' => $pr['requester_pubkey_hash'] ?? null,
+                        'description' => $pr['description'] ?? null,
+                        'created_at' => $createdAt,
+                    ];
+                }
+                if (count($payload['new']['payment_requests']) >= $maxPerKind) {
+                    break;
+                }
+            }
+
+            // Contact requests — same pattern.
+            $pendingContacts = $contactService->getPendingContactRequests() ?: [];
+            foreach ($pendingContacts as $c) {
+                $createdAt = isset($c['created_at']) ? strtotime((string) $c['created_at']) : 0;
+                if ($createdAt > $since) {
+                    $payload['new']['contact_requests'][] = [
+                        'pubkey_hash' => $c['pubkey_hash'] ?? null,
+                        'http_address' => $c['http_address'] ?? null,
+                        'tor_address' => $c['tor_address'] ?? null,
+                        'created_at' => $createdAt,
+                    ];
+                }
+                if (count($payload['new']['contact_requests']) >= $maxPerKind) {
+                    break;
+                }
+            }
+
+            // Transactions — dedicated SQL time-filter, bounded.
+            $txRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
+            $txRows = $txRepo->getIncomingSince($since, $maxPerKind);
+            foreach ($txRows as $tx) {
+                $tsEpoch = isset($tx['timestamp']) ? strtotime((string) $tx['timestamp']) : 0;
+                $payload['new']['transactions'][] = [
+                    'txid' => $tx['txid'] ?? null,
+                    'type' => $tx['type'] ?? null,
+                    'status' => $tx['status'] ?? null,
+                    'amount' => $tx['amount'] ?? null,
+                    'currency' => $tx['currency'] ?? null,
+                    'sender_address' => $tx['sender_address'] ?? null,
+                    'receiver_address' => $tx['receiver_address'] ?? null,
+                    'description' => $tx['description'] ?? null,
+                    'timestamp' => $tsEpoch,
+                ];
+            }
+
+            // DLQ — dedicated SQL time-filter, bounded.
+            $dlqRepoPoll = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
+            $dlqRows = $dlqRepoPoll->getItemsSince($since, $maxPerKind);
+            foreach ($dlqRows as $d) {
+                $createdAt = isset($d['created_at']) ? strtotime((string) $d['created_at']) : 0;
+                $payload['new']['dlq'][] = [
+                    'id' => $d['id'] ?? null,
+                    'message_type' => $d['message_type'] ?? null,
+                    'message_id' => $d['message_id'] ?? null,
+                    'status' => $d['status'] ?? null,
+                    'created_at' => $createdAt,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, ['context' => 'check_incoming_handler']);
+            // Don't leak internals; return empty deltas so the client
+            // backs off gracefully on transient server errors.
+        }
+    }
+
+    echo json_encode($payload);
+    exit;
+}
+
 // Get message from session flash messages (set by controllers, read-once)
 // Flash messages are cleared after reading so they don't re-appear on refresh
 if (isset($_SESSION[SessionKeys::MESSAGE])) {

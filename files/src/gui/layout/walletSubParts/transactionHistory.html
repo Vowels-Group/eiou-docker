@@ -388,4 +388,7 @@
 
     var hasInProgressTx = <?php echo !empty($inProgressTransactions) ? 'true' : 'false'; ?>;
     var autoRefreshEnabled = <?php echo $user->getAutoRefreshEnabled() ? 'true' : 'false'; ?>;
+    var liveNotificationsEnabled = <?php echo $user->getLiveNotificationsEnabled() ? 'true' : 'false'; ?>;
+    var liveNotificationsVerbosity = <?php echo json_encode($user->getLiveNotificationsVerbosity()); ?>;
+    var liveNotificationsToastDurationMs = <?php echo (int) $user->getLiveNotificationsToastDurationMs(); ?>;
 </script>

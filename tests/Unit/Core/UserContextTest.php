@@ -702,6 +702,69 @@ class UserContextTest extends TestCase
         $this->assertEquals(Constants::AUTO_REFRESH_ENABLED, $instance->getAutoRefreshEnabled());
     }
 
+    public function testGetLiveNotificationsEnabledReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_ENABLED, $instance->getLiveNotificationsEnabled());
+    }
+
+    public function testGetLiveNotificationsEnabledReadsStoredValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['liveNotificationsEnabled' => false]);
+        $this->assertFalse($instance->getLiveNotificationsEnabled());
+
+        $instance->setUserData(['liveNotificationsEnabled' => true]);
+        $this->assertTrue($instance->getLiveNotificationsEnabled());
+    }
+
+    public function testGetLiveNotificationsVerbosityReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_VERBOSITY, $instance->getLiveNotificationsVerbosity());
+    }
+
+    public function testGetLiveNotificationsVerbosityAcceptsAllValidOptions(): void
+    {
+        $instance = UserContext::getInstance();
+        foreach (Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS as $mode) {
+            $instance->setUserData(['liveNotificationsVerbosity' => $mode]);
+            $this->assertSame($mode, $instance->getLiveNotificationsVerbosity());
+        }
+    }
+
+    public function testGetLiveNotificationsVerbosityFallsBackOnInvalidValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['liveNotificationsVerbosity' => 'not-a-mode']);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_VERBOSITY, $instance->getLiveNotificationsVerbosity());
+    }
+
+    public function testGetLiveNotificationsToastDurationReturnsDefaultWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS, $instance->getLiveNotificationsToastDurationMs());
+    }
+
+    public function testGetLiveNotificationsToastDurationAcceptsAllValidOptions(): void
+    {
+        $instance = UserContext::getInstance();
+        foreach (Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS as $ms) {
+            $instance->setUserData(['liveNotificationsToastDurationMs' => $ms]);
+            $this->assertSame($ms, $instance->getLiveNotificationsToastDurationMs());
+        }
+    }
+
+    public function testGetLiveNotificationsToastDurationFallsBackOnInvalidValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['liveNotificationsToastDurationMs' => 12345]);
+        $this->assertSame(Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS, $instance->getLiveNotificationsToastDurationMs());
+    }
+
     /**
      * Test getAutoBackupEnabled returns default when not set
      */

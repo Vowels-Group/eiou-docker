@@ -2685,6 +2685,39 @@ tr.tx-item-in-progress > td:first-child {
     line-height: 1;
 }
 
+/* Live-event toasts: richer variant with action button + click-to-expand
+   details. Base .toast styles still apply; these only layer extras. */
+.toast-event { cursor: pointer; }
+.toast-event .toast-action {
+    margin-right: 0.35rem;
+    white-space: nowrap;
+}
+.toast-event .toast-details-wrap {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e9ecef;
+    font-size: 0.85rem;
+}
+.toast-event.toast-expanded {
+    cursor: default;
+    max-width: 420px;
+}
+.toast-event dl.toast-details {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15rem 0.75rem;
+}
+.toast-event dl.toast-details dt {
+    color: #6c757d;
+    font-weight: 500;
+}
+.toast-event dl.toast-details dd {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .toast-close:hover {
     color: #6c757d;
 }
