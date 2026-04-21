@@ -250,10 +250,18 @@ class TransactionRepository extends AbstractRepository {
         // there is no single `amount` column. Select the pair and collapse to a
         // display float via TransactionFormatter below — the live-notif endpoint
         // consumer reads `amount` as a number for the toast body.
+        //
+        // `tx_type='contact'` rows are excluded: those are bilateral contact-
+        // establishment records with amount=0 by construction. Including them
+        // would fire "Payment received — 0 USD" toasts on every contact
+        // handshake at balanced/quiet verbosities, and "Transaction completed"
+        // at live, none of which represent money movement. The real money-
+        // carrying rows are `standard` and `p2p`, both of which stay in.
         $query = "SELECT txid, type, status, amount_whole, amount_frac, currency,
                          sender_address, receiver_address, timestamp, description
                   FROM {$this->tableName}
                   WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                    AND tx_type <> 'contact'
                     AND timestamp > ?
                   ORDER BY timestamp DESC
                   LIMIT " . (int) $limit;

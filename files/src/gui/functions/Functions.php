@@ -829,9 +829,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
             foreach ($pendingPr as $pr) {
                 $createdAt = isset($pr['created_at']) ? strtotime((string) $pr['created_at']) : 0;
                 if ($createdAt > $since) {
+                    // $pr['amount'] is hydrated by PaymentRequestRepository's
+                    // splitAmountColumns → a SplitAmount object. Collapse to a
+                    // display float here; serializing the object directly would
+                    // ship `{whole, frac}` to the client, which the JS toast
+                    // template string-concats into "[object Object] USD".
+                    $prAmount = $pr['amount'] ?? null;
+                    if ($prAmount instanceof \Eiou\Core\SplitAmount) {
+                        $prAmount = $prAmount->toMajorUnits();
+                    }
                     $payload['new']['payment_requests'][] = [
                         'id' => $pr['request_id'] ?? ($pr['id'] ?? null),
-                        'amount' => $pr['amount'] ?? null,
+                        'amount' => $prAmount,
                         'currency' => $pr['currency'] ?? null,
                         'requester_pubkey_hash' => $pr['requester_pubkey_hash'] ?? null,
                         'description' => $pr['description'] ?? null,

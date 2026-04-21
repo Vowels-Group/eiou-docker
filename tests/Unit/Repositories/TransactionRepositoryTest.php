@@ -333,6 +333,45 @@ class TransactionRepositoryTest extends TestCase
         );
     }
 
+    public function testGetIncomingSinceExcludesContactTypeRows(): void
+    {
+        // Contact-establishment rows (tx_type='contact') have amount=0 by
+        // construction and must never enter the live-notif stream — otherwise
+        // they fire "Payment received — 0 USD" toasts on every handshake at
+        // quiet/balanced verbosities.
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+
+        $userContext = $this->createMock(\Eiou\Core\UserContext::class);
+        $userContext->method('getUserAddresses')->willReturn(['alice.onion']);
+
+        $capturedQuery = null;
+        $pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturnCallback(function ($q) use (&$capturedQuery, $stmt) {
+                $capturedQuery = $q;
+                return $stmt;
+            });
+        $stmt->method('execute')->willReturn(true);
+        $stmt->method('fetchAll')->willReturn([]);
+
+        $repo = new TransactionRepository($pdo);
+        $reflection = new \ReflectionClass($repo);
+        $property = $reflection->getProperty('currentUser');
+        $property->setAccessible(true);
+        $property->setValue($repo, $userContext);
+
+        $repo->getIncomingSince(0, 25);
+
+        // Whitespace-tolerant match — the WHERE clause is multi-line in the
+        // source, so anchor the comparison on the <> operator and quoted value.
+        $this->assertMatchesRegularExpression(
+            "/tx_type\\s*<>\\s*'contact'/",
+            $capturedQuery,
+            'getIncomingSince must exclude tx_type=contact rows'
+        );
+    }
+
     public function testGetIncomingSinceCollapsesSplitAmountToFloat(): void
     {
         $pdo = $this->createMock(PDO::class);
