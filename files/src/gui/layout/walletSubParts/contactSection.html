@@ -498,7 +498,33 @@
      there's nothing pending. -->
 <?php if (!$user->getHideEmptyGuiSections() || !empty($pendingContacts)): ?>
 <div id="pending-contacts" class="contacts-section fade-in-up">
-    <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
+    <div class="section-header">
+        <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
+    </div>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>About Pending Contact Requests</span>
+        </summary>
+        <div class="section-intro-body">
+            Incoming requests from other wallets that want to connect with you.
+            Accepting creates a bilateral contact record (and adds any currencies
+            they use if they aren't already in your <strong>Allowed Currencies</strong>
+            list). Rejecting silently drops the request — the other side isn't told.
+            Outgoing requests you've sent that are still waiting on the other party
+            also live here until they respond.
+            <br><br>
+            <small>
+                <strong>Subnote on currencies.</strong>
+                If a request carries a currency outside your Allowed Currencies list,
+                you'll see an explicit per-currency accept toggle so you can pick
+                which to allow rather than accepting everything blindly. The default
+                behaviour (accept what the contact offers) can be changed under
+                Settings → Feature Toggles → Contacts → <em>Auto-reject Unknown
+                Currency</em>.
+            </small>
+        </div>
+    </details>
 <?php if (empty($pendingContacts)): ?>
     <!-- Big empty-state panel matching the Payment Requests / Your
          Contacts / Recent Transactions style, so empty states feel
