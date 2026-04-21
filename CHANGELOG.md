@@ -12,6 +12,10 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+---
+
+## v0.1.13-alpha (2026-04-21)
+
 ### Added
 - **`Constants::ADDRESS_TYPE_DISPLAY` + `getAddressTypeDisplay()` — central registry for address-type labels and FontAwesome icons**, with a graceful fallback for types that aren't in the registry yet. Keyed by the `addresses` schema column name (`tor`, `https`, `http`); each entry carries a display label and an icon class. Unknown types fall back to `{ label: strtoupper($type), icon: 'fa-question' }` so adding a new transport column (e.g. `i2p`) lights up in the GUI immediately — labelled `I2P` with a question-mark icon — rather than rendering as empty markup or throwing. Once the registry is updated with the real label/icon, every call site picks up the correct values without further change. Consumed by `renderContactModal` (the contact detail modal's address dropdown), the pending-contact modal's address pills (`contactSection.html`), and the contact row's `data-contact-address` search attribute. Registry is bootstrapped to JS globals via `wallet.html` as `EIOU_ADDRESS_TYPE_DISPLAY` — populated by merging `AddressRepository::getAllAddressTypes()` (discovered from `INFORMATION_SCHEMA`) with `Constants::getAddressTypeDisplay()` so only the columns that actually exist in the live schema get echoed to the client. Two unit tests in `ConstantsTest` — known-types smoke + fallback behaviour on an unknown type (simulates a future transport)
 
