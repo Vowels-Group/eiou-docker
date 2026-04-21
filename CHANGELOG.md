@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- **Docker publish workflow: "Add Docker Hub reference to release notes" step no longer fails on `gh release view`/`gh release edit`.** The `merge` job doesn't check out the repo, so the `gh` CLI had no local git remote to auto-detect the repo from and exited with `fatal: not a git repository`. Both commands now pass `--repo "${{ github.repository }}"` explicitly so they work without a checkout. Caught on the v0.1.13-alpha release — the image itself published fine, but the Docker Hub footer failed to append to the release notes.
+
 ---
 
 ## v0.1.13-alpha (2026-04-21)
