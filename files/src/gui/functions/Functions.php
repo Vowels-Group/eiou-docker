@@ -787,6 +787,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
         $since = $now - 86400;
     }
 
+    // Known limitation — burst overflow: if >$maxPerKind events of the
+    // same kind arrive inside one poll window, the surplus is silently
+    // dropped from the toast stream (the data is still in the tables,
+    // just not notified). A complete fix would need (a) deterministic
+    // ASC ordering across all four kinds — getPendingIncoming and
+    // getPendingContactRequests currently rely on MySQL's undefined row
+    // order — and (b) an effective_now cursor of min($now, newest_returned)
+    // when any kind hits its cap, so the next poll backfills. Scope
+    // judged not worth it for ALPHA: bursts >25 events/10s are unusual
+    // for a wallet, and the UI tables remain complete.
+    //
     // If the master toggle is off, return an empty delta but still echo
     // the current settings so the client can keep them in sync without a
     // page reload (user flips the toggle via a separate save → reload —

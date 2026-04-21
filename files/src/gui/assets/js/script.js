@@ -1662,6 +1662,15 @@ function showEventToast(opts) {
         eventToastQueue.push(opts);
         return null;
     }
+    // Safety net for modal close paths that don't fire `click` or `keydown:Escape`
+    // (programmatic close, navigation that doesn't redirect, code paths we
+    // didn't hook below) — drain any queue built up during the modal session
+    // BEFORE rendering the current event so earlier events replay in order.
+    // flushEventToastQueue splices the buffer to 0 on entry, so the recursive
+    // showEventToast calls it makes can't trigger this branch again.
+    if (eventToastQueue.length > 0) {
+        flushEventToastQueue();
+    }
 
     // Aggregation check: if ≥AGGREGATE_THRESHOLD same-kind fires happened in
     // the last AGGREGATE_WINDOW_MS, fold this + recent into one toast.
@@ -1791,13 +1800,22 @@ function flushEventToastQueue() {
         dedupKey: 'flush:' + Date.now(),
     });
 }
-// Watch for blocking modals closing so we can flush the queue.
-document.addEventListener('click', function(e) {
-    // Cheap heuristic: any click outside a modal that isn't itself a modal
-    // open-trigger → re-check on the next tick.
+// Watch for blocking modals closing so we can flush the queue. Listens on
+// BOTH click and `keydown:Escape` — a user who dismisses a modal via the
+// Escape key (handled by the document-level keydown listener further up
+// the file) would otherwise see their queued toasts sit buffered until
+// their next mouse click, since the keydown path never fires a click event.
+function checkFlushOnInteraction() {
+    // 50ms lets the actual modal-close handler (click dispatch / keydown
+    // close) run and update the DOM first, so isBlockingModalOpen() sees
+    // the post-close state rather than racing it.
     setTimeout(function() {
         if (!isBlockingModalOpen()) flushEventToastQueue();
     }, 50);
+}
+document.addEventListener('click', checkFlushOnInteraction);
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.keyCode === 27) checkFlushOnInteraction();
 });
 
 /**
