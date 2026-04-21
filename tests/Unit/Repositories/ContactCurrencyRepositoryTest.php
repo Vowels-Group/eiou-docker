@@ -269,6 +269,56 @@ class ContactCurrencyRepositoryTest extends TestCase
     // hasCurrency
     // =========================================================================
 
+    public function testHasAcceptedCurrencyIncludesAcceptedStatusFilter(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('SELECT 1'),
+                $this->stringContains('WHERE pubkey_hash'),
+                $this->stringContains('currency'),
+                $this->stringContains("status = 'accepted'")
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')->willReturn(true);
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+        $this->stmt->method('fetch')->with(PDO::FETCH_ASSOC)->willReturn(['1' => 1]);
+
+        $this->assertTrue($this->repository->hasAcceptedCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY));
+    }
+
+    public function testHasAcceptedCurrencyReturnsFalseWhenRowExistsButPending(): void
+    {
+        // The row exists for (pubkey, currency) but with status='pending',
+        // so the SELECT returns no match and hasAcceptedCurrency=false.
+        $this->pdo->expects($this->once())->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('bindValue')->willReturn(true);
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+        $this->stmt->method('fetch')->with(PDO::FETCH_ASSOC)->willReturn(false);
+
+        $this->assertFalse($this->repository->hasAcceptedCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY));
+    }
+
+    public function testHasAcceptedCurrencyAppliesDirectionFilterWhenGiven(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->stringContains('direction = :direction'))
+            ->willReturn($this->stmt);
+        $this->stmt->method('bindValue')->willReturn(true);
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+        $this->stmt->method('fetch')->with(PDO::FETCH_ASSOC)->willReturn(['1' => 1]);
+
+        $this->assertTrue($this->repository->hasAcceptedCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY, 'incoming'));
+    }
+
+    public function testHasAcceptedCurrencyReturnsFalseOnPDOException(): void
+    {
+        $this->pdo->method('prepare')->willThrowException(new \PDOException('boom'));
+        $this->assertFalse($this->repository->hasAcceptedCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY));
+    }
+
     public function testHasCurrencyReturnsTrueWhenExists(): void
     {
         $this->pdo->expects($this->once())

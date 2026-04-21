@@ -1233,6 +1233,13 @@ foreach ($pendingUserContacts as $puc) {
 foreach ($acceptedContacts as $c) {
     if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
         $c['is_existing_contact'] = true;
+        // Flag: contact.status = 'accepted' but ZERO currencies are actually
+        // in status='accepted' on their contact_currencies rows. Happens
+        // most visibly after unblockContact() (which only flips contact
+        // status, not currency rows). The UI uses this to show a louder
+        // warning — a contact with no active currency lines cannot send,
+        // receive, or P2P-relay until at least one currency is accepted.
+        $c['has_no_active_currencies'] = empty($c['currencies']);
         $pendingContacts[] = $c;
     }
 }

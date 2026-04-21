@@ -50,6 +50,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
      */
     private ?SyncTriggerInterface $syncTrigger = null;
     private ?TransactionChainRepository $transactionChainRepository = null;
+    private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
     private ?TransactionService $transactionService = null;
     private ?ChainDropServiceInterface $chainDropService = null;
     private static array $contactSendLocks = [];
@@ -75,6 +76,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         $this->lockingService = $lockingService;
         if ($repositoryFactory !== null) {
             $this->transactionChainRepository = $repositoryFactory->get(\Eiou\Database\TransactionChainRepository::class);
+            $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
         }
         if ($syncTrigger !== null) {
             $this->syncTrigger = $syncTrigger;
@@ -297,6 +299,33 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     public function handleDirectRoute(array $request, array $contactInfo, ?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
+
+        // Guard: contact.status='accepted' is necessary but not sufficient
+        // for a direct send. The send currency must ALSO have an accepted
+        // row in contact_currencies. After Unblock, contact status flips
+        // back to 'accepted' but pending currency requests (from the
+        // original contact exchange) stay with status='pending' — without
+        // this check, the send would insert a transaction against a
+        // nonexistent credit line and either silently corrupt state or
+        // pile up downstream errors in the sync/retry path. Guard lives
+        // here (not sendEiou) so all handleDirectRoute callers are
+        // protected: the ACCEPTED branch AND the PENDING-then-synced
+        // branch in sendEiou, plus any external caller.
+        $txCurrency = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
+        $hasAcceptedCurrency = $this->contactCurrencyRepository !== null
+            ? $this->contactCurrencyRepository->hasAcceptedCurrency($contactPubkeyHash, $txCurrency)
+            : true;
+        if (!$hasAcceptedCurrency) {
+            $output->error(
+                "Cannot send: no accepted {$txCurrency} line with this contact. "
+                . "Accept the {$txCurrency} currency request from the Pending Contact Requests "
+                . "section first (or ask them to open a {$txCurrency} line with you), then retry.",
+                ErrorCodes::INVALID_CURRENCY,
+                400,
+                ['recipient' => $request[2] ?? null, 'currency' => $txCurrency]
+            );
+            return;
+        }
 
         if (!$this->acquireContactSendLock($contactPubkeyHash)) {
             $output->error("Cannot send transaction: Another transaction to this contact is in progress",

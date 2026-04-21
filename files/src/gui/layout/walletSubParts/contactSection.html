@@ -984,13 +984,32 @@
                  currency rows can safely stay pending forever —
                  accept them when ready from this same modal. -->
             <?php if ($isExistingHeader): ?>
-            <div class="alert alert-info mb-0">
-                <i class="fas fa-info-circle"></i>
-                You've already accepted this contact. Accept the currencies above
-                individually, or ignore them — they'll stay pending on your side
-                until you act. To end the relationship entirely, open the contact
-                from Your Contacts and use Delete or Block there.
-            </div>
+                <?php if (!empty($contact['has_no_active_currencies'])): ?>
+                <!-- Loud warning: contact.status='accepted' but NO rows
+                     in contact_currencies are status='accepted'. Most
+                     likely reached via Unblock, which only flips the
+                     contact status. Sends/receives/P2P won't work
+                     until the user accepts at least one currency. -->
+                <div class="alert alert-warning mb-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>No currency lines active yet.</strong>
+                    You can't send, receive, or P2P-relay with this contact until
+                    you accept at least one currency above. Unblocking restored
+                    the contact relationship but didn't open any currency lines —
+                    accept the ones you want (typically your default currency,
+                    <?php echo htmlspecialchars($user->getDefaultCurrency()); ?>, at minimum).
+                </div>
+                <?php else: ?>
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle"></i>
+                    You've already accepted this contact and have at least one
+                    active currency line with them. Accept any of the additional
+                    currencies above to open more lines, or ignore them — they'll
+                    stay pending on your side until you act. To end the
+                    relationship entirely, open the contact from Your Contacts
+                    and use Delete or Block there.
+                </div>
+                <?php endif; ?>
             <?php else: ?>
             <div class="pending-contact-actions">
                 <form method="POST" class="pending-contact-action-col">
