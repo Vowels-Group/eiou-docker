@@ -1541,8 +1541,9 @@ function showToast(title, message, type) {
 //     instead of stacking (e.g. tx pending→sent→completed = 1 toast)
 //   - aggregation: ≥3 fires of same `kind` within AGGREGATE_WINDOW_MS collapse
 //     into a single "N new X" toast whose expanded state lists them
-//   - modal suppression: if a .modal.show is visible, fires are queued and
-//     flushed as an aggregate when the modal closes
+//   - modal suppression: if any `.modal` resolves to a visible computed
+//     display (this app toggles via inline style / `d-none`, not `.show`),
+//     fires are queued and flushed as an aggregate when the modal closes
 //   - duration: user-preference in ms; 0 = until-dismissed
 // ============================================================================
 
@@ -1554,12 +1555,22 @@ var eventToastRecentByKind = {};             // kind → [{ts, event}, ...]
 var eventToastsByDedupKey = {};              // dedupKey → live toast element
 
 function isBlockingModalOpen() {
-    // "Blocking" = anything that'd make a toast steal focus or overlap. Covers
-    // the common modal patterns in this codebase without enumerating each one.
+    // "Blocking" = anything that'd make a toast steal focus or overlap.
+    // This app's `.modal` CSS defaults to `display: flex`; visibility is
+    // toggled via inline `style.display` OR the `d-none` class, so the
+    // Bootstrap-style `.modal.show` check alone never matches here. Walk
+    // every `.modal` and ask the engine whether it resolves to a visible
+    // display — this captures both hiding patterns without hard-coding them.
+    var modals = document.querySelectorAll('.modal');
+    for (var i = 0; i < modals.length; i++) {
+        var disp = window.getComputedStyle(modals[i]).display;
+        if (disp && disp !== 'none') return true;
+    }
+    // Defensive: framework patterns that may appear in grafted-in partials.
     return !!(
-        document.querySelector('.modal.show') ||
         document.querySelector('[role="dialog"][aria-hidden="false"]') ||
-        document.querySelector('.modal-overlay.is-visible')
+        document.querySelector('.modal-overlay.is-visible') ||
+        document.querySelector('.modal-overlay.active')
     );
 }
 
@@ -6890,10 +6901,14 @@ window.stopAutoRefresh = function() {
 // updates tab badges in place.
 //
 // Activity gates (all layered together to keep the feature unobtrusive):
-//   - Visibility API: pause entirely when document.hidden
-//   - Idle backoff: drop from base→2× after 60s no interaction, 6× after 5min
+//   - Visibility API: pause entirely when document.hidden (cursor preserved
+//     so resume catches everything that arrived while hidden)
+//   - Idle backoff: drop from base→3× after 60s no interaction, 6× after 5min
 //   - Dedup via sessionStorage: surviving a full reload won't re-toast the
 //     same ids
+//   - Cursor overlap: next-poll `since` is server `now - 1` so events whose
+//     DB timestamp rounds to the same integer second as the server's
+//     `time()` call aren't dropped when they land after the query ran
 // Settings are delivered by the server on each poll — we trust the server
 // over the bootstrap constants, so a settings save takes effect without
 // page reload.
@@ -7126,7 +7141,12 @@ function livePollOnce() {
                 return;
             }
         }
-        if (data.now) liveSinceTs = data.now;
+        // Overlap the next cursor by 1 second so we don't silently drop
+        // events whose DB timestamp rounds to the same integer second as
+        // the server's `time()` call but which landed *after* the query
+        // ran. Client-side dedup (`liveIsSeen` + `eventToastsByDedupKey`)
+        // absorbs the redundant fire on the next poll.
+        if (data.now) liveSinceTs = Math.max(0, data.now - 1);
         liveDispatch(data);
     };
     xhr.ontimeout = function() { liveInflight = false; };
@@ -7145,10 +7165,14 @@ function liveSchedule() {
 
 function liveStartPolling() {
     if (typeof liveNotificationsEnabled === 'undefined' || !liveNotificationsEnabled) return;
-    // Initial since = now - 60s so we don't re-toast anything rendered on
-    // first paint, but we still catch the first arrivals after the page
-    // loaded. Subsequent polls advance liveSinceTs via data.now.
-    liveSinceTs = Math.floor(Date.now() / 1000) - 60;
+    // First start: since = now - 60s so we don't re-toast anything rendered
+    // on first paint, but still catch any arrivals right after page load.
+    // Subsequent calls (e.g. tab coming back from `visibilitychange:hidden`)
+    // must PRESERVE the cursor — otherwise events accrued while the tab was
+    // hidden get silently dropped on resume.
+    if (!liveSinceTs) {
+        liveSinceTs = Math.floor(Date.now() / 1000) - 60;
+    }
     liveSchedule();
 }
 function liveStopPolling() {
