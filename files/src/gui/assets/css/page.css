@@ -4265,6 +4265,19 @@ tr.tx-item-in-progress > td:first-child {
     border-top: 1px solid #e9ecef;
     padding-top: 0.75rem;
 }
+.pending-currency-body .currency-decline-form {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #e9ecef;
+    text-align: right;
+}
+.pending-currency-body .currency-decline-btn {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+.pending-currency-body .currency-decline-btn:hover {
+    opacity: 1;
+}
 
 .pending-contact-header {
     display: -webkit-box; display: -ms-flexbox; display: flex;

@@ -319,6 +319,44 @@ class ContactCurrencyRepositoryTest extends TestCase
         $this->assertFalse($this->repository->hasAcceptedCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY));
     }
 
+    public function testDeclineIncomingCurrencyDeletesOnlyPendingIncomingRow(): void
+    {
+        // Verify the DELETE query is tightly scoped: incoming + pending
+        // only. Protects accepted or outgoing rows from accidental removal.
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('DELETE FROM'),
+                $this->stringContains('pubkey_hash = :pubkey_hash'),
+                $this->stringContains('currency = :currency'),
+                $this->stringContains("direction = 'incoming'"),
+                $this->stringContains("status = 'pending'")
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('bindValue')->willReturn(true);
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+        $this->stmt->method('rowCount')->willReturn(1);
+
+        $this->assertTrue($this->repository->declineIncomingCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY));
+    }
+
+    public function testDeclineIncomingCurrencyReturnsFalseWhenNoRowMatched(): void
+    {
+        $this->pdo->expects($this->once())->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('bindValue')->willReturn(true);
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+        $this->stmt->method('rowCount')->willReturn(0);
+
+        $this->assertFalse($this->repository->declineIncomingCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY));
+    }
+
+    public function testDeclineIncomingCurrencyReturnsFalseOnPDOException(): void
+    {
+        $this->pdo->method('prepare')->willThrowException(new \PDOException('boom'));
+        $this->assertFalse($this->repository->declineIncomingCurrency(self::TEST_PUBKEY_HASH, self::TEST_CURRENCY));
+    }
+
     public function testHasCurrencyReturnsTrueWhenExists(): void
     {
         $this->pdo->expects($this->once())

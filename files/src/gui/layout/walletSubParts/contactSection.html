@@ -892,6 +892,24 @@
                                 </div>
                                 <?php endif; ?>
                             </form>
+
+                            <!-- Decline this specific currency. Separate form so
+                                 it doesn't submit the Accept's fee/credit fields.
+                                 Silent delete of the pending contact_currencies
+                                 row — matches the protocol-level behaviour of
+                                 deleteContact (sender isn't notified). -->
+                            <?php if (!empty($contact['pubkey_hash'])): ?>
+                            <form method="POST" class="currency-decline-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="action" value="declineCurrency">
+                                <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash']); ?>">
+                                <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
+                                <button type="submit" class="btn btn-secondary btn-sm currency-decline-btn"
+                                        data-confirm="Decline <?php echo htmlspecialchars($pc['currency']); ?> request from this contact? The request will be removed from your pending list. They can re-request later.">
+                                    <i class="fas fa-times"></i> Decline <?php echo htmlspecialchars($pc['currency']); ?>
+                                </button>
+                            </form>
+                            <?php endif; ?>
                         </div>
                     </details>
                     <?php endforeach; ?>

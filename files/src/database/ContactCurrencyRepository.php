@@ -498,4 +498,32 @@ class ContactCurrencyRepository extends AbstractRepository {
 
         return $stmt->rowCount() > 0;
     }
+
+    /**
+     * Decline a pending incoming currency request — removes the row so
+     * the GUI stops surfacing it in the Pending Contact Requests list.
+     * Narrowly targeted: matches only (pubkey, currency, direction=
+     * 'incoming', status='pending') so it cannot accidentally delete
+     * our own outgoing row (if we happened to request the same
+     * currency from them) or a previously-accepted row.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency Currency code (e.g. 'MXN')
+     * @return bool True if a row was deleted
+     */
+    public function declineIncomingCurrency(string $pubkeyHash, string $currency): bool {
+        $query = "DELETE FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash
+                    AND currency = :currency
+                    AND direction = 'incoming'
+                    AND status = 'pending'";
+        $stmt = $this->execute($query, [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency,
+        ]);
+        if (!$stmt) {
+            return false;
+        }
+        return $stmt->rowCount() > 0;
+    }
 }

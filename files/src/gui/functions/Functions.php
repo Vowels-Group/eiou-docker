@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
     // Contact actions
-    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
+    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'declineCurrency', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
         $contactController->routeAction();
     }
 
@@ -1228,21 +1228,13 @@ foreach ($pendingUserContacts as $puc) {
     }
 }
 
-// Also add accepted contacts with pending incoming currencies to $pendingContacts
-// (they stay in $acceptedContacts too — grid shows them as accepted, standalone section shows accept form)
-foreach ($acceptedContacts as $c) {
-    if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
-        $c['is_existing_contact'] = true;
-        // Flag: contact.status = 'accepted' but ZERO currencies are actually
-        // in status='accepted' on their contact_currencies rows. Happens
-        // most visibly after unblockContact() (which only flips contact
-        // status, not currency rows). The UI uses this to show a louder
-        // warning — a contact with no active currency lines cannot send,
-        // receive, or P2P-relay until at least one currency is accepted.
-        $c['has_no_active_currencies'] = empty($c['currencies']);
-        $pendingContacts[] = $c;
-    }
-}
+// "Accepted contacts with pending incoming currencies get re-added to
+// $pendingContacts" — deferred until after the $acceptedContacts entries
+// have had $contact['currencies'] populated (that happens in the
+// merge-credit loop ~250 lines below). Doing it here would capture
+// entries with no `currencies` key, which would make the
+// has_no_active_currencies detection always think the contact has no
+// active lines — wrong for a partially-accepted contact.
 // $pendingCurrencyContacts no longer needed for separate notification
 $pendingCurrencyContacts = [];
 
@@ -1495,6 +1487,28 @@ foreach ($contactArraysForCredit as &$contacts) {
     unset($contact);
 }
 unset($contacts);
+
+// Re-add accepted contacts with pending incoming currencies to
+// $pendingContacts so the standalone section shows the accept form.
+// Placed here (after the merge-credit loop populates $c['currencies']
+// with accepted-status-only rows) so has_no_active_currencies is
+// computed against the true count of active currency lines — not
+// against a null/unset field.
+foreach ($acceptedContacts as $c) {
+    if (!empty($c['pending_currencies']) && !isset($pendingContactHashes[$c['pubkey_hash'] ?? ''])) {
+        $c['is_existing_contact'] = true;
+        // Flag: contact.status='accepted' but ZERO rows in
+        // contact_currencies are status='accepted'. Most common after
+        // unblockContact() (which only flips contact status, not
+        // currency rows). The UI shows a louder yellow warning in
+        // this case — a contact with no active currency lines can't
+        // send, receive, or P2P-relay until at least one is accepted.
+        // `currencies` here is the accepted-only list set above.
+        $c['has_no_active_currencies'] = empty($c['currencies']);
+        $pendingContacts[] = $c;
+        $pendingContactHashes[$c['pubkey_hash'] ?? ''] = true;
+    }
+}
 
 // Load payment requests for display in the Send tab
 $paymentRequests = ['incoming' => [], 'outgoing' => []];
