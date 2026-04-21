@@ -221,10 +221,11 @@ jobs:
       - name: "Add Docker Hub reference to release notes"
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           VERSION="${{ needs.meta.outputs.version }}"
           TAG="${{ needs.meta.outputs.tag }}"
-          gh release view "${TAG}" --json body -q '.body' > /tmp/release-notes.md
+          gh release view "${TAG}" --repo "${REPO}" --json body -q '.body' > /tmp/release-notes.md
           cat >> /tmp/release-notes.md <<EOF
 
           ---
@@ -239,7 +240,7 @@ jobs:
 
           [View on Docker Hub](https://hub.docker.com/r/${IMAGE}/tags?name=${VERSION})
           EOF
-          gh release edit "${TAG}" --notes-file /tmp/release-notes.md
+          gh release edit "${TAG}" --repo "${REPO}" --notes-file /tmp/release-notes.md
 
       - name: "Summary"
         run: |
