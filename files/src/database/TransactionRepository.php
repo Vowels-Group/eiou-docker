@@ -246,7 +246,11 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $placeholders = $this->createPlaceholders($userAddresses);
-        $query = "SELECT txid, type, status, amount, currency,
+        // Schema stores amount as a SplitAmount pair (amount_whole / amount_frac);
+        // there is no single `amount` column. Select the pair and collapse to a
+        // display float via TransactionFormatter below — the live-notif endpoint
+        // consumer reads `amount` as a number for the toast body.
+        $query = "SELECT txid, type, status, amount_whole, amount_frac, currency,
                          sender_address, receiver_address, timestamp, description
                   FROM {$this->tableName}
                   WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
@@ -261,7 +265,13 @@ class TransactionRepository extends AbstractRepository {
         try {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            return array_map(function (array $row): array {
+                $row['amount'] = TransactionFormatter::convertAmount(
+                    TransactionFormatter::extractAmount($row)
+                );
+                return $row;
+            }, $rows);
         } catch (\PDOException $e) {
             Logger::getInstance()->log('getIncomingSince failed: ' . $e->getMessage(), 'WARNING');
             return [];
