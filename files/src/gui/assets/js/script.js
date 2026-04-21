@@ -3436,9 +3436,14 @@ function openContactModal(contact, openTab) {
     // Address dropdown — iterate whatever transport columns the schema
     // currently exposes (EIOU_ADDRESS_TYPE_DISPLAY is bootstrapped from
     // AddressRepository::getAllAddressTypes + Constants::ADDRESS_TYPE_DISPLAY
-    // on page render). A new transport column added to the addresses table
-    // picks up whatever display metadata the Constants registry has, or
-    // falls back to an UPPERCASE(type) label + fa-question icon.
+    // on page render, ordered by security priority). A new transport column
+    // picks up whatever display label the Constants registry has, falling
+    // back to UPPERCASE(type).
+    //
+    // Only `type` and `address` are consumed below (option value + data-
+    // attribute); the registry's icon metadata is used by the pending-
+    // contact pills, not this dropdown, so we don't carry it into the
+    // pushed object.
     var addresses = [];
     if (typeof EIOU_ADDRESS_TYPE_DISPLAY !== 'undefined' && EIOU_ADDRESS_TYPE_DISPLAY) {
         for (var _t in EIOU_ADDRESS_TYPE_DISPLAY) {
@@ -3448,7 +3453,6 @@ function openContactModal(contact, openTab) {
             addresses.push({
                 type: _meta.label || _t.toUpperCase(),
                 address: contact[_t],
-                icon: _meta.icon || 'fa-question',
             });
         }
     }

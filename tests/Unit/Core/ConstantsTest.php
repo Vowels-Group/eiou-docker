@@ -772,4 +772,27 @@ class ConstantsTest extends TestCase
         $this->assertSame('', $empty['label']);
         $this->assertSame('fa-question', $empty['icon']);
     }
+
+    public function testAddressTypeDisplayKeysMatchValidTransportIndices(): void
+    {
+        // Drift guard. The two constants describe the same universe of
+        // "known address types":
+        //   - VALID_TRANSPORT_INDICES: the canonical priority order used
+        //     for display ordering and env-var validation.
+        //   - ADDRESS_TYPE_DISPLAY:    the label+icon registry for the
+        //     contact-modal dropdown and pending-contact pills.
+        // Adding a transport to one but not the other produces working-
+        // but-ugly output (fa-question fallback) or a type that renders
+        // last despite having proper metadata. This test keeps the two
+        // in sync unless someone explicitly updates both.
+        $displayKeys = array_keys(Constants::ADDRESS_TYPE_DISPLAY);
+        sort($displayKeys);
+        $validTransports = Constants::VALID_TRANSPORT_INDICES;
+        sort($validTransports);
+        $this->assertSame(
+            $validTransports,
+            $displayKeys,
+            'ADDRESS_TYPE_DISPLAY keys and VALID_TRANSPORT_INDICES must describe the same set'
+        );
+    }
 }
