@@ -1395,6 +1395,13 @@ window.onclick = function(event) {
         resetModal.classList.add('d-none');
     }
 
+    // Pending-contact modals are rendered one per request (id
+    // "pending-contact-modal-<index>"). Any click on the backdrop of any
+    // of them closes that specific modal.
+    if (event.target && event.target.matches && event.target.matches('[data-pending-contact-modal]')) {
+        event.target.classList.add('d-none');
+    }
+
     // API-keys modals (all dispatch through the apiKeys IIFE so state
     // gets cleaned up correctly; e.g. pendingEdit / pendingDelete are reset)
     if (window.apiKeys) {
@@ -1437,6 +1444,11 @@ document.addEventListener('keydown', function(event) {
     closeContactModal();
     closeAddContactModal();
     closeWhatsNewModal();
+    // Close any open pending-contact modal on Escape.
+    var openPending = document.querySelectorAll('[data-pending-contact-modal]:not(.d-none)');
+    for (var pi = 0; pi < openPending.length; pi++) {
+        openPending[pi].classList.add('d-none');
+    }
 });
 
 /**
@@ -2293,6 +2305,37 @@ function initializeCurrencyAcceptHandlers() {
                 if (currencies.length === 0) {
                     e.preventDefault();
                     return;
+                }
+
+                // Defaults guard — if any currency is at both the default
+                // fee AND default credit, warn before accepting. User's
+                // defaults come from data attributes on the accept-all form
+                // (emitted by PHP from user settings). Skipped if all
+                // currencies were customized.
+                var defaultFee = form.getAttribute('data-default-fee');
+                var defaultCredit = form.getAttribute('data-default-credit');
+                if (defaultFee !== null && defaultCredit !== null) {
+                    var untouched = [];
+                    for (var m = 0; m < currencies.length; m++) {
+                        // Number comparison — the rendered value may have
+                        // trailing zeros etc. that string-compare would miss.
+                        if (parseFloat(currencies[m].fee) === parseFloat(defaultFee)
+                            && parseFloat(currencies[m].credit) === parseFloat(defaultCredit)) {
+                            untouched.push(currencies[m].currency);
+                        }
+                    }
+                    if (untouched.length > 0 && !form.dataset.guardConfirmed) {
+                        e.preventDefault();
+                        var msg = untouched.length === currencies.length
+                            ? 'You\'re accepting all ' + currencies.length + ' currencies with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
+                            : 'The following currencies are at your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
+                        if (!confirm(msg)) return;
+                        // One-shot bypass — set a flag, re-submit, skip the
+                        // guard on the second pass.
+                        form.dataset.guardConfirmed = '1';
+                        form.submit();
+                        return;
+                    }
                 }
 
                 // Set the JSON data into the hidden field
@@ -3278,12 +3321,17 @@ function showInfoModal(el) {
     overlay.className = 'modal';
     overlay.id = 'info-modal';
     overlay.innerHTML =
-        '<div class="modal-content" style="max-width:340px">' +
+        '<div class="modal-content" style="max-width:440px">' +
             '<div class="modal-header">' +
                 '<h3 style="font-size:1rem"><i class="fas fa-info-circle" style="color:#6c757d"></i> Info</h3>' +
                 '<span class="close" id="info-modal-close" title="Close">&times;</span>' +
             '</div>' +
-            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5;white-space:pre-line">' +
+            // overflow-wrap:anywhere + word-break:break-word lets long
+            // unbreakable strings (Tor onions, pubkey hashes, URLs without
+            // spaces) wrap at any character rather than walking off the
+            // right edge. white-space:pre-line preserves intentional
+            // newlines in multi-line tooltips.
+            '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem;line-height:1.5;white-space:pre-line;overflow-wrap:anywhere;word-break:break-word">' +
                 escapeHtml(text) +
             '</div>' +
         '</div>';
@@ -7483,6 +7531,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'revokeAllRememberSessions': function(el) {
             if (!confirm('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.')) return;
             revokeAllRememberSessions(el);
+        },
+        'openPendingContactModal': function(el) {
+            // Row-click handler for the pending-contacts table. Reads the
+            // target modal id from data-modal-id and un-hides it. Each
+            // pending contact gets its own inline modal so the existing
+            // form PHP doesn't need to be JS-serialized.
+            var modalId = el.getAttribute('data-modal-id');
+            if (!modalId) return;
+            var modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.classList.remove('d-none');
+        },
+        'closePendingContactModal': function(el) {
+            var modalId = el.getAttribute('data-modal-id');
+            if (!modalId) return;
+            var modal = document.getElementById(modalId);
+            if (modal) modal.classList.add('d-none');
         },
         'openResetToDefaultsModal': function() {
             var modal = document.getElementById('settingsResetToDefaultsModal');

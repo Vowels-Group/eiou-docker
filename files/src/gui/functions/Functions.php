@@ -810,8 +810,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
     if ($liveEnabled) {
         try {
             // Payment requests — small working set, filter in PHP by created_at.
-            $prService = $serviceContainer->getPaymentRequestService();
-            $pendingPr = $prService->getPendingIncoming() ?: [];
+            // getPendingIncoming() lives on the repository, not the service
+            // (the service only exposes countPendingIncoming). Pulling the
+            // repo directly is the existing pattern for DLQ access below.
+            $prRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestRepository::class);
+            $pendingPr = $prRepo->getPendingIncoming() ?: [];
             foreach ($pendingPr as $pr) {
                 $createdAt = isset($pr['created_at']) ? strtotime((string) $pr['created_at']) : 0;
                 if ($createdAt > $since) {
