@@ -10,19 +10,58 @@
         <details class="section-intro text-muted">
             <summary>
                 <i class="fas fa-info-circle"></i>
-                <span>Save, Reset, and Reset to Defaults</span>
+                <span>How saving works</span>
             </summary>
             <div class="section-intro-body">
-                Change settings here and hit <strong>Save Settings</strong> when you&rsquo;re done.
-                <strong>Reset</strong> only reverts your current unsaved changes — it does
-                <em>not</em> wipe your saved settings. To throw every saved setting back to
-                the defaults this node ships with, use
-                <strong>Advanced Settings → Reset to Defaults</strong>.
+                <strong>One form, one Save button.</strong> Switch between sections
+                using the <strong>Section</strong> dropdown below — flip toggles,
+                change dropdowns, edit numbers in any section in any order. Your
+                edits stick as you move between sections (nothing is lost when you
+                switch view). When you're done, hit <strong>Save Settings</strong>
+                once at the bottom and every change across every section is
+                persisted in a single write.
+                <br><br>
+                <strong>Reset</strong> only reverts your current unsaved edits — it
+                does <em>not</em> wipe your saved settings. To throw every saved
+                setting back to the defaults this node ships with, pick
+                <strong>Reset to Defaults</strong> from the Section dropdown.
             </div>
         </details>
 
-        <h5 class="settings-group-heading"><i class="fas fa-palette"></i> Appearance</h5>
-        <div class="settings-grid">
+        <!-- Unified section selector — the whole settings page is a single
+             view at a time, driven by this dropdown. Hidden sections stay in
+             the DOM (so their inputs still post on Save); display is toggled
+             in JS by switchAdvancedSection(). -->
+        <div class="adv-section-nav">
+            <label for="advancedSectionSelect">Section:</label>
+            <select id="advancedSectionSelect" data-action-change="switchAdvancedSection">
+                <!-- Disabled header-style options replace <optgroup> — optgroup
+                     labels render as muted italic and browsers sometimes clip
+                     them on narrow selects. Explicit disabled rows are more
+                     robustly visible and work identically across browsers. -->
+                <option disabled>────── Main ──────</option>
+                <option value="appearance" selected>Appearance</option>
+                <option value="identity">Identity</option>
+                <option value="payments">Payments</option>
+                <option value="network-basic">Network</option>
+                <option value="notifications">Notifications</option>
+                <option disabled>──── Advanced ────</option>
+                <option value="feature-toggles">Feature Toggles</option>
+                <option value="currency">Currency</option>
+                <option value="display">Display</option>
+                <option value="backup-logging">Backup &amp; Logging</option>
+                <option value="data-retention">Data Retention</option>
+                <option value="sync">Sync</option>
+                <option value="network">Network (advanced)</option>
+                <option value="rate-limiting">Rate Limiting</option>
+                <option value="gui-security">GUI Security</option>
+                <option value="reset">Reset to Defaults</option>
+            </select>
+        </div>
+
+        <div id="adv-section-appearance" class="adv-section">
+            <h4 class="settings-subsection-title"><i class="fas fa-palette"></i> Appearance</h4>
+            <div class="settings-grid">
             <!-- Contact Avatar Style -->
             <div class="form-group">
                 <label>Contact Avatar Style:</label>
@@ -120,21 +159,26 @@
             </div>
         </div>
 
-        <h5 class="settings-group-heading"><i class="fas fa-id-card"></i> Identity</h5>
-        <div class="settings-grid">
-            <!-- Display Name -->
-            <div class="form-group">
-                <label for="settingsName">Display Name:</label>
-                <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Your display name shown in the GUI and shared when contacts scan your QR code
-                </small>
-            </div>
-        </div>
+        </div><!-- /adv-section-appearance -->
 
-        <h5 class="settings-group-heading"><i class="fas fa-coins"></i> Payments</h5>
-        <div class="settings-grid">
+        <div id="adv-section-identity" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-id-card"></i> Identity</h4>
+            <div class="settings-grid">
+                <!-- Display Name -->
+                <div class="form-group">
+                    <label for="settingsName">Display Name:</label>
+                    <input type="text" id="settingsName" name="name" value="<?php echo htmlspecialchars($user->getName() ?? ''); ?>" maxlength="64" placeholder="Enter your name (optional)">
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Your display name shown in the GUI and shared when contacts scan your QR code
+                    </small>
+                </div>
+            </div>
+        </div><!-- /adv-section-identity -->
+
+        <div id="adv-section-payments" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-coins"></i> Payments</h4>
+            <div class="settings-grid">
             <!-- Default Currency -->
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>
@@ -193,60 +237,79 @@
                 </small>
             </div>
         </div>
+        </div><!-- /adv-section-payments -->
 
-        <h5 class="settings-group-heading"><i class="fas fa-network-wired"></i> Network</h5>
-        <div class="settings-grid">
-            <!-- Default Transport Mode -->
-            <div class="form-group">
-                <label for="defaultTransportMode">Default Transport Mode:</label>
-                <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
-                    <?php
-                    // Dynamically generate transport options from available types
-                    $transportTypes = validTransportIndices();
-                    $currentTransport = $user->getDefaultTransportMode();
-                    foreach ($transportTypes as $type):
-                        $displayName = strtoupper($type);
-                        $selected = ($currentTransport === $type) ? 'selected' : '';
-                    ?>
-                    <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($displayName); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <small class="form-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Preferred network transport for communications (Tor is most secure, HTTP is least secure)
-                </small>
-            </div>
-        </div>
-
-        <!-- Advanced Settings (Collapsible) -->
-        <div class="settings-advanced-divider">
-            <h3 class="settings-advanced-title" data-action="toggleConfigSection" data-section="advanced-settings-content" data-arrow="advanced-settings-arrow">
-                <i class="fas fa-sliders-h"></i> Advanced Settings
-                <i id="advanced-settings-arrow" class="fas fa-chevron-down settings-collapsible-arrow"></i>
-            </h3>
-            <div id="advanced-settings-content" class="d-none">
-
-                <!-- Category selector -->
-                <div class="adv-section-nav">
-                    <label for="advancedSectionSelect">Category:</label>
-                    <select id="advancedSectionSelect" data-action-change="switchAdvancedSection">
-                        <option value="feature-toggles">Feature Toggles</option>
-                        <option value="currency">Currency</option>
-                        <option value="display">Display</option>
-                        <option value="backup-logging">Backup &amp; Logging</option>
-                        <option value="data-retention">Data Retention</option>
-                        <option value="sync">Sync</option>
-                        <option value="network">Network</option>
-                        <option value="rate-limiting">Rate Limiting</option>
-                        <option value="gui-security">GUI Security</option>
-                        <option value="reset">Reset to Defaults</option>
+        <div id="adv-section-network-basic" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-network-wired"></i> Network</h4>
+            <div class="settings-grid">
+                <!-- Default Transport Mode -->
+                <div class="form-group">
+                    <label for="defaultTransportMode">Default Transport Mode:</label>
+                    <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
+                        <?php
+                        // Dynamically generate transport options from available types
+                        $transportTypes = validTransportIndices();
+                        $currentTransport = $user->getDefaultTransportMode();
+                        foreach ($transportTypes as $type):
+                            $displayName = strtoupper($type);
+                            $selected = ($currentTransport === $type) ? 'selected' : '';
+                        ?>
+                        <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($displayName); ?></option>
+                        <?php endforeach; ?>
                     </select>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Preferred network transport for communications (Tor is most secure, HTTP is least secure)
+                    </small>
                 </div>
+            </div>
+        </div><!-- /adv-section-network-basic -->
+
+        <!-- Notifications — dedicated subsection for live event notifications.
+             Grouped together because the verbosity + duration dropdowns don't
+             belong under Feature Toggles (which is toggle-switches only). -->
+        <div id="adv-section-notifications" class="adv-section d-none">
+            <h4 class="settings-subsection-title"><i class="fas fa-bell"></i> Notifications</h4>
+            <p class="text-muted mb-lg">
+                Fine-tune live event notifications. The master on/off switch lives under
+                <strong>Feature Toggles → GUI → Live Event Notifications</strong>.
+                Values below are saved either way, but only take effect while the master
+                toggle is on.
+            </p>
+            <div class="settings-grid">
+                <div class="form-group">
+                    <label for="liveNotificationsVerbosity">Notification Verbosity:</label>
+                    <select id="liveNotificationsVerbosity" name="liveNotificationsVerbosity" class="default-value">
+                        <?php $curVerbosity = $user->getLiveNotificationsVerbosity(); ?>
+                        <option value="quiet" <?php echo ($curVerbosity === 'quiet') ? 'selected' : ''; ?>>Quiet — only money events toast</option>
+                        <option value="balanced" <?php echo ($curVerbosity === 'balanced') ? 'selected' : ''; ?>>Balanced — money events + delivery failures toast</option>
+                        <option value="live" <?php echo ($curVerbosity === 'live') ? 'selected' : ''; ?>>Live — everything toasts, including status updates</option>
+                    </select>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i> Quiet = received payments, payment requests, and contact requests toast; in-flight status churn and delivery failures stay badge-only. Balanced adds delivery failures. Live adds in-flight status updates (pending → sent → completed).
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="liveNotificationsToastDurationMs">Toast Duration:</label>
+                    <select id="liveNotificationsToastDurationMs" name="liveNotificationsToastDurationMs" class="default-value">
+                        <?php $curDuration = $user->getLiveNotificationsToastDurationMs(); ?>
+                        <option value="5000" <?php echo ($curDuration === 5000) ? 'selected' : ''; ?>>5 seconds</option>
+                        <option value="10000" <?php echo ($curDuration === 10000) ? 'selected' : ''; ?>>10 seconds (default)</option>
+                        <option value="20000" <?php echo ($curDuration === 20000) ? 'selected' : ''; ?>>20 seconds</option>
+                        <option value="0" <?php echo ($curDuration === 0) ? 'selected' : ''; ?>>Until dismissed</option>
+                    </select>
+                    <small class="form-hint">
+                        <i class="fas fa-info-circle"></i> How long live-event toasts stay on screen before auto-dismissing. Hovering or clicking to expand always pauses the timer.
+                    </small>
+                </div>
+            </div>
+        </div><!-- /adv-section-notifications -->
 
                 <!-- Feature Toggles — grouped by domain (Transactions /
                      Contacts / GUI / System) since the flat list was
                      getting long and the options bucket naturally. -->
-                <div id="adv-section-feature-toggles" class="adv-section">
+                <div id="adv-section-feature-toggles" class="adv-section d-none">
                     <h4 class="settings-subsection-title">
                         <i class="fas fa-toggle-on"></i> Feature Toggles
                     </h4>
@@ -434,6 +497,27 @@
                                 <i class="fas fa-info-circle"></i> Hide Failed Messages, Payment Requests, and Pending Contact Requests sections when they have nothing in them. Default OFF — empty sections stay visible so you can see the feature exists and know there's nothing awaiting you.
                             </small>
                         </div>
+
+                        <!-- Live event notifications master toggle lives here
+                             (it IS a toggle) — the companion verbosity + toast
+                             duration dropdowns live in the dedicated
+                             Notifications subsection since they're not toggles. -->
+                        <div class="form-group">
+                            <label for="liveNotificationsEnabled">Live Event Notifications:</label>
+                            <div class="toggle-row">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="liveNotificationsEnabled" name="liveNotificationsEnabled" value="1" <?php echo $user->getLiveNotificationsEnabled() ? 'checked' : ''; ?>>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="liveNotificationsEnabledStatus" class="toggle-status <?php echo $user->getLiveNotificationsEnabled() ? 'enabled' : ''; ?>">
+                                    <?php echo $user->getLiveNotificationsEnabled() ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                            <small class="form-hint">
+                                <i class="fas fa-info-circle"></i> Show toasts + keep tab badges fresh when new payment requests, contact requests, transactions, or delivery failures arrive. Polls every ~10s, pauses when the tab is hidden or you're idle, never reloads the page. Suppresses Auto-Refresh Transactions while active. Configure verbosity + toast duration under <strong>Notifications</strong>.
+                            </small>
+                        </div>
+
                     </div>
 
                     <h5 class="settings-group-heading"><i class="fas fa-server"></i> System</h5>
@@ -1058,9 +1142,6 @@
                         </div>
                     </div>
                 </div>
-
-            </div>
-        </div>
 
         <div class="form-actions settings-actions">
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Settings</button>

@@ -2685,6 +2685,39 @@ tr.tx-item-in-progress > td:first-child {
     line-height: 1;
 }
 
+/* Live-event toasts: richer variant with action button + click-to-expand
+   details. Base .toast styles still apply; these only layer extras. */
+.toast-event { cursor: pointer; }
+.toast-event .toast-action {
+    margin-right: 0.35rem;
+    white-space: nowrap;
+}
+.toast-event .toast-details-wrap {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e9ecef;
+    font-size: 0.85rem;
+}
+.toast-event.toast-expanded {
+    cursor: default;
+    max-width: 420px;
+}
+.toast-event dl.toast-details {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15rem 0.75rem;
+}
+.toast-event dl.toast-details dt {
+    color: #6c757d;
+    font-weight: 500;
+}
+.toast-event dl.toast-details dd {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .toast-close:hover {
     color: #6c757d;
 }
@@ -4081,6 +4114,169 @@ tr.tx-item-in-progress > td:first-child {
     border-radius: 4px;
     margin-bottom: 1rem;
     border-left: 4px solid #0d6efd;
+}
+
+/* Pending contact requests table — compact tabular view; each row opens a
+   modal with the full accept/reject form. Column widths are tuned so the
+   identifier (usually a Tor onion) gets enough room before truncating. */
+.pending-contacts-table tbody tr.pending-contact-row {
+    transition: background 0.15s ease;
+}
+.pending-contacts-table tbody tr.pending-contact-row:hover {
+    background: #f0f7ff;
+}
+.pending-contacts-table .pending-col-identifier {
+    /* Wide enough to show a 10-chars-...10-chars onion slice. */
+    min-width: 220px;
+    max-width: 38%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pending-contacts-table .pending-col-message {
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pending-contacts-table .pending-col-currencies {
+    min-width: 120px;
+    white-space: nowrap;
+}
+.pending-contacts-table .pending-col-currencies .badge {
+    margin-right: 0.25rem;
+}
+
+/* On mobile the Currencies column is the first thing to drop — users can
+   still see it in the detail modal. Identifier + Message are what's needed
+   to pick the right request out of a stack. */
+@media (max-width: 600px) {
+    .pending-contacts-table .pending-col-currencies {
+        display: none;
+    }
+    .pending-contacts-table .pending-col-identifier {
+        max-width: 50%;
+    }
+}
+
+/* Pending-contact modal compact layout: address icons, collapsed public
+   key, accordion per currency. All about vertical budget — the old card
+   rendered 3 full addresses + the full PEM pubkey + every currency's form
+   stacked, which blew out the modal height on anything beyond one currency. */
+.pending-addresses-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.pending-addr-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem;
+    background: #f1f5f9;
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    color: #495057;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.pending-addr-icon:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+.pending-addr-icon.address-tor   { color: #7a2e8f; }
+.pending-addr-icon.address-https { color: #198754; }
+.pending-addr-icon.address-http  { color: #0d6efd; }
+.pending-addr-label {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.pending-pubkey-disclosure {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    background: #fafbfc;
+}
+.pending-pubkey-disclosure > summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+    list-style: none;
+}
+.pending-pubkey-disclosure > summary::-webkit-details-marker { display: none; }
+.pending-pubkey-disclosure > summary::before {
+    content: "▸ ";
+    color: #6c757d;
+}
+.pending-pubkey-disclosure[open] > summary::before { content: "▾ "; }
+.pending-pubkey-disclosure .pubkey-display {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    word-break: break-all;
+}
+
+.pending-currency-accordion {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: white;
+}
+.pending-currency-accordion[open] {
+    background: #fafbfc;
+}
+.pending-currency-summary {
+    cursor: pointer;
+    padding: 0.6rem 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+    font-weight: 500;
+}
+.pending-currency-summary::-webkit-details-marker { display: none; }
+.pending-currency-summary::before {
+    content: "▸";
+    color: #6c757d;
+    font-size: 0.85rem;
+    display: inline-block;
+    width: 0.85rem;
+}
+.pending-currency-accordion[open] .pending-currency-summary::before {
+    content: "▾";
+}
+.pending-currency-code {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    min-width: 3ch;
+}
+.pending-currency-summary-msg {
+    font-size: 0.85rem;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.pending-currency-body {
+    padding: 0 0.85rem 0.85rem 0.85rem;
+    border-top: 1px solid #e9ecef;
+    padding-top: 0.75rem;
+}
+.pending-currency-body .currency-decline-form {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #e9ecef;
+    text-align: right;
+}
+.pending-currency-body .currency-decline-btn {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+.pending-currency-body .currency-decline-btn:hover {
+    opacity: 1;
 }
 
 .pending-contact-header {

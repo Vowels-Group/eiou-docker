@@ -225,6 +225,37 @@ class DeadLetterQueueRepository extends AbstractRepository {
     }
 
     /**
+     * Return DLQ items created strictly after $sinceTs, newest first.
+     * Used by the live-notifications poll to surface newly-failed messages
+     * as toasts without the full /dlq reload.
+     *
+     * @param int $sinceTs Unix timestamp (seconds)
+     * @param int $limit   Hard cap on rows
+     * @return array Array of DLQ records
+     */
+    public function getItemsSince(int $sinceTs, int $limit): array {
+        if ($limit <= 0) {
+            return [];
+        }
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE created_at > :created_after
+                  ORDER BY created_at DESC
+                  LIMIT :limit";
+        $stmt = $this->pdo->prepare($query);
+        // DLQ schema uses MySQL DATETIME for created_at; pass wire format.
+        $stmt->bindValue(':created_after', date('Y-m-d H:i:s', $sinceTs));
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        try {
+            $stmt->execute();
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $this->decodeJsonFields($results, 'payload');
+        } catch (PDOException $e) {
+            $this->logError('Failed to get DLQ items since', $e);
+            return [];
+        }
+    }
+
+    /**
      * Update item status to 'retrying'
      *
      * @param int $id DLQ item ID

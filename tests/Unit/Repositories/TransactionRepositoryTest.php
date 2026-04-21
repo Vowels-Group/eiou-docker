@@ -281,4 +281,151 @@ class TransactionRepositoryTest extends TestCase
         $result = $repo->getByTxid('tx-live');
         $this->assertSame('tx-live', $result[0]['txid']);
     }
+
+    // =========================================================================
+    // getIncomingSince() — regression for live-notifications endpoint.
+    // The schema stores amount as amount_whole + amount_frac; there is no
+    // single `amount` column. An earlier draft of this method selected
+    // `amount` directly, which MySQL rejected at execute time with "Unknown
+    // column 'amount'". The try/catch swallowed the PDOException and returned
+    // [], so the live-notif endpoint's transaction toasts silently never
+    // fired. Tests here pin the SELECT against the correct columns and
+    // verify the PHP post-processing fills in the `amount` float the endpoint
+    // consumer expects.
+    // =========================================================================
+
+    public function testGetIncomingSinceSelectsAmountSplitColumnsNotAggregateAmount(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+
+        $userContext = $this->createMock(\Eiou\Core\UserContext::class);
+        $userContext->method('getUserAddresses')->willReturn(['alice.onion']);
+
+        $capturedQuery = null;
+        $pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturnCallback(function ($q) use (&$capturedQuery, $stmt) {
+                $capturedQuery = $q;
+                return $stmt;
+            });
+        $stmt->method('execute')->willReturn(true);
+        $stmt->method('fetchAll')->willReturn([]);
+
+        $repo = new TransactionRepository($pdo);
+        $reflection = new \ReflectionClass($repo);
+        $property = $reflection->getProperty('currentUser');
+        $property->setAccessible(true);
+        $property->setValue($repo, $userContext);
+
+        $repo->getIncomingSince(0, 25);
+
+        $this->assertNotNull($capturedQuery);
+        $this->assertStringContainsString('amount_whole', $capturedQuery);
+        $this->assertStringContainsString('amount_frac', $capturedQuery);
+        // Guard against a `amount,` or `amount ` reappearing — the schema
+        // has no such column. Word-boundary regex avoids a false positive on
+        // `amount_whole` / `amount_frac`.
+        $this->assertDoesNotMatchRegularExpression(
+            '/\bamount\b(?!_)/',
+            $capturedQuery,
+            'getIncomingSince must not select the non-existent `amount` column'
+        );
+    }
+
+    public function testGetIncomingSinceExcludesContactTypeRows(): void
+    {
+        // Contact-establishment rows (tx_type='contact') have amount=0 by
+        // construction and must never enter the live-notif stream — otherwise
+        // they fire "Payment received — 0 USD" toasts on every handshake at
+        // quiet/balanced verbosities.
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+
+        $userContext = $this->createMock(\Eiou\Core\UserContext::class);
+        $userContext->method('getUserAddresses')->willReturn(['alice.onion']);
+
+        $capturedQuery = null;
+        $pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturnCallback(function ($q) use (&$capturedQuery, $stmt) {
+                $capturedQuery = $q;
+                return $stmt;
+            });
+        $stmt->method('execute')->willReturn(true);
+        $stmt->method('fetchAll')->willReturn([]);
+
+        $repo = new TransactionRepository($pdo);
+        $reflection = new \ReflectionClass($repo);
+        $property = $reflection->getProperty('currentUser');
+        $property->setAccessible(true);
+        $property->setValue($repo, $userContext);
+
+        $repo->getIncomingSince(0, 25);
+
+        // Whitespace-tolerant match — the WHERE clause is multi-line in the
+        // source, so anchor the comparison on the <> operator and quoted value.
+        $this->assertMatchesRegularExpression(
+            "/tx_type\\s*<>\\s*'contact'/",
+            $capturedQuery,
+            'getIncomingSince must exclude tx_type=contact rows'
+        );
+    }
+
+    public function testGetIncomingSinceCollapsesSplitAmountToFloat(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $stmt = $this->createMock(PDOStatement::class);
+
+        $userContext = $this->createMock(\Eiou\Core\UserContext::class);
+        $userContext->method('getUserAddresses')->willReturn(['alice.onion']);
+
+        $pdo->method('prepare')->willReturn($stmt);
+        $stmt->method('execute')->willReturn(true);
+        // One whole dollar + a fractional piece — the endpoint reads `amount`
+        // as a display float, so the repo's post-processing must collapse the
+        // pair rather than returning them untouched.
+        $stmt->method('fetchAll')->willReturn([[
+            'txid' => 'tx-1',
+            'type' => 'received',
+            'status' => 'completed',
+            'amount_whole' => 42,
+            'amount_frac' => 50000000, // SplitAmount uses 10^8 scale → 0.50
+            'currency' => 'USD',
+            'sender_address' => 'bob.onion',
+            'receiver_address' => 'alice.onion',
+            'timestamp' => '2026-04-21 12:00:00',
+            'description' => 'Payment',
+        ]]);
+
+        $repo = new TransactionRepository($pdo);
+        $reflection = new \ReflectionClass($repo);
+        $property = $reflection->getProperty('currentUser');
+        $property->setAccessible(true);
+        $property->setValue($repo, $userContext);
+
+        $result = $repo->getIncomingSince(0, 25);
+
+        $this->assertCount(1, $result);
+        $this->assertArrayHasKey('amount', $result[0]);
+        $this->assertEqualsWithDelta(42.50, $result[0]['amount'], 0.001);
+    }
+
+    public function testGetIncomingSinceEmptyOnNoUserAddresses(): void
+    {
+        $pdo = $this->createMock(PDO::class);
+        $userContext = $this->createMock(\Eiou\Core\UserContext::class);
+        $userContext->method('getUserAddresses')->willReturn([]);
+
+        // Short-circuit before any query runs.
+        $pdo->expects($this->never())->method('prepare');
+
+        $repo = new TransactionRepository($pdo);
+        $reflection = new \ReflectionClass($repo);
+        $property = $reflection->getProperty('currentUser');
+        $property->setAccessible(true);
+        $property->setValue($repo, $userContext);
+
+        $this->assertSame([], $repo->getIncomingSince(0, 25));
+    }
 }

@@ -257,6 +257,35 @@ class Constants {
     const DEFAULT_TRANSPORT_MODE = 'tor';
     const VALID_TRANSPORT_INDICES = ['tor', 'https', 'http'];
 
+    // Address-type display registry — label + FontAwesome icon per known
+    // transport. Consumed by the contact modal's address dropdown (script.js)
+    // and the pending-contact modal's address pills (contactSection.html).
+    //
+    // Lookups go through `getAddressTypeDisplay()` which falls back to an
+    // uppercased column name + `fa-question` icon when a new transport is
+    // added to the `addresses` schema before its entry lands here — so the
+    // UI never breaks on a schema-only change, it just renders the new
+    // type with a placeholder icon until someone fills in the entry.
+    const ADDRESS_TYPE_DISPLAY = [
+        'tor'   => ['label' => 'Tor',   'icon' => 'fa-user-secret'],
+        'https' => ['label' => 'HTTPS', 'icon' => 'fa-lock'],
+        'http'  => ['label' => 'HTTP',  'icon' => 'fa-globe'],
+    ];
+
+    /**
+     * Get the display metadata for an address type, with a fall-back for
+     * types that exist in the `addresses` schema but don't yet have an entry
+     * in ADDRESS_TYPE_DISPLAY. Keeps the GUI from breaking when a new
+     * transport column is added before the display map is updated.
+     *
+     * @param string $type Schema column name (e.g. 'http', 'tor', 'i2p')
+     * @return array{label: string, icon: string}
+     */
+    public static function getAddressTypeDisplay(string $type): array {
+        return self::ADDRESS_TYPE_DISPLAY[$type]
+            ?? ['label' => strtoupper($type), 'icon' => 'fa-question'];
+    }
+
     /**
      * Get the default transport mode, with env override support
      *
@@ -456,6 +485,21 @@ class Constants {
     const DISPLAY_CURRENCY_DECIMALS = 8;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 10;
     const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
+
+    // Live event notifications — non-reloading XHR poll that surfaces new
+    // incoming payment requests / contact requests / transactions / DLQ
+    // entries as toasts, and keeps tab badges fresh. Supersedes the page
+    // reload path: when LIVE_NOTIFICATIONS_ENABLED is true, the
+    // AUTO_REFRESH_ENABLED 15s reload is suppressed at runtime (both can be
+    // ON in settings; live-notifs wins to avoid reloading the page out from
+    // under a just-fired toast).
+    const LIVE_NOTIFICATIONS_ENABLED = true;                    // Default ON — unobtrusive by design (visibility-gated, idle-backoff, modal-suppressed)
+    const LIVE_NOTIFICATIONS_POLL_INTERVAL_MS = 10000;          // Base poll cadence; loop backs off when idle
+    const LIVE_NOTIFICATIONS_VERBOSITY = 'balanced';            // quiet | balanced | live — see matrix in GUI settings
+    const LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS = ['quiet', 'balanced', 'live'];
+    const LIVE_NOTIFICATIONS_TOAST_DURATION_MS = 10000;         // 0 = until-dismissed
+    const LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS = [5000, 10000, 20000, 0];
+    const LIVE_NOTIFICATIONS_MAX_PER_KIND = 25;                 // Hard cap on deltas returned per kind per poll (keeps payload bounded)
 
     // Session
     const SESSION_TIMEOUT_MINUTES = 30;             // Default session inactivity timeout in minutes

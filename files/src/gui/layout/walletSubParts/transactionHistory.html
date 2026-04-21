@@ -302,6 +302,48 @@
                 'rejected'  => 'fa-times',
                 'cancelled' => 'fa-ban',
             ];
+
+            // Multi-currency contact-request description propagation.
+            // A contact request that establishes N currencies creates N
+            // separate tx_type='contact' rows (one per currency chain —
+            // ContactSyncService.php:600-620). When the sender's code
+            // only attached the user-typed description to the first
+            // currency, the other rows fall back to the generic
+            // "Contact request" placeholder, which reads as noise
+            // duplicating the real one. Here we pre-walk the set and,
+            // for any contact tx whose description is the placeholder,
+            // inherit a richer sibling's description if one exists
+            // with the same counterparty at the same second. Display-
+            // only — doesn't touch stored rows.
+            $contactDescIndex = [];
+            foreach ($transactions as $tx) {
+                $type = $tx['type'] ?? ($tx['tx_type'] ?? '');
+                if ($type !== 'contact') continue;
+                $desc = trim((string) ($tx['description'] ?? ''));
+                $isPlaceholder = ($desc === '' || $desc === 'Contact request' || $desc === 'Contact request transaction');
+                if ($isPlaceholder) continue;
+                // Group key: (counterparty address, integer-second timestamp).
+                $counter = $tx['counterparty_address'] ?? ($tx['sender_address'] ?? ($tx['receiver_address'] ?? ''));
+                $tsKey = is_string($tx['timestamp'] ?? null) ? substr($tx['timestamp'], 0, 19) : (string) ($tx['timestamp'] ?? '');
+                $key = $counter . '|' . $tsKey;
+                if (!isset($contactDescIndex[$key])) {
+                    $contactDescIndex[$key] = $desc;
+                }
+            }
+            foreach ($transactions as $k => &$tx) {
+                $type = $tx['type'] ?? ($tx['tx_type'] ?? '');
+                if ($type !== 'contact') continue;
+                $desc = trim((string) ($tx['description'] ?? ''));
+                $isPlaceholder = ($desc === '' || $desc === 'Contact request' || $desc === 'Contact request transaction');
+                if (!$isPlaceholder) continue;
+                $counter = $tx['counterparty_address'] ?? ($tx['sender_address'] ?? ($tx['receiver_address'] ?? ''));
+                $tsKey = is_string($tx['timestamp'] ?? null) ? substr($tx['timestamp'], 0, 19) : (string) ($tx['timestamp'] ?? '');
+                $key = $counter . '|' . $tsKey;
+                if (isset($contactDescIndex[$key])) {
+                    $tx['description'] = $contactDescIndex[$key];
+                }
+            }
+            unset($tx);
             ?>
             <?php foreach ($transactions as $index => $tx): ?>
                 <?php require __DIR__ . '/_transactionHistoryRow.html'; ?>
@@ -388,4 +430,7 @@
 
     var hasInProgressTx = <?php echo !empty($inProgressTransactions) ? 'true' : 'false'; ?>;
     var autoRefreshEnabled = <?php echo $user->getAutoRefreshEnabled() ? 'true' : 'false'; ?>;
+    var liveNotificationsEnabled = <?php echo $user->getLiveNotificationsEnabled() ? 'true' : 'false'; ?>;
+    var liveNotificationsVerbosity = <?php echo json_encode($user->getLiveNotificationsVerbosity()); ?>;
+    var liveNotificationsToastDurationMs = <?php echo (int) $user->getLiveNotificationsToastDurationMs(); ?>;
 </script>

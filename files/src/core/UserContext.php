@@ -591,6 +591,52 @@ class UserContext {
     }
 
     /**
+     * Master toggle for live event notifications (non-reloading XHR poll
+     * that shows toasts + updates tab badges when new incoming payment
+     * requests / contact requests / transactions / DLQ entries arrive).
+     *
+     * @return bool
+     */
+    public function getLiveNotificationsEnabled(): bool {
+        return (bool) ($this->get('liveNotificationsEnabled') ?? Constants::LIVE_NOTIFICATIONS_ENABLED);
+    }
+
+    /**
+     * Verbosity mode for live event notifications.
+     *
+     * Quiet    — only customer-visible events toast (received completed,
+     *            payment requests, contact requests). In-flight tx status
+     *            churn and DLQ failures update badges silently.
+     * Balanced — quiet + DLQ failures toast (default).
+     * Live     — everything toasts, including in-flight tx status churn.
+     *
+     * @return string One of Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS
+     */
+    public function getLiveNotificationsVerbosity(): string {
+        $v = (string) ($this->get('liveNotificationsVerbosity') ?? Constants::LIVE_NOTIFICATIONS_VERBOSITY);
+        return in_array($v, Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS, true)
+            ? $v
+            : Constants::LIVE_NOTIFICATIONS_VERBOSITY;
+    }
+
+    /**
+     * Toast auto-dismiss duration in milliseconds. 0 = persist until user
+     * dismisses.
+     *
+     * @return int
+     */
+    public function getLiveNotificationsToastDurationMs(): int {
+        $v = $this->get('liveNotificationsToastDurationMs');
+        if ($v === null) {
+            return Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS;
+        }
+        $v = (int) $v;
+        return in_array($v, Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS, true)
+            ? $v
+            : Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS;
+    }
+
+    /**
      * Get auto-backup enabled status for daily database backups
      *
      * @return bool
@@ -1226,6 +1272,9 @@ class UserContext {
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
             'defaultTransportMode' => Constants::getDefaultTransportMode(),
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
+            'liveNotificationsEnabled' => Constants::LIVE_NOTIFICATIONS_ENABLED,
+            'liveNotificationsVerbosity' => Constants::LIVE_NOTIFICATIONS_VERBOSITY,
+            'liveNotificationsToastDurationMs' => Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_MS,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED,
             'autoAcceptTransaction' => Constants::AUTO_ACCEPT_TRANSACTION,
             'hideEmptyGuiSections' => Constants::HIDE_EMPTY_GUI_SECTIONS,

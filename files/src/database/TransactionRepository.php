@@ -225,6 +225,68 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Return recent transactions touching this user (sender OR receiver)
+     * with `timestamp > $sinceTs`. Thin projection — only the columns the
+     * live-notifications poll needs, so the payload stays small and we
+     * don't pay for the full join that getTransactionHistory does.
+     *
+     * Does NOT consult transactions_archive: by design this is a hot-tail
+     * query — if a row's already been archived (30d+ old under default
+     * retention) it's not "new" for toast purposes.
+     *
+     * @param int $sinceTs Unix timestamp (seconds) — return rows strictly newer than this
+     * @param int $limit   Hard cap on rows returned
+     * @return array<int, array<string, mixed>>
+     */
+    public function getIncomingSince(int $sinceTs, int $limit): array
+    {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null || $limit <= 0) {
+            return [];
+        }
+
+        $placeholders = $this->createPlaceholders($userAddresses);
+        // Schema stores amount as a SplitAmount pair (amount_whole / amount_frac);
+        // there is no single `amount` column. Select the pair and collapse to a
+        // display float via TransactionFormatter below — the live-notif endpoint
+        // consumer reads `amount` as a number for the toast body.
+        //
+        // `tx_type='contact'` rows are excluded: those are bilateral contact-
+        // establishment records with amount=0 by construction. Including them
+        // would fire "Payment received — 0 USD" toasts on every contact
+        // handshake at balanced/quiet verbosities, and "Transaction completed"
+        // at live, none of which represent money movement. The real money-
+        // carrying rows are `standard` and `p2p`, both of which stay in.
+        $query = "SELECT txid, type, status, amount_whole, amount_frac, currency,
+                         sender_address, receiver_address, timestamp, description
+                  FROM {$this->tableName}
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                    AND tx_type <> 'contact'
+                    AND timestamp > ?
+                  ORDER BY timestamp DESC
+                  LIMIT " . (int) $limit;
+
+        // Same DATETIME wire-format note as checkForNewTransactions() —
+        // DISPLAY_DATE_FORMAT is European presentation and MySQL rejects it
+        // as a DATETIME param.
+        $params = $this->buildInClauseParams($userAddresses, 2, [date('Y-m-d H:i:s', $sinceTs)]);
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            return array_map(function (array $row): array {
+                $row['amount'] = TransactionFormatter::convertAmount(
+                    TransactionFormatter::extractAmount($row)
+                );
+                return $row;
+            }, $rows);
+        } catch (\PDOException $e) {
+            Logger::getInstance()->log('getIncomingSince failed: ' . $e->getMessage(), 'WARNING');
+            return [];
+        }
+    }
+
+    /**
      * Check for new transactions since last check
      *
      * @param int $lastCheckTime

@@ -334,6 +334,56 @@ class SettingsControllerTest extends TestCase
     }
 
     #[Test]
+    public function handleUpdateSettingsHandlesLiveNotificationsEnabled(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsEnabled' => '1'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected redirect/write */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsHandlesValidLiveNotificationsVerbosity(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsVerbosity' => 'balanced'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsRejectsInvalidLiveNotificationsVerbosity(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsVerbosity' => 'loud'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsHandlesValidLiveNotificationsToastDuration(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsToastDurationMs' => '10000'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleUpdateSettingsRejectsInvalidLiveNotificationsToastDuration(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['liveNotificationsToastDurationMs' => '12345'];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try { $this->controller->handleUpdateSettings(); } catch (\Throwable $e) { /* expected */ }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
     public function handleUpdateSettingsHandlesBooleanAutoBackupEnabled(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';

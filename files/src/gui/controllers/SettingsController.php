@@ -196,6 +196,39 @@ class SettingsController
         // Checkbox only posts value when checked, so we need to handle both cases
         $settings['autoRefreshEnabled'] = isset($_POST['autoRefreshEnabled']) && $_POST['autoRefreshEnabled'] === '1';
 
+        // Live event notifications — master on/off. When ON, the 15s
+        // autoRefreshEnabled reload is suppressed client-side (see
+        // startAutoRefresh in script.js) so a just-fired toast isn't
+        // clobbered by a page reload.
+        $settings['liveNotificationsEnabled'] = isset($_POST['liveNotificationsEnabled']) && $_POST['liveNotificationsEnabled'] === '1';
+
+        // Live notifications verbosity (quiet | balanced | live)
+        if (isset($_POST['liveNotificationsVerbosity'])) {
+            $verbosity = strtolower(Security::sanitizeInput($_POST['liveNotificationsVerbosity']));
+            if (in_array($verbosity, Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS, true)) {
+                $settings['liveNotificationsVerbosity'] = $verbosity;
+            } else {
+                $errors[] = 'Invalid live notifications verbosity: must be one of '
+                    . implode(', ', Constants::LIVE_NOTIFICATIONS_VERBOSITY_OPTIONS);
+            }
+        }
+
+        // Toast duration — must be one of the allowed options (5s / 10s / 20s / 0 = until-dismissed)
+        if (isset($_POST['liveNotificationsToastDurationMs'])) {
+            $raw = trim($_POST['liveNotificationsToastDurationMs']);
+            if ($raw !== '' && ctype_digit($raw)) {
+                $duration = (int) $raw;
+                if (in_array($duration, Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS, true)) {
+                    $settings['liveNotificationsToastDurationMs'] = $duration;
+                } else {
+                    $errors[] = 'Invalid toast duration: must be one of '
+                        . implode(', ', Constants::LIVE_NOTIFICATIONS_TOAST_DURATION_OPTIONS) . ' ms';
+                }
+            } elseif ($raw !== '') {
+                $errors[] = 'Invalid toast duration: must be a non-negative integer';
+            }
+        }
+
         // Auto-Backup Enabled (boolean toggle, default: true/on)
         // Checkbox only posts value when checked, so we need to handle both cases
         $settings['autoBackupEnabled'] = isset($_POST['autoBackupEnabled']) && $_POST['autoBackupEnabled'] === '1';

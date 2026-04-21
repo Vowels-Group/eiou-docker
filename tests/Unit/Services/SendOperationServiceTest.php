@@ -81,10 +81,21 @@ class SendOperationServiceTest extends TestCase
         $this->mockChainDropService = $this->createMock(ChainDropServiceInterface::class);
 
         $this->mockRepositoryFactory = $this->createMock(RepositoryFactory::class);
+        // Default ContactCurrencyRepository mock returns TRUE on
+        // hasAcceptedCurrency so the send-path guard (added alongside
+        // the Unblock currency-line fix) lets the existing tests reach
+        // the downstream behaviour they assert on. Tests specifically
+        // covering the no-accepted-currency branch should stub this to
+        // return false.
+        $mockContactCurrencyRepo = $this->createMock(\Eiou\Database\ContactCurrencyRepository::class);
+        $mockContactCurrencyRepo->method('hasAcceptedCurrency')->willReturn(true);
         $this->mockRepositoryFactory->method('get')
-            ->willReturnCallback(function (string $class) {
+            ->willReturnCallback(function (string $class) use ($mockContactCurrencyRepo) {
                 if ($class === TransactionChainRepository::class) {
                     return $this->mockChainRepo;
+                }
+                if ($class === \Eiou\Database\ContactCurrencyRepository::class) {
+                    return $mockContactCurrencyRepo;
                 }
                 return $this->createMock($class);
             });
