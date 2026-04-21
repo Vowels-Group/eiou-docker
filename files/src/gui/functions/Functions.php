@@ -852,15 +852,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
                 }
             }
 
-            // Contact requests — same pattern.
+            // Contact requests. Address types are discovered dynamically from
+            // the `addresses` schema via AddressRepository::getAllAddressTypes()
+            // — the same INFORMATION_SCHEMA-backed helper ApiController already
+            // uses throughout. Adding a future transport column (say `i2p`) to
+            // the addresses table flows through to the live-notif payload with
+            // zero changes here, and the client iterates whatever keys arrive
+            // under `addresses`.
+            $addressRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\AddressRepository::class);
+            $addressTypes = $addressRepo->getAllAddressTypes();
             $pendingContacts = $contactService->getPendingContactRequests() ?: [];
             foreach ($pendingContacts as $c) {
                 $createdAt = isset($c['created_at']) ? strtotime((string) $c['created_at']) : 0;
                 if ($createdAt > $since) {
+                    $addresses = [];
+                    foreach ($addressTypes as $type) {
+                        if (!empty($c[$type])) {
+                            $addresses[$type] = $c[$type];
+                        }
+                    }
                     $payload['new']['contact_requests'][] = [
                         'pubkey_hash' => $c['pubkey_hash'] ?? null,
-                        'http_address' => $c['http_address'] ?? null,
-                        'tor_address' => $c['tor_address'] ?? null,
+                        'addresses' => $addresses,
                         'created_at' => $createdAt,
                     ];
                 }

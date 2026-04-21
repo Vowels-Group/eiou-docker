@@ -7040,21 +7040,29 @@ function liveDispatch(payload) {
         });
     });
 
-    // Contact requests — always toast.
+    // Contact requests — always toast. Address-type keys (http / https / tor
+    // and any future additions) arrive under `c.addresses` as a dict keyed by
+    // the schema column name — the server discovers these dynamically from
+    // INFORMATION_SCHEMA.COLUMNS on the `addresses` table, so new transports
+    // surface here without a client-side change.
     (neu.contact_requests || []).forEach(function(c) {
         var seenKey = 'c:' + (c.pubkey_hash || '');
         if (!c.pubkey_hash || liveIsSeen(seenKey)) return;
         liveMarkSeen(seenKey);
         liveBadgeBumpCount('[data-badge="contact-requests"]', 1);
+        var details = { pubkey: liveShortHash(c.pubkey_hash) };
+        if (c.addresses && typeof c.addresses === 'object') {
+            for (var k in c.addresses) {
+                if (Object.prototype.hasOwnProperty.call(c.addresses, k)) {
+                    details[k] = c.addresses[k];
+                }
+            }
+        }
         showEventToast({
             kind: 'contact_request',
             title: 'New contact request',
             message: liveShortHash(c.pubkey_hash),
-            details: {
-                pubkey: liveShortHash(c.pubkey_hash),
-                http: c.http_address || '',
-                tor: c.tor_address || '',
-            },
+            details: details,
             dedupKey: seenKey,
             duration: duration,
             action: { label: 'View', onClick: function() { liveSwitchTabIfExists('contacts'); } },
