@@ -7004,10 +7004,19 @@ function liveComputeInterval() {
 
 function liveTruncate(s, n) { s = String(s || ''); return s.length > n ? s.substring(0, n - 1) + '…' : s; }
 function liveShortHash(h) { if (!h) return ''; return String(h).substring(0, 8) + '…'; }
-function liveSwitchTabIfExists(tabName) {
-    if (typeof switchTab === 'function') {
-        try { switchTab(tabName); } catch (e) { /* tab not present on this page */ }
-    }
+function liveReloadToHash(hash) {
+    // The live-notif toast's "View" action navigates + reloads into the
+    // target hash rather than just switching the tab. The tab's content
+    // was rendered at page load; the event that fired the toast arrived
+    // after, so an in-place tab switch would land the user on stale
+    // content (empty pending-contacts list, missing transaction, etc).
+    // Hash values come from TAB_HASH_MAP above — payment-requests,
+    // pending-contacts, transactions, dlq — so the post-reload router
+    // also scrolls to the relevant section.
+    try {
+        window.location.href = window.location.pathname + '#' + hash;
+        window.location.reload();
+    } catch (e) { /* swallow — fallback is no navigation */ }
 }
 
 function liveBadgeBumpCount(selector, delta) {
@@ -7049,7 +7058,7 @@ function liveDispatch(payload) {
             },
             dedupKey: seenKey,
             duration: duration,
-            action: { label: 'View', onClick: function() { liveSwitchTabIfExists('activity'); } },
+            action: { label: 'View', onClick: function() { liveReloadToHash('payment-requests'); } },
         });
     });
 
@@ -7078,7 +7087,7 @@ function liveDispatch(payload) {
             details: details,
             dedupKey: seenKey,
             duration: duration,
-            action: { label: 'View', onClick: function() { liveSwitchTabIfExists('contacts'); } },
+            action: { label: 'View', onClick: function() { liveReloadToHash('pending-contacts'); } },
         });
     });
 
@@ -7120,7 +7129,7 @@ function liveDispatch(payload) {
                 },
                 dedupKey: dedupKey,
                 duration: duration,
-                action: { label: 'View', onClick: function() { liveSwitchTabIfExists('activity'); } },
+                action: { label: 'View', onClick: function() { liveReloadToHash('transactions'); } },
             });
         }
         // Badge bump only for brand-new received txs (not status churn).
@@ -7150,7 +7159,7 @@ function liveDispatch(payload) {
             },
             dedupKey: seenKey,
             duration: duration,
-            action: { label: 'View', onClick: function() { liveSwitchTabIfExists('activity'); } },
+            action: { label: 'View', onClick: function() { liveReloadToHash('dlq'); } },
         });
     });
 }
