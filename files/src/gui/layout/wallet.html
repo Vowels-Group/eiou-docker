@@ -9,7 +9,22 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₳</text></svg>">
     <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
     <style nonce="<?php echo cspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/page.css");?></style>
-    <script nonce="<?php echo cspNonce(); ?>">var EIOU_DISPLAY_DECIMALS = <?php echo displayDecimals(); ?>; var EIOU_DATE_FORMAT = '<?php echo displayDateFormat(); ?>';</script>
+    <script nonce="<?php echo cspNonce(); ?>">var EIOU_DISPLAY_DECIMALS = <?php echo displayDecimals(); ?>; var EIOU_DATE_FORMAT = '<?php echo displayDateFormat(); ?>';
+    <?php
+        // Address-type display map — keys come from the live schema via
+        // AddressRepository::getAllAddressTypes(), values from the Constants
+        // registry with a fa-question fallback for any column the registry
+        // hasn't been taught about yet. Consumed by renderContactModal and
+        // any other address-iterating JS so a new transport column flows
+        // through with no per-call-site change required.
+        $_addrRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\AddressRepository::class);
+        $_addrTypes = $_addrRepo->getAllAddressTypes();
+        $_addrDisplayMap = [];
+        foreach ($_addrTypes as $_t) {
+            $_addrDisplayMap[$_t] = \Eiou\Core\Constants::getAddressTypeDisplay($_t);
+        }
+    ?>
+    var EIOU_ADDRESS_TYPE_DISPLAY = <?php echo json_encode($_addrDisplayMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;</script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/qrcode-generator.js?v=<?php echo appVersion(); ?>"></script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/html5-qrcode.min.js?v=<?php echo appVersion(); ?>"></script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js?v=<?php echo appVersion(); ?>"></script>

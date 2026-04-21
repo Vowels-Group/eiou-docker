@@ -257,6 +257,35 @@ class Constants {
     const DEFAULT_TRANSPORT_MODE = 'tor';
     const VALID_TRANSPORT_INDICES = ['tor', 'https', 'http'];
 
+    // Address-type display registry — label + FontAwesome icon per known
+    // transport. Consumed by the contact modal's address dropdown (script.js)
+    // and the pending-contact modal's address pills (contactSection.html).
+    //
+    // Lookups go through `getAddressTypeDisplay()` which falls back to an
+    // uppercased column name + `fa-question` icon when a new transport is
+    // added to the `addresses` schema before its entry lands here — so the
+    // UI never breaks on a schema-only change, it just renders the new
+    // type with a placeholder icon until someone fills in the entry.
+    const ADDRESS_TYPE_DISPLAY = [
+        'tor'   => ['label' => 'Tor',   'icon' => 'fa-user-secret'],
+        'https' => ['label' => 'HTTPS', 'icon' => 'fa-lock'],
+        'http'  => ['label' => 'HTTP',  'icon' => 'fa-globe'],
+    ];
+
+    /**
+     * Get the display metadata for an address type, with a fall-back for
+     * types that exist in the `addresses` schema but don't yet have an entry
+     * in ADDRESS_TYPE_DISPLAY. Keeps the GUI from breaking when a new
+     * transport column is added before the display map is updated.
+     *
+     * @param string $type Schema column name (e.g. 'http', 'tor', 'i2p')
+     * @return array{label: string, icon: string}
+     */
+    public static function getAddressTypeDisplay(string $type): array {
+        return self::ADDRESS_TYPE_DISPLAY[$type]
+            ?? ['label' => strtoupper($type), 'icon' => 'fa-question'];
+    }
+
     /**
      * Get the default transport mode, with env override support
      *

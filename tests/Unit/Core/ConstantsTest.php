@@ -731,4 +731,45 @@ class ConstantsTest extends TestCase
         sort($sorted);
         $this->assertSame($sorted, Constants::SESSION_TIMEOUT_OPTIONS);
     }
+
+    // =========================================================================
+    // ADDRESS_TYPE_DISPLAY registry + getAddressTypeDisplay fallback.
+    //
+    // Consumed by the contact modal's address dropdown (script.js) and the
+    // pending-contact modal's address pills (contactSection.html). Also
+    // bootstrapped to JS globals via wallet.html. A missing entry for a
+    // schema column (e.g. a future `i2p` transport) MUST fall back to
+    // UPPERCASE(type) label + `fa-question` icon rather than breaking
+    // template rendering.
+    // =========================================================================
+
+    public function testAddressTypeDisplayKnownTypes(): void
+    {
+        $tor = Constants::getAddressTypeDisplay('tor');
+        $this->assertSame('Tor', $tor['label']);
+        $this->assertSame('fa-user-secret', $tor['icon']);
+
+        $https = Constants::getAddressTypeDisplay('https');
+        $this->assertSame('HTTPS', $https['label']);
+        $this->assertSame('fa-lock', $https['icon']);
+
+        $http = Constants::getAddressTypeDisplay('http');
+        $this->assertSame('HTTP', $http['label']);
+        $this->assertSame('fa-globe', $http['icon']);
+    }
+
+    public function testAddressTypeDisplayFallsBackForUnknownType(): void
+    {
+        // Simulates a freshly-added `addresses.i2p` column before the
+        // registry has been taught about it — must not throw, must return
+        // a sensible placeholder so the GUI keeps rendering.
+        $unknown = Constants::getAddressTypeDisplay('i2p');
+        $this->assertSame('I2P', $unknown['label']);
+        $this->assertSame('fa-question', $unknown['icon']);
+
+        // Pathological input: empty string. Falls back with empty uppercase.
+        $empty = Constants::getAddressTypeDisplay('');
+        $this->assertSame('', $empty['label']);
+        $this->assertSame('fa-question', $empty['icon']);
+    }
 }

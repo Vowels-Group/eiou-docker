@@ -3433,15 +3433,24 @@ function openContactModal(contact, openTab) {
     var addressDisplay = document.getElementById('modal_address_display');
     addressSelector.innerHTML = '';
 
+    // Address dropdown — iterate whatever transport columns the schema
+    // currently exposes (EIOU_ADDRESS_TYPE_DISPLAY is bootstrapped from
+    // AddressRepository::getAllAddressTypes + Constants::ADDRESS_TYPE_DISPLAY
+    // on page render). A new transport column added to the addresses table
+    // picks up whatever display metadata the Constants registry has, or
+    // falls back to an UPPERCASE(type) label + fa-question icon.
     var addresses = [];
-    if (contact.tor) {
-        addresses.push({ type: 'TOR', address: contact.tor, icon: 'fa-user-secret' });
-    }
-    if (contact.https) {
-        addresses.push({ type: 'HTTPS', address: contact.https, icon: 'fa-globe' });
-    }
-    if (contact.http) {
-        addresses.push({ type: 'HTTP', address: contact.http, icon: 'fa-globe' });
+    if (typeof EIOU_ADDRESS_TYPE_DISPLAY !== 'undefined' && EIOU_ADDRESS_TYPE_DISPLAY) {
+        for (var _t in EIOU_ADDRESS_TYPE_DISPLAY) {
+            if (!Object.prototype.hasOwnProperty.call(EIOU_ADDRESS_TYPE_DISPLAY, _t)) continue;
+            if (!contact[_t]) continue;
+            var _meta = EIOU_ADDRESS_TYPE_DISPLAY[_t];
+            addresses.push({
+                type: _meta.label || _t.toUpperCase(),
+                address: contact[_t],
+                icon: _meta.icon || 'fa-question',
+            });
+        }
     }
 
     if (addresses.length === 0) {

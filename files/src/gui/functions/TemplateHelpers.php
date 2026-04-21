@@ -564,3 +564,34 @@ function renderAlertBanner(array $config): string {
         . '</div>'
     . '</div>';
 }
+
+/**
+ * Build the flattened, lowercased, space-joined search string for a
+ * contact row's `data-contact-address` attribute. Iterates whatever
+ * transport columns the `addresses` schema currently exposes (via
+ * AddressRepository::getAllAddressTypes), so adding a new transport
+ * column doesn't silently leave it out of the client-side search index.
+ *
+ * Cached in a function-static to avoid an INFORMATION_SCHEMA round-trip
+ * per row.
+ *
+ * @param array $contact Row merged with address columns (as emitted by
+ *                       getPendingContactRequests / ContactDataBuilder)
+ * @return string Space-joined lowercased address values, htmlspecialchars-safe
+ */
+function contactAddressSearchAttr(array $contact): string {
+    static $addressTypes = null;
+    if ($addressTypes === null) {
+        $addressTypes = \Eiou\Core\Application::getInstance()->services
+            ->getRepositoryFactory()
+            ->get(\Eiou\Database\AddressRepository::class)
+            ->getAllAddressTypes();
+    }
+    $values = [];
+    foreach ($addressTypes as $type) {
+        if (!empty($contact[$type])) {
+            $values[] = (string) $contact[$type];
+        }
+    }
+    return strtolower(implode(' ', $values));
+}

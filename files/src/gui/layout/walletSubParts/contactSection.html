@@ -93,7 +93,7 @@
                 <tr class="contact-card contact-row contact-row-pending cursor-pointer"
                     data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
                     data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
-                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
+                    data-contact-address="<?php echo htmlspecialchars(contactAddressSearchAttr($contact)); ?>"
                     data-status="pending"
                     data-chain-state="none"
                     data-online="unknown"
@@ -134,7 +134,7 @@
                 <tr class="contact-card contact-row contact-row-blocked cursor-pointer"
                     data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>"
                     data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>"
-                    data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['https'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>"
+                    data-contact-address="<?php echo htmlspecialchars(contactAddressSearchAttr($contact)); ?>"
                     data-status="blocked"
                     data-chain-state="none"
                     data-online="unknown"
@@ -737,30 +737,28 @@
                  to-copy that happened before they could verify what they
                  were about to paste. -->
             <div class="pending-addresses-compact mb-lg">
-                <?php if (!empty($contact['tor'])): ?>
-                    <button type="button" class="pending-addr-icon address-tor"
+                <?php
+                    // Iterate address types from the live schema (via the
+                    // shared AddressRepository helper) and pull each pill's
+                    // label + icon from Constants::getAddressTypeDisplay,
+                    // which falls back to UPPERCASE(type) + fa-question for
+                    // any new transport column that hasn't been taught to
+                    // the registry yet.
+                    $_pillAddrTypes = \Eiou\Core\Application::getInstance()->services
+                        ->getRepositoryFactory()
+                        ->get(\Eiou\Database\AddressRepository::class)
+                        ->getAllAddressTypes();
+                    foreach ($_pillAddrTypes as $_pillType):
+                        if (empty($contact[$_pillType])) continue;
+                        $_pillDisplay = \Eiou\Core\Constants::getAddressTypeDisplay($_pillType);
+                ?>
+                    <button type="button" class="pending-addr-icon address-<?php echo htmlspecialchars($_pillType); ?>"
                             data-action="showInfoModal"
-                            title="Tor address: <?php echo htmlspecialchars($contact['tor']); ?>">
-                        <i class="fas fa-user-secret"></i>
-                        <span class="pending-addr-label">Tor</span>
+                            title="<?php echo htmlspecialchars($_pillDisplay['label']); ?> address: <?php echo htmlspecialchars($contact[$_pillType]); ?>">
+                        <i class="fas <?php echo htmlspecialchars($_pillDisplay['icon']); ?>"></i>
+                        <span class="pending-addr-label"><?php echo htmlspecialchars($_pillDisplay['label']); ?></span>
                     </button>
-                <?php endif; ?>
-                <?php if (!empty($contact['https'])): ?>
-                    <button type="button" class="pending-addr-icon address-https"
-                            data-action="showInfoModal"
-                            title="HTTPS address: <?php echo htmlspecialchars($contact['https']); ?>">
-                        <i class="fas fa-lock"></i>
-                        <span class="pending-addr-label">HTTPS</span>
-                    </button>
-                <?php endif; ?>
-                <?php if (!empty($contact['http'])): ?>
-                    <button type="button" class="pending-addr-icon address-http"
-                            data-action="showInfoModal"
-                            title="HTTP address: <?php echo htmlspecialchars($contact['http']); ?>">
-                        <i class="fas fa-globe"></i>
-                        <span class="pending-addr-label">HTTP</span>
-                    </button>
-                <?php endif; ?>
+                <?php endforeach; ?>
             </div>
 
             <!-- Public key collapsed — users rarely verify it at
