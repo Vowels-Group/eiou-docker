@@ -556,6 +556,14 @@
             <?php foreach ($pendingContacts as $index => $contact): ?>
                 <?php
                     $hasName = !empty($contact['name']);
+                    // "Existing contact with still-pending currencies" —
+                    // distinct from a brand-new contact request. Landed
+                    // here via Functions.php:1233-1238 which re-adds
+                    // accepted contacts that have outstanding pending
+                    // incoming currency rows. Dangerous Delete/Block
+                    // actions are hidden for this case since they'd
+                    // nuke the whole (already-accepted) contact.
+                    $isExistingRow = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']);
                     $pendingCurrenciesRow = $contact['pending_currencies'] ?? [];
                     $outgoingCurrenciesRow = $contact['outgoing_currencies'] ?? [];
                     // Message preview = first non-empty currency description,
@@ -599,6 +607,11 @@
                     aria-label="Open pending contact request <?php echo $index + 1; ?>">
                     <td class="pending-col-identifier">
                         <?php echo $identifier; ?>
+                        <?php if ($isExistingRow): ?>
+                            <span class="badge badge-secondary ml-sm" title="You've already accepted this contact — these are additional currency requests from them. Accepting won't re-establish the contact, just opens the new currency line.">
+                                <i class="fas fa-coins"></i> +currencies
+                            </span>
+                        <?php endif; ?>
                         <?php if (!empty($contact['has_prior_history'])): ?>
                             <span class="badge badge-prior-contact ml-sm" title="This contact has prior transaction history — likely a previously known contact">
                                 <i class="fas fa-history"></i> Prior
@@ -633,17 +646,32 @@
          server-side controllers need no changes. Only the visual wrapping
          changed from card → modal. -->
     <?php foreach ($pendingContacts as $index => $contact): ?>
-        <?php $hasName = !empty($contact['name']); ?>
+        <?php
+            $hasName = !empty($contact['name']);
+            // Mirror the row-level flag — used below to distinguish
+            // "new contact request" (default flow) from "currencies on
+            // an already-accepted contact" (arrived here via the
+            // line-1233 re-add in Functions.php).
+            $isExistingHeader = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']);
+        ?>
         <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal>
             <div class="modal-content modal-content-md">
                 <div class="modal-header">
                     <div class="modal-header-content">
                         <h3>
-                            <i class="fas fa-user-clock"></i>
-                            <?php if ($hasName): ?>
-                                <?php echo htmlspecialchars($contact['name']); ?> — Currency Request
+                            <?php if ($isExistingHeader): ?>
+                                <i class="fas fa-coins"></i>
+                                Currency Request
+                                <?php if ($hasName): ?>
+                                    — <?php echo htmlspecialchars($contact['name']); ?>
+                                <?php endif; ?>
                             <?php else: ?>
-                                Contact Request #<?php echo $index + 1; ?>
+                                <i class="fas fa-user-clock"></i>
+                                <?php if ($hasName): ?>
+                                    <?php echo htmlspecialchars($contact['name']); ?> — Contact Request
+                                <?php else: ?>
+                                    Contact Request #<?php echo $index + 1; ?>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </h3>
                         <?php if (!empty($contact['has_prior_history'])): ?>
@@ -651,7 +679,11 @@
                                 <i class="fas fa-history"></i> Prior Contact
                             </span>
                         <?php endif; ?>
-                        <span class="badge badge-pending">Pending</span>
+                        <?php if ($isExistingHeader): ?>
+                            <span class="badge badge-success">Contact accepted</span>
+                        <?php else: ?>
+                            <span class="badge badge-pending">Pending</span>
+                        <?php endif; ?>
                     </div>
                     <span class="close" data-action="closePendingContactModal" data-modal-id="pending-contact-modal-<?php echo $index; ?>">&times;</span>
                 </div>
@@ -941,7 +973,25 @@
                 <?php endif; ?>
             </div>
 
-            <!-- Action Buttons -->
+            <!-- Action Buttons.
+                 Delete/Block hidden for existing (already-accepted)
+                 contacts since those actions operate on the WHOLE
+                 contact — clicking Delete here would erase the
+                 already-accepted currencies too, and Block would
+                 block the contact entirely. Neither matches the
+                 user's intent when they're just deciding whether
+                 to also add a new currency line. The unaddressed
+                 currency rows can safely stay pending forever —
+                 accept them when ready from this same modal. -->
+            <?php if ($isExistingHeader): ?>
+            <div class="alert alert-info mb-0">
+                <i class="fas fa-info-circle"></i>
+                You've already accepted this contact. Accept the currencies above
+                individually, or ignore them — they'll stay pending on your side
+                until you act. To end the relationship entirely, open the contact
+                from Your Contacts and use Delete or Block there.
+            </div>
+            <?php else: ?>
             <div class="pending-contact-actions">
                 <form method="POST" class="pending-contact-action-col">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
@@ -961,6 +1011,7 @@
                     </button>
                 </form>
             </div>
+            <?php endif; ?>
 
                 </div><!-- /modal-body -->
             </div><!-- /modal-content -->
