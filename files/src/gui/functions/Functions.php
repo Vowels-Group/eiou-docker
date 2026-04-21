@@ -40,8 +40,14 @@ use Eiou\Gui\Includes\SessionKeys;
 // so the unauthenticated login page can use them too. The require_once below
 // is idempotent; the functions have already been defined by the time we get
 // here on the authenticated path.
+//
+// WalletTemplateHelpers is the post-auth counterpart — helpers that reach
+// into `Application::getInstance()` / the repository factory and therefore
+// can't safely run from the login page. Kept split so the purity contract
+// on TemplateHelpers.php stays honest.
 // =========================================================================
 require_once __DIR__ . '/TemplateHelpers.php';
+require_once __DIR__ . '/WalletTemplateHelpers.php';
 
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
