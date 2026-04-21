@@ -737,20 +737,9 @@
                  to-copy that happened before they could verify what they
                  were about to paste. -->
             <div class="pending-addresses-compact mb-lg">
-                <?php
-                    // Iterate address types from the live schema (via the
-                    // shared AddressRepository helper) and pull each pill's
-                    // label + icon from Constants::getAddressTypeDisplay,
-                    // which falls back to UPPERCASE(type) + fa-question for
-                    // any new transport column that hasn't been taught to
-                    // the registry yet.
-                    $_pillAddrTypes = \Eiou\Core\Application::getInstance()->services
-                        ->getRepositoryFactory()
-                        ->get(\Eiou\Database\AddressRepository::class)
-                        ->getAllAddressTypes();
-                    foreach ($_pillAddrTypes as $_pillType):
-                        if (empty($contact[$_pillType])) continue;
-                        $_pillDisplay = \Eiou\Core\Constants::getAddressTypeDisplay($_pillType);
+                <?php foreach (getOrderedAddressSchemaTypes() as $_pillType):
+                    if (empty($contact[$_pillType])) continue;
+                    $_pillDisplay = \Eiou\Core\Constants::getAddressTypeDisplay($_pillType);
                 ?>
                     <button type="button" class="pending-addr-icon address-<?php echo htmlspecialchars($_pillType); ?>"
                             data-action="showInfoModal"

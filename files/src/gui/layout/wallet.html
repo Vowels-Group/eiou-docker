@@ -11,16 +11,14 @@
     <style nonce="<?php echo cspNonce(); ?>"><?php require_once("/app/eiou/src/gui/assets/css/page.css");?></style>
     <script nonce="<?php echo cspNonce(); ?>">var EIOU_DISPLAY_DECIMALS = <?php echo displayDecimals(); ?>; var EIOU_DATE_FORMAT = '<?php echo displayDateFormat(); ?>';
     <?php
-        // Address-type display map — keys come from the live schema via
-        // AddressRepository::getAllAddressTypes(), values from the Constants
-        // registry with a fa-question fallback for any column the registry
-        // hasn't been taught about yet. Consumed by renderContactModal and
-        // any other address-iterating JS so a new transport column flows
-        // through with no per-call-site change required.
-        $_addrRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\AddressRepository::class);
-        $_addrTypes = $_addrRepo->getAllAddressTypes();
+        // Address-type display map keyed by schema column name, ordered by
+        // the canonical security priority (Tor > HTTPS > HTTP > unknown).
+        // Values come from Constants::ADDRESS_TYPE_DISPLAY with a
+        // fa-question fallback for columns the registry hasn't been taught
+        // about yet — so a new transport flows through to renderContactModal
+        // with a placeholder icon until someone fills in the registry entry.
         $_addrDisplayMap = [];
-        foreach ($_addrTypes as $_t) {
+        foreach (getOrderedAddressSchemaTypes() as $_t) {
             $_addrDisplayMap[$_t] = \Eiou\Core\Constants::getAddressTypeDisplay($_t);
         }
     ?>
