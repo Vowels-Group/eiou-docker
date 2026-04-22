@@ -102,10 +102,19 @@ class PluginLoader
     /**
      * Phase 1: call register() on each loaded plugin. Plugin failures
      * mark that plugin as failed but do not affect siblings.
+     *
+     * Idempotent: a plugin already past 'discovered' (i.e. registered or
+     * booted) is skipped on a second call. This protects against double
+     * service registration if the lifecycle ever re-runs on the same
+     * loader instance.
      */
     public function registerAll(ServiceContainer $container): void
     {
         foreach ($this->plugins as $name => $plugin) {
+            $status = $this->metadata[$name]['status'] ?? '';
+            if (in_array($status, ['registered', 'booted', 'failed'], true)) {
+                continue;
+            }
             try {
                 $plugin->register($container);
                 $this->metadata[$name]['status'] = 'registered';
@@ -117,18 +126,29 @@ class PluginLoader
 
     /**
      * Phase 2: call boot() on each successfully-registered plugin.
+     *
+     * Idempotent: a plugin already 'booted' is skipped. Without this guard,
+     * a re-invocation of the lifecycle (which we've seen happen inside
+     * PHP-FPM workers under `pm.process_idle_timeout` cycling) would call
+     * boot() multiple times and double-subscribe event listeners — meaning
+     * one `sync.completed` event would fire N reactions in the same worker.
+     *
+     * Logged at DEBUG, not INFO: with short-lived child workers (P2pWorker,
+     * CLI commands, cron jobs) each spawning a fresh process that boots
+     * plugins, INFO-level logging here would dominate app.log.
      */
     public function bootAll(ServiceContainer $container): void
     {
         foreach ($this->plugins as $name => $plugin) {
-            // Skip plugins that failed during register()
-            if (($this->metadata[$name]['status'] ?? '') === 'failed') {
+            $status = $this->metadata[$name]['status'] ?? '';
+            // Skip plugins that failed in register() AND plugins already booted.
+            if ($status === 'failed' || $status === 'booted') {
                 continue;
             }
             try {
                 $plugin->boot($container);
                 $this->metadata[$name]['status'] = 'booted';
-                $this->logger->info("Plugin booted", [
+                $this->logger->debug("Plugin booted", [
                     'name' => $name,
                     'version' => $this->metadata[$name]['version'] ?? '?'
                 ]);

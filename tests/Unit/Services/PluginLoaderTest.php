@@ -315,6 +315,68 @@ class PluginLoaderTest extends TestCase
         $this->assertSame('A nice description', $rows[0]['description']);
     }
 
+    // -- Lifecycle idempotency ---------------------------------------------
+
+    public function testRegisterAllIsIdempotent(): void
+    {
+        // Plugin counts register() calls in a static so tests can observe
+        // how many times the lifecycle ran on the same loader.
+        $this->writePlugin('count-reg', 'Eiou\\Tests\\Plugins\\CountReg\\CountRegPlugin',
+            $this->countingPluginSource('CountReg'));
+
+        $loader = $this->loader();
+        $loader->discover();
+
+        $container = $this->createMock(ServiceContainer::class);
+        $loader->registerAll($container);
+        $loader->registerAll($container);
+        $loader->registerAll($container);
+
+        $registerCount = \Eiou\Tests\Plugins\CountReg\CountRegPlugin::$registerCalls;
+        $this->assertSame(1, $registerCount,
+            'registerAll() called 3 times but plugin->register() should only fire once');
+    }
+
+    public function testBootAllIsIdempotent(): void
+    {
+        // The real bug we're guarding against: a second bootAll() must NOT
+        // re-call boot(). If boot() re-ran, it would double-subscribe event
+        // listeners and one event would trigger N reactions per worker.
+        $this->writePlugin('count-boot', 'Eiou\\Tests\\Plugins\\CountBoot\\CountBootPlugin',
+            $this->countingPluginSource('CountBoot'));
+
+        $loader = $this->loader();
+        $loader->discover();
+
+        $container = $this->createMock(ServiceContainer::class);
+        $loader->registerAll($container);
+        $loader->bootAll($container);
+        $loader->bootAll($container);
+        $loader->bootAll($container);
+
+        $bootCount = \Eiou\Tests\Plugins\CountBoot\CountBootPlugin::$bootCalls;
+        $this->assertSame(1, $bootCount,
+            'bootAll() called 3 times but plugin->boot() should only fire once');
+    }
+
+    public function testFailedPluginNotRetriedOnSecondRegisterAll(): void
+    {
+        // Once register() throws, the plugin is marked failed. Subsequent
+        // registerAll() calls should leave it failed, not retry it.
+        $this->writePlugin('fail-once', 'Eiou\\Tests\\Plugins\\FailOnce\\FailOncePlugin',
+            $this->throwingPluginSource('FailOnce', 'register'));
+
+        $this->logger->expects($this->atLeastOnce())->method('error');
+        $loader = $this->loader();
+        $loader->discover();
+
+        $container = $this->createMock(ServiceContainer::class);
+        $loader->registerAll($container);
+        $loader->registerAll($container);
+
+        $this->assertSame('failed', $loader->getLoadedPlugins()['fail-once']['status']);
+    }
+
     // -- Helpers --------------------------------------------------------------
 
     private function writePlugin(string $dirName, string $entryClass, string $sourceCode): void
@@ -398,6 +460,33 @@ class {$classBase}Plugin implements PluginInterface
     public function getVersion(): string { return '1.0.0'; }
     public function register(ServiceContainer \$c): void {}
     public function boot(ServiceContainer \$c): void {}
+}
+PHP;
+    }
+
+    /**
+     * Plugin that counts register/boot invocations on static class properties
+     * so tests can assert the lifecycle ran the expected number of times.
+     */
+    private function countingPluginSource(string $classBase): string
+    {
+        $namespace = "Eiou\\Tests\\Plugins\\{$classBase}";
+        return <<<PHP
+<?php
+namespace {$namespace};
+
+use Eiou\Contracts\PluginInterface;
+use Eiou\Services\ServiceContainer;
+
+class {$classBase}Plugin implements PluginInterface
+{
+    public static int \$registerCalls = 0;
+    public static int \$bootCalls = 0;
+
+    public function getName(): string { return '{$classBase}'; }
+    public function getVersion(): string { return '1.0.0'; }
+    public function register(ServiceContainer \$c): void { self::\$registerCalls++; }
+    public function boot(ServiceContainer \$c): void { self::\$bootCalls++; }
 }
 PHP;
     }
