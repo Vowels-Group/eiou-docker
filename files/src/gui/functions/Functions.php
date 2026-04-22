@@ -84,6 +84,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
+    // AJAX-only plugin actions (returns JSON, exits immediately)
+    if (in_array($action, ['pluginsList', 'pluginsToggle'], true)) {
+        if ($pluginController === null) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'error' => 'plugin_loader_unavailable',
+                'message' => 'Plugin system is not initialized.'
+            ]);
+            exit;
+        }
+        try {
+            $pluginController->routeAction();
+        } catch (\Eiou\Gui\Controllers\PluginControllerResponseSent $sent) {
+            // Response already emitted by the controller — fall through to exit.
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     // AJAX-only "What's New" actions (returns JSON, exits immediately)
     if ($action === 'whatsNewDismiss') {
         header('Content-Type: application/json');

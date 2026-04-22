@@ -27,6 +27,7 @@
  *   ping <contact>             - Check contact online status
  *   updatecheck                - Check for newer image versions
  *   shutdown                   - Graceful shutdown
+ *   restart                    - Restart processors and PHP-FPM workers (in-place)
  *
  * Output Flags:
  *   --json, -j     - Output in JSON format
@@ -334,6 +335,14 @@ elseif($request === "start"){
   // Start processors after a previous shutdown
   $debugService->output("Executing start request", 'SILENT');
   $app->start($output);
+}
+elseif($request === "restart"){
+  // Full node restart: respawn processors AND PHP-FPM workers so freshly
+  // enabled plugins (or any other startup-bound state) take effect without
+  // a container reboot. Requires root inside the container to signal the
+  // PHP-FPM master.
+  $debugService->output("Executing restart request", 'SILENT');
+  $app->restart($output);
 }
 // API Key Management
 elseif($request === "apikey"){

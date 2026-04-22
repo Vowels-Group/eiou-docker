@@ -1,0 +1,12 @@
+{
+  "name": "hello-eiou",
+  "version": "1.0.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Logs a random eIOU fortune each time a sync completes — a minimal, readable demonstration of the plugin API.",
+  "author": "EIOU",
+  "entryClass": "Eiou\\Plugins\\HelloEiou\\HelloEiouPlugin",
+  "autoload": {
+    "psr-4": {
+      "Eiou\\Plugins\\HelloEiou\\": "src/"
+    }
+  }
+}

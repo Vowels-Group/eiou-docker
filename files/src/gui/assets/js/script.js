@@ -7728,7 +7728,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
         'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
         'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
-        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); }
+        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); },
+
+        // Plugins
+        'reloadPlugins': function() { if (window.plugins) window.plugins.reload(); }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -7791,6 +7794,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         else if (action === 'setDlqFilter') { setDlqFilter(); }
         else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
+        else if (action === 'togglePlugin') {
+            if (window.plugins) {
+                window.plugins.toggle(el.getAttribute('data-plugin'), el.checked);
+            }
+        }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
@@ -8698,6 +8706,180 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             copyToClipboard: copyToClipboard,
             closeVerifyModal: closeVerifyModal,
             submitVerify: submitVerify
+        };
+    })();
+
+    // ========================================================================
+    // Plugins GUI module
+    //
+    // Backs the "Plugins" section in the Settings tab. Lists every plugin
+    // discovered on disk (enabled or not) and lets the user flip the enabled
+    // flag. Toggles are persisted immediately but event subscriptions bind
+    // during boot, so a restart notice is shown after any change.
+    // ========================================================================
+    window.plugins = (function() {
+        var loaded = false;
+
+        function csrfToken() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return (el && el.value) ? el.value : '';
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function post(payload) {
+            var body = new FormData();
+            Object.keys(payload).forEach(function(k) {
+                if (payload[k] !== null && payload[k] !== undefined) {
+                    body.append(k, payload[k]);
+                }
+            });
+            if (!body.has('csrf_token')) body.append('csrf_token', csrfToken());
+            return fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) {
+                    return { status: res.status, data: data };
+                });
+            });
+        }
+
+        function statusBadge(status) {
+            var label = status || 'unknown';
+            var cls = 'status-badge status-unknown';
+            if (status === 'booted')        { cls = 'status-badge status-online';  label = 'Running'; }
+            else if (status === 'failed')   { cls = 'badge-danger';                 label = 'Failed'; }
+            else if (status === 'disabled') { cls = 'status-badge status-offline'; label = 'Disabled'; }
+            else if (status === 'registered' || status === 'discovered') {
+                cls = 'status-badge status-partial'; label = 'Loaded';
+            }
+            return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
+        }
+
+        function renderList(pluginsArr) {
+            pluginsArr = pluginsArr || [];
+            var emptyEl = document.getElementById('plugins-empty');
+            var tableEl = document.getElementById('plugins-table-wrapper');
+            var tbody   = document.getElementById('plugins-tbody');
+            if (!tbody) return;
+
+            if (pluginsArr.length === 0) {
+                if (emptyEl) {
+                    emptyEl.innerHTML = 'No plugins installed. Drop a plugin folder into <code>/etc/eiou/plugins/</code> and click Refresh.';
+                    emptyEl.classList.remove('d-none');
+                }
+                if (tableEl) tableEl.classList.add('d-none');
+                tbody.innerHTML = '';
+                return;
+            }
+
+            if (emptyEl) emptyEl.classList.add('d-none');
+            if (tableEl) tableEl.classList.remove('d-none');
+
+            var rows = pluginsArr.map(function(p) {
+                var checkId = 'plugin-toggle-' + p.name.replace(/[^a-z0-9-]/gi, '-');
+                var err = p.error
+                    ? '<div class="text-danger text-sm">' + escapeHtml(p.error) + '</div>'
+                    : '';
+                return ''
+                    + '<tr>'
+                    +   '<td><strong>' + escapeHtml(p.name) + '</strong></td>'
+                    +   '<td><code>' + escapeHtml(p.version) + '</code></td>'
+                    +   '<td>' + escapeHtml(p.description || '') + err + '</td>'
+                    +   '<td>' + statusBadge(p.status) + '</td>'
+                    +   '<td class="text-right">'
+                    +     '<label class="toggle-switch" for="' + checkId + '">'
+                    +       '<input type="checkbox" id="' + checkId + '"'
+                    +         ' data-action-change="togglePlugin"'
+                    +         ' data-plugin="' + escapeHtml(p.name) + '"'
+                    +         (p.enabled ? ' checked' : '') + '>'
+                    +       '<span class="toggle-slider"></span>'
+                    +     '</label>'
+                    +   '</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        function showRestartBanner() {
+            var el = document.getElementById('plugins-restart-banner');
+            if (el) el.classList.remove('d-none');
+        }
+
+        function refresh() {
+            return post({ action: 'pluginsList' }).then(function(r) {
+                if (r.data && r.data.success) {
+                    renderList(r.data.plugins || []);
+                    loaded = true;
+                } else {
+                    var msg = (r.data && r.data.message) || 'Could not load plugins';
+                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                }
+            }).catch(function() {
+                if (typeof showToast === 'function') showToast('Error', 'Network error while loading plugins', 'error');
+            });
+        }
+
+        function toggle(name, enabled) {
+            if (!name) return;
+            post({
+                action: 'pluginsToggle',
+                name: name,
+                enabled: enabled ? '1' : '0'
+            }).then(function(r) {
+                if (r.data && r.data.success) {
+                    showRestartBanner();
+                    if (typeof showToast === 'function') {
+                        showToast(
+                            enabled ? 'Plugin enabled' : 'Plugin disabled',
+                            name + ' — restart the node for the change to take effect.',
+                            'success'
+                        );
+                    }
+                } else {
+                    // Revert the checkbox on failure so the UI matches truth.
+                    var cb = document.querySelector('input[data-plugin="' + name.replace(/"/g, '') + '"]');
+                    if (cb) cb.checked = !enabled;
+                    var msg = (r.data && r.data.message) || 'Toggle failed';
+                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                }
+            }).catch(function() {
+                var cb = document.querySelector('input[data-plugin="' + name.replace(/"/g, '') + '"]');
+                if (cb) cb.checked = !enabled;
+                if (typeof showToast === 'function') showToast('Error', 'Network error', 'error');
+            });
+        }
+
+        function ensureLoadedOnTab() {
+            var settingsPanel = document.getElementById('tab-panel-settings');
+            if (!settingsPanel) return;
+            var observer = new MutationObserver(function() {
+                if (settingsPanel.style.display !== 'none' && !loaded) {
+                    refresh();
+                }
+            });
+            observer.observe(settingsPanel, { attributes: true, attributeFilter: ['style'] });
+            if (settingsPanel.style.display !== 'none' && !loaded) {
+                refresh();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', ensureLoadedOnTab);
+
+        return {
+            reload: function() { loaded = false; return refresh(); },
+            toggle: toggle
         };
     })();
 
