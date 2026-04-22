@@ -264,6 +264,7 @@ class ApiController {
             $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
             $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
             $method === 'POST' && $action === 'start' => $this->startProcessors(),
+            $method === 'POST' && $action === 'restart' => $this->restartNode(),
             $method === 'GET' && $action === 'debug-report' => $this->getDebugReport($params),
             $method === 'POST' && $action === 'debug-report' => $this->submitDebugReport($body),
             default => $this->errorResponse('Unknown system action: ' . $action, 404, 'unknown_action')
@@ -1929,6 +1930,51 @@ class ApiController {
             ]);
         } catch (Exception $e) {
             return $this->errorResponse('Shutdown failed: ' . $e->getMessage(), 500, 'shutdown_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/system/restart
+     *
+     * Request a full in-place node restart (PHP-FPM workers + processors).
+     * The API runs as www-data and cannot signal the root-owned FPM master,
+     * so we write a request marker that the root-side poller in startup.sh
+     * picks up within ~2s and turns into `eiou restart`.
+     *
+     * Use this after toggling plugins via the API, or any other change that
+     * is bound at boot. The request is rate-limited to one restart per 10s
+     * by the poller; rapid duplicate calls return success but only the
+     * first is acted on.
+     */
+    private function restartNode(): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        try {
+            $requester = new \Eiou\Services\RestartRequestService();
+            // Audit field: which API key triggered this. Logged so we can
+            // tell GUI-vs-API-vs-CLI restarts apart in the audit trail.
+            $requestor = (string) ($this->authenticatedKey['key_id'] ?? '');
+
+            if (!$requester->request('api', $requestor)) {
+                return $this->errorResponse(
+                    'Could not write the restart request file',
+                    500,
+                    'request_write_failed'
+                );
+            }
+
+            \Eiou\Utils\Logger::getInstance()->info('node_restart_requested_via_api', [
+                'requestor' => $requestor,
+            ]);
+
+            return $this->successResponse([
+                'message' => 'Restart requested. The node will respawn its workers within a few seconds.',
+                'expected_restart_within_seconds' => 5,
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Restart request failed: ' . $e->getMessage(), 500, 'restart_error');
         }
     }
 

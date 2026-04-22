@@ -29,8 +29,15 @@
     </details>
 
     <div id="plugins-restart-banner" class="alert alert-warning d-none" role="status">
-        <i class="fas fa-info-circle"></i>
-        Plugin changes have been saved. Restart the node for them to take effect.
+        <div class="plugins-restart-banner-row">
+            <span>
+                <i class="fas fa-info-circle"></i>
+                Plugin changes are saved. Restart the node for them to take effect.
+            </span>
+            <button type="button" class="btn btn-warning btn-compact" data-action="restartNodeFromPlugins">
+                <i class="fas fa-power-off"></i> Restart node
+            </button>
+        </div>
     </div>
 
     <div id="plugins-empty" class="api-keys-empty text-muted">

@@ -7731,7 +7731,8 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); },
 
         // Plugins
-        'reloadPlugins': function() { if (window.plugins) window.plugins.reload(); }
+        'reloadPlugins': function() { if (window.plugins) window.plugins.reload(); },
+        'restartNodeFromPlugins': function() { if (window.plugins) window.plugins.requestRestart(); }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -8816,11 +8817,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var el = document.getElementById('plugins-restart-banner');
             if (el) el.classList.remove('d-none');
         }
+        function hideRestartBanner() {
+            var el = document.getElementById('plugins-restart-banner');
+            if (el) el.classList.add('d-none');
+        }
 
         function refresh() {
             return post({ action: 'pluginsList' }).then(function(r) {
                 if (r.data && r.data.success) {
                     renderList(r.data.plugins || []);
+                    // Server is the source of truth for "needs restart" so the
+                    // banner survives page reloads and is consistent across
+                    // sessions / tabs.
+                    if (r.data.restart_required) {
+                        showRestartBanner();
+                    } else {
+                        hideRestartBanner();
+                    }
                     loaded = true;
                 } else {
                     var msg = (r.data && r.data.message) || 'Could not load plugins';
@@ -8828,6 +8841,93 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 }
             }).catch(function() {
                 if (typeof showToast === 'function') showToast('Error', 'Network error while loading plugins', 'error');
+            });
+        }
+
+        // -- Restart flow ----------------------------------------------------
+
+        function showRestartOverlay() {
+            // Idempotent: don't stack overlays on a double click.
+            if (document.getElementById('plugins-restart-overlay')) return;
+            var overlay = document.createElement('div');
+            overlay.id = 'plugins-restart-overlay';
+            overlay.className = 'restart-overlay';
+            overlay.innerHTML =
+                '<div class="restart-overlay-card">' +
+                  '<i class="fas fa-spinner fa-spin"></i>' +
+                  '<h3>Restarting node…</h3>' +
+                  '<p>Workers and processors are recycling.</p>' +
+                  '<p>This page will reload automatically.</p>' +
+                '</div>';
+            document.body.appendChild(overlay);
+        }
+
+        function pollUntilBackOnline(attempts) {
+            attempts = attempts || 0;
+            // Cap at ~30s of polling. The poller in startup.sh fires within
+            // ~2s and `eiou restart` is fast, but the FPM master respawn
+            // can briefly drop in-flight connections — so we tolerate
+            // transient errors and only give up after many failures.
+            if (attempts > 30) {
+                if (typeof showToast === 'function') {
+                    showToast('Restart taking longer than expected',
+                        'The node may still be restarting. Reload the page manually if it does not return.',
+                        'warning');
+                }
+                return;
+            }
+            // We send a benign POST that the server can answer cheaply. The
+            // pluginsList action is already idempotent and CSRF-protected.
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: (function() {
+                    var b = new FormData();
+                    b.append('action', 'pluginsList');
+                    b.append('csrf_token', csrfToken());
+                    return b;
+                })(),
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                // 200 with JSON body == FPM workers are serving requests again.
+                // Reload to pick up the freshly booted state in the worker
+                // that handles the next page render.
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    setTimeout(function() { pollUntilBackOnline(attempts + 1); }, 1000);
+                }
+            }).catch(function() {
+                setTimeout(function() { pollUntilBackOnline(attempts + 1); }, 1000);
+            });
+        }
+
+        function requestRestart() {
+            if (!window.confirm(
+                'Restart the node now?\n\n' +
+                'PHP-FPM workers and background processors will recycle. ' +
+                'Active sessions stay logged in, but pages may reload briefly. ' +
+                'Plugin toggles take effect after this restart.'
+            )) return;
+
+            showRestartOverlay();
+            post({ action: 'pluginsRequestRestart' }).then(function(r) {
+                if (!(r.data && r.data.success)) {
+                    var overlay = document.getElementById('plugins-restart-overlay');
+                    if (overlay) overlay.remove();
+                    var msg = (r.data && r.data.message) || 'Restart request failed';
+                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                    return;
+                }
+                // Wait briefly for the request poller (~2s cycle) to pick
+                // it up + run `eiou restart`, THEN start polling — checking
+                // immediately would just see the still-running old worker
+                // and "succeed" before the restart even started.
+                setTimeout(function() { pollUntilBackOnline(0); }, 3000);
+            }).catch(function() {
+                var overlay = document.getElementById('plugins-restart-overlay');
+                if (overlay) overlay.remove();
+                if (typeof showToast === 'function') showToast('Error', 'Network error while requesting restart', 'error');
             });
         }
 
@@ -8879,7 +8979,8 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         return {
             reload: function() { loaded = false; return refresh(); },
-            toggle: toggle
+            toggle: toggle,
+            requestRestart: requestRestart
         };
     })();
 

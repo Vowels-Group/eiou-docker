@@ -92,6 +92,7 @@ TRANSACTION_PID=""
 CLEANUP_PID=""
 CONTACT_STATUS_PID=""
 WATCHDOG_PID=""
+RESTART_POLLER_PID=""
 
 # -----------------------------------------------------------------------------
 # graceful_shutdown() - Signal handler for clean container termination
@@ -118,6 +119,14 @@ graceful_shutdown() {
         echo "[Shutdown] Stopping watchdog (PID: $WATCHDOG_PID)"
         kill "$WATCHDOG_PID" 2>/dev/null
         wait "$WATCHDOG_PID" 2>/dev/null || true
+    fi
+
+    # Stop restart-request poller too — no point letting it kick off a fresh
+    # restart while we're trying to tear everything down.
+    if [ -n "$RESTART_POLLER_PID" ] && kill -0 "$RESTART_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping restart poller (PID: $RESTART_POLLER_PID)"
+        kill "$RESTART_POLLER_PID" 2>/dev/null
+        wait "$RESTART_POLLER_PID" 2>/dev/null || true
     fi
 
     echo ""
@@ -2238,10 +2247,63 @@ if type show_alpha_warning_short &>/dev/null; then
     show_alpha_warning_short
 fi
 
+# =============================================================================
+# restart_poller() — root-side hook for GUI/API "Restart node" buttons.
+#
+# PHP-FPM workers run as www-data and cannot signal the root-owned PHP-FPM
+# master, so a request like "user clicked Restart in the Plugins tab" can't
+# call NodeRestartService directly — the SIGUSR2 to FPM would silently fail.
+#
+# Instead, the GUI/API writes /tmp/eiou_restart_requested via
+# RestartRequestService. This loop (running as root, since it's spawned by
+# PID 1) polls every 2s, deletes the marker, and runs `eiou restart` as a
+# privileged invocation that can actually signal FPM.
+#
+# Rate limited to one restart per 10s to absorb double-clicks and simultaneous
+# requests from multiple sources.
+# =============================================================================
+restart_poller() {
+    local REQ_FILE="/tmp/eiou_restart_requested"
+    local POLL_INTERVAL=2
+    local MIN_INTERVAL=10
+    local LAST_RESTART=0
+
+    while true; do
+        sleep $POLL_INTERVAL
+        [ -f "$REQ_FILE" ] || continue
+
+        # Read metadata for the audit log, then delete immediately so a
+        # crash inside `eiou restart` doesn't loop us forever on the same
+        # request.
+        local META
+        META=$(cat "$REQ_FILE" 2>/dev/null || echo '{}')
+        rm -f "$REQ_FILE"
+
+        local NOW
+        NOW=$(date +%s)
+        if [ $((NOW - LAST_RESTART)) -lt $MIN_INTERVAL ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] RESTART POLLER: Ignoring restart request — last restart was $((NOW - LAST_RESTART))s ago (cooldown ${MIN_INTERVAL}s). Request: $META"
+            continue
+        fi
+        LAST_RESTART=$NOW
+
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] RESTART POLLER: Restart requested: $META"
+        # Run the same command an operator would type. NodeRestartService
+        # writes the planned-restart flag the watchdog reads, so the
+        # downstream "died/respawning" lines stay friendly.
+        eiou restart 2>&1 | sed 's/^/[RESTART POLLER] /'
+    done
+}
+
 # Start watchdog in background
 watchdog &
 WATCHDOG_PID=$!
 echo "Watchdog started (PID: $WATCHDOG_PID)"
+
+# Start restart-request poller in background
+restart_poller &
+RESTART_POLLER_PID=$!
+echo "Restart poller started (PID: $RESTART_POLLER_PID)"
 
 echo ""
 echo "=========================================="

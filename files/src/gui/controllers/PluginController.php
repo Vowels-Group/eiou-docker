@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\PluginLoader;
+use Eiou\Services\RestartRequestService;
 use Eiou\Utils\Logger;
 use Throwable;
 
@@ -24,11 +25,16 @@ class PluginController
 {
     private Session $session;
     private PluginLoader $loader;
+    private RestartRequestService $restartRequester;
 
-    public function __construct(Session $session, PluginLoader $loader)
-    {
+    public function __construct(
+        Session $session,
+        PluginLoader $loader,
+        ?RestartRequestService $restartRequester = null
+    ) {
         $this->session = $session;
         $this->loader = $loader;
+        $this->restartRequester = $restartRequester ?? new RestartRequestService();
     }
 
     /**
@@ -54,6 +60,9 @@ class PluginController
                 case 'pluginsToggle':
                     $this->togglePlugin();
                     break;
+                case 'pluginsRequestRestart':
+                    $this->requestRestart();
+                    break;
                 default:
                     $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
             }
@@ -74,9 +83,75 @@ class PluginController
 
     private function listPlugins(): void
     {
+        $plugins = $this->loader->listAllPlugins();
         $this->respond([
             'success' => true,
-            'plugins' => $this->loader->listAllPlugins(),
+            'plugins' => $plugins,
+            // True when the on-disk state differs from what's actually
+            // running in this PHP-FPM worker. Drives the GUI's "Restart
+            // node" banner. Survives page reloads because it's recomputed
+            // from authoritative state, not held in JS memory.
+            'restart_required' => $this->computeRestartRequired($plugins),
+            'restart_requested' => $this->restartRequester->isRequested(),
+        ]);
+    }
+
+    /**
+     * Compare each plugin's persisted enabled flag to whether it's loaded
+     * in this worker. Any mismatch means a restart is needed for state to
+     * catch up.
+     *
+     * @param list<array{name:string,enabled:bool,status:string}> $plugins
+     */
+    private function computeRestartRequired(array $plugins): bool
+    {
+        // status values from PluginLoader: discovered, registered, booted,
+        // failed, disabled, not_loaded. Anything that ran register/boot is
+        // "actually loaded" from the worker's perspective.
+        $loadedStatuses = ['discovered', 'registered', 'booted'];
+
+        foreach ($plugins as $p) {
+            $isLoaded = in_array($p['status'] ?? '', $loadedStatuses, true);
+            if (($p['enabled'] ?? false) !== $isLoaded) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function requestRestart(): void
+    {
+        // Best-effort audit field — only safe to derive when a wallet is
+        // loaded. Skipping it never blocks the restart; it just leaves the
+        // requestor empty in the audit log.
+        $pubkeyHash = '';
+        try {
+            $user = \Eiou\Core\UserContext::getInstance();
+            if ($user->getPublicKey() !== null) {
+                $pubkeyHash = (string) $user->getPublicKeyHash();
+            }
+        } catch (Throwable $e) {
+            // missing wallet / uninitialized state — leave hash empty
+        }
+
+        if (!$this->restartRequester->request('gui', $pubkeyHash)) {
+            $this->respond([
+                'success' => false,
+                'error' => 'request_failed',
+                'message' => 'Could not write the restart request file.',
+            ], 500);
+        }
+
+        Logger::getInstance()->info('node_restart_requested_via_gui', [
+            'requestor' => $pubkeyHash,
+        ]);
+
+        $this->respond([
+            'success' => true,
+            // The poller in startup.sh runs every ~2s. Tell the client what
+            // to expect so the UI can size its loading overlay accordingly.
+            'expected_restart_within_seconds' => 5,
+            'message' => 'Restart requested. The node will respawn its workers within a few seconds.',
         ]);
     }
 
