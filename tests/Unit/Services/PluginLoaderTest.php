@@ -10,6 +10,8 @@ namespace Eiou\Tests\Services;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\PluginEvents;
 use Eiou\Services\PluginLoader;
 use Eiou\Services\ServiceContainer;
 use Eiou\Utils\Logger;
@@ -27,11 +29,15 @@ class PluginLoaderTest extends TestCase
         mkdir($this->tmpRoot, 0777, true);
         $this->stateFile = $this->tmpRoot . '/plugins-state.json';
         $this->logger = $this->createMock(Logger::class);
+        // Reset so each test sees a clean subscription table — otherwise
+        // listeners registered in one test leak into the next.
+        EventDispatcher::resetInstance();
     }
 
     protected function tearDown(): void
     {
         $this->removeDir($this->tmpRoot);
+        EventDispatcher::resetInstance();
     }
 
     private function loader(): PluginLoader
@@ -433,6 +439,74 @@ class PluginLoaderTest extends TestCase
         );
 
         $this->assertNull($this->loader()->readChangelog('huge-log'));
+    }
+
+    // -- Lifecycle event dispatch ------------------------------------------
+
+    public function testRegisterAllDispatchesPluginRegistered(): void
+    {
+        $this->writePlugin('lifecycle-ok', 'Eiou\\Tests\\Plugins\\LifecycleOk\\LifecycleOkPlugin',
+            $this->validPluginSource('LifecycleOk'));
+        $loader = $this->loader();
+        $loader->discover();
+
+        $fired = [];
+        EventDispatcher::getInstance()->subscribe(PluginEvents::PLUGIN_REGISTERED, function (array $data) use (&$fired) {
+            $fired[] = $data;
+        });
+
+        $loader->registerAll($this->createMock(ServiceContainer::class));
+
+        $this->assertCount(1, $fired);
+        $this->assertSame('lifecycle-ok', $fired[0]['name']);
+        $this->assertSame('1.0.0', $fired[0]['version']);
+    }
+
+    public function testBootAllDispatchesPluginBooted(): void
+    {
+        $this->writePlugin('boot-ok', 'Eiou\\Tests\\Plugins\\BootOk\\BootOkPlugin',
+            $this->validPluginSource('BootOk'));
+        $loader = $this->loader();
+        $loader->discover();
+        $container = $this->createMock(ServiceContainer::class);
+        $loader->registerAll($container);
+
+        $fired = [];
+        EventDispatcher::getInstance()->subscribe(PluginEvents::PLUGIN_BOOTED, function (array $data) use (&$fired) {
+            $fired[] = $data;
+        });
+
+        $loader->bootAll($container);
+
+        $this->assertCount(1, $fired);
+        $this->assertSame('boot-ok', $fired[0]['name']);
+    }
+
+    public function testFailedPluginDispatchesPluginFailed(): void
+    {
+        // Plugin that throws inside boot() — covers the disablePlugin path
+        // for the 'boot' phase. The register phase uses the same disable
+        // helper so this single test covers both.
+        $this->writePlugin('boom',
+            'Eiou\\Tests\\Plugins\\Boom\\BoomPlugin',
+            $this->throwingPluginSource('Boom', 'boot')
+        );
+        $loader = $this->loader();
+        $loader->discover();
+        $container = $this->createMock(ServiceContainer::class);
+        $loader->registerAll($container);
+
+        $fired = [];
+        EventDispatcher::getInstance()->subscribe(PluginEvents::PLUGIN_FAILED, function (array $data) use (&$fired) {
+            $fired[] = $data;
+        });
+
+        $loader->bootAll($container);
+
+        $this->assertCount(1, $fired);
+        $this->assertSame('boom', $fired[0]['name']);
+        $this->assertSame('boot', $fired[0]['phase']);
+        $this->assertStringContainsString('boot exploded', $fired[0]['error']);
     }
 
     // -- Lifecycle idempotency ---------------------------------------------

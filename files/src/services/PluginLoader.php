@@ -4,6 +4,8 @@
 namespace Eiou\Services;
 
 use Eiou\Contracts\PluginInterface;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\PluginEvents;
 use Eiou\Utils\Logger;
 use Throwable;
 
@@ -130,6 +132,10 @@ class PluginLoader
             try {
                 $plugin->register($container);
                 $this->metadata[$name]['status'] = 'registered';
+                EventDispatcher::getInstance()->dispatch(PluginEvents::PLUGIN_REGISTERED, [
+                    'name' => $name,
+                    'version' => $this->metadata[$name]['version'] ?? '',
+                ]);
             } catch (Throwable $e) {
                 $this->disablePlugin($name, 'register', $e);
             }
@@ -163,6 +169,10 @@ class PluginLoader
                 $this->logger->debug("Plugin booted", [
                     'name' => $name,
                     'version' => $this->metadata[$name]['version'] ?? '?'
+                ]);
+                EventDispatcher::getInstance()->dispatch(PluginEvents::PLUGIN_BOOTED, [
+                    'name' => $name,
+                    'version' => $this->metadata[$name]['version'] ?? '',
                 ]);
             } catch (Throwable $e) {
                 $this->disablePlugin($name, 'boot', $e);
@@ -568,6 +578,12 @@ class PluginLoader
             'error' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine()
+        ]);
+        EventDispatcher::getInstance()->dispatch(PluginEvents::PLUGIN_FAILED, [
+            'name' => $name,
+            'version' => $this->metadata[$name]['version'] ?? '',
+            'phase' => $phase,
+            'error' => $e->getMessage(),
         ]);
     }
 }

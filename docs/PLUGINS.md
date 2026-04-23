@@ -57,9 +57,11 @@ boot.
 - Register their own REST endpoints (e.g. `GET /api/v1/plugins/myplugin/data`).
   A `PluginApiRegistry` is on the roadmap — the `/api/v1/plugins` path
   today exposes core's plugin-management endpoints only.
-- Subscribe to transaction, contact, and P2P events — see
-  [Planned events](#planned-events). Today plugins can only subscribe to
-  sync, delivery, and chain-drop events.
+- Subscribe to a handful of specific event constants whose emit points
+  still live in duplicated GUI/CLI/API flows — see *"Not yet emitted"*
+  rows under [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to).
+  The constants are defined and stable, so subscriptions written against
+  them keep working once emission lands.
 
 ### Disabled by default
 
@@ -426,11 +428,11 @@ EventDispatcher::getInstance()->subscribe(SyncEvents::SYNC_COMPLETED, function(a
 });
 ```
 
-The dispatched event set today covers sync, delivery, and chain-drop
-lifecycle. Additional business-moment events — transaction, contact, P2P —
-are planned but not yet wired through the services that would emit them;
-see [Planned events](#planned-events) below for the shape they'll take
-when landed.
+The dispatched event set covers sync, delivery, chain-drop, transaction,
+contact, P2P, and plugin-lifecycle events. A few constants are defined
+but not yet wired through their emit points because the relevant flows
+are duplicated across GUI/CLI/API without a shared service-level commit
+point; see the per-class tables below for exact coverage.
 
 ### `SyncEvents`
 
@@ -468,57 +470,55 @@ The exact shape of each event's `$data` payload is documented in each event
 class's docblock. Read the class, don't trust docs alone — the payload is the
 contract.
 
-### Planned events
+### `TransactionEvents`
 
-These event classes are not yet part of the codebase — they're tracked
-for a future release so plugins have hooks at the business moments most
-useful for integrations (webhooks, analytics, custom fee logic, etc.).
-Constants listed here are the expected names so future plugin code
-against them will continue to work once landed.
+| Constant              | When it fires                                                              |
+| --------------------- | -------------------------------------------------------------------------- |
+| `TRANSACTION_CREATED` | *Not yet emitted* — planned                                                |
+| `TRANSACTION_SENT`    | After successful direct delivery (`handleAcceptedTransaction`)             |
+| `TRANSACTION_RECEIVED`| An inbound direct transaction was persisted (`processStandardIncoming`)    |
+| `TRANSACTION_FAILED`  | Delivery attempts exhausted and DLQ-cancelled (`processOutgoingDirect`)    |
 
-**`TransactionEvents`** — to be dispatched from `SendOperationService`,
-`TransactionProcessingService`, and `SyncService`:
+### `ContactEvents`
 
-| Constant              | When it will fire                                       |
-| --------------------- | ------------------------------------------------------- |
-| `TRANSACTION_CREATED` | A pending tx was created (before delivery)              |
-| `TRANSACTION_SENT`    | A tx was successfully delivered to the recipient        |
-| `TRANSACTION_RECEIVED`| An inbound tx arrived via sync                          |
-| `TRANSACTION_FAILED`  | A tx delivery failed (attempts exhausted or hard error) |
+| Constant            | When it fires                                                            |
+| ------------------- | ------------------------------------------------------------------------ |
+| `CONTACT_ADDED`     | *Not yet emitted* — planned (no shared service-level commit point today) |
+| `CONTACT_ACCEPTED`  | After `ContactManagementService::acceptContact()` commits                |
+| `CONTACT_REJECTED`  | *Not yet emitted* — planned                                              |
+| `CONTACT_BLOCKED`   | After `ContactManagementService::blockContact()` commits                 |
 
-**`ContactEvents`** — to be dispatched from `ContactManagementService`
-and `ContactController`:
+### `P2pEvents`
 
-| Constant            | When it will fire                                   |
-| ------------------- | --------------------------------------------------- |
-| `CONTACT_ADDED`     | A new contact was added                             |
-| `CONTACT_ACCEPTED`  | A pending contact request was accepted              |
-| `CONTACT_REJECTED`  | A pending contact request was rejected              |
-| `CONTACT_BLOCKED`   | A contact was blocked                               |
+| Constant        | When it fires                                                        |
+| --------------- | -------------------------------------------------------------------- |
+| `P2P_RECEIVED`  | An inbound P2P leg was persisted (both relay and end-recipient legs) |
+| `P2P_APPROVED`  | *Not yet emitted* — planned                                          |
+| `P2P_REJECTED`  | *Not yet emitted* — planned                                          |
+| `P2P_COMPLETED` | A P2P transaction reached its final destination (end-recipient leg)  |
 
-**`P2pEvents`** — to be dispatched from `P2pService`:
+### `PluginEvents`
 
-| Constant        | When it will fire                              |
-| --------------- | ---------------------------------------------- |
-| `P2P_RECEIVED`  | An inbound P2P transaction arrived             |
-| `P2P_APPROVED`  | A P2P transaction was approved by the operator |
-| `P2P_REJECTED`  | A P2P transaction was rejected                 |
-| `P2P_COMPLETED` | A P2P transaction finished all legs            |
+Plugin-lifecycle events dispatched by `PluginLoader` itself.
 
-**`PluginEvents`** — plugin-lifecycle events dispatched by
-`PluginLoader` itself:
+| Constant            | When it fires                                                 |
+| ------------------- | ------------------------------------------------------------- |
+| `PLUGIN_REGISTERED` | After a plugin's `register()` completes                       |
+| `PLUGIN_BOOTED`     | After a plugin's `boot()` completes                           |
+| `PLUGIN_FAILED`     | A plugin threw during `register()` or `boot()` (plus phase)   |
 
-| Constant            | When it will fire                                    |
-| ------------------- | ---------------------------------------------------- |
-| `PLUGIN_REGISTERED` | After a plugin's `register()` completes              |
-| `PLUGIN_BOOTED`     | After a plugin's `boot()` completes                  |
-| `PLUGIN_FAILED`     | A plugin threw during discovery, register, or boot   |
+Subscriptions made in `register()` won't observe other plugins'
+`PLUGIN_REGISTERED` events that ran ahead of you in iteration order —
+subscribe in `boot()` to catch the full registration pass.
 
-Contributions that add these classes and the corresponding `dispatch()`
-calls in the relevant services are welcome — keep each event class focused
-(constants only, no behaviour), match the existing `SyncEvents` / `ChainDropEvents`
-docblock style, and include unit tests that assert the event fires with
-the documented payload shape.
+### Constants without emit points
+
+Constants marked *"Not yet emitted"* above are stable — the class files
+ship with them defined so plugin code written against the names today
+keeps working once the emit points land. Subscriptions to those events
+just don't fire anything yet. Contributions wiring them up in the
+relevant services are welcome; match the payload shape documented in
+the event class's docblock and add a dispatch unit test.
 
 ---
 
