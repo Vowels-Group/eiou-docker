@@ -66,6 +66,7 @@ use Eiou\Services\ApiKeyService;
  * - GET  /api/v1/plugins                     - List installed plugins (admin)
  * - POST /api/v1/plugins/:name/enable        - Enable a plugin (admin, no auto-restart)
  * - POST /api/v1/plugins/:name/disable       - Disable a plugin (admin, no auto-restart)
+ * - *    /api/v1/plugins/:name/:action       - Plugin-owned endpoints (admin, via PluginApiRegistry)
  *
  * - POST /api/v1/chaindrop/propose           - Propose tx drop
  * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal
@@ -341,12 +342,31 @@ class ApiController {
             return $this->permissionDenied('admin');
         }
 
-        return match (true) {
-            $method === 'GET'  && !$action                     => $this->listPluginsApi(),
-            $method === 'POST' && $action && $id === 'enable'  => $this->togglePluginApi($action, true),
-            $method === 'POST' && $action && $id === 'disable' => $this->togglePluginApi($action, false),
-            default => $this->errorResponse('Unknown plugins action', 404, 'unknown_action')
-        };
+        // Core plugin-management endpoints first.
+        if ($method === 'GET' && !$action)                        { return $this->listPluginsApi(); }
+        if ($method === 'POST' && $action && $id === 'enable')    { return $this->togglePluginApi($action, true); }
+        if ($method === 'POST' && $action && $id === 'disable')   { return $this->togglePluginApi($action, false); }
+
+        // Plugin-owned endpoint fallthrough. Shape: /api/v1/plugins/{plugin}/{action}.
+        // The registry inherits admin scope from the gate above — v1 keeps all
+        // plugin-owned endpoints admin-only to sidestep per-endpoint scope
+        // declarations in the manifest.
+        if ($action && $id) {
+            $registry = $this->services->getPluginApiRegistry();
+            if ($registry->has($action, $method, $id)) {
+                $result = $registry->dispatch($action, $method, $id, $params, $body);
+                if ($result['status'] === 200) {
+                    return $this->successResponse($result['payload']);
+                }
+                return $this->errorResponse(
+                    $result['payload']['message'] ?? 'Plugin endpoint failed',
+                    $result['status'],
+                    $result['payload']['error'] ?? 'plugin_error'
+                );
+            }
+        }
+
+        return $this->errorResponse('Unknown plugins action', 404, 'unknown_action');
     }
 
     // ==================== Wallet Endpoints ====================

@@ -627,6 +627,28 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Registry for plugin-owned CLI subcommands. Plugins grab this in
+     * boot() and call ->register() to expose `eiou <plugin> ...` verbs.
+     */
+    public function getPluginCliRegistry(): PluginCliRegistry {
+        if (!isset($this->services['PluginCliRegistry'])) {
+            $this->services['PluginCliRegistry'] = new PluginCliRegistry();
+        }
+        return $this->services['PluginCliRegistry'];
+    }
+
+    /**
+     * Registry for plugin-owned REST endpoints under
+     * /api/v1/plugins/{plugin}/{action}. Plugins register in boot().
+     */
+    public function getPluginApiRegistry(): PluginApiRegistry {
+        if (!isset($this->services['PluginApiRegistry'])) {
+            $this->services['PluginApiRegistry'] = new PluginApiRegistry();
+        }
+        return $this->services['PluginApiRegistry'];
+    }
+
+    /**
      * Get CliDlqService instance
      *
      * Extracted from CliService (ARCH-04) to handle DLQ management CLI commands.

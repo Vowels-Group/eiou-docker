@@ -583,10 +583,19 @@ elseif($request === "updatecheck"){
   }
 }
 else{
-  // If no known input, display commands possible for input
-  $cliService = $app->services->getCliService();
-  $cliService->displayHelp($cleanArgv, $output);
-  $output->error("Command '$request' not found", ErrorCodes::COMMAND_NOT_FOUND, 404);
+  // Plugin-owned CLI subcommand fallthrough: core's elseif chain didn't
+  // match, so ask the registry before declaring the command unknown. The
+  // registry catches handler exceptions and emits a clean CLI error, so a
+  // buggy plugin can't tear down the process here.
+  $pluginCliRegistry = $app->services->getPluginCliRegistry();
+  if ($pluginCliRegistry->has($request)) {
+    $pluginCliRegistry->dispatch($request, $cleanArgv, $output);
+  } else {
+    // Still unknown — show help and fail loudly.
+    $cliService = $app->services->getCliService();
+    $cliService->displayHelp($cleanArgv, $output);
+    $output->error("Command '$request' not found", ErrorCodes::COMMAND_NOT_FOUND, 404);
+  }
 }
 
 } catch (ValidationServiceException $e) {

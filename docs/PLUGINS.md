@@ -16,10 +16,11 @@ default until the operator explicitly enables them.
 7. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
 8. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
 9. [Writing a Plugin](#writing-a-plugin)
-10. [Testing a Plugin](#testing-a-plugin)
-11. [Safety Model and Limitations](#safety-model-and-limitations)
-12. [Troubleshooting](#troubleshooting)
-13. [Related Documentation](#related-documentation)
+10. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+11. [Testing a Plugin](#testing-a-plugin)
+12. [Safety Model and Limitations](#safety-model-and-limitations)
+13. [Troubleshooting](#troubleshooting)
+14. [Related Documentation](#related-documentation)
 
 ---
 
@@ -33,11 +34,14 @@ boot.
 
 ### What plugins can do
 
-- Subscribe to core events (sync, delivery, chain-drop) via `EventDispatcher`
+- Subscribe to core events (sync, delivery, chain-drop, transaction, contact,
+  P2P, plugin lifecycle) via `EventDispatcher`
 - Register new services in the `ServiceContainer`
 - Add new repositories (including new database tables)
 - Decorate existing services
-- Extend the CLI or API surface
+- Register their own CLI subcommands via `PluginCliRegistry` (`eiou <plugin> ...`)
+- Register their own REST endpoints via `PluginApiRegistry`
+  (`* /api/v1/plugins/<plugin>/<action>`, admin-scoped)
 
 ### What plugins cannot do (by design)
 
@@ -48,15 +52,6 @@ boot.
 - Persist state outside their own directory or the shared state file
 - Take effect without a node restart — see [Lifecycle](#lifecycle) below
 
-### What plugins cannot do *yet* (planned for a future release)
-
-- Register their own CLI subcommands (e.g. `eiou myplugin status`). A
-  `PluginCliRegistry` is on the roadmap — for now the `plugin` command
-  namespace is reserved for core's `list` / `enable` / `disable`
-  operations and plugins cannot add sibling subcommands.
-- Register their own REST endpoints (e.g. `GET /api/v1/plugins/myplugin/data`).
-  A `PluginApiRegistry` is on the roadmap — the `/api/v1/plugins` path
-  today exposes core's plugin-management endpoints only.
 
 ### Disabled by default
 
@@ -582,6 +577,86 @@ class MyPlugin implements PluginInterface
 Drop a `CHANGELOG.md` next to `plugin.json`. The GUI will automatically
 expose a **View bundled CHANGELOG.md** button in the detail modal. See
 `hello-eiou/CHANGELOG.md` for a minimal example.
+
+---
+
+## Extending the CLI and REST API
+
+Plugins can register top-level `eiou` subcommands and REST endpoints under
+`/api/v1/plugins/<plugin>/`. Both registrations happen in `boot()` — the
+registries are wired in by then — and both are admin/privileged by default:
+the CLI runs as the local operator, and plugin-owned REST endpoints
+inherit the admin scope gate from the `/api/v1/plugins` resource.
+
+### CLI subcommand
+
+```php
+public function boot(ServiceContainer $container): void
+{
+    $container->getPluginCliRegistry()->register('myplugin',
+        function (array $argv, CliOutputManager $output): void {
+            // $argv is the full `eiou <cmd> [args...]` argv. Parse further
+            // subcommands out of $argv[2+].
+            $sub = $argv[2] ?? 'help';
+            if ($sub === 'status') {
+                $output->success('All systems nominal', ['status' => 'ok']);
+                return;
+            }
+            $output->error("Unknown subcommand: {$sub}", 'COMMAND_NOT_FOUND', 404);
+        }
+    );
+}
+```
+
+Operators invoke it as `eiou myplugin status`.
+
+Naming rules:
+
+- kebab-case, 1–32 chars, must start with a letter
+- cannot collide with a core command (the registry has a hard-coded list of
+  reserved names — `send`, `add`, `plugin`, `restart`, etc.; colliding names
+  throw at `register()` time so plugin authors find out loudly)
+- each plugin name can only be registered once per process
+
+Handler failures are caught and reported via the output manager, so a
+buggy command can't tear down the CLI process.
+
+### REST endpoint
+
+```php
+public function boot(ServiceContainer $container): void
+{
+    $container->getPluginApiRegistry()->register('myplugin', 'GET', 'status',
+        function (string $method, array $params, string $body): array {
+            return ['status' => 'ok', 'ts' => time()];
+        }
+    );
+}
+```
+
+Callers invoke it as `GET /api/v1/plugins/myplugin/status`. The handler's
+return array is wrapped in the standard `successResponse` shape by the
+core `ApiController`. Throwing becomes a 500 with a structured error body.
+
+Rules:
+
+- `action` is kebab-case, 1–64 chars
+- `enable` and `disable` are reserved for core's plugin-management endpoints
+- same `(plugin, method, action)` tuple can only be registered once
+- admin scope is enforced by the core `handlePlugins` gate, so individual
+  handlers don't need to re-check auth
+
+Path shape is single-level only: `/api/v1/plugins/<plugin>/<action>`.
+Nested paths like `/api/v1/plugins/myplugin/users/123` aren't supported in
+v1 because the API router's path parser stops at the fifth segment —
+encode sub-resources as query params (`?id=123`) or as a compound action
+name.
+
+### Reference
+
+See `hello-eiou` — `eiou hello-eiou` returns a random fortune from the
+CLI, and `GET /api/v1/plugins/hello-eiou/fortune` returns one as JSON.
+Both registrations live in `HelloEiouPlugin::boot()`.
 
 ---
 

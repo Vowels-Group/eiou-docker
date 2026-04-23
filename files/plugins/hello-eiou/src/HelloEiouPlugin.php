@@ -50,7 +50,7 @@ class HelloEiouPlugin implements PluginInterface
 
     public function getVersion(): string
     {
-        return '1.0.0';
+        return '1.1.0';
     }
 
     /**
@@ -76,6 +76,26 @@ class HelloEiouPlugin implements PluginInterface
                     'event' => SyncEvents::SYNC_COMPLETED,
                     'contact_pubkey' => $data['contact_pubkey'] ?? null,
                 ]);
+            }
+        );
+
+        // Register a CLI subcommand `eiou hello-eiou [fortune]` so operators
+        // can pull a fortune on demand. Demonstrates PluginCliRegistry — a
+        // real plugin would parse $argv[2+] for richer subcommands.
+        $container->getPluginCliRegistry()->register('hello-eiou',
+            function (array $argv, \Eiou\Cli\CliOutputManager $output): void {
+                $fortune = self::FORTUNES[array_rand(self::FORTUNES)];
+                $output->success($fortune, ['fortune' => $fortune]);
+            }
+        );
+
+        // Register a REST endpoint `GET /api/v1/plugins/hello-eiou/fortune`.
+        // Demonstrates PluginApiRegistry — handler returns a plain array
+        // and the registry wraps it in the standard successResponse shape.
+        $container->getPluginApiRegistry()->register('hello-eiou', 'GET', 'fortune',
+            function (string $method, array $params, string $body): array {
+                $fortune = self::FORTUNES[array_rand(self::FORTUNES)];
+                return ['fortune' => $fortune];
             }
         );
     }
