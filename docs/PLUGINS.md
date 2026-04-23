@@ -146,7 +146,7 @@ Full manifest with all optional metadata:
 
 | Field         | Required | Type                  | Notes                                                                                          |
 | ------------- | -------- | --------------------- | ---------------------------------------------------------------------------------------------- |
-| `name`        | yes      | string (kebab-case)   | Must match the subdirectory name. Used as the key in `plugins.json` and in all API responses. |
+| `name`        | yes      | string (kebab-case)   | Used as the key in `plugins.json` and in all API responses. Should match the subdirectory name (loader doesn't enforce, but mismatches make the GUI/CLI surfaces confusing). |
 | `version`     | yes      | string (semver)       | Displayed in the Plugins table. Used for log correlation.                                      |
 | `entryClass`  | yes      | string (FQCN)         | Must implement `Eiou\Contracts\PluginInterface`.                                               |
 | `autoload`    | yes      | object                | PSR-4 map: `{ "psr-4": { "Namespace\\": "src/" } }`. Relative to the plugin directory.        |
