@@ -344,6 +344,26 @@ elseif($request === "restart"){
   $debugService->output("Executing restart request", 'SILENT');
   $app->restart($output);
 }
+// Plugin management — list/enable/disable. Does NOT restart the node;
+// operator must run `eiou restart` (or hit the REST/GUI equivalent) for
+// enable/disable to take effect, since event subscriptions bind during
+// boot.
+elseif($request === "plugin"){
+  $debugService->output("Executing plugin request", 'SILENT');
+  if ($app->pluginLoader === null) {
+    $output->error('Plugin system not initialized', ErrorCodes::GENERAL_ERROR);
+    exit(1);
+  }
+  $pluginCliService = new \Eiou\Services\CliPluginService($app->pluginLoader);
+  $subcommand = strtolower($cleanArgv[2] ?? 'list');
+  if ($subcommand === 'enable') {
+    $pluginCliService->enablePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'disable') {
+    $pluginCliService->disablePlugin($cleanArgv, $output);
+  } else {
+    $pluginCliService->listPlugins($cleanArgv, $output);
+  }
+}
 // API Key Management
 elseif($request === "apikey"){
   // Manage API keys

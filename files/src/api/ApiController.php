@@ -59,8 +59,13 @@ use Eiou\Services\ApiKeyService;
  * - POST /api/v1/system/sync                 - Trigger sync operation
  * - POST /api/v1/system/shutdown             - Shutdown processors
  * - POST /api/v1/system/start               - Start processors
+ * - POST /api/v1/system/restart             - Restart processors + PHP-FPM workers in-place
  * - GET  /api/v1/system/debug-report        - Download debug report (JSON)
  * - POST /api/v1/system/debug-report        - Submit debug report to support
+ *
+ * - GET  /api/v1/plugins                     - List installed plugins (admin)
+ * - POST /api/v1/plugins/:name/enable        - Enable a plugin (admin, no auto-restart)
+ * - POST /api/v1/plugins/:name/disable       - Disable a plugin (admin, no auto-restart)
  *
  * - POST /api/v1/chaindrop/propose           - Propose tx drop
  * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal
@@ -170,6 +175,7 @@ class ApiController {
                 'p2p' => $this->handleP2p($method, $action, $id, $params, $body),
                 'backup' => $this->handleBackup($method, $action, $params, $body),
                 'requests' => $this->handleRequests($method, $action, $id, $params, $body),
+                'plugins' => $this->handlePlugins($method, $action, $id, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
         } catch (ServiceException $e) {
@@ -316,6 +322,30 @@ class ApiController {
             $method === 'POST' && $action === 'disable' => $this->disableAutoBackup(),
             $method === 'POST' && $action === 'cleanup' => $this->cleanupBackups(),
             default => $this->errorResponse('Unknown backup action: ' . $action, 404, 'unknown_action')
+        };
+    }
+
+    /**
+     * Handle plugin endpoints (admin only)
+     *
+     * Routes:
+     * - GET  /api/v1/plugins                   - List installed plugins
+     * - POST /api/v1/plugins/:name/enable      - Enable a plugin
+     * - POST /api/v1/plugins/:name/disable     - Disable a plugin
+     *
+     * Enable/disable persists the flag but does NOT restart the node.
+     * Follow up with POST /api/v1/system/restart to apply changes.
+     */
+    private function handlePlugins(string $method, ?string $action, ?string $id, array $params, string $body): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        return match (true) {
+            $method === 'GET'  && !$action                     => $this->listPluginsApi(),
+            $method === 'POST' && $action && $id === 'enable'  => $this->togglePluginApi($action, true),
+            $method === 'POST' && $action && $id === 'disable' => $this->togglePluginApi($action, false),
+            default => $this->errorResponse('Unknown plugins action', 404, 'unknown_action')
         };
     }
 
@@ -1976,6 +2006,65 @@ class ApiController {
         } catch (Exception $e) {
             return $this->errorResponse('Restart request failed: ' . $e->getMessage(), 500, 'restart_error');
         }
+    }
+
+    /**
+     * GET /api/v1/plugins
+     *
+     * Returns the full list of discovered plugins including the optional
+     * metadata fields (author, homepage, changelog, license, has_changelog).
+     * Same payload shape as `pluginsList` in the GUI — no schema split.
+     */
+    private function listPluginsApi(): array {
+        $loader = \Eiou\Core\Application::getInstance()->pluginLoader;
+        if ($loader === null) {
+            return $this->errorResponse('Plugin system not initialized', 500, 'plugin_loader_unavailable');
+        }
+        return $this->successResponse([
+            'plugins' => $loader->listAllPlugins(),
+        ]);
+    }
+
+    /**
+     * POST /api/v1/plugins/{name}/enable
+     * POST /api/v1/plugins/{name}/disable
+     *
+     * Persist the enabled flag; does NOT restart the node. The caller must
+     * follow up with POST /api/v1/system/restart for the change to take
+     * effect in the running process.
+     */
+    private function togglePluginApi(string $name, bool $enabled): array {
+        $loader = \Eiou\Core\Application::getInstance()->pluginLoader;
+        if ($loader === null) {
+            return $this->errorResponse('Plugin system not initialized', 500, 'plugin_loader_unavailable');
+        }
+
+        // Kebab-case alphanumerics only — same guard the CLI + GUI apply.
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            return $this->errorResponse('Invalid plugin name', 400, 'invalid_name');
+        }
+
+        $known = array_column($loader->listAllPlugins(), 'name');
+        if (!in_array($name, $known, true)) {
+            return $this->errorResponse('Unknown plugin: ' . $name, 404, 'unknown_plugin');
+        }
+
+        if (!$loader->setEnabled($name, $enabled)) {
+            return $this->errorResponse('Failed to persist plugin state', 500, 'persist_failed');
+        }
+
+        \Eiou\Utils\Logger::getInstance()->info('plugin_toggled_via_api', [
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'requestor' => $this->authenticatedKey['key_id'] ?? null,
+        ]);
+
+        return $this->successResponse([
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'restart_required' => true,
+            'message' => 'Plugin state persisted. POST /api/v1/system/restart to apply.',
+        ]);
     }
 
     /**
