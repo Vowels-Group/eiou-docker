@@ -16,6 +16,18 @@
         </div>
 
         <div class="modal-body" style="padding: 1rem 1.5rem;">
+            <!-- Loading state — shown while fetching a method for edit/view. -->
+            <div class="payback-loading" style="display: none; padding: 2rem; text-align: center;">
+                <i class="fas fa-spinner fa-spin"></i> <span class="text-muted">Loading…</span>
+            </div>
+
+            <!-- View-only banner — shown only in view mode. -->
+            <div class="payback-view-banner alert alert-info" style="display: none;">
+                <i class="fas fa-eye"></i>
+                <strong>View only.</strong>
+                Click <em>Edit</em> below to make changes.
+            </div>
+
             <!-- Step 1 — type selector -->
             <div class="payback-step" data-step="1">
                 <label class="form-label">What kind of payback method?</label>
@@ -60,12 +72,19 @@
         </div>
 
         <div class="modal-footer">
-            <button class="btn btn-secondary" data-action="closePaybackMethodForm">Cancel</button>
+            <button class="btn btn-danger payback-delete" data-action="deletePaybackMethodFromModal" style="display: none;">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+            <span class="modal-footer-spacer" style="flex: 1 1 auto;"></span>
+            <button class="btn btn-secondary payback-cancel" data-action="closePaybackMethodForm">Cancel</button>
             <button class="btn btn-secondary payback-step-back" data-action="paybackStepBack" style="display: none;">
                 <i class="fas fa-chevron-left"></i> Back
             </button>
             <button class="btn btn-primary payback-step-next" data-action="paybackStepNext" disabled>
                 Next <i class="fas fa-chevron-right"></i>
+            </button>
+            <button class="btn btn-primary payback-edit-from-view" data-action="paybackSwitchToEdit" style="display: none;">
+                <i class="fas fa-pen"></i> Edit
             </button>
             <button class="btn btn-primary payback-submit" data-action="submitPaybackMethod" style="display: none;">
                 <i class="fas fa-save"></i> Save Method

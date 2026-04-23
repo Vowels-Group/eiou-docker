@@ -104,41 +104,6 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
     </div>
 </div>
 
-<!-- Re-auth modal -->
-<div id="apiKeysVerifyModal" class="modal d-none">
-    <div class="modal-content modal-content-sm">
-        <div class="modal-header">
-            <h3><i class="fas fa-lock"></i> Confirm it&rsquo;s you</h3>
-            <span class="close" data-action="closeApiKeysVerifyModal">&times;</span>
-        </div>
-        <div class="modal-body modal-body-padded">
-            <p class="text-muted">
-                API key operations need a fresh confirmation. Remembered
-                devices stay logged in, but creating or revoking keys always
-                requires your auth code.
-            </p>
-            <form>
-                <input type="hidden" name="action" value="apiKeysVerify">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                <div class="form-group">
-                    <label for="apiKeysVerifyAuthcode">Auth Code</label>
-                    <input type="password" id="apiKeysVerifyAuthcode" name="authcode"
-                           autocomplete="current-password" required>
-                </div>
-                <div id="apiKeysVerifyError" class="form-error d-none"></div>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeysVerifyModal">
-                Cancel
-            </button>
-            <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeysVerify">
-                Unlock
-            </button>
-        </div>
-    </div>
-</div>
-
 <!-- Create API key modal -->
 <div id="apiKeysCreateModal" class="modal d-none">
     <div class="modal-content modal-content-md">

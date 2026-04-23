@@ -7754,6 +7754,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'deletePaybackMethod': function(el) {
             if (window.paybackMethods) { window.paybackMethods.remove(el.getAttribute('data-method-id'), el.getAttribute('data-label') || ''); }
         },
+        'deletePaybackMethodFromModal': function() {
+            if (window.paybackMethods) { window.paybackMethods.removeCurrent(); }
+        },
+        'paybackSwitchToEdit': function() {
+            if (window.paybackMethods) { window.paybackMethods.switchToEdit(); }
+        },
         'selectPaybackType': function(el) {
             if (window.paybackMethods) { window.paybackMethods.selectType(el.getAttribute('data-type')); }
         },
@@ -8660,9 +8666,16 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             return attempt();
         }
 
-        function openVerifyModal(message) {
+        function openVerifyModal(messageOrCallback, maybeLabel) {
+            // Accept either a server-provided message (used internally by
+            // withSensitiveAccess) or a callback to run after successful verify
+            // (used by other modules that don't route through that helper).
+            if (typeof messageOrCallback === 'function') {
+                pendingAction = { fn: messageOrCallback, label: maybeLabel || 'Confirm' };
+            }
             var input = document.getElementById('apiKeysVerifyAuthcode');
             var err = document.getElementById('apiKeysVerifyError');
+            if (!input) { return; }
             input.value = '';
             if (err) { err.classList.add('d-none'); err.textContent = ''; }
             showModal('apiKeysVerifyModal');
@@ -8736,6 +8749,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             copyDetailKeyId: copyDetailKeyId,
             closeRevealModal: closeRevealModal,
             copyToClipboard: copyToClipboard,
+            openVerifyModal: openVerifyModal,
             closeVerifyModal: closeVerifyModal,
             submitVerify: submitVerify
         };
@@ -9289,31 +9303,35 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     '</div>';
                 return;
             }
-            var html = '<div class="payback-methods-rows">';
+            var cat = ensureCatalog() || { types: [] };
+            var typeLabels = {};
+            (cat.types || []).forEach(function (t) { typeLabels[t.id] = t.label; });
+            var sharePolicyLabels = { auto: 'Auto', prompt: 'Ask first', never: 'Never' };
+
+            var html = '<div class="contacts-table-wrapper payback-methods-table-wrapper">' +
+                '<table class="contacts-table payback-methods-table">' +
+                '<thead><tr>' +
+                    '<th class="col-pb-type"     style="width:16%">Type</th>' +
+                    '<th class="col-pb-currency" style="width:10%">Currency</th>' +
+                    '<th class="col-pb-label"    style="width:24%">Label</th>' +
+                    '<th class="col-pb-details"  style="width:36%">Details</th>' +
+                    '<th class="col-pb-share"    style="width:14%">Share</th>' +
+                '</tr></thead><tbody>';
             state.methods.forEach(function (m) {
-                html += '<div class="payback-method-row" data-method-id="' + escapeAttr(m.method_id) + '">' +
-                    '<span class="payback-method-type-badge">' + escapeHtml(m.type) + '</span>' +
-                    '<span class="payback-method-currency-pill">' + escapeHtml(m.currency) + '</span>' +
-                    '<span class="payback-method-label">' + escapeHtml(m.label) + '</span>' +
-                    '<span class="payback-method-mask">' + escapeHtml(m.masked_display || '') + '</span>' +
-                    '<button class="btn btn-sm btn-outline" ' +
-                        'data-action="revealPaybackMethod" data-method-id="' + escapeAttr(m.method_id) + '" ' +
-                        'title="Reveal full details">' +
-                        '<i class="fas fa-eye"></i>' +
-                    '</button>' +
-                    '<button class="btn btn-sm btn-outline" ' +
-                        'data-action="openPaybackMethodForm" data-payback-mode="edit" ' +
-                        'data-method-id="' + escapeAttr(m.method_id) + '" title="Edit">' +
-                        '<i class="fas fa-pen"></i>' +
-                    '</button>' +
-                    '<button class="btn btn-sm btn-danger" ' +
-                        'data-action="deletePaybackMethod" data-method-id="' + escapeAttr(m.method_id) + '" ' +
-                        'data-label="' + escapeAttr(m.label) + '" title="Delete">' +
-                        '<i class="fas fa-trash"></i>' +
-                    '</button>' +
-                    '</div>';
+                var typeLabel = typeLabels[m.type] || m.type;
+                var shareLabel = sharePolicyLabels[m.share_policy] || (m.share_policy || 'auto');
+                html +=
+                    '<tr class="is-clickable" ' +
+                        'data-action="openPaybackMethodForm" data-payback-mode="view" ' +
+                        'data-method-id="' + escapeAttr(m.method_id) + '" title="Click to view">' +
+                        '<td class="col-pb-type"><span class="payback-method-type-badge">' + escapeHtml(typeLabel) + '</span></td>' +
+                        '<td class="col-pb-currency">' + escapeHtml(m.currency) + '</td>' +
+                        '<td class="col-pb-label payback-method-label" title="' + escapeAttr(m.label) + '">' + escapeHtml(m.label) + '</td>' +
+                        '<td class="col-pb-details payback-method-mask text-muted" title="' + escapeAttr(m.masked_display || '') + '">' + escapeHtml(m.masked_display || '') + '</td>' +
+                        '<td class="col-pb-share">' + escapeHtml(shareLabel) + '</td>' +
+                    '</tr>';
             });
-            html += '</div>';
+            html += '</tbody></table></div>';
             container.innerHTML = html;
         }
 
@@ -9332,20 +9350,48 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (!overlay) { return; }
 
             resetFormInputs();
-            renderTypeTiles();
-            setModalTitle(state.formMode === 'edit' ? 'Edit Payback Method' : 'Add Payback Method');
-            setStepVisibility(1);
+            clearReadOnlyView();
+            var isEditOrView = state.formMode === 'edit' || state.formMode === 'view';
+            if (!isEditOrView) { renderTypeTiles(); }
+            setModalTitle(
+                state.formMode === 'view' ? 'View Payback Method' :
+                state.formMode === 'edit' ? 'Edit Payback Method' :
+                'Add Payback Method'
+            );
+            setStepVisibility(isEditOrView ? 0 : 1);
             hideErrors();
             overlay.style.display = 'flex';
 
-            if (state.formMode === 'edit' && methodId) {
-                post('paybackMethodsGet', { method_id: methodId }, function (data) {
-                    if (!data.success || !data.method) {
-                        showErrors([{ field: null, message: data.error || 'Could not load method' }]);
-                        return;
-                    }
-                    prefillForEdit(data.method);
+            if (!overlay.__paybackBackdropBound) {
+                overlay.__paybackBackdropBound = true;
+                overlay.addEventListener('click', function (e) {
+                    if (e.target === overlay) { closeForm(); }
                 });
+            }
+
+            if ((state.formMode === 'edit' || state.formMode === 'view') && methodId) {
+                // Use reveal so sensitive fields decrypt for pre-fill. The
+                // endpoint is gated by sensitive-access; on 403 we pop the
+                // unlock modal and retry after the user enters their code.
+                var loadForEdit = function () {
+                    post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
+                        if (status === 403 && data.error === 'sensitive_access_required') {
+                            if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                                window.apiKeys.openVerifyModal(loadForEdit);
+                            } else {
+                                showErrors([{ field: null, message: 'Please unlock sensitive actions first.' }]);
+                            }
+                            return;
+                        }
+                        if (!data.success || !data.method) {
+                            showErrors([{ field: null, message: data.error || 'Could not load method' }]);
+                            return;
+                        }
+                        prefillForEdit(data.method);
+                        if (state.formMode === 'view') { applyReadOnlyView(); }
+                    });
+                };
+                loadForEdit();
             }
         }
 
@@ -9369,16 +9415,72 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             setStepVisibility(n);
         }
 
-        function setStepVisibility(n) {
-            document.querySelectorAll('#payback-method-modal-overlay .payback-step').forEach(function (s) {
-                s.style.display = s.getAttribute('data-step') === String(n) ? '' : 'none';
+        // View mode reuses the edit form but locks every input. Toggled on
+        // after prefillForEdit populates, and cleared on next openForm.
+        function applyReadOnlyView() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+            overlay.classList.add('is-view-mode');
+            overlay.querySelectorAll('.modal-body input, .modal-body textarea').forEach(function (el) {
+                el.setAttribute('readonly', 'readonly');
             });
-            var back = document.querySelector('#payback-method-modal-overlay .payback-step-back');
-            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
-            var save = document.querySelector('#payback-method-modal-overlay .payback-submit');
-            if (back) { back.style.display = n === 2 ? '' : 'none'; }
-            if (next) { next.style.display = n === 1 ? '' : 'none'; }
-            if (save) { save.style.display = n === 2 ? '' : 'none'; }
+            overlay.querySelectorAll('.modal-body select, .modal-body button').forEach(function (el) {
+                el.disabled = true;
+            });
+        }
+        function clearReadOnlyView() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+            overlay.classList.remove('is-view-mode');
+            overlay.querySelectorAll('.modal-body [readonly]').forEach(function (el) {
+                el.removeAttribute('readonly');
+            });
+            overlay.querySelectorAll('.modal-body select, .modal-body button').forEach(function (el) {
+                el.disabled = false;
+            });
+        }
+
+        // Delete the method currently open in the edit form.
+        function removeCurrent() {
+            if (!state.editingId) { return; }
+            var label = (document.getElementById('payback-label') || {}).value || 'this method';
+            remove(state.editingId, label);
+        }
+
+        // Flip the open modal from view → edit without refetching. Data is
+        // already loaded; we just unlock the inputs and swap footer actions.
+        function switchToEdit() {
+            if (state.formMode !== 'view' || !state.editingId) { return; }
+            state.formMode = 'edit';
+            clearReadOnlyView();
+            setModalTitle('Edit Payback Method');
+            setStepVisibility(2);
+        }
+
+        function setStepVisibility(n) {
+            // n=0 → loading placeholder (edit/view while revealing); n=1/2 → step panels
+            var loading = document.querySelector('#payback-method-modal-overlay .payback-loading');
+            if (loading) { loading.style.display = (n === 0) ? '' : 'none'; }
+            document.querySelectorAll('#payback-method-modal-overlay .payback-step').forEach(function (s) {
+                s.style.display = (n !== 0 && s.getAttribute('data-step') === String(n)) ? '' : 'none';
+            });
+            var viewing = state.formMode === 'view';
+            var editing = state.formMode === 'edit';
+            var back    = document.querySelector('#payback-method-modal-overlay .payback-step-back');
+            var next    = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            var save    = document.querySelector('#payback-method-modal-overlay .payback-submit');
+            var del     = document.querySelector('#payback-method-modal-overlay .payback-delete');
+            var cancel  = document.querySelector('#payback-method-modal-overlay .payback-cancel');
+            var edit    = document.querySelector('#payback-method-modal-overlay .payback-edit-from-view');
+            var banner  = document.querySelector('#payback-method-modal-overlay .payback-view-banner');
+            // In view/edit we jump straight to step 2 and hide the type-picker nav.
+            if (back)   { back.style.display   = (n === 2 && !viewing && !editing) ? '' : 'none'; }
+            if (next)   { next.style.display   = (n === 1 && !viewing && !editing) ? '' : 'none'; }
+            if (save)   { save.style.display   = (n === 2 && !viewing) ? '' : 'none'; }
+            if (del)    { del.style.display    = (n === 2 && editing) ? '' : 'none'; }
+            if (edit)   { edit.style.display   = (n === 2 && viewing) ? '' : 'none'; }
+            if (banner) { banner.style.display = (n === 2 && viewing) ? '' : 'none'; }
+            if (cancel) { cancel.textContent = viewing ? 'Close' : 'Cancel'; }
         }
 
         function setModalTitle(title) {
@@ -9492,11 +9594,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var container = document.getElementById('payback-type-fields');
             if (!container) { return; }
             container.innerHTML = '';
-            (type.fields || []).forEach(function (f) {
-                container.appendChild(buildFieldDom(f));
+            (type.fields || []).forEach(function (f, i) {
+                container.appendChild(buildFieldDom(f, i));
             });
             attachConditionalWatchers(type);
             applyShowWhen(type);
+            applySwiftIdentifierToggle(type);
 
             if (type.currenciesFor && type.currenciesFor.field) {
                 var watched = document.querySelector('#payback-type-fields [data-payback-field="' + type.currenciesFor.field + '"]');
@@ -9507,10 +9610,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             }
         }
 
-        function buildFieldDom(f) {
+        function buildFieldDom(f, index) {
+            var inputId = 'payback-field-' + f.name + '-' + index;
             var wrap = document.createElement('div');
             wrap.className = 'form-group payback-field-group';
             wrap.setAttribute('data-payback-field-group', f.name);
+            wrap.setAttribute('data-payback-field-index', String(index));
             if (f.showWhen) {
                 wrap.setAttribute('data-show-when-field', f.showWhen.field);
                 wrap.setAttribute('data-show-when-in', JSON.stringify(f.showWhen.in || []));
@@ -9518,7 +9623,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
             var label = document.createElement('label');
             label.className = 'form-label';
-            label.setAttribute('for', 'payback-field-' + f.name);
+            label.setAttribute('for', inputId);
             label.textContent = f.label + (f.required ? ' *' : '');
             wrap.appendChild(label);
 
@@ -9544,7 +9649,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                            : 'text';
                 input.className = 'form-control';
             }
-            input.id = 'payback-field-' + f.name;
+            input.id = inputId;
             input.setAttribute('data-payback-field', f.name);
             if (f.placeholder) { input.placeholder = f.placeholder; }
             if (f.required) { input.required = true; }
@@ -9568,22 +9673,94 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 var el = document.querySelector('#payback-type-fields [data-payback-field="' + name + '"]');
                 if (el && !el.__paybackWatcherAttached) {
                     el.__paybackWatcherAttached = true;
-                    el.addEventListener('change', function () { applyShowWhen(type); });
-                    el.addEventListener('input',  function () { applyShowWhen(type); });
+                    var refresh = function () { applyShowWhen(type); applySwiftIdentifierToggle(type); };
+                    el.addEventListener('change', refresh);
+                    el.addEventListener('input',  refresh);
                 }
             });
         }
 
         function applyShowWhen(type) {
-            (type.fields || []).forEach(function (f) {
+            (type.fields || []).forEach(function (f, i) {
                 if (!f.showWhen) { return; }
-                var wrap = document.querySelector('[data-payback-field-group="' + f.name + '"]');
+                var wrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"]');
                 if (!wrap) { return; }
                 var watched = document.querySelector('#payback-type-fields [data-payback-field="' + f.showWhen.field + '"]');
                 var val = watched ? watched.value : '';
                 var wanted = f.showWhen.in || [];
                 wrap.style.display = wanted.indexOf(val) !== -1 ? '' : 'none';
             });
+        }
+
+        // SWIFT uniquely accepts *either* an IBAN or a local account number,
+        // not both. Rather than render two separate text fields side by side
+        // (confusing, looks like duplicates), render a segmented toggle and
+        // display only the chosen field. Activated only when rail=swift.
+        function applySwiftIdentifierToggle(type) {
+            var container = document.getElementById('payback-type-fields');
+            var railEl = document.querySelector('#payback-type-fields [data-payback-field="rail"]');
+            if (!container || !railEl) { return; }
+
+            var indices = { iban: -1, account_number: -1 };
+            (type.fields || []).forEach(function (f, i) {
+                if (f.showWhen && f.showWhen.field === 'rail'
+                        && Array.isArray(f.showWhen.in) && f.showWhen.in.length === 1
+                        && f.showWhen.in[0] === 'swift'
+                        && (f.name === 'iban' || f.name === 'account_number')) {
+                    indices[f.name] = i;
+                }
+            });
+
+            var existing = document.getElementById('payback-swift-id-toggle');
+            if (railEl.value !== 'swift' || indices.iban === -1 || indices.account_number === -1) {
+                if (existing) { existing.parentNode.removeChild(existing); }
+                return;
+            }
+
+            var ibanWrap = container.querySelector('[data-payback-field-index="' + indices.iban + '"]');
+            var acctWrap = container.querySelector('[data-payback-field-index="' + indices.account_number + '"]');
+            if (!ibanWrap || !acctWrap) { return; }
+
+            if (!existing) {
+                existing = document.createElement('div');
+                existing.id = 'payback-swift-id-toggle';
+                existing.className = 'form-group payback-swift-id-toggle';
+                existing.innerHTML =
+                    '<label class="form-label">Identifier *</label>' +
+                    '<div class="payback-swift-id-btns" role="tablist" aria-label="SWIFT identifier type">' +
+                        '<button type="button" class="btn btn-primary btn-compact" data-swift-id="iban">IBAN</button>' +
+                        '<button type="button" class="btn btn-secondary btn-compact" data-swift-id="account_number">Account number</button>' +
+                    '</div>' +
+                    '<small class="text-muted">SWIFT accepts either an IBAN or a local account number.</small>';
+                ibanWrap.parentNode.insertBefore(existing, ibanWrap);
+                existing.querySelectorAll('[data-swift-id]').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        setSwiftIdentifier(b.getAttribute('data-swift-id'), indices);
+                    });
+                });
+            }
+            // Strip the redundant "IBAN (or account_number)" / "Account
+            // number (or IBAN)" labels — the toggle now communicates that.
+            [[ibanWrap, 'IBAN'], [acctWrap, 'Account number']].forEach(function (pair) {
+                var lbl = pair[0].querySelector('label.form-label');
+                if (lbl) { lbl.textContent = pair[1]; }
+            });
+            setSwiftIdentifier(existing.getAttribute('data-current') || 'iban', indices);
+        }
+
+        function setSwiftIdentifier(choice, indices) {
+            var toggle = document.getElementById('payback-swift-id-toggle');
+            if (!toggle) { return; }
+            toggle.setAttribute('data-current', choice);
+            toggle.querySelectorAll('[data-swift-id]').forEach(function (b) {
+                var active = b.getAttribute('data-swift-id') === choice;
+                b.classList.toggle('btn-primary',   active);
+                b.classList.toggle('btn-secondary', !active);
+            });
+            var ibanWrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + indices.iban + '"]');
+            var acctWrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + indices.account_number + '"]');
+            if (ibanWrap) { ibanWrap.style.display = (choice === 'iban')           ? '' : 'none'; }
+            if (acctWrap) { acctWrap.style.display = (choice === 'account_number') ? '' : 'none'; }
         }
 
         function applyCurrenciesFor(type, variantValue) {
@@ -9620,19 +9797,49 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (!type) { return; }
             selectType(m.type);
             gotoStep(2);
-            var label = document.getElementById('payback-label');
-            if (label) { label.value = m.label || ''; }
+            var labelEl = document.getElementById('payback-label');
+            if (labelEl) { labelEl.value = m.label || ''; }
             renderCurrencyOptions(type, m.currency);
             var share = document.getElementById('payback-share-policy');
             if (share) { share.value = m.share_policy || 'auto'; }
             var priority = document.getElementById('payback-priority');
             if (priority) { priority.value = m.priority != null ? m.priority : 100; }
-            var note = document.createElement('div');
-            note.className = 'form-hint text-muted';
-            note.style.marginTop = '0.5rem';
-            note.textContent = 'Leave sensitive fields blank to keep the stored values unchanged.';
-            var container = document.getElementById('payback-type-fields');
-            if (container) { container.appendChild(note); }
+
+            var stored = m.fields || {};
+
+            // First pass: set values on watched/unconditional fields (e.g., rail
+            // selects) so applyShowWhen resolves correctly.
+            (type.fields || []).forEach(function (f, i) {
+                if (f.showWhen) { return; }
+                if (stored[f.name] == null) { return; }
+                var el = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"] [data-payback-field]');
+                if (el) { el.value = stored[f.name]; }
+            });
+            applyShowWhen(type);
+
+            // For SWIFT, pick the identifier branch that actually has a value.
+            if (stored.rail === 'swift') {
+                var prefer = (stored.iban && String(stored.iban).length) ? 'iban'
+                           : (stored.account_number && String(stored.account_number).length) ? 'account_number'
+                           : 'iban';
+                var toggle = document.getElementById('payback-swift-id-toggle');
+                if (!toggle) { applySwiftIdentifierToggle(type); toggle = document.getElementById('payback-swift-id-toggle'); }
+                if (toggle) { toggle.setAttribute('data-current', prefer); }
+            }
+            applySwiftIdentifierToggle(type);
+
+            // Second pass: fill every conditional field whose showWhen matches
+            // the stored watched value.
+            (type.fields || []).forEach(function (f, i) {
+                if (stored[f.name] == null) { return; }
+                if (f.showWhen) {
+                    var watchedVal = stored[f.showWhen.field];
+                    if ((f.showWhen.in || []).indexOf(watchedVal) === -1) { return; }
+                }
+                var input = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"] [data-payback-field]');
+                if (input) { input.value = stored[f.name]; }
+            });
+
             document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (t) {
                 if (t.getAttribute('data-type') !== m.type) { t.disabled = true; }
             });
@@ -9765,6 +9972,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     return;
                 }
                 if (!data.success) { alert('Failed to delete: ' + (data.error || 'unknown')); return; }
+                closeForm();
                 loadList();
             });
         }
@@ -9792,6 +10000,8 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             submit:     submit,
             reveal:     reveal,
             remove:     remove,
+            removeCurrent: removeCurrent,
+            switchToEdit: switchToEdit,
             selectType: selectType,
             gotoStep:   gotoStep
         };

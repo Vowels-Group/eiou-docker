@@ -325,7 +325,11 @@ class PaybackMethodService
                 $tail = $fields['iban'] ?? $fields['account_number'] ?? '';
                 return '••••' . substr($tail, -4);
             case 'custom':
-                return substr($fields['details'] ?? '', 0, 8) . '…';
+                // `details` is user-authored free text — not sensitive like an
+                // IBAN, so show a wide preview and let the table's own CSS
+                // ellipsis handle truncation at the column boundary.
+                $details = (string) ($fields['details'] ?? '');
+                return mb_strlen($details) > 80 ? mb_substr($details, 0, 80) . '…' : $details;
         }
         return '•••';
     }

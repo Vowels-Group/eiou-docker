@@ -12,12 +12,14 @@
 <?php
     $paybackMethodsCatalog = \Eiou\Validators\PaybackMethodTypeValidator::getCatalog();
 ?>
-<div class="info-item payback-methods-section" id="payback-methods-section">
-    <div class="info-label" style="display: flex; justify-content: space-between; align-items: center;">
-        <span><i class="fas fa-hand-holding-usd"></i> Payback Methods</span>
-        <button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">
-            <i class="fas fa-plus"></i> Add
-        </button>
+<div class="form-container fade-in-up payback-methods-section" id="payback-methods-section">
+    <div class="section-header">
+        <h2><i class="fas fa-hand-holding-usd"></i> Payback Methods</h2>
+        <div class="dlq-section-header-actions">
+            <button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">
+                <i class="fas fa-plus"></i> Add
+            </button>
+        </div>
     </div>
 
     <details class="section-intro text-muted">

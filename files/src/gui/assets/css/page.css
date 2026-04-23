@@ -5992,17 +5992,6 @@ label.api-keys-permission .api-keys-permission-text {
 .payback-methods-list { margin-top: 0.5rem; }
 .payback-methods-empty { padding: 0.75rem; border: 1px dashed var(--border-color, #ccc); border-radius: 4px; }
 
-.payback-methods-rows { display: flex; flex-direction: column; gap: 0.25rem; }
-.payback-method-row {
-    display: grid;
-    grid-template-columns: 80px 60px 1fr 1fr auto auto auto;
-    gap: 0.5rem;
-    align-items: center;
-    padding: 0.5rem;
-    border: 1px solid var(--border-color, #eee);
-    border-radius: 4px;
-    background: var(--bg-alt, #fafafa);
-}
 .payback-method-type-badge {
     font-size: 0.75rem;
     font-weight: 600;
@@ -6096,6 +6085,35 @@ details.payback-type-group > summary.payback-type-group-label:hover { background
 
 .payback-type-fields .form-group + .form-group { margin-top: 0.5rem; }
 .payback-field-group { display: flex; flex-direction: column; gap: 0.25rem; }
+.payback-swift-id-btns { display: flex; gap: 0.5rem; }
+.payback-swift-id-btns > .btn { flex: 1 1 auto; }
+.payback-methods-table tbody tr.is-clickable { cursor: pointer; transition: background 0.15s; }
+.payback-methods-table tbody tr.is-clickable:hover { background: var(--bg-alt, #f6f8fa); }
+.contacts-table.payback-methods-table .col-pb-type     { width: 14%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-currency { width: 10%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-label    {
+    width: 22%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.contacts-table.payback-methods-table .col-pb-details  {
+    width: 30%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.contacts-table.payback-methods-table .col-pb-share    { width: 14%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-actions  { width: 10%; white-space: nowrap; }
+
+/* Mobile (≤600px): the generic .contacts-table rule hides cols 3+.
+   Re-show Label (3) + Actions (6) and let everything size naturally. */
+@media (max-width: 600px) {
+    .contacts-table.payback-methods-table thead th:nth-child(3),
+    .contacts-table.payback-methods-table tbody td:nth-child(3),
+    .contacts-table.payback-methods-table thead th:nth-child(6),
+    .contacts-table.payback-methods-table tbody td:nth-child(6) {
+        display: table-cell;
+    }
+    .contacts-table.payback-methods-table .col-pb-type     { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-currency { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-label    { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-actions  { width: 1%; }
+}
 
 .form-errors {
     margin-top: 0.75rem;
@@ -6108,11 +6126,3 @@ details.payback-type-group > summary.payback-type-group-label:hover { background
 }
 .form-errors-list { margin: 0; padding-left: 1.1rem; }
 
-@media (max-width: 640px) {
-    .payback-method-row {
-        grid-template-columns: auto auto 1fr;
-        grid-template-rows: auto auto auto;
-    }
-    .payback-method-label { grid-column: 1 / -1; }
-    .payback-method-mask { grid-column: 1 / -1; }
-}

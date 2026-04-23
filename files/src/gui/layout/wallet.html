@@ -25,7 +25,7 @@
     var EIOU_ADDRESS_TYPE_DISPLAY = <?php echo json_encode($_addrDisplayMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;</script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/qrcode-generator.js?v=<?php echo appVersion(); ?>"></script>
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/vendor/html5-qrcode.min.js?v=<?php echo appVersion(); ?>"></script>
-    <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js?v=<?php echo appVersion(); ?>"></script>
+    <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js?v=<?php echo appVersion(); ?>&amp;t=<?php echo @filemtime('/app/eiou/src/gui/assets/js/script.js') ?: time(); ?>"></script>
     <!-- Graceful degradation: show all sections when JS is disabled (Tor Safest mode) -->
     <noscript><style>.tab-panel{display:block!important}.tab-bar,.tab-bar-mobile{display:none!important}</style></noscript>
 </head>
@@ -69,6 +69,7 @@
         <!-- Tab: Dashboard -->
         <div class="tab-panel" id="tab-panel-dashboard">
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>
+            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/paybackMethodsSection.html");?>
         </div>
 
         <!-- Tab: Send -->
@@ -94,6 +95,41 @@
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/apiKeysSection.html");?>
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/pluginsSection.html");?>
             <?php require_once("/app/eiou/src/gui/layout/walletSubParts/debugSection.html");?>
+        </div>
+    </div>
+
+    <!-- Global sensitive-action verify modal (used by API keys, payback methods, etc.) -->
+    <div id="apiKeysVerifyModal" class="modal d-none">
+        <div class="modal-content modal-content-sm">
+            <div class="modal-header">
+                <h3><i class="fas fa-lock"></i> Confirm it&rsquo;s you</h3>
+                <span class="close" data-action="closeApiKeysVerifyModal">&times;</span>
+            </div>
+            <div class="modal-body modal-body-padded">
+                <p class="text-muted">
+                    This action needs a fresh confirmation. Remembered devices
+                    stay logged in, but sensitive operations always require
+                    your auth code.
+                </p>
+                <form>
+                    <input type="hidden" name="action" value="apiKeysVerify">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                    <div class="form-group">
+                        <label for="apiKeysVerifyAuthcode">Auth Code</label>
+                        <input type="password" id="apiKeysVerifyAuthcode" name="authcode"
+                               autocomplete="current-password" required>
+                    </div>
+                    <div id="apiKeysVerifyError" class="form-error d-none"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeysVerifyModal">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeysVerify">
+                    Unlock
+                </button>
+            </div>
         </div>
     </div>
 
