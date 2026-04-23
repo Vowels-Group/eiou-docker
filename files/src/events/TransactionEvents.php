@@ -17,25 +17,24 @@ namespace Eiou\Events;
  *       // Post to a webhook, update analytics, etc.
  *   });
  *
- * Not every constant has an emission site in core yet — see docs/PLUGINS.md
- * "Events a Plugin Can Subscribe To" for the current dispatch coverage. The
- * constants are stable even when emission lands later, so plugin code
- * written against the names today will keep working once the emit points
- * are wired.
  */
 class TransactionEvents
 {
     /**
-     * Dispatched when a new outbound transaction is created (before delivery).
+     * Dispatched when a pending outbound transaction is inserted into the
+     * `transactions` table, before any delivery attempt.
      *
-     * Not yet emitted in core — planned for a future release. Subscribing today
-     * is safe; the event will start firing once emission is wired.
+     * Emitted by SendOperationService::handleDirectRoute() (direct route)
+     * and SendOperationService::sendP2pEiou() (approved P2P route). The
+     * `route` field distinguishes the two paths.
      *
-     * Event data (when emitted):
-     *   - txid: string            - Transaction ID
-     *   - amount: string          - Amount in major units
-     *   - currency: string        - Currency code
-     *   - recipient_pubkey: string - Recipient public key hash
+     * Event data:
+     *   - txid: string                  - Transaction ID
+     *   - amount: string|null           - Amount in major units
+     *   - currency: string|null         - Currency code
+     *   - recipient_address: string|null - Recipient transport address
+     *   - recipient_pubkey: string|null  - Recipient public key (if resolved)
+     *   - route: string                  - 'direct' or 'p2p'
      */
     public const TRANSACTION_CREATED = 'transaction.created';
 

@@ -14,8 +14,6 @@ namespace Eiou\Events;
  *       // Fire off an analytics event, push a mobile notification, etc.
  *   });
  *
- * Not every constant has an emission site in core yet — see docs/PLUGINS.md
- * for current dispatch coverage. Constants are stable.
  */
 class P2pEvents
 {
@@ -37,26 +35,26 @@ class P2pEvents
     /**
      * Dispatched after the operator approves a P2P transaction.
      *
-     * Not yet emitted in core — approval lives in both CliP2pApprovalService
-     * and ApiController without a shared service-level method. Planned for a
-     * future release once the paths consolidate.
+     * Emitted by P2pApprovalService::approve() — the shared commit point
+     * that CLI, REST API, and GUI all route through, so the event fires
+     * once per operator decision regardless of entry surface.
      *
-     * Event data (when emitted):
-     *   - p2p_id: string   - P2P route identifier
-     *   - amount: string   - Amount in major units
-     *   - currency: string - Currency code
+     * Event data:
+     *   - p2p_id: string          - P2P route identifier
+     *   - amount: string|null     - Amount in major units
+     *   - currency: string|null   - Currency code
+     *   - sender_address: string|null - Route's immediate sender address
+     *   - mode: string            - 'candidate' (explicit selection) or 'fast'
      */
     public const P2P_APPROVED = 'p2p.approved';
 
     /**
      * Dispatched after the operator rejects a P2P transaction.
      *
-     * Not yet emitted in core — same duplicated-path situation as
-     * P2P_APPROVED. Planned for a future release.
+     * Emitted by P2pApprovalService::reject() — shared across CLI/API/GUI.
      *
-     * Event data (when emitted):
-     *   - p2p_id: string        - P2P route identifier
-     *   - reason: string|null   - Optional rejection reason
+     * Event data:
+     *   - p2p_id: string - P2P route identifier
      */
     public const P2P_REJECTED = 'p2p.rejected';
 

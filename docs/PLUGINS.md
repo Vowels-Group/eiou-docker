@@ -57,11 +57,6 @@ boot.
 - Register their own REST endpoints (e.g. `GET /api/v1/plugins/myplugin/data`).
   A `PluginApiRegistry` is on the roadmap — the `/api/v1/plugins` path
   today exposes core's plugin-management endpoints only.
-- Subscribe to a handful of specific event constants whose emit points
-  still live in duplicated GUI/CLI/API flows — see *"Not yet emitted"*
-  rows under [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to).
-  The constants are defined and stable, so subscriptions written against
-  them keep working once emission lands.
 
 ### Disabled by default
 
@@ -429,10 +424,8 @@ EventDispatcher::getInstance()->subscribe(SyncEvents::SYNC_COMPLETED, function(a
 ```
 
 The dispatched event set covers sync, delivery, chain-drop, transaction,
-contact, P2P, and plugin-lifecycle events. A few constants are defined
-but not yet wired through their emit points because the relevant flows
-are duplicated across GUI/CLI/API without a shared service-level commit
-point; see the per-class tables below for exact coverage.
+contact, P2P, and plugin-lifecycle events. Every constant documented
+below has a live emit point.
 
 ### `SyncEvents`
 
@@ -472,30 +465,30 @@ contract.
 
 ### `TransactionEvents`
 
-| Constant              | When it fires                                                              |
-| --------------------- | -------------------------------------------------------------------------- |
-| `TRANSACTION_CREATED` | *Not yet emitted* — planned                                                |
-| `TRANSACTION_SENT`    | After successful direct delivery (`handleAcceptedTransaction`)             |
-| `TRANSACTION_RECEIVED`| An inbound direct transaction was persisted (`processStandardIncoming`)    |
-| `TRANSACTION_FAILED`  | Delivery attempts exhausted and DLQ-cancelled (`processOutgoingDirect`)    |
+| Constant              | When it fires                                                                |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `TRANSACTION_CREATED` | A pending outbound tx was inserted in `SendOperationService` (direct or P2P) |
+| `TRANSACTION_SENT`    | After successful direct delivery (`handleAcceptedTransaction`)               |
+| `TRANSACTION_RECEIVED`| An inbound direct transaction was persisted (`processStandardIncoming`)      |
+| `TRANSACTION_FAILED`  | Delivery attempts exhausted and DLQ-cancelled (`processOutgoingDirect`)      |
 
 ### `ContactEvents`
 
-| Constant            | When it fires                                                            |
-| ------------------- | ------------------------------------------------------------------------ |
-| `CONTACT_ADDED`     | *Not yet emitted* — planned (no shared service-level commit point today) |
-| `CONTACT_ACCEPTED`  | After `ContactManagementService::acceptContact()` commits                |
-| `CONTACT_REJECTED`  | *Not yet emitted* — planned                                              |
-| `CONTACT_BLOCKED`   | After `ContactManagementService::blockContact()` commits                 |
+| Constant            | When it fires                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| `CONTACT_ADDED`     | After `insertContact()` / `addPendingContact()` — includes outgoing, incoming, and wallet-restore paths |
+| `CONTACT_ACCEPTED`  | After `ContactManagementService::acceptContact()` commits                            |
+| `CONTACT_REJECTED`  | After an incoming contact request is auto-rejected for an unsupported currency       |
+| `CONTACT_BLOCKED`   | After `ContactManagementService::blockContact()` commits                             |
 
 ### `P2pEvents`
 
-| Constant        | When it fires                                                        |
-| --------------- | -------------------------------------------------------------------- |
-| `P2P_RECEIVED`  | An inbound P2P leg was persisted (both relay and end-recipient legs) |
-| `P2P_APPROVED`  | *Not yet emitted* — planned                                          |
-| `P2P_REJECTED`  | *Not yet emitted* — planned                                          |
-| `P2P_COMPLETED` | A P2P transaction reached its final destination (end-recipient leg)  |
+| Constant        | When it fires                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| `P2P_RECEIVED`  | An inbound P2P leg was persisted (both relay and end-recipient legs)                                   |
+| `P2P_APPROVED`  | After the operator approves a P2P transaction (via CLI, REST, or GUI — all route through `P2pApprovalService::approve()`) |
+| `P2P_REJECTED`  | After the operator rejects a P2P transaction (same shared service commit point)                       |
+| `P2P_COMPLETED` | A P2P transaction reached its final destination (end-recipient leg)                                    |
 
 ### `PluginEvents`
 
@@ -511,14 +504,6 @@ Subscriptions made in `register()` won't observe other plugins'
 `PLUGIN_REGISTERED` events that ran ahead of you in iteration order —
 subscribe in `boot()` to catch the full registration pass.
 
-### Constants without emit points
-
-Constants marked *"Not yet emitted"* above are stable — the class files
-ship with them defined so plugin code written against the names today
-keeps working once the emit points land. Subscriptions to those events
-just don't fire anything yet. Contributions wiring them up in the
-relevant services are welcome; match the payload shape documented in
-the event class's docblock and add a dispatch unit test.
 
 ---
 

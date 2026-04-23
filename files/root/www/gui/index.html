@@ -58,6 +58,7 @@ $transactionController->setP2pApprovalDependencies(
     $serviceContainer->getP2pService(),
     $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
+$transactionController->setApprovalService($serviceContainer->getP2pApprovalService());
 $settingsController = new SettingsController($secureSession);
 $apiKeysController = new ApiKeysController(
     $secureSession,

@@ -16,23 +16,24 @@ namespace Eiou\Events;
  *       // Welcome webhook, initial audit log entry, etc.
  *   });
  *
- * Not every constant has an emission site in core yet — see docs/PLUGINS.md
- * for current dispatch coverage. Constants are stable so subscriptions
- * against them today will keep working once emit points land.
  */
 class ContactEvents
 {
     /**
      * Dispatched after a new contact record is created locally.
      *
-     * Not yet emitted in core — the contact creation path is split across
-     * outgoing-request / incoming-accept / P2P-sync flows without a single
-     * service-level commit point. Planned for a future release.
+     * Emitted from ContactSyncService::insertContactWithEvent() (which wraps
+     * every `contactRepository->insertContact()` call site), from
+     * ContactSyncService::addPendingContactWithEvent() for incoming-request
+     * pending rows, and from ContactStatusService when a wallet-restore
+     * sync creates a pending row for a previously-known peer. Subscribers
+     * for the pending case see `name` = null / `currency` = null; re-query
+     * the contact after CONTACT_ACCEPTED fires for the enriched record.
      *
-     * Event data (when emitted):
-     *   - pubkey: string   - Contact public key
-     *   - name: string     - Contact display name
-     *   - address: string  - Contact transport address
+     * Event data:
+     *   - pubkey: string           - Contact public key
+     *   - name: string|null        - Contact display name (null on pending rows)
+     *   - currency: string|null    - Initial currency (null on pending rows)
      */
     public const CONTACT_ADDED = 'contact.added';
 
@@ -52,14 +53,18 @@ class ContactEvents
     public const CONTACT_ACCEPTED = 'contact.accepted';
 
     /**
-     * Dispatched when a pending contact request is rejected locally.
+     * Dispatched when an incoming contact request is auto-rejected by the
+     * node — currently fires when the request carries a currency that is
+     * not in `allowedCurrencies` and `autoRejectUnknownCurrency` is on.
      *
-     * Not yet emitted in core — rejection lives in GUI-only handlers today
-     * (no shared service-layer method). Planned for a future release.
+     * Emitted by ContactSyncService::handleContactCreation() before the
+     * rejection payload goes on the wire.
      *
-     * Event data (when emitted):
-     *   - pubkey: string - Contact public key
-     *   - reason: string|null - Optional rejection reason
+     * Event data:
+     *   - pubkey: string           - Contact public key
+     *   - address: string          - Sender transport address
+     *   - reason: string           - Machine-readable reason (e.g. 'currency_not_accepted')
+     *   - currency: string|null    - Offending currency code when applicable
      */
     public const CONTACT_REJECTED = 'contact.rejected';
 
