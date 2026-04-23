@@ -7732,7 +7732,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         // Plugins
         'reloadPlugins': function() { if (window.plugins) window.plugins.reload(); },
-        'restartNodeFromPlugins': function() { if (window.plugins) window.plugins.requestRestart(); }
+        'restartNodeFromPlugins': function() { if (window.plugins) window.plugins.requestRestart(); },
+        'openPluginModal': function(el) {
+            if (window.plugins) window.plugins.openModal(el.getAttribute('data-plugin'));
+        }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -7798,6 +7801,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'togglePlugin') {
             if (window.plugins) {
                 window.plugins.toggle(el.getAttribute('data-plugin'), el.checked);
+            }
+        }
+        else if (action === 'togglePluginFromModal') {
+            if (window.plugins) {
+                window.plugins.toggleFromModal(el.getAttribute('data-plugin'), el.checked);
             }
         }
         else if (action === 'previewColorScheme') {
@@ -8720,6 +8728,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
     // ========================================================================
     window.plugins = (function() {
         var loaded = false;
+        var lastList = [];
 
         function csrfToken() {
             var el = document.querySelector('input[name="csrf_token"]');
@@ -8768,8 +8777,19 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
         }
 
+        function dotFor(p) {
+            if (p.error || p.status === 'failed') {
+                return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--failed" title="Failed"></i>';
+            }
+            if (p.enabled) {
+                return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--enabled" title="Enabled"></i>';
+            }
+            return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--disabled" title="Disabled"></i>';
+        }
+
         function renderList(pluginsArr) {
             pluginsArr = pluginsArr || [];
+            lastList = pluginsArr;
             var emptyEl = document.getElementById('plugins-empty');
             var tableEl = document.getElementById('plugins-table-wrapper');
             var tbody   = document.getElementById('plugins-tbody');
@@ -8790,20 +8810,25 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
             var rows = pluginsArr.map(function(p) {
                 var checkId = 'plugin-toggle-' + p.name.replace(/[^a-z0-9-]/gi, '-');
-                var err = p.error
-                    ? '<div class="text-danger text-sm">' + escapeHtml(p.error) + '</div>'
-                    : '';
+                var desc = p.description || '';
+                var tooltip = p.error ? (desc ? desc + ' — ' : '') + p.error : desc;
+                var descCell = p.error
+                    ? '<i class="fas fa-exclamation-triangle text-danger"></i> ' + escapeHtml(desc || p.error)
+                    : escapeHtml(desc);
                 return ''
-                    + '<tr>'
-                    +   '<td><strong>' + escapeHtml(p.name) + '</strong></td>'
-                    +   '<td><code>' + escapeHtml(p.version) + '</code></td>'
-                    +   '<td>' + escapeHtml(p.description || '') + err + '</td>'
-                    +   '<td>' + statusBadge(p.status) + '</td>'
-                    +   '<td class="text-right">'
-                    +     '<label class="toggle-switch" for="' + checkId + '">'
+                    + '<tr class="cursor-pointer"'
+                    +   ' data-action="openPluginModal"'
+                    +   ' data-plugin="' + escapeHtml(p.name) + '">'
+                    +   '<td class="col-plugin-dot text-center">' + dotFor(p) + '</td>'
+                    +   '<td class="col-name"><strong>' + escapeHtml(p.name) + '</strong></td>'
+                    +   '<td class="col-version"><code>' + escapeHtml(p.version) + '</code></td>'
+                    +   '<td class="col-description" title="' + escapeHtml(tooltip) + '">' + descCell + '</td>'
+                    +   '<td class="col-enabled text-right">'
+                    +     '<label class="toggle-switch" for="' + checkId + '" data-stop-propagation="true">'
                     +       '<input type="checkbox" id="' + checkId + '"'
                     +         ' data-action-change="togglePlugin"'
                     +         ' data-plugin="' + escapeHtml(p.name) + '"'
+                    +         ' data-stop-propagation="true"'
                     +         (p.enabled ? ' checked' : '') + '>'
                     +       '<span class="toggle-slider"></span>'
                     +     '</label>'
@@ -8822,18 +8847,33 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (el) el.classList.add('d-none');
         }
 
+        // "Running" = the plugin is actually live in the current node process.
+        // `booted` is the only status that means fully loaded + subscribed.
+        // Everything else (disabled, failed, registered, discovered) means
+        // not-running from a runtime perspective.
+        function isRunning(p) { return p && p.status === 'booted'; }
+
+        // A plugin needs a restart iff its desired enabled flag diverges from
+        // the runtime. Toggling back to the pre-change state clears the need.
+        function isDivergent(p) { return !!p.enabled !== isRunning(p); }
+
+        function updateRestartBanner() {
+            var any = false;
+            for (var i = 0; i < lastList.length; i++) {
+                if (isDivergent(lastList[i])) { any = true; break; }
+            }
+            if (any) showRestartBanner();
+            else hideRestartBanner();
+        }
+
         function refresh() {
             return post({ action: 'pluginsList' }).then(function(r) {
                 if (r.data && r.data.success) {
                     renderList(r.data.plugins || []);
-                    // Server is the source of truth for "needs restart" so the
-                    // banner survives page reloads and is consistent across
-                    // sessions / tabs.
-                    if (r.data.restart_required) {
-                        showRestartBanner();
-                    } else {
-                        hideRestartBanner();
-                    }
+                    // Banner reflects real divergence between desired enabled
+                    // flags and runtime status — not a sticky config-changed
+                    // flag. Toggling back to the original state clears it.
+                    updateRestartBanner();
                     loaded = true;
                 } else {
                     var msg = (r.data && r.data.message) || 'Could not load plugins';
@@ -8939,11 +8979,18 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 enabled: enabled ? '1' : '0'
             }).then(function(r) {
                 if (r.data && r.data.success) {
-                    showRestartBanner();
+                    // Mirror the new flag into lastList so the banner and any
+                    // follow-up toggle decisions see the current desired state.
+                    var p = findByName(name);
+                    if (p) p.enabled = enabled;
+                    updateRestartBanner();
                     if (typeof showToast === 'function') {
+                        var msg = (p && isDivergent(p))
+                            ? name + ' — restart the node for the change to take effect.'
+                            : name + ' — matches the current runtime, no restart needed.';
                         showToast(
                             enabled ? 'Plugin enabled' : 'Plugin disabled',
-                            name + ' — restart the node for the change to take effect.',
+                            msg,
                             'success'
                         );
                     }
@@ -8977,9 +9024,85 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         document.addEventListener('DOMContentLoaded', ensureLoadedOnTab);
 
+        function findByName(name) {
+            for (var i = 0; i < lastList.length; i++) {
+                if (lastList[i].name === name) return lastList[i];
+            }
+            return null;
+        }
+
+        function closeModal() {
+            var overlay = document.getElementById('plugin-modal');
+            if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            document.removeEventListener('keydown', modalEsc);
+        }
+
+        function modalEsc(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) closeModal();
+        }
+
+        function openModal(name) {
+            var p = findByName(name);
+            if (!p) return;
+            closeModal();
+
+            var checkId = 'plugin-modal-toggle';
+            var errBlock = p.error
+                ? '<div class="alert alert-danger text-sm" style="margin-top:0.75rem">'
+                +   '<i class="fas fa-exclamation-triangle"></i> ' + escapeHtml(p.error)
+                + '</div>'
+                : '';
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:480px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem"><i class="fas fa-puzzle-piece"></i> ' + escapeHtml(p.name) + '</h3>' +
+                        '<span class="close" id="plugin-modal-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem">' +
+                        '<dl class="plugin-modal-dl">' +
+                            '<dt>Version</dt><dd><code>' + escapeHtml(p.version || '') + '</code></dd>' +
+                            '<dt>Status</dt><dd>' + statusBadge(p.status) + '</dd>' +
+                            '<dt>Description</dt><dd>' + escapeHtml(p.description || '—') + '</dd>' +
+                        '</dl>' +
+                        '<div class="plugin-modal-toggle-row">' +
+                            '<label for="' + checkId + '"><strong>Enabled</strong></label>' +
+                            '<label class="toggle-switch" for="' + checkId + '">' +
+                                '<input type="checkbox" id="' + checkId + '"' +
+                                    ' data-action-change="togglePluginFromModal"' +
+                                    ' data-plugin="' + escapeHtml(p.name) + '"' +
+                                    (p.enabled ? ' checked' : '') + '>' +
+                                '<span class="toggle-slider"></span>' +
+                            '</label>' +
+                        '</div>' +
+                        '<div class="text-muted text-sm" style="margin-top:0.75rem">' +
+                            'Toggles persist immediately but take effect after a node restart.' +
+                        '</div>' +
+                        errBlock +
+                    '</div>' +
+                '</div>';
+
+            overlay.querySelector('#plugin-modal-close').onclick = closeModal;
+            overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+            document.addEventListener('keydown', modalEsc);
+            document.body.appendChild(overlay);
+        }
+
+        function toggleFromModal(name, enabled) {
+            var rowCb = document.querySelector('#plugins-tbody input[data-plugin="' + String(name).replace(/"/g, '') + '"]');
+            if (rowCb) rowCb.checked = enabled;
+            closeModal();
+            toggle(name, enabled);
+        }
+
         return {
             reload: function() { loaded = false; return refresh(); },
             toggle: toggle,
+            toggleFromModal: toggleFromModal,
+            openModal: openModal,
             requestRestart: requestRestart
         };
     })();

@@ -947,6 +947,89 @@ tr.paginator-hidden {
 .contacts-table .col-status { width: 10%; }
 .contacts-table .col-chain  { width: 8%; }
 .contacts-table .col-online { width: 6%; }
+
+/* ─── Plugins table — extends .contacts-table with .plugins-table ───
+   Wide Description column that truncates to a single line with ellipsis;
+   full text (and any error — and the status badge) surface in the detail
+   modal on row click. The leading dot carries enabled/disabled/failed at
+   a glance, so a dedicated Status column would be redundant. */
+/* Leading status-dot column: mirrors .col-tx-status-icon — a tight
+   percentage keeps it proportional on desktop; a fixed 28px on mobile
+   (where most other cols are hidden) prevents table-layout:fixed from
+   inflating the icon cell to absorb the freed-up width. */
+.plugins-table th.col-plugin-dot,
+.plugins-table td.col-plugin-dot {
+    width: 3%;
+    padding: 0.4rem 0 0.4rem 0.6rem;
+    text-align: center;
+}
+.plugins-table .col-name        { width: 15%; }
+.plugins-table .col-version     { width: 11%; }
+.plugins-table .col-description {
+    width: 62%;
+    max-width: 0; /* lets the fixed-layout cell collapse to col width */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.plugins-table .col-enabled     { width: 9%; }
+.plugins-table tbody td { vertical-align: middle; }
+.plugins-table tbody tr:hover { background: #f8f9fa; }
+
+/* Mobile: inherit the .contacts-table rule that hides col 3+, then
+   re-show col 3 (Version) so users see dot + name + version. Cols 4–5
+   (Description, Enabled toggle) stay hidden — the row opens the modal
+   which has the toggle. */
+@media (max-width: 600px) {
+    /* Compound .contacts-table.plugins-table beats the generic
+       .contacts-table rule below that hides every col from the third
+       onwards — same nth-child selector but higher specificity, so it
+       wins regardless of source order. */
+    .contacts-table.plugins-table thead th:nth-child(3),
+    .contacts-table.plugins-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    /* Fix the icon cell and let the two text cells (name + version) size
+       naturally so the icon can't inflate to absorb the hidden columns'
+       freed-up width. Mirrors the tx-table mobile treatment. */
+    .contacts-table.plugins-table .col-plugin-dot {
+        width: 28px;
+        padding-left: 0.25rem;
+        padding-right: 0;
+    }
+    .contacts-table.plugins-table .col-name    { width: auto; }
+    .contacts-table.plugins-table .col-version { width: auto; }
+}
+
+.plugin-status-dot {
+    font-size: 0.55rem;
+    vertical-align: middle;
+}
+/* Fallbacks are grey so the neutral status-colour scheme (which unsets
+   --status-*-bg to `initial`) collapses enabled/failed to the neutral
+   palette, matching the tx-status-icon / api-keys-status-dot pattern. */
+.plugin-status-dot--enabled  { color: var(--status-success-bg, #6c757d); }
+.plugin-status-dot--disabled { color: #adb5bd; }
+.plugin-status-dot--failed   { color: var(--status-failure-bg, #6c757d); }
+
+/* Plugin detail modal — used on mobile where the inline toggle is hidden */
+.plugin-modal-dl {
+    margin: 0 0 1rem 0;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.4rem 0.75rem;
+}
+.plugin-modal-dl dt { color: #6c757d; font-weight: 600; }
+.plugin-modal-dl dd { margin: 0; overflow-wrap: anywhere; }
+.plugin-modal-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
 /* Narrow screens: hide credits / status / chain / online — keep Name + Balance only */
 @media (max-width: 600px) {
     .contacts-table thead th:nth-child(n+3),
