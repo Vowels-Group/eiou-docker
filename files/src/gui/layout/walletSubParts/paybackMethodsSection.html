@@ -36,12 +36,28 @@
         </summary>
         <div class="section-intro-body">
             Payback methods are how you prefer to be paid back — a bank wire,
-            a Bitcoin address, Pix, PayPal, Venmo, Wise, and more. Sensitive
-            fields (account numbers, wallet addresses) are encrypted locally
-            and stay masked in this list until you unlock them with your auth
-            code. Each method carries a share policy so you control whether a
-            contact asking how to settle up can receive it automatically, gets
-            asked first, or never sees it.
+            a Bitcoin address, Pix, PayPal, Venmo, Wise, and more.
+            <br><br>
+            <strong>Every method is encrypted at rest on this node</strong>
+            (per-row, AES-256-GCM keyed to the wallet) before it hits the
+            database, whatever the type. How much is hidden <em>in this list</em>
+            depends on the rail.
+            <br><br>
+            <strong>Bank wire</strong> and similar typed rails redact the
+            sensitive tail (<code>••••</code> + last 4 of the IBAN or account
+            number); the full value is released only after you unlock with
+            your auth code.
+            <br><br>
+            <strong>Custom</strong> is free-text you write yourself — the
+            list shows the first 80 characters as a preview since the whole
+            point of the field is to be descriptive. Treat it like a note,
+            not a secret: anything after that 80-char cut-off is hidden
+            until unlock, but don't paste bank tails into it and expect the
+            same redaction as a typed rail.
+            <br><br>
+            Each method also carries a share policy so you control whether a
+            contact asking how to settle up can receive it automatically,
+            gets asked first, or never sees it.
         </div>
     </details>
 

@@ -3869,26 +3869,10 @@ function openContactModal(contact, openTab) {
         transactionsEl.innerHTML = html;
     }
 
-    // Show the Payback tab only when this node owes the contact in at
-    // least one currency. Keeps mobile at a 4-tab max; there's nothing
-    // to settle if we're net-even or they owe us.
-    var paybackTabBtn = document.getElementById('modal-tab-payback');
-    if (paybackTabBtn) {
-        var owesSomething = false;
-        var balances = (typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {};
-        Object.keys(balances).forEach(function (code) {
-            var raw = balances[code] && (balances[code].balance != null ? balances[code].balance : balances[code].amount);
-            var n = parseFloat(raw);
-            if (!isNaN(n) && n < 0) { owesSomething = true; }
-        });
-        if (!owesSomething) {
-            var flat = parseFloat(contact.balance);
-            if (!isNaN(flat) && flat < 0) { owesSomething = true; }
-        }
-        paybackTabBtn.style.display = owesSomething ? '' : 'none';
-    }
-
-    // Open specified tab or default to info tab
+    // Open specified tab or default to info tab. The Payback tab is always
+    // visible — even when net-even or being owed, the user may want to
+    // offer a partial pre-settlement or just inspect the contact's
+    // declared rails.
     var tabToOpen = openTab || 'info-tab';
     showModalTab(tabToOpen, null);
 
@@ -9617,8 +9601,34 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function renderStep2(typeId) {
             var type = getType(typeId);
             if (!type) { return; }
+            renderTypeInfo(type);
             renderCurrencyOptions(type, null);
             renderTypeFields(type);
+        }
+
+        // Per-type info block. The catalog entry may carry an `info` string
+        // (plain text or limited HTML — plugins opt in by setting this key in
+        // their getCatalogEntry() return). Rendered as a collapsible details
+        // banner at the top of step 2 so it doesn't shove the form down for
+        // returning users who don't need the refresher.
+        function renderTypeInfo(type) {
+            var host = document.getElementById('payback-type-info');
+            if (!host) { return; }
+            var info = type && type.info ? String(type.info).trim() : '';
+            if (info === '') {
+                host.style.display = 'none';
+                host.innerHTML = '';
+                return;
+            }
+            host.style.display = '';
+            host.innerHTML =
+                '<details class="section-intro text-muted" open>' +
+                    '<summary>' +
+                        '<i class="' + escapeAttr(type.icon || 'fas fa-info-circle') + '"></i> ' +
+                        '<span>About ' + escapeHtml(type.label || type.id) + '</span>' +
+                    '</summary>' +
+                    '<div class="section-intro-body">' + info + '</div>' +
+                '</details>';
         }
 
         function renderCurrencyOptions(type, preselect) {
@@ -10155,7 +10165,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function renderContactName() {
-            var el = document.getElementById('payback-contact-name');
+            // The short inline label was merged into the info details; we
+            // now populate the contact name inside the expandable section.
+            var el = document.getElementById('payback-contact-name-info');
             if (!el) { return; }
             var nameEl = document.getElementById('modal_contact_name');
             var name = (nameEl && nameEl.textContent) ? nameEl.textContent.trim() : 'this contact';

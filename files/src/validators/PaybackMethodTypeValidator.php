@@ -321,6 +321,15 @@ class PaybackMethodTypeValidator
                     'id' => self::TYPE_BANK_WIRE, 'label' => 'Bank wire', 'group' => 'bank',
                     'icon' => 'fas fa-university',
                     'description' => 'SEPA, Faster Payments, ACH, FedNow, or SWIFT.',
+                    'info' => 'Pick the rail that matches the account: <strong>SEPA</strong> for EUR '
+                        . 'accounts in the EU, <strong>Faster Payments</strong> for UK GBP, '
+                        . '<strong>ACH</strong> or <strong>FedNow</strong> for US USD, '
+                        . '<strong>SWIFT</strong> for anything international (including cross-'
+                        . 'currency transfers). The form only shows the fields relevant to the '
+                        . 'rail you choose — IBAN for SEPA, sort code + 8-digit account for Faster '
+                        . 'Payments, ABA + account number + checking/savings for ACH/FedNow. '
+                        . 'SWIFT accepts either an IBAN or a local account number — the toggle '
+                        . 'above the field switches between the two.',
                     'currencies' => ['EUR', 'GBP', 'USD'],
                     'currenciesFor' => [
                         'field' => 'rail',
@@ -389,6 +398,17 @@ class PaybackMethodTypeValidator
                     'id' => self::TYPE_CUSTOM, 'label' => 'Custom', 'group' => 'other',
                     'icon' => 'fas fa-question',
                     'description' => 'Free-form instructions when no canonical rail fits. Currency is whatever you declare.',
+                    'info' => 'Use <strong>Custom</strong> when no typed rail fits — an in-person '
+                        . 'meet-up, a gift card, an obscure payment service, a barter arrangement, '
+                        . 'etc. Put the instructions a payer needs to actually settle into the '
+                        . '<em>Details</em> field (up to 1024 characters). '
+                        . '<br><br>'
+                        . '<strong>Heads up — custom details are only loosely masked.</strong> '
+                        . 'The list row shows the first 80 characters as a preview since this field '
+                        . 'is usually descriptive; the rest is hidden until you unlock. If you '
+                        . 'absolutely need a secret (a password, a seed phrase) to live in a payback '
+                        . 'method, put it behind the 80-character mark or use a typed rail designed '
+                        . 'for that kind of value.',
                     'currencies' => null,
                     'fields' => [
                         ['name' => 'details', 'label' => 'Details', 'type' => 'textarea', 'required' => true,

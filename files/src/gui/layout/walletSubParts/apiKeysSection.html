@@ -112,6 +112,36 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
             <span class="close" data-action="closeApiKeyCreateModal">&times;</span>
         </div>
         <div class="modal-body modal-body-padded">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About API Keys</span>
+                </summary>
+                <div class="section-intro-body">
+                    API keys let external tools — scripts, accounting importers,
+                    monitoring dashboards — talk to this node over HTTPS without
+                    sharing your auth code. Each key carries a fixed subset of
+                    <strong>permissions</strong> (scopes) granted at creation
+                    time and cannot be upgraded afterwards — create a new key
+                    instead.
+                    <br><br>
+                    <strong>Label</strong> is for you — something that will help
+                    you recognise what the key is for in the list later.
+                    <strong>Presets</strong> fill the permission checkboxes with
+                    common bundles (Read-only, Full access); you can always
+                    tick or untick individual scopes afterwards.
+                    <br><br>
+                    <strong>Rate limit</strong> caps how many requests per
+                    minute the key is allowed; default 100, max 1000.
+                    <strong>Expires</strong> sets a hard cut-off after which
+                    the key is rejected — for scripts that should never live
+                    forever. Pick <em>Never</em> for keys you manage lifecycle
+                    of yourself.
+                    <br><br>
+                    The secret is shown once on the next screen and never
+                    again. Copy it somewhere safe before closing the modal.
+                </div>
+            </details>
             <form id="apiKeysCreateForm">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 

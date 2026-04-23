@@ -204,6 +204,31 @@
                 <span class="close" data-action="closeTransactionModal">&times;</span>
             </div>
             <div class="modal-body modal-body-padded">
+                <details class="section-intro text-muted">
+                    <summary>
+                        <i class="fas fa-info-circle"></i>
+                        <span>About Transaction Details</span>
+                    </summary>
+                    <div class="section-intro-body">
+                        Everything recorded for this transaction — who it was between,
+                        when it was committed, the signed amount, and the identifiers
+                        that let both sides verify it without trusting a third party.
+                        <br><br>
+                        <strong>Transaction ID</strong> is the cryptographic fingerprint of
+                        this specific transaction; both sides' chains must agree on it for
+                        the balance to be considered settled. <strong>Previous Tx</strong>
+                        links to the transaction directly before this one in your chain with
+                        this counterparty — clicking it opens that transaction's details.
+                        Walking the chain backwards lets you reconstruct the full history
+                        between you and a contact.
+                        <br><br>
+                        For <strong>P2P routed</strong> transactions (multi-hop payments
+                        where your node was a relay or an endpoint), you'll also see the
+                        end recipient, the routing fee you earned or paid, and the hop
+                        sequence. For <strong>contact requests</strong>, the transaction
+                        itself is the handshake that established the relationship.
+                    </div>
+                </details>
                 <div id="tx-modal-content">
                     <!-- Content populated by JavaScript -->
                 </div>

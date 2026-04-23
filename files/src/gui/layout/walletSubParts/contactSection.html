@@ -184,7 +184,7 @@
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="transactions-tab">
                 <i class="fas fa-exchange-alt"></i> Transactions
             </button>
-            <button type="button" class="modal-tab" id="modal-tab-payback" data-action="showContactPaybackTab" data-tab="payback-tab" style="display:none;">
+            <button type="button" class="modal-tab" id="modal-tab-payback" data-action="showContactPaybackTab" data-tab="payback-tab">
                 <i class="fas fa-hand-holding-usd"></i> Payback
             </button>
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="status-tab">
@@ -197,6 +197,30 @@
 
         <!-- Info Tab -->
         <div id="info-tab" class="modal-tab-content active">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About this contact's Info</span>
+                </summary>
+                <div class="section-intro-body">
+                    <strong>Balance</strong> is the net of every completed transaction with this contact
+                    in the selected currency. Positive means they owe you; negative means you owe them.
+                    <br><br>
+                    <strong>Your / Their Available Credit</strong> show how much either of you can still
+                    spend with the other before bumping into the credit limit. These update on every
+                    transaction plus a periodic background refresh.
+                    <br><br>
+                    <strong>Their Credit Limit</strong> is the maximum you're willing to let this
+                    contact owe you &mdash; set it from the Settings tab of this modal. Their Relay Fee
+                    is the percentage this contact charges you when routing your transactions through
+                    their node in a multi-hop payment.
+                    <br><br>
+                    <strong>Address</strong> shows how your wallet reaches theirs &mdash; a Tor .onion
+                    (private), an HTTPS host, or an HTTP host. A contact can have more than one; your
+                    wallet tries the most secure first.
+                </div>
+            </details>
+
             <!-- Currency Slider (shown for multi-currency contacts) -->
             <div id="currency-selector-section" class="contact-info-section" style="display: none;">
                 <h4><i class="fas fa-coins"></i> Currency</h4>
@@ -289,6 +313,25 @@
         <!-- Transactions Tab -->
         <div id="transactions-tab" class="modal-tab-content">
             <div class="modal-tab-scroll">
+                <details class="section-intro text-muted">
+                    <summary>
+                        <i class="fas fa-info-circle"></i>
+                        <span>About Transactions</span>
+                    </summary>
+                    <div class="section-intro-body">
+                        Every money-movement between your node and this contact, in reverse
+                        chronological order &mdash; sent, received, and any relayed transactions
+                        that hopped through either side. The status icon on the left shows whether
+                        a transaction is pending, in-flight, completed, or failed; click any row
+                        to open the full transaction-details modal (txid, signatures, previous-txid
+                        chain link, and so on).
+                        <br><br>
+                        Only the <strong>last <?php echo $maxDisplayLines; ?></strong> transactions
+                        load by default to keep the modal snappy. Refresh pulls the latest from the
+                        database &mdash; helpful right after you've sent or received, or after a
+                        chain sync finished in the background.
+                    </div>
+                </details>
                 <div class="tx-tab-header">
                     <p>
                         <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
@@ -306,11 +349,27 @@
         <!-- Payback Tab -->
         <div id="payback-tab" class="modal-tab-content">
             <div class="modal-tab-scroll">
-                <p style="margin: 0 0 0.5rem;">
-                    <i class="fas fa-info-circle"></i>
-                    Ways <strong id="payback-contact-name">this contact</strong> accepts settlement.
-                    Fetched live &mdash; nothing is stored on this device.
-                </p>
+                <details class="section-intro text-muted">
+                    <summary>
+                        <i class="fas fa-info-circle"></i>
+                        <span>About the Payback tab</span>
+                    </summary>
+                    <div class="section-intro-body">
+                        This tab lists the ways <strong id="payback-contact-name-info">this contact</strong>
+                        will accept settlement of debts you owe them &mdash; bank account, PayPal,
+                        Bitcoin address, and so on. The list is <strong>fetched live</strong> from their
+                        node every time you open the tab; nothing is cached or stored on this device,
+                        so the information is always as fresh as what they're currently sharing.
+                        <br><br>
+                        Tap any row to see the full details with copy-to-clipboard buttons for each
+                        field. Use the currency selector to filter to a specific currency when the
+                        contact shares methods in more than one.
+                        <br><br>
+                        If the tab says the contact is not sharing anything, it means either they
+                        haven't added any payback methods yet or they've chosen not to share them
+                        with you &mdash; each method has a share policy (auto / ask first / never).
+                    </div>
+                </details>
                 <div class="payback-options-controls">
                     <select id="payback-options-currency" class="form-control form-control-sm"></select>
                     <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactPayback">
@@ -319,7 +378,7 @@
                 </div>
                 <div id="payback-options-state" class="text-muted" style="padding: 0.25rem 0 0.5rem; font-size: 0.85rem;"></div>
                 <div id="payback-options-list">
-                    <p class="no-transactions">Opening the tab will fetch live from the contact.</p>
+                    <p class="no-transactions">Opening this tab fetches methods live from the contact. This might take a moment&hellip;</p>
                 </div>
             </div>
         </div>
@@ -328,6 +387,28 @@
 
         <!-- Status Tab -->
         <div id="status-tab" class="modal-tab-content">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About Status</span>
+                </summary>
+                <div class="section-intro-body">
+                    <strong>Online</strong> means your wallet successfully pinged theirs within the
+                    last few minutes. <strong>Offline</strong> usually just means their node isn't
+                    reachable right now (asleep, offline, Tor circuit issue) &mdash; it does not
+                    mean the contact is deleted or blocked, just unreachable.
+                    <br><br>
+                    <strong>Chain</strong> reports the integrity of your shared transaction history.
+                    A checkmark means your two chains agree &mdash; every transaction your side has
+                    links correctly to theirs. A warning means there's a gap or mismatch that needs
+                    to be reconciled.
+                    <br><br>
+                    <strong>Check Status</strong> forces a fresh ping and a chain sanity check. If
+                    the chain shows a gap, try this first &mdash; it often clears up stale state from
+                    a dropped connection. If the gap persists, the contact is out of sync and the
+                    chain-drop workflow below guides you through resolving it.
+                </div>
+            </details>
             <div class="contact-info-section">
                 <h4><i class="fas fa-signal"></i> Connection Status</h4>
                 <!-- Online + Chain badges and the Check Status button share
@@ -450,6 +531,31 @@
         </div>
 
         <div id="settings-tab" class="modal-tab-content">
+                <details class="section-intro text-muted">
+                    <summary>
+                        <i class="fas fa-info-circle"></i>
+                        <span>About Settings</span>
+                    </summary>
+                    <div class="section-intro-body">
+                        <strong>Name</strong> is how this contact appears in your wallet &mdash; only
+                        you see it, changing it doesn't notify the other side.
+                        <br><br>
+                        <strong>Credit limit</strong> is the maximum amount you're willing to let
+                        this contact owe you in the selected currency. Lowering it below what they
+                        currently owe is allowed &mdash; it just means they can't accrue more until
+                        they've paid back below the new ceiling.
+                        <br><br>
+                        <strong>Fee</strong> is the percentage you charge them when routing their
+                        multi-hop transactions through your node. Keep it small or zero for trusted
+                        contacts; raise it if you're a busy relay node.
+                        <br><br>
+                        <strong>Block</strong> stops all new transactions with this contact and hides
+                        them from your contact list. Existing transactions are not touched.
+                        <strong>Delete</strong> removes the contact entirely &mdash; existing
+                        transactions stay on both chains, but you can't make new ones without
+                        re-adding them as a contact first.
+                    </div>
+                </details>
                 <form method="POST" id="editContactForm">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="editContact">
