@@ -22,6 +22,7 @@ use Eiou\Gui\Controllers\PaymentRequestController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
 use Eiou\Gui\Controllers\ApiKeysController;
+use Eiou\Gui\Controllers\PluginController;
 
 if (!file_exists("/etc/eiou/config/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
@@ -57,6 +58,7 @@ $transactionController->setP2pApprovalDependencies(
     $serviceContainer->getP2pService(),
     $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
+$transactionController->setApprovalService($serviceContainer->getP2pApprovalService());
 $settingsController = new SettingsController($secureSession);
 $apiKeysController = new ApiKeysController(
     $secureSession,
@@ -73,6 +75,13 @@ $dlqController = new DlqController(
     $app->utilityServices->getTransportUtility(),
     $repoFactory->get(Eiou\Database\TransactionRepository::class)
 );
+// Plugin controller — uses Application's PluginLoader so toggles flow to the
+// same state file the loader reads from at boot. If discover() never ran (no
+// userconfig.json yet) the loader is null and this controller stays absent;
+// the GUI section gracefully shows the loading state in that case.
+$pluginController = $app->pluginLoader !== null
+    ? new PluginController($secureSession, $app->pluginLoader)
+    : null;
 
 // Handle logout request
 if (isset($_GET['logout'])) {

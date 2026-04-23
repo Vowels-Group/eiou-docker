@@ -34,6 +34,9 @@ use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Core\SplitAmount;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\HeldTransactionServiceInterface;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\P2pEvents;
+use Eiou\Events\TransactionEvents;
 use RuntimeException;
 use InvalidArgumentException;
 
@@ -59,6 +62,9 @@ class TransactionProcessingServiceTest extends TestCase
 
     protected function setUp(): void
     {
+        // Event subscriptions from previous tests must not leak, or the
+        // dispatch assertions below will see cross-test interference.
+        EventDispatcher::resetInstance();
         $this->mockTransactionRepo = $this->createMock(TransactionRepository::class);
         $this->mockRecoveryRepo = $this->createMock(TransactionRecoveryRepository::class);
         $this->mockChainRepo = $this->createMock(TransactionChainRepository::class);
@@ -220,8 +226,17 @@ class TransactionProcessingServiceTest extends TestCase
             'senderAddress' => 'http://sender.example.com',
             'txid' => 'test-txid-12345',
             'receiverAddress' => 'http://receiver.example.com',
-            'receiverPublicKey' => 'receiver-public-key'
+            'receiverPublicKey' => 'receiver-public-key',
+            'amount' => '10.00',
+            'currency' => 'USD',
+            'senderPublicKey' => 'sender-public-key',
         ];
+
+        $firedTxReceived = null;
+        EventDispatcher::getInstance()->subscribe(
+            TransactionEvents::TRANSACTION_RECEIVED,
+            function (array $data) use (&$firedTxReceived) { $firedTxReceived = $data; }
+        );
 
         $this->mockTransportUtility->expects($this->once())
             ->method('resolveUserAddressForTransport')
@@ -246,6 +261,12 @@ class TransactionProcessingServiceTest extends TestCase
             ->method('updateTrackingFields');
 
         $this->service->processTransaction($request);
+
+        $this->assertNotNull($firedTxReceived, 'TRANSACTION_RECEIVED must fire after the incoming tx is persisted');
+        $this->assertSame('test-txid-12345', $firedTxReceived['txid']);
+        $this->assertSame('10.00', $firedTxReceived['amount']);
+        $this->assertSame('USD', $firedTxReceived['currency']);
+        $this->assertSame('sender-public-key', $firedTxReceived['sender_pubkey']);
     }
 
     /**
@@ -256,7 +277,10 @@ class TransactionProcessingServiceTest extends TestCase
         $request = [
             'memo' => 'p2p-hash-12345',
             'senderAddress' => 'http://sender.example.com',
-            'txid' => 'test-txid-12345'
+            'txid' => 'test-txid-12345',
+            'amount' => '5.00',
+            'currency' => 'USD',
+            'senderPublicKey' => 'upstream-pk',
         ];
 
         $this->mockRp2pRepo->expects($this->once())
@@ -269,7 +293,68 @@ class TransactionProcessingServiceTest extends TestCase
             ->with($request, 'relay')
             ->willReturn('{"status":"success"}');
 
+        // Relay leg should fire P2P_RECEIVED but NOT P2P_COMPLETED — only
+        // the end-recipient branch completes the route.
+        $firedReceived = null;
+        $firedCompleted = false;
+        EventDispatcher::getInstance()->subscribe(P2pEvents::P2P_RECEIVED,
+            function (array $data) use (&$firedReceived) { $firedReceived = $data; });
+        EventDispatcher::getInstance()->subscribe(P2pEvents::P2P_COMPLETED,
+            function () use (&$firedCompleted) { $firedCompleted = true; });
+
         $this->service->processTransaction($request);
+
+        $this->assertNotNull($firedReceived, 'P2P_RECEIVED must fire for a relay leg');
+        $this->assertSame('p2p-hash-12345', $firedReceived['p2p_id']);
+        $this->assertSame('test-txid-12345', $firedReceived['txid']);
+        $this->assertFalse($firedCompleted, 'P2P_COMPLETED must NOT fire for a relay leg — only end-recipient');
+    }
+
+    /**
+     * End-recipient incoming P2P leg must fire BOTH P2P_RECEIVED and
+     * P2P_COMPLETED. The distinction from the relay path: rp2p row is
+     * absent (so the first branch's `isset($rP2pResult)` is false) and
+     * matchYourselfTransaction resolves true because the memo hash matches
+     * one of our own addresses + the P2P salt/time.
+     */
+    public function testProcessTransactionWithP2pMemoEndRecipientFiresBothEvents(): void
+    {
+        $salt = 'deterministic-salt';
+        $time = '99999';
+        $myAddress = 'http://me.example.com';
+        $memo = hash('sha256', $myAddress . $salt . $time);
+
+        $request = [
+            'memo' => $memo,
+            'senderAddress' => 'http://upstream.example.com',
+            'txid' => 'final-txid-xyz',
+            'amount' => '25.00',
+            'currency' => 'USD',
+            'senderPublicKey' => 'originator-pk',
+        ];
+
+        $this->mockRp2pRepo->method('getByHash')->with($memo)->willReturn(null);
+        $this->mockP2pRepo->method('getByHash')->with($memo)->willReturn([
+            'hash' => $memo,
+            'salt' => $salt,
+            'time' => $time,
+        ]);
+        $this->mockTransportUtility->method('resolveUserAddressForTransport')->willReturn($myAddress);
+        $this->mockTransactionPayload->method('generateRecipientSignature')->willReturn('sig');
+        $this->mockTransactionRepo->method('insertTransaction')->willReturn('{"ok":true}');
+
+        $eventsFired = [];
+        EventDispatcher::getInstance()->subscribe(P2pEvents::P2P_RECEIVED,
+            function ($data) use (&$eventsFired) { $eventsFired[] = 'received'; });
+        EventDispatcher::getInstance()->subscribe(P2pEvents::P2P_COMPLETED,
+            function ($data) use (&$eventsFired) { $eventsFired[] = 'completed'; });
+
+        $this->service->processTransaction($request);
+
+        // Order matters: RECEIVED fires before COMPLETED so a subscriber that
+        // counts "leg arrivals" isn't double-counted when it also listens for
+        // completions.
+        $this->assertSame(['received', 'completed'], $eventsFired);
     }
 
     // =========================================================================
@@ -356,9 +441,83 @@ class TransactionProcessingServiceTest extends TestCase
             ->method('updateRecipientSignature')
             ->with('test-txid-12345', 'sig');
 
+        // handleAcceptedTransaction re-fetches the tx so the dispatched
+        // TRANSACTION_SENT event carries amount/currency/recipient — stub
+        // the re-fetch and assert the event fires.
+        $this->mockTransactionRepo->method('getByTxid')->with('test-txid-12345')->willReturn([
+            'amount' => '10.00',
+            'currency' => 'USD',
+            'receiver_address' => 'http://receiver.example.com',
+        ]);
+
+        $firedSent = null;
+        EventDispatcher::getInstance()->subscribe(TransactionEvents::TRANSACTION_SENT,
+            function ($data) use (&$firedSent) { $firedSent = $data; });
+
         $result = $this->service->processPendingTransactions();
 
         $this->assertEquals(1, $result);
+        $this->assertNotNull($firedSent, 'TRANSACTION_SENT must fire after successful delivery');
+        $this->assertSame('test-txid-12345', $firedSent['txid']);
+        $this->assertSame('10.00', $firedSent['amount']);
+        $this->assertSame('USD', $firedSent['currency']);
+        $this->assertSame('http://receiver.example.com', $firedSent['recipient_address']);
+    }
+
+    /**
+     * TRANSACTION_FAILED fires only when delivery is exhausted and the
+     * message moves to the DLQ — transient failures that will retry
+     * aren't a terminal failure so the event stays silent. Pins the
+     * "fires only once per terminal failure" contract documented in
+     * TransactionEvents::TRANSACTION_FAILED.
+     */
+    public function testProcessPendingTransactionsFiresTransactionFailedOnDlqExhaustion(): void
+    {
+        $this->service->setP2pService($this->mockP2pService);
+        $this->service->setHeldTransactionService($this->mockHeldTransactionService);
+
+        $pendingMessage = [
+            'memo' => 'standard',
+            'txid' => 'failed-txid',
+            'sender_address' => 'http://user.example.com',
+            'receiver_address' => 'http://dead.example.com',
+            'sender_public_key' => 'sender-pk',
+            'receiver_public_key' => 'receiver-pk',
+            'amount' => 500,
+            'currency' => 'USD',
+        ];
+
+        $this->mockRecoveryRepo->method('getPendingTransactions')->willReturn([$pendingMessage]);
+        $this->mockTransportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://user.example.com');
+        $this->mockRecoveryRepo->method('claimPendingTransaction')->willReturn(true);
+        $this->mockTransactionPayload->method('buildStandardFromDatabase')->willReturn(['type' => 'send']);
+        $this->mockTimeUtility->method('getCurrentMicrotime')->willReturn(1);
+
+        // Delivery fails with DLQ flag set — this is the "attempts
+        // exhausted" terminal state the event documents. Response is
+        // a minimal non-null array so the outputter doesn't choke on
+        // null; the failure path is driven by success=false + dlq flag.
+        $this->mockMessageDeliveryService->method('sendMessage')->willReturn([
+            'success' => false,
+            'response' => ['status' => 'error'],
+            'tracking' => ['dlq' => true, 'attempts' => 5, 'error' => 'recipient unreachable'],
+        ]);
+
+        $firedFailed = null;
+        $firedSent = false;
+        EventDispatcher::getInstance()->subscribe(TransactionEvents::TRANSACTION_FAILED,
+            function ($data) use (&$firedFailed) { $firedFailed = $data; });
+        EventDispatcher::getInstance()->subscribe(TransactionEvents::TRANSACTION_SENT,
+            function () use (&$firedSent) { $firedSent = true; });
+
+        $this->service->processPendingTransactions();
+
+        $this->assertNotNull($firedFailed, 'TRANSACTION_FAILED must fire after DLQ-exhausted delivery');
+        $this->assertSame('failed-txid', $firedFailed['txid']);
+        $this->assertSame(5, $firedFailed['attempts']);
+        $this->assertStringContainsString('recipient unreachable', $firedFailed['error']);
+        $this->assertFalse($firedSent, 'TRANSACTION_SENT must NOT fire when delivery failed');
     }
 
     /**

@@ -14,6 +14,8 @@ use Eiou\Database\ContactRepository;
 use Eiou\Database\RepositoryFactory;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
+use Eiou\Events\ContactEvents;
+use Eiou\Events\EventDispatcher;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\UserContext;
@@ -229,7 +231,17 @@ class ContactStatusService implements ContactStatusServiceInterface {
                     try {
                         $restoredCount = $this->contactRepository->countContactsByNamePrefix('RestoredContact') + 1;
                         $restoredName = 'RestoredContact' . $restoredCount;
-                        $this->contactRepository->addPendingContact($senderPubkey, $restoredName);
+                        if ($this->contactRepository->addPendingContact($senderPubkey, $restoredName)) {
+                            // Wallet-restore flow: remote peer tried to sync before
+                            // we'd re-added them. The contact row is fresh, so fire
+                            // CONTACT_ADDED here too (same semantics as the incoming-
+                            // request path in ContactSyncService).
+                            EventDispatcher::getInstance()->dispatch(ContactEvents::CONTACT_ADDED, [
+                                'pubkey' => $senderPubkey,
+                                'name' => $restoredName,
+                                'currency' => null,
+                            ]);
+                        }
                         $this->addressRepository->insertAddress($senderPubkey, $transportIndexAssociative);
 
                         // Create contact_currencies entries for all currencies the remote has

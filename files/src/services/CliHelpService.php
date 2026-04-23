@@ -546,6 +546,45 @@ class CliHelpService
                 ],
                 'note' => 'Removes the shutdown flag. The watchdog detects this and restarts all processors within 30 seconds. If no shutdown flag exists (processors already running), reports that and exits.'
             ],
+            'restart' => [
+                'description' => 'Restart processors AND PHP-FPM workers in-place (apply plugin/config changes without a container reboot)',
+                'usage' => 'restart',
+                'arguments' => [],
+                'examples' => [
+                    'restart' => 'Restart everything in-place',
+                    'restart --json' => 'JSON output'
+                ],
+                'note' => 'SIGTERMs the processors (the watchdog respawns them within ~30s) and sends SIGUSR2 to the PHP-FPM master to gracefully recycle all worker processes. In-flight HTTP requests finish before workers exit. Required when toggling plugins, since event subscriptions bind during boot. Must run as root inside the container — the CLI does, calling from a PHP-FPM worker (GUI) does not.'
+            ],
+            'plugin' => [
+                'description' => 'Manage plugins: list installed ones and toggle their enabled flag',
+                'usage' => 'plugin [list|enable|disable] [name]',
+                'arguments' => [
+                    'subcommand' => ['type' => 'optional', 'description' => 'Subcommand: list (default), enable, disable'],
+                    'name' => ['type' => 'conditional', 'description' => 'Plugin name — required for enable/disable']
+                ],
+                'actions' => [
+                    'list' => [
+                        'usage' => 'plugin [list]',
+                        'description' => 'List every installed plugin with version, enabled flag, status, license',
+                    ],
+                    'enable' => [
+                        'usage' => 'plugin enable <name>',
+                        'description' => 'Persist the enabled flag as true for the named plugin',
+                    ],
+                    'disable' => [
+                        'usage' => 'plugin disable <name>',
+                        'description' => 'Persist the enabled flag as false for the named plugin',
+                    ],
+                ],
+                'examples' => [
+                    'plugin' => 'List all plugins (table)',
+                    'plugin list --json' => 'List all plugins (JSON with full metadata)',
+                    'plugin enable hello-eiou' => 'Enable hello-eiou',
+                    'plugin disable hello-eiou' => 'Disable hello-eiou',
+                ],
+                'note' => 'Enable/disable persists to /etc/eiou/config/plugins.json immediately but does NOT take effect until the next restart — event subscriptions bind during boot. Run `eiou restart` (or hit POST /api/v1/system/restart, or use the GUI restart button) once you are done toggling.'
+            ],
             'chaindrop' => [
                 'description' => 'Manage chain drop agreements for resolving transaction chain gaps',
                 'usage' => 'chaindrop [action] ([args...])',

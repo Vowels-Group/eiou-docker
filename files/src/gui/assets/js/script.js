@@ -7728,7 +7728,17 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
         'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
         'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
-        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); }
+        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); },
+
+        // Plugins
+        'reloadPlugins': function() { if (window.plugins) window.plugins.reload(); },
+        'restartNodeFromPlugins': function() { if (window.plugins) window.plugins.requestRestart(); },
+        'openPluginModal': function(el) {
+            if (window.plugins) window.plugins.openModal(el.getAttribute('data-plugin'));
+        },
+        'openPluginChangelog': function(el) {
+            if (window.plugins) window.plugins.openChangelog(el.getAttribute('data-plugin'));
+        }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -7791,6 +7801,16 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         else if (action === 'setDlqFilter') { setDlqFilter(); }
         else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
+        else if (action === 'togglePlugin') {
+            if (window.plugins) {
+                window.plugins.toggle(el.getAttribute('data-plugin'), el.checked);
+            }
+        }
+        else if (action === 'togglePluginFromModal') {
+            if (window.plugins) {
+                window.plugins.toggleFromModal(el.getAttribute('data-plugin'), el.checked);
+            }
+        }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
@@ -8698,6 +8718,482 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             copyToClipboard: copyToClipboard,
             closeVerifyModal: closeVerifyModal,
             submitVerify: submitVerify
+        };
+    })();
+
+    // ========================================================================
+    // Plugins GUI module
+    //
+    // Backs the "Plugins" section in the Settings tab. Lists every plugin
+    // discovered on disk (enabled or not) and lets the user flip the enabled
+    // flag. Toggles are persisted immediately but event subscriptions bind
+    // during boot, so a restart notice is shown after any change.
+    // ========================================================================
+    window.plugins = (function() {
+        var loaded = false;
+        var lastList = [];
+
+        function csrfToken() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return (el && el.value) ? el.value : '';
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function post(payload) {
+            var body = new FormData();
+            Object.keys(payload).forEach(function(k) {
+                if (payload[k] !== null && payload[k] !== undefined) {
+                    body.append(k, payload[k]);
+                }
+            });
+            if (!body.has('csrf_token')) body.append('csrf_token', csrfToken());
+            return fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) {
+                    return { status: res.status, data: data };
+                });
+            });
+        }
+
+        function statusBadge(status) {
+            var label = status || 'unknown';
+            var cls = 'status-badge status-unknown';
+            if (status === 'booted')        { cls = 'status-badge status-online';  label = 'Running'; }
+            else if (status === 'failed')   { cls = 'badge-danger';                 label = 'Failed'; }
+            else if (status === 'disabled') { cls = 'status-badge status-offline'; label = 'Disabled'; }
+            else if (status === 'registered' || status === 'discovered') {
+                cls = 'status-badge status-partial'; label = 'Loaded';
+            }
+            return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
+        }
+
+        function dotFor(p) {
+            if (p.error || p.status === 'failed') {
+                return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--failed" title="Failed"></i>';
+            }
+            if (p.enabled) {
+                return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--enabled" title="Enabled"></i>';
+            }
+            return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--disabled" title="Disabled"></i>';
+        }
+
+        function renderList(pluginsArr) {
+            pluginsArr = pluginsArr || [];
+            lastList = pluginsArr;
+            var emptyEl = document.getElementById('plugins-empty');
+            var tableEl = document.getElementById('plugins-table-wrapper');
+            var tbody   = document.getElementById('plugins-tbody');
+            if (!tbody) return;
+
+            if (pluginsArr.length === 0) {
+                if (emptyEl) {
+                    emptyEl.innerHTML = 'No plugins installed. Drop a plugin folder into <code>/etc/eiou/plugins/</code> and click Refresh.';
+                    emptyEl.classList.remove('d-none');
+                }
+                if (tableEl) tableEl.classList.add('d-none');
+                tbody.innerHTML = '';
+                return;
+            }
+
+            if (emptyEl) emptyEl.classList.add('d-none');
+            if (tableEl) tableEl.classList.remove('d-none');
+
+            var rows = pluginsArr.map(function(p) {
+                var checkId = 'plugin-toggle-' + p.name.replace(/[^a-z0-9-]/gi, '-');
+                var desc = p.description || '';
+                var tooltip = p.error ? (desc ? desc + ' — ' : '') + p.error : desc;
+                var descCell = p.error
+                    ? '<i class="fas fa-exclamation-triangle text-danger"></i> ' + escapeHtml(desc || p.error)
+                    : escapeHtml(desc);
+                return ''
+                    + '<tr class="cursor-pointer"'
+                    +   ' data-action="openPluginModal"'
+                    +   ' data-plugin="' + escapeHtml(p.name) + '">'
+                    +   '<td class="col-plugin-dot text-center">' + dotFor(p) + '</td>'
+                    +   '<td class="col-name"><strong>' + escapeHtml(p.name) + '</strong></td>'
+                    +   '<td class="col-version"><code>' + escapeHtml(p.version) + '</code></td>'
+                    +   '<td class="col-description" title="' + escapeHtml(tooltip) + '">' + descCell + '</td>'
+                    +   '<td class="col-enabled text-right">'
+                    +     '<label class="toggle-switch" for="' + checkId + '" data-stop-propagation="true">'
+                    +       '<input type="checkbox" id="' + checkId + '"'
+                    +         ' data-action-change="togglePlugin"'
+                    +         ' data-plugin="' + escapeHtml(p.name) + '"'
+                    +         ' data-stop-propagation="true"'
+                    +         (p.enabled ? ' checked' : '') + '>'
+                    +       '<span class="toggle-slider"></span>'
+                    +     '</label>'
+                    +   '</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        function showRestartBanner() {
+            var el = document.getElementById('plugins-restart-banner');
+            if (el) el.classList.remove('d-none');
+        }
+        function hideRestartBanner() {
+            var el = document.getElementById('plugins-restart-banner');
+            if (el) el.classList.add('d-none');
+        }
+
+        // "Running" = the plugin is actually live in the current node process.
+        // `booted` is the only status that means fully loaded + subscribed.
+        // Everything else (disabled, failed, registered, discovered) means
+        // not-running from a runtime perspective.
+        function isRunning(p) { return p && p.status === 'booted'; }
+
+        // A plugin needs a restart iff its desired enabled flag diverges from
+        // the runtime. Toggling back to the pre-change state clears the need.
+        function isDivergent(p) { return !!p.enabled !== isRunning(p); }
+
+        function updateRestartBanner() {
+            var any = false;
+            for (var i = 0; i < lastList.length; i++) {
+                if (isDivergent(lastList[i])) { any = true; break; }
+            }
+            if (any) showRestartBanner();
+            else hideRestartBanner();
+        }
+
+        function refresh() {
+            return post({ action: 'pluginsList' }).then(function(r) {
+                if (r.data && r.data.success) {
+                    renderList(r.data.plugins || []);
+                    // Banner reflects real divergence between desired enabled
+                    // flags and runtime status — not a sticky config-changed
+                    // flag. Toggling back to the original state clears it.
+                    updateRestartBanner();
+                    loaded = true;
+                } else {
+                    var msg = (r.data && r.data.message) || 'Could not load plugins';
+                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                }
+            }).catch(function() {
+                if (typeof showToast === 'function') showToast('Error', 'Network error while loading plugins', 'error');
+            });
+        }
+
+        // -- Restart flow ----------------------------------------------------
+
+        function showRestartOverlay() {
+            // Idempotent: don't stack overlays on a double click.
+            if (document.getElementById('plugins-restart-overlay')) return;
+            var overlay = document.createElement('div');
+            overlay.id = 'plugins-restart-overlay';
+            overlay.className = 'restart-overlay';
+            overlay.innerHTML =
+                '<div class="restart-overlay-card">' +
+                  '<i class="fas fa-spinner fa-spin"></i>' +
+                  '<h3>Restarting node…</h3>' +
+                  '<p>Workers and processors are recycling.</p>' +
+                  '<p>This page will reload automatically.</p>' +
+                '</div>';
+            document.body.appendChild(overlay);
+        }
+
+        function pollUntilBackOnline(attempts) {
+            attempts = attempts || 0;
+            // Cap at ~30s of polling. The poller in startup.sh fires within
+            // ~2s and `eiou restart` is fast, but the FPM master respawn
+            // can briefly drop in-flight connections — so we tolerate
+            // transient errors and only give up after many failures.
+            if (attempts > 30) {
+                if (typeof showToast === 'function') {
+                    showToast('Restart taking longer than expected',
+                        'The node may still be restarting. Reload the page manually if it does not return.',
+                        'warning');
+                }
+                return;
+            }
+            // We send a benign POST that the server can answer cheaply. The
+            // pluginsList action is already idempotent and CSRF-protected.
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: (function() {
+                    var b = new FormData();
+                    b.append('action', 'pluginsList');
+                    b.append('csrf_token', csrfToken());
+                    return b;
+                })(),
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                // 200 with JSON body == FPM workers are serving requests again.
+                // Reload to pick up the freshly booted state in the worker
+                // that handles the next page render.
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    setTimeout(function() { pollUntilBackOnline(attempts + 1); }, 1000);
+                }
+            }).catch(function() {
+                setTimeout(function() { pollUntilBackOnline(attempts + 1); }, 1000);
+            });
+        }
+
+        function requestRestart() {
+            if (!window.confirm(
+                'Restart the node now?\n\n' +
+                'PHP-FPM workers and background processors will recycle. ' +
+                'Active sessions stay logged in, but pages may reload briefly. ' +
+                'Plugin toggles take effect after this restart.'
+            )) return;
+
+            showRestartOverlay();
+            post({ action: 'pluginsRequestRestart' }).then(function(r) {
+                if (!(r.data && r.data.success)) {
+                    var overlay = document.getElementById('plugins-restart-overlay');
+                    if (overlay) overlay.remove();
+                    var msg = (r.data && r.data.message) || 'Restart request failed';
+                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                    return;
+                }
+                // Wait briefly for the request poller (~2s cycle) to pick
+                // it up + run `eiou restart`, THEN start polling — checking
+                // immediately would just see the still-running old worker
+                // and "succeed" before the restart even started.
+                setTimeout(function() { pollUntilBackOnline(0); }, 3000);
+            }).catch(function() {
+                var overlay = document.getElementById('plugins-restart-overlay');
+                if (overlay) overlay.remove();
+                if (typeof showToast === 'function') showToast('Error', 'Network error while requesting restart', 'error');
+            });
+        }
+
+        function toggle(name, enabled) {
+            if (!name) return;
+            post({
+                action: 'pluginsToggle',
+                name: name,
+                enabled: enabled ? '1' : '0'
+            }).then(function(r) {
+                if (r.data && r.data.success) {
+                    // Mirror the new flag into lastList so the banner and any
+                    // follow-up toggle decisions see the current desired state.
+                    var p = findByName(name);
+                    if (p) p.enabled = enabled;
+                    updateRestartBanner();
+                    if (typeof showToast === 'function') {
+                        var msg = (p && isDivergent(p))
+                            ? name + ' — restart the node for the change to take effect.'
+                            : name + ' — matches the current runtime, no restart needed.';
+                        showToast(
+                            enabled ? 'Plugin enabled' : 'Plugin disabled',
+                            msg,
+                            'success'
+                        );
+                    }
+                } else {
+                    // Revert the checkbox on failure so the UI matches truth.
+                    var cb = document.querySelector('input[data-plugin="' + name.replace(/"/g, '') + '"]');
+                    if (cb) cb.checked = !enabled;
+                    var msg = (r.data && r.data.message) || 'Toggle failed';
+                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                }
+            }).catch(function() {
+                var cb = document.querySelector('input[data-plugin="' + name.replace(/"/g, '') + '"]');
+                if (cb) cb.checked = !enabled;
+                if (typeof showToast === 'function') showToast('Error', 'Network error', 'error');
+            });
+        }
+
+        function ensureLoadedOnTab() {
+            var settingsPanel = document.getElementById('tab-panel-settings');
+            if (!settingsPanel) return;
+            var observer = new MutationObserver(function() {
+                if (settingsPanel.style.display !== 'none' && !loaded) {
+                    refresh();
+                }
+            });
+            observer.observe(settingsPanel, { attributes: true, attributeFilter: ['style'] });
+            if (settingsPanel.style.display !== 'none' && !loaded) {
+                refresh();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', ensureLoadedOnTab);
+
+        function findByName(name) {
+            for (var i = 0; i < lastList.length; i++) {
+                if (lastList[i].name === name) return lastList[i];
+            }
+            return null;
+        }
+
+        function closeModal() {
+            var overlay = document.getElementById('plugin-modal');
+            if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            document.removeEventListener('keydown', modalEsc);
+        }
+
+        function modalEsc(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) closeModal();
+        }
+
+        // Server normalized these to http(s)-only URLs (see PluginLoader),
+        // so a link tag is safe — we still set rel=noopener to keep the new
+        // window from reaching back through window.opener.
+        function linkLine(url) {
+            var safe = escapeHtml(url);
+            return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' +
+                safe + ' <i class="fas fa-external-link-alt" style="font-size:0.75em"></i></a>';
+        }
+
+        function authorLine(author) {
+            if (!author || !author.name) return '';
+            var nameEsc = escapeHtml(author.name);
+            if (author.url) {
+                var urlEsc = escapeHtml(author.url);
+                return '<a href="' + urlEsc + '" target="_blank" rel="noopener noreferrer">' +
+                    nameEsc + ' <i class="fas fa-external-link-alt" style="font-size:0.75em"></i></a>';
+            }
+            return nameEsc;
+        }
+
+        // A bundled CHANGELOG.md wins over a manifest URL — we can render it
+        // in-place without a round-trip to the open internet (works over Tor
+        // or on an air-gapped node).
+        function changelogLine(p) {
+            if (p.has_changelog) {
+                return '<button type="button" class="btn btn-sm btn-link p-0"' +
+                    ' data-action="openPluginChangelog"' +
+                    ' data-plugin="' + escapeHtml(p.name) + '">' +
+                    'View bundled CHANGELOG.md' +
+                    '</button>';
+            }
+            if (p.changelog) {
+                return linkLine(p.changelog);
+            }
+            return '';
+        }
+
+        function openChangelogModal(name) {
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-changelog-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:720px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem"><i class="fas fa-scroll"></i> ' +
+                            escapeHtml(name) + ' — Changelog</h3>' +
+                        '<span class="close" id="plugin-changelog-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body plugin-changelog-body" id="plugin-changelog-body">' +
+                        '<i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;' +
+                    '</div>' +
+                '</div>';
+
+            function closeChangelog() {
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) closeChangelog(); }
+
+            overlay.querySelector('#plugin-changelog-close').onclick = closeChangelog;
+            overlay.onclick = function(e) { if (e.target === overlay) closeChangelog(); };
+            document.addEventListener('keydown', esc);
+            document.body.appendChild(overlay);
+
+            post({ action: 'pluginChangelog', name: name }).then(function(r) {
+                var body = document.getElementById('plugin-changelog-body');
+                if (!body) return;
+                if (r.data && r.data.success) {
+                    // Server rendered with UpdateCheckService::markdownToHtml,
+                    // which escapes all user content via htmlspecialchars — safe
+                    // to inject as innerHTML here.
+                    body.innerHTML = r.data.html;
+                } else {
+                    body.innerHTML = '<div class="text-muted">No bundled changelog available.</div>';
+                }
+            }).catch(function() {
+                var body = document.getElementById('plugin-changelog-body');
+                if (body) body.innerHTML = '<div class="text-danger">Failed to load changelog.</div>';
+            });
+        }
+
+        function openModal(name) {
+            var p = findByName(name);
+            if (!p) return;
+            closeModal();
+
+            var checkId = 'plugin-modal-toggle';
+            var errBlock = p.error
+                ? '<div class="alert alert-danger text-sm" style="margin-top:0.75rem">'
+                +   '<i class="fas fa-exclamation-triangle"></i> ' + escapeHtml(p.error)
+                + '</div>'
+                : '';
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:480px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem"><i class="fas fa-puzzle-piece"></i> ' + escapeHtml(p.name) + '</h3>' +
+                        '<span class="close" id="plugin-modal-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem">' +
+                        '<dl class="plugin-modal-dl">' +
+                            '<dt>Version</dt><dd><code>' + escapeHtml(p.version || '') + '</code>' +
+                                (p.license ? ' <span class="text-muted">· ' + escapeHtml(p.license) + '</span>' : '') +
+                            '</dd>' +
+                            '<dt>Status</dt><dd>' + statusBadge(p.status) + '</dd>' +
+                            (p.author ? '<dt>Author</dt><dd>' + authorLine(p.author) + '</dd>' : '') +
+                            (p.homepage ? '<dt>Website</dt><dd>' + linkLine(p.homepage) + '</dd>' : '') +
+                            (changelogLine(p) ? '<dt>Changelog</dt><dd>' + changelogLine(p) + '</dd>' : '') +
+                            '<dt>Description</dt><dd>' + escapeHtml(p.description || '—') + '</dd>' +
+                        '</dl>' +
+                        '<div class="plugin-modal-toggle-row">' +
+                            '<label for="' + checkId + '"><strong>Enabled</strong></label>' +
+                            '<label class="toggle-switch" for="' + checkId + '">' +
+                                '<input type="checkbox" id="' + checkId + '"' +
+                                    ' data-action-change="togglePluginFromModal"' +
+                                    ' data-plugin="' + escapeHtml(p.name) + '"' +
+                                    (p.enabled ? ' checked' : '') + '>' +
+                                '<span class="toggle-slider"></span>' +
+                            '</label>' +
+                        '</div>' +
+                        '<div class="text-muted text-sm" style="margin-top:0.75rem">' +
+                            'Toggles persist immediately but take effect after a node restart.' +
+                        '</div>' +
+                        errBlock +
+                    '</div>' +
+                '</div>';
+
+            overlay.querySelector('#plugin-modal-close').onclick = closeModal;
+            overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+            document.addEventListener('keydown', modalEsc);
+            document.body.appendChild(overlay);
+        }
+
+        function toggleFromModal(name, enabled) {
+            var rowCb = document.querySelector('#plugins-tbody input[data-plugin="' + String(name).replace(/"/g, '') + '"]');
+            if (rowCb) rowCb.checked = enabled;
+            closeModal();
+            toggle(name, enabled);
+        }
+
+        return {
+            reload: function() { loaded = false; return refresh(); },
+            toggle: toggle,
+            toggleFromModal: toggleFromModal,
+            openModal: openModal,
+            openChangelog: openChangelogModal,
+            requestRestart: requestRestart
         };
     })();
 

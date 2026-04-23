@@ -92,6 +92,7 @@ TRANSACTION_PID=""
 CLEANUP_PID=""
 CONTACT_STATUS_PID=""
 WATCHDOG_PID=""
+RESTART_POLLER_PID=""
 
 # -----------------------------------------------------------------------------
 # graceful_shutdown() - Signal handler for clean container termination
@@ -118,6 +119,14 @@ graceful_shutdown() {
         echo "[Shutdown] Stopping watchdog (PID: $WATCHDOG_PID)"
         kill "$WATCHDOG_PID" 2>/dev/null
         wait "$WATCHDOG_PID" 2>/dev/null || true
+    fi
+
+    # Stop restart-request poller too — no point letting it kick off a fresh
+    # restart while we're trying to tear everything down.
+    if [ -n "$RESTART_POLLER_PID" ] && kill -0 "$RESTART_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping restart poller (PID: $RESTART_POLLER_PID)"
+        kill "$RESTART_POLLER_PID" 2>/dev/null
+        wait "$RESTART_POLLER_PID" 2>/dev/null || true
     fi
 
     echo ""
@@ -785,6 +794,15 @@ touch /var/log/eiou/app.log
 chown -R www-data:www-data /var/log/eiou
 chmod 755 /var/log/eiou
 chmod 640 /var/log/eiou/app.log
+
+# Seed bundled plugins (e.g. hello-eiou) into the plugin directory on a
+# Docker volume. Uses cp -rn so existing plugins are never overwritten —
+# users can remove or replace bundled plugins and the change persists.
+mkdir -p /etc/eiou/plugins
+if [ -d /app/plugins ]; then
+    cp -rn /app/plugins/. /etc/eiou/plugins/ 2>/dev/null || true
+    chown -R www-data:www-data /etc/eiou/plugins
+fi
 
 # =============================================================================
 # PRE-SERVICE ENCRYPTION SETUP
@@ -1890,6 +1908,8 @@ watchdog() {
     local WATCHDOG_INTERVAL=30       # Check every 30 seconds
     local RESTART_COOLDOWN=60        # Minimum seconds between restarts of same processor
     local MAX_RESTARTS=10            # Maximum restarts before giving up
+    local PLANNED_RESTART_FLAG="/tmp/eiou_planned_restart.flag"
+    local PLANNED_RESTART_MAX_AGE=120  # Ignore stale flags older than this (seconds)
 
     # Track restart counts and last restart times
     local P2P_RESTARTS=0
@@ -1948,64 +1968,117 @@ watchdog() {
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Shutdown flag cleared, resuming processor monitoring with reset counters"
         fi
 
+        # =====================================================================
+        # Planned-restart detection
+        #
+        # NodeRestartService (the backend for `eiou restart`) writes
+        # /tmp/eiou_planned_restart.flag with a timestamp before SIGTERM'ing
+        # processors. Without this hint, the upcoming PID-died checks would
+        # log them as a crash with "died (was PID ...), restarting (attempt
+        # N/10)..." — alarming and wrong. With the hint we use friendlier
+        # phrasing and skip the attempt-counter / cooldown gates so the
+        # respawn happens this cycle.
+        # =====================================================================
+        local PLANNED_RESTART=false
+        if [ -f "$PLANNED_RESTART_FLAG" ]; then
+            local FLAG_TIME
+            FLAG_TIME=$(cat "$PLANNED_RESTART_FLAG" 2>/dev/null || echo 0)
+            local FLAG_AGE=$((CURRENT_TIME - FLAG_TIME))
+            # Reject negative ages (clock skew) and stale flags.
+            if [ "$FLAG_AGE" -ge 0 ] && [ "$FLAG_AGE" -le "$PLANNED_RESTART_MAX_AGE" ]; then
+                PLANNED_RESTART=true
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Planned restart detected (eiou restart) — respawning processors with fresh state, attempt counters not incremented"
+            fi
+            # Always clear the marker so a real future crash isn't masked.
+            rm -f "$PLANNED_RESTART_FLAG"
+        fi
+
         # Check P2pMessages processor
         if ! kill -0 "$P2P_PID" 2>/dev/null; then
-            local TIME_SINCE_RESTART=$((CURRENT_TIME - P2P_LAST_RESTART))
-            if [ $P2P_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
-                P2P_RESTARTS=$((P2P_RESTARTS + 1))
-                P2P_LAST_RESTART=$CURRENT_TIME
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages died (was PID $P2P_PID), restarting (attempt $P2P_RESTARTS/$MAX_RESTARTS)..."
+            if [ "$PLANNED_RESTART" = true ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages respawning after planned restart (was PID $P2P_PID)"
                 nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
                 P2P_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages restarted (new PID: $P2P_PID)"
-            elif [ $P2P_RESTARTS -ge $MAX_RESTARTS ]; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            else
+                local TIME_SINCE_RESTART=$((CURRENT_TIME - P2P_LAST_RESTART))
+                if [ $P2P_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                    P2P_RESTARTS=$((P2P_RESTARTS + 1))
+                    P2P_LAST_RESTART=$CURRENT_TIME
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages died (was PID $P2P_PID), restarting (attempt $P2P_RESTARTS/$MAX_RESTARTS)..."
+                    nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
+                    P2P_PID=$!
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages restarted (new PID: $P2P_PID)"
+                elif [ $P2P_RESTARTS -ge $MAX_RESTARTS ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+                fi
             fi
         fi
 
         # Check TransactionMessages processor
         if ! kill -0 "$TRANSACTION_PID" 2>/dev/null; then
-            local TIME_SINCE_RESTART=$((CURRENT_TIME - TRANSACTION_LAST_RESTART))
-            if [ $TRANSACTION_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
-                TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
-                TRANSACTION_LAST_RESTART=$CURRENT_TIME
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages died (was PID $TRANSACTION_PID), restarting (attempt $TRANSACTION_RESTARTS/$MAX_RESTARTS)..."
+            if [ "$PLANNED_RESTART" = true ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages respawning after planned restart (was PID $TRANSACTION_PID)"
                 nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
                 TRANSACTION_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages restarted (new PID: $TRANSACTION_PID)"
-            elif [ $TRANSACTION_RESTARTS -ge $MAX_RESTARTS ]; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            else
+                local TIME_SINCE_RESTART=$((CURRENT_TIME - TRANSACTION_LAST_RESTART))
+                if [ $TRANSACTION_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                    TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
+                    TRANSACTION_LAST_RESTART=$CURRENT_TIME
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages died (was PID $TRANSACTION_PID), restarting (attempt $TRANSACTION_RESTARTS/$MAX_RESTARTS)..."
+                    nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
+                    TRANSACTION_PID=$!
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages restarted (new PID: $TRANSACTION_PID)"
+                elif [ $TRANSACTION_RESTARTS -ge $MAX_RESTARTS ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+                fi
             fi
         fi
 
         # Check CleanupMessages processor
         if ! kill -0 "$CLEANUP_PID" 2>/dev/null; then
-            local TIME_SINCE_RESTART=$((CURRENT_TIME - CLEANUP_LAST_RESTART))
-            if [ $CLEANUP_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
-                CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
-                CLEANUP_LAST_RESTART=$CURRENT_TIME
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages died (was PID $CLEANUP_PID), restarting (attempt $CLEANUP_RESTARTS/$MAX_RESTARTS)..."
+            if [ "$PLANNED_RESTART" = true ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages respawning after planned restart (was PID $CLEANUP_PID)"
                 nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
                 CLEANUP_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
-            elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            else
+                local TIME_SINCE_RESTART=$((CURRENT_TIME - CLEANUP_LAST_RESTART))
+                if [ $CLEANUP_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                    CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
+                    CLEANUP_LAST_RESTART=$CURRENT_TIME
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages died (was PID $CLEANUP_PID), restarting (attempt $CLEANUP_RESTARTS/$MAX_RESTARTS)..."
+                    nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
+                    CLEANUP_PID=$!
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
+                elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+                fi
             fi
         fi
 
         # Check ContactStatusMessages processor (only if enabled - skip if CONTACT_STATUS_PID is empty)
         if [ -n "$CONTACT_STATUS_PID" ]; then
             if ! kill -0 "$CONTACT_STATUS_PID" 2>/dev/null; then
-                local TIME_SINCE_RESTART=$((CURRENT_TIME - CONTACT_STATUS_LAST_RESTART))
-                if [ $CONTACT_STATUS_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
-                    CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
-                    CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
+                if [ "$PLANNED_RESTART" = true ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages respawning after planned restart (was PID $CONTACT_STATUS_PID)"
                     nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
                     CONTACT_STATUS_PID=$!
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
-                elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+                else
+                    local TIME_SINCE_RESTART=$((CURRENT_TIME - CONTACT_STATUS_LAST_RESTART))
+                    if [ $CONTACT_STATUS_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                        CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
+                        CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
+                        nohup $RUNUSER_BIN -u www-data -- php /app/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
+                        CONTACT_STATUS_PID=$!
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
+                    elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+                    fi
                 fi
             fi
         fi
@@ -2174,10 +2247,63 @@ if type show_alpha_warning_short &>/dev/null; then
     show_alpha_warning_short
 fi
 
+# =============================================================================
+# restart_poller() — root-side hook for GUI/API "Restart node" buttons.
+#
+# PHP-FPM workers run as www-data and cannot signal the root-owned PHP-FPM
+# master, so a request like "user clicked Restart in the Plugins tab" can't
+# call NodeRestartService directly — the SIGUSR2 to FPM would silently fail.
+#
+# Instead, the GUI/API writes /tmp/eiou_restart_requested via
+# RestartRequestService. This loop (running as root, since it's spawned by
+# PID 1) polls every 2s, deletes the marker, and runs `eiou restart` as a
+# privileged invocation that can actually signal FPM.
+#
+# Rate limited to one restart per 10s to absorb double-clicks and simultaneous
+# requests from multiple sources.
+# =============================================================================
+restart_poller() {
+    local REQ_FILE="/tmp/eiou_restart_requested"
+    local POLL_INTERVAL=2
+    local MIN_INTERVAL=10
+    local LAST_RESTART=0
+
+    while true; do
+        sleep $POLL_INTERVAL
+        [ -f "$REQ_FILE" ] || continue
+
+        # Read metadata for the audit log, then delete immediately so a
+        # crash inside `eiou restart` doesn't loop us forever on the same
+        # request.
+        local META
+        META=$(cat "$REQ_FILE" 2>/dev/null || echo '{}')
+        rm -f "$REQ_FILE"
+
+        local NOW
+        NOW=$(date +%s)
+        if [ $((NOW - LAST_RESTART)) -lt $MIN_INTERVAL ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] RESTART POLLER: Ignoring restart request — last restart was $((NOW - LAST_RESTART))s ago (cooldown ${MIN_INTERVAL}s). Request: $META"
+            continue
+        fi
+        LAST_RESTART=$NOW
+
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] RESTART POLLER: Restart requested: $META"
+        # Run the same command an operator would type. NodeRestartService
+        # writes the planned-restart flag the watchdog reads, so the
+        # downstream "died/respawning" lines stay friendly.
+        eiou restart 2>&1 | sed 's/^/[RESTART POLLER] /'
+    done
+}
+
 # Start watchdog in background
 watchdog &
 WATCHDOG_PID=$!
 echo "Watchdog started (PID: $WATCHDOG_PID)"
+
+# Start restart-request poller in background
+restart_poller &
+RESTART_POLLER_PID=$!
+echo "Restart poller started (PID: $RESTART_POLLER_PID)"
 
 echo ""
 echo "=========================================="

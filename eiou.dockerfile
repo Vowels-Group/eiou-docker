@@ -205,6 +205,10 @@ COPY files/src/ /app/eiou/src/
 # Copy scripts (analytics-cron, backup-cron, update-check-cron, validate-autoload)
 COPY files/scripts/ /app/eiou/scripts/
 
+# Copy bundled plugins (e.g. hello-eiou). Seeded into /etc/eiou/plugins/ at
+# startup if not already present, so users can override or remove them.
+COPY files/plugins/ /app/plugins/
+
 # Copy composer.json (needed for autoloader path reference)
 COPY files/composer.json /app/eiou/composer.json
 

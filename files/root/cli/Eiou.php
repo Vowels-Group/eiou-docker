@@ -27,6 +27,7 @@
  *   ping <contact>             - Check contact online status
  *   updatecheck                - Check for newer image versions
  *   shutdown                   - Graceful shutdown
+ *   restart                    - Restart processors and PHP-FPM workers (in-place)
  *
  * Output Flags:
  *   --json, -j     - Output in JSON format
@@ -335,6 +336,34 @@ elseif($request === "start"){
   $debugService->output("Executing start request", 'SILENT');
   $app->start($output);
 }
+elseif($request === "restart"){
+  // Full node restart: respawn processors AND PHP-FPM workers so freshly
+  // enabled plugins (or any other startup-bound state) take effect without
+  // a container reboot. Requires root inside the container to signal the
+  // PHP-FPM master.
+  $debugService->output("Executing restart request", 'SILENT');
+  $app->restart($output);
+}
+// Plugin management — list/enable/disable. Does NOT restart the node;
+// operator must run `eiou restart` (or hit the REST/GUI equivalent) for
+// enable/disable to take effect, since event subscriptions bind during
+// boot.
+elseif($request === "plugin"){
+  $debugService->output("Executing plugin request", 'SILENT');
+  if ($app->pluginLoader === null) {
+    $output->error('Plugin system not initialized', ErrorCodes::GENERAL_ERROR);
+    exit(1);
+  }
+  $pluginCliService = new \Eiou\Services\CliPluginService($app->pluginLoader);
+  $subcommand = strtolower($cleanArgv[2] ?? 'list');
+  if ($subcommand === 'enable') {
+    $pluginCliService->enablePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'disable') {
+    $pluginCliService->disablePlugin($cleanArgv, $output);
+  } else {
+    $pluginCliService->listPlugins($cleanArgv, $output);
+  }
+}
 // API Key Management
 elseif($request === "apikey"){
   // Manage API keys
@@ -554,10 +583,19 @@ elseif($request === "updatecheck"){
   }
 }
 else{
-  // If no known input, display commands possible for input
-  $cliService = $app->services->getCliService();
-  $cliService->displayHelp($cleanArgv, $output);
-  $output->error("Command '$request' not found", ErrorCodes::COMMAND_NOT_FOUND, 404);
+  // Plugin-owned CLI subcommand fallthrough: core's elseif chain didn't
+  // match, so ask the registry before declaring the command unknown. The
+  // registry catches handler exceptions and emits a clean CLI error, so a
+  // buggy plugin can't tear down the process here.
+  $pluginCliRegistry = $app->services->getPluginCliRegistry();
+  if ($pluginCliRegistry->has($request)) {
+    $pluginCliRegistry->dispatch($request, $cleanArgv, $output);
+  } else {
+    // Still unknown — show help and fail loudly.
+    $cliService = $app->services->getCliService();
+    $cliService->displayHelp($cleanArgv, $output);
+    $output->error("Command '$request' not found", ErrorCodes::COMMAND_NOT_FOUND, 404);
+  }
 }
 
 } catch (ValidationServiceException $e) {

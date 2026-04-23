@@ -17,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Eiou\Services\CliP2pApprovalService;
+use Eiou\Services\P2pApprovalService;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
@@ -59,6 +60,18 @@ class CliP2pApprovalServiceTest extends TestCase
             $this->p2pTransactionSender,
             $this->p2pService
         );
+
+        // CLI now delegates approve/reject to the shared P2pApprovalService.
+        // Wire a real one through the same mocks so the existing repository-
+        // level assertions in approve/reject tests continue to verify the
+        // full chain (CLI → shared service → mocks).
+        $this->service->setApprovalService(new P2pApprovalService(
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->rp2pCandidateRepository,
+            $this->p2pTransactionSender,
+            $this->p2pService
+        ));
     }
 
     // =========================================================================
@@ -543,12 +556,14 @@ class CliP2pApprovalServiceTest extends TestCase
      */
     public function testRejectP2pMissingDependencies(): void
     {
+        // No approvalService set — CLI should surface a clear config error
+        // rather than silently succeeding.
         $service = new CliP2pApprovalService($this->currencyUtility);
 
         $this->outputManager->expects($this->once())
             ->method('error')
             ->with(
-                $this->stringContains('not available'),
+                $this->stringContains('not configured'),
                 $this->anything()
             );
 

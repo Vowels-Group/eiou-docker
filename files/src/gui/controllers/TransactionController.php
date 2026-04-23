@@ -11,6 +11,7 @@ use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Contracts\P2pServiceInterface;
+use Eiou\Services\P2pApprovalService;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Utils\Logger;
@@ -69,6 +70,11 @@ class TransactionController
     private ?Rp2pCandidateRepository $rp2pCandidateRepository = null;
 
     /**
+     * @var P2pApprovalService|null Shared approve/reject commit point — CLI, API, and GUI all route through this so P2P_APPROVED / P2P_REJECTED fire once per operator decision regardless of entry surface.
+     */
+    private ?P2pApprovalService $approvalService = null;
+
+    /**
      * Constructor
      *
      * @param Session $session
@@ -107,6 +113,18 @@ class TransactionController
         $this->p2pTransactionSender = $sender;
         $this->p2pService = $p2pService;
         $this->rp2pCandidateRepository = $rp2pCandidateRepository;
+    }
+
+    /**
+     * Inject the shared approve/reject commit-point service so the GUI
+     * delegates to the same logic as CLI/API. When set, handleApproveP2p()
+     * and handleRejectP2p() route through it; otherwise they error out so
+     * bootstrap misconfigurations surface immediately instead of silently
+     * skipping the event dispatch.
+     */
+    public function setApprovalService(P2pApprovalService $service): void
+    {
+        $this->approvalService = $service;
     }
 
     /**
@@ -296,7 +314,7 @@ class TransactionController
 
         $this->session->verifyCSRFToken(false);
 
-        if ($this->p2pRepository === null || $this->rp2pRepository === null || $this->p2pTransactionSender === null) {
+        if ($this->approvalService === null) {
             echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
             return;
         }
@@ -307,108 +325,29 @@ class TransactionController
             return;
         }
 
-        $p2p = $this->p2pRepository->getAwaitingApproval($hash);
-        if (!$p2p) {
-            echo json_encode(['success' => false, 'error' => 'not_found', 'message' => 'Transaction not found or not awaiting approval']);
-            return;
-        }
+        $candidateId = isset($_POST['candidate_id']) ? (int) $_POST['candidate_id'] : null;
 
-        // Verify the P2P belongs to this user (has destination_address = originator)
-        if (empty($p2p['destination_address'])) {
-            echo json_encode(['success' => false, 'error' => 'not_originator', 'message' => 'Only the transaction originator can approve']);
-            return;
-        }
-
-        // Check for candidate_id (multi-candidate best-fee mode)
-        $candidateId = isset($_POST['candidate_id']) ? (int) $_POST['candidate_id'] : 0;
-
-        if ($candidateId > 0 && $this->rp2pCandidateRepository !== null) {
-            // Multi-candidate selection: user chose a specific candidate
-            $candidate = $this->rp2pCandidateRepository->getCandidateById($candidateId);
-            if (!$candidate) {
-                echo json_encode(['success' => false, 'error' => 'candidate_not_found', 'message' => 'Selected route candidate not found']);
-                return;
-            }
-
-            // Validate candidate belongs to this hash
-            if ($candidate['hash'] !== $hash) {
-                echo json_encode(['success' => false, 'error' => 'candidate_mismatch', 'message' => 'Candidate does not belong to this transaction']);
-                return;
-            }
-
-            // Build request from candidate data (same format as Rp2pService uses)
-            $request = [
-                'hash' => $candidate['hash'],
-                'time' => $candidate['time'],
-                'amount' => $candidate['amount'],
-                'currency' => $candidate['currency'],
-                'senderPublicKey' => $candidate['sender_public_key'],
-                'senderAddress' => $candidate['sender_address'],
-                'signature' => $candidate['sender_signature'],
-            ];
-
-            // Candidate amount already includes the originator's fee from handleRp2pCandidate.
-            // Insert the rp2p record (required by daemon's processOutgoingP2p for the 'time' field)
-            // then call sendP2pEiou — mirrors what handleRp2pRequest does in the auto-accept path.
-
-            try {
-                $this->rp2pRepository->insertRp2pRequest($request);
-                $this->p2pRepository->updateStatus($hash, 'found');
-                $this->p2pTransactionSender->sendP2pEiou($request);
-
-                // Clean up all candidates for this hash
-                $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
-
-                Logger::getInstance()->info("P2P transaction approved by user (candidate selected)", [
-                    'hash' => $hash,
-                    'candidate_id' => $candidateId,
-                    'sender_address' => $candidate['sender_address'],
-                ]);
-                echo json_encode(['success' => true]);
-            } catch (\Throwable $e) {
-                Logger::getInstance()->logException($e, [
-                    'controller' => 'TransactionController',
-                    'action' => 'handleApproveP2p',
-                    'hash' => $hash,
-                    'candidate_id' => $candidateId,
-                ]);
-                echo json_encode(['success' => false, 'error' => 'send_failed', 'message' => 'Failed to send transaction']);
-            }
-            return;
-        }
-
-        // Single rp2p path (fast mode / legacy)
-        $rp2p = $this->rp2pRepository->getByHash($hash);
-        if (!$rp2p) {
-            echo json_encode(['success' => false, 'error' => 'rp2p_not_found', 'message' => 'Route response not found']);
-            return;
-        }
-
-        // Build the request array from stored RP2P data
-        $request = [
-            'hash' => $rp2p['hash'],
-            'time' => $rp2p['time'],
-            'amount' => $rp2p['amount'],
-            'currency' => $rp2p['currency'],
-            'senderPublicKey' => $rp2p['sender_public_key'],
-            'senderAddress' => $rp2p['sender_address'],
-            'signature' => $rp2p['sender_signature'],
-        ];
-
-        try {
-            $this->p2pRepository->updateStatus($hash, 'found');
-            $this->p2pTransactionSender->sendP2pEiou($request);
-
-            Logger::getInstance()->info("P2P transaction approved by user", ['hash' => $hash]);
-            echo json_encode(['success' => true]);
-        } catch (\Throwable $e) {
-            Logger::getInstance()->logException($e, [
-                'controller' => 'TransactionController',
-                'action' => 'handleApproveP2p',
+        $result = $this->approvalService->approve($hash, null, $candidateId);
+        if (!$result['success']) {
+            Logger::getInstance()->info('P2P approval rejected by service', [
                 'hash' => $hash,
+                'candidate_id' => $candidateId,
+                'code' => $result['code'],
             ]);
-            echo json_encode(['success' => false, 'error' => 'send_failed', 'message' => 'Failed to send transaction']);
+            echo json_encode([
+                'success' => false,
+                'error' => $result['code'],
+                'message' => $result['message'],
+            ]);
+            return;
         }
+
+        Logger::getInstance()->info('P2P transaction approved by user', [
+            'hash' => $hash,
+            'candidate_id' => $candidateId,
+            'mode' => $result['mode'] ?? null,
+        ]);
+        echo json_encode(['success' => true]);
     }
 
     /**
@@ -422,7 +361,7 @@ class TransactionController
 
         $this->session->verifyCSRFToken(false);
 
-        if ($this->p2pRepository === null) {
+        if ($this->approvalService === null) {
             echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
             return;
         }
@@ -433,41 +372,18 @@ class TransactionController
             return;
         }
 
-        $p2p = $this->p2pRepository->getAwaitingApproval($hash);
-        if (!$p2p) {
-            echo json_encode(['success' => false, 'error' => 'not_found', 'message' => 'Transaction not found or not awaiting approval']);
-            return;
-        }
-
-        // Verify the P2P belongs to this user (has destination_address = originator)
-        if (empty($p2p['destination_address'])) {
-            echo json_encode(['success' => false, 'error' => 'not_originator', 'message' => 'Only the transaction originator can reject']);
-            return;
-        }
-
-        try {
-            $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
-
-            // Propagate cancel upstream
-            if ($this->p2pService !== null) {
-                $this->p2pService->sendCancelNotificationForHash($hash);
-            }
-
-            // Clean up any remaining candidates (best-fee mode)
-            if ($this->rp2pCandidateRepository !== null) {
-                $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
-            }
-
-            Logger::getInstance()->info("P2P transaction rejected by user", ['hash' => $hash]);
-            echo json_encode(['success' => true]);
-        } catch (\Throwable $e) {
-            Logger::getInstance()->logException($e, [
-                'controller' => 'TransactionController',
-                'action' => 'handleRejectP2p',
-                'hash' => $hash,
+        $result = $this->approvalService->reject($hash);
+        if (!$result['success']) {
+            echo json_encode([
+                'success' => false,
+                'error' => $result['code'],
+                'message' => $result['message'],
             ]);
-            echo json_encode(['success' => false, 'error' => 'reject_failed', 'message' => 'Failed to reject transaction']);
+            return;
         }
+
+        Logger::getInstance()->info('P2P transaction rejected by user', ['hash' => $hash]);
+        echo json_encode(['success' => true]);
     }
 
     /**

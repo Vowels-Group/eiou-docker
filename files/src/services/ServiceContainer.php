@@ -602,9 +602,50 @@ class ServiceContainer implements ContainerInterface {
                 $this->getSendOperationService(),
                 $this->getP2pService()
             );
+            $service->setApprovalService($this->getP2pApprovalService());
             $this->services['CliP2pApprovalService'] = $service;
         }
         return $this->services['CliP2pApprovalService'];
+    }
+
+    /**
+     * Shared approve/reject commit point used by CLI, API, and GUI. Holds
+     * the validation rules and side-effect sequence in one place so every
+     * path emits P2P_APPROVED / P2P_REJECTED consistently.
+     */
+    public function getP2pApprovalService(): P2pApprovalService {
+        if (!isset($this->services['P2pApprovalService'])) {
+            $this->services['P2pApprovalService'] = new P2pApprovalService(
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pCandidateRepository::class),
+                $this->getSendOperationService(),
+                $this->getP2pService()
+            );
+        }
+        return $this->services['P2pApprovalService'];
+    }
+
+    /**
+     * Registry for plugin-owned CLI subcommands. Plugins grab this in
+     * boot() and call ->register() to expose `eiou <plugin> ...` verbs.
+     */
+    public function getPluginCliRegistry(): PluginCliRegistry {
+        if (!isset($this->services['PluginCliRegistry'])) {
+            $this->services['PluginCliRegistry'] = new PluginCliRegistry();
+        }
+        return $this->services['PluginCliRegistry'];
+    }
+
+    /**
+     * Registry for plugin-owned REST endpoints under
+     * /api/v1/plugins/{plugin}/{action}. Plugins register in boot().
+     */
+    public function getPluginApiRegistry(): PluginApiRegistry {
+        if (!isset($this->services['PluginApiRegistry'])) {
+            $this->services['PluginApiRegistry'] = new PluginApiRegistry();
+        }
+        return $this->services['PluginApiRegistry'];
     }
 
     /**

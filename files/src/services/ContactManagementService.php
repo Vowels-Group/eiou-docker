@@ -15,6 +15,8 @@ use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\ContactCreditRepository;
 use Eiou\Database\ContactRepository;
+use Eiou\Events\ContactEvents;
+use Eiou\Events\EventDispatcher;
 use Eiou\Exceptions\FatalServiceException;
 use Eiou\Exceptions\ValidationServiceException;
 use Eiou\Services\Utilities\CurrencyUtilityService;
@@ -401,6 +403,14 @@ class ContactManagementService implements ContactManagementServiceInterface
                     ]);
                 }
             }
+
+            EventDispatcher::getInstance()->dispatch(ContactEvents::CONTACT_ACCEPTED, [
+                'pubkey' => $pubkey,
+                'name' => $name,
+                'currency' => $currency,
+                'fee' => $fee,
+                'credit' => $credit,
+            ]);
         }
         return $success;
     }
@@ -969,6 +979,14 @@ class ContactManagementService implements ContactManagementServiceInterface
         }
 
         if ($this->contactRepository->blockContact($transportIndex, $address)) {
+            // Look up the contact's pubkey so subscribers have a stable id
+            // (name/address can change or differ across nodes; pubkey won't).
+            $blockedContact = $this->contactRepository->lookupByAddress($transportIndex, $address);
+            EventDispatcher::getInstance()->dispatch(ContactEvents::CONTACT_BLOCKED, [
+                'pubkey' => $blockedContact['pubkey'] ?? '',
+                'address' => $address,
+            ]);
+
             $output->success("Contact blocked successfully", [
                 'address' => $address,
                 'status' => Constants::CONTACT_STATUS_BLOCKED

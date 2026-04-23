@@ -1,0 +1,61 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<!-- Plugins Section -->
+<div id="plugins-section" class="form-container fade-in-up">
+    <div class="section-header">
+        <h2><i class="fas fa-puzzle-piece"></i> Plugins</h2>
+        <button type="button" class="btn btn-secondary btn-compact" data-action="reloadPlugins" title="Refresh the list from disk">
+            <i class="fas fa-sync"></i> Refresh
+        </button>
+    </div>
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>Extend your node with optional add-ons</span>
+        </summary>
+        <div class="section-intro-body">
+            Plugins live under <code>/etc/eiou/plugins/</code>. They subscribe to
+            internal events (sync, transactions, contacts) and add capabilities
+            without modifying the core code.
+            <br><br>
+            <strong>Plugins are disabled by default.</strong> A new plugin
+            sitting in the directory will not run until you enable it here
+            and restart the node. This way a buggy or untrusted plugin
+            cannot crash the node on its first boot &mdash; you opt in
+            deliberately, with the chance to read the manifest first.
+            Toggles persist immediately but take effect only after a restart,
+            since event subscriptions are wired during startup.
+        </div>
+    </details>
+
+    <div id="plugins-restart-banner" class="alert alert-warning d-none" role="status">
+        <div class="plugins-restart-banner-row">
+            <span>
+                <i class="fas fa-info-circle"></i>
+                Plugin changes are saved. Restart the node for them to take effect.
+            </span>
+            <button type="button" class="btn btn-warning btn-compact" data-action="restartNodeFromPlugins">
+                <i class="fas fa-power-off"></i> Restart node
+            </button>
+        </div>
+    </div>
+
+    <div id="plugins-empty" class="api-keys-empty text-muted">
+        <i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;
+    </div>
+
+    <div id="plugins-table-wrapper" class="contacts-table-wrapper d-none">
+        <table class="contacts-table plugins-table">
+            <thead>
+                <tr>
+                    <th class="col-plugin-dot text-center" aria-label="Enabled"></th>
+                    <th class="col-name">Name</th>
+                    <th class="col-version">Version</th>
+                    <th class="col-description">Description</th>
+                    <th class="col-enabled text-right">Enabled</th>
+                </tr>
+            </thead>
+            <tbody id="plugins-tbody"></tbody>
+        </table>
+    </div>
+</div>

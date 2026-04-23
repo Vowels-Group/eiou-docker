@@ -18,6 +18,7 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Events\ContactEvents;
 use Eiou\Events\DeliveryEvents;
 use Eiou\Events\EventDispatcher;
 use Eiou\Database\RepositoryFactory;
@@ -381,7 +382,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Handle response based on status — same logic as handleNewContact() inline processing
         if ($status === Constants::DELIVERY_RECEIVED) {
             // Standard case: contact request was received, pending acceptance
-            if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+            if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
                 $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
                 // Store additional addresses if present
@@ -436,7 +437,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             }
         } elseif ($status === Constants::STATUS_ACCEPTED) {
             // Mutual request: remote auto-accepted because they already had us as pending
-            if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+            if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
                 $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
                 if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
@@ -481,7 +482,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // This typically happens when our initial async send was received by the remote
             // (or they added us independently) but we never got the response back.
             // We still need to insert the contact locally — treat like DELIVERY_RECEIVED.
-            if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+            if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
                 $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
                 if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
@@ -1413,7 +1414,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // Contact request was received (initial insert on their end as pending, awaiting acceptance)
             if($responseData['status'] === Constants::DELIVERY_RECEIVED){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
-                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
                     // Store any additional addresses from senderAddresses if present
@@ -1473,7 +1474,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // Remote auto-accepted because they already had us as a pending contact (mutual request)
             elseif($responseData['status'] === Constants::STATUS_ACCEPTED){
                 // Insert contact on our end with returned pubkey
-                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
                     // Store any additional addresses from senderAddresses if present
@@ -1532,7 +1533,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             elseif($responseData['status'] === Constants::DELIVERY_UPDATED){
                 $senderAddress = $responseData['senderAddress'];
                 // Contact was deleted locally - re-insert and sync
-                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
                     // Store any additional addresses from senderAddresses if present
@@ -1603,7 +1604,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // Our contact pubkey and address both exist on their end (Case when we delete the contact and try re-adding it)
             elseif($responseData['status'] === Constants::DELIVERY_WARNING){
                 // Insert contact and perform full sync (transactions + balances)
-                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
                     // Store any additional addresses from senderAddresses if present
@@ -1766,6 +1767,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
         // Validate currency against allowed currencies — auto-reject if setting enabled
         $allowedCurrencies = $this->currentUser->getAllowedCurrencies();
         if (!in_array($currency, $allowedCurrencies) && $this->currentUser->getAutoRejectUnknownCurrency()) {
+            // Fires CONTACT_REJECTED before the rejection payload goes on the
+            // wire so plugins can observe the decision (e.g. to log every
+            // auto-rejected request for a compliance audit trail).
+            EventDispatcher::getInstance()->dispatch(ContactEvents::CONTACT_REJECTED, [
+                'pubkey' => $senderPublicKey,
+                'address' => $senderAddress,
+                'reason' => 'currency_not_accepted',
+                'currency' => $currency,
+            ]);
+
             return $this->contactPayload->buildRejection(
                 $senderAddress,
                 'Currency ' . $currency . ' is not accepted by this node'
@@ -2036,7 +2047,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             }
         } else{
             // Contact request is brand new, no prior users exist in any form
-            if($this->contactRepository->addPendingContact($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
+            if($this->addPendingContactWithEvent($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
                 // Store any additional addresses from senderAddresses if present
                 if (!empty($senderAddresses) && is_array($senderAddresses)) {
                     $this->addressRepository->updateContactFields($senderPublicKeyHash, $senderAddresses);
@@ -2292,6 +2303,48 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $currency Currency code
      * @return bool Success status
      */
+    /**
+     * Insert a fully-formed contact record and fire CONTACT_ADDED on success.
+     *
+     * Wraps the 7 `contactRepository->insertContact()` call sites in this
+     * service so the event fires from one place. Same return semantics as
+     * the repository call so callers can stay `if (...)` shaped.
+     */
+    private function insertContactWithEvent(string $pubkey, string $name, int $fee, $credit, string $currency): bool
+    {
+        if (!$this->contactRepository->insertContact($pubkey, $name, $fee, $credit, $currency)) {
+            return false;
+        }
+        EventDispatcher::getInstance()->dispatch(ContactEvents::CONTACT_ADDED, [
+            'pubkey' => $pubkey,
+            'name' => $name,
+            'currency' => $currency,
+        ]);
+        return true;
+    }
+
+    /**
+     * Persist an incoming-request pending contact and fire CONTACT_ADDED.
+     *
+     * `addPendingContact` stores a minimal record (no name/currency yet — those
+     * arrive when the remote side's request payload is fully parsed), but the
+     * contact row is real, so the event fires here too. Subscribers see a
+     * null name; they can re-query the contact after `CONTACT_ACCEPTED`
+     * fires for the enriched record.
+     */
+    private function addPendingContactWithEvent(string $pubkey, ?string $name = null): bool
+    {
+        if (!$this->contactRepository->addPendingContact($pubkey, $name)) {
+            return false;
+        }
+        EventDispatcher::getInstance()->dispatch(ContactEvents::CONTACT_ADDED, [
+            'pubkey' => $pubkey,
+            'name' => $name,
+            'currency' => null,
+        ]);
+        return true;
+    }
+
     private function acceptContact(string $pubkey, string $name, int $fee, $credit, string $currency): bool {
         $success = $this->contactRepository->acceptContact($pubkey, $name, $fee, $credit, $currency);
         if($success){

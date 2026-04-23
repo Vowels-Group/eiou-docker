@@ -399,6 +399,7 @@ See [Testing Guide](docs/TESTING.md) for details.
 | [CLI Demo Guide](docs/CLI_DEMO_GUIDE.md) | Step-by-step CLI command walkthrough |
 | [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
 | [Testing Guide](docs/TESTING.md) | Unit and integration testing documentation |
+| [Plugins](docs/PLUGINS.md) | Authoring plugins, manifest schema, lifecycle, GUI management |
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
 | [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) | What data is sent, privacy guarantees, how to toggle |
 | [Security Policy](SECURITY.md) | Security architecture, vulnerability reporting, and best practices |

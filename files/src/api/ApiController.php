@@ -59,8 +59,14 @@ use Eiou\Services\ApiKeyService;
  * - POST /api/v1/system/sync                 - Trigger sync operation
  * - POST /api/v1/system/shutdown             - Shutdown processors
  * - POST /api/v1/system/start               - Start processors
+ * - POST /api/v1/system/restart             - Restart processors + PHP-FPM workers in-place
  * - GET  /api/v1/system/debug-report        - Download debug report (JSON)
  * - POST /api/v1/system/debug-report        - Submit debug report to support
+ *
+ * - GET  /api/v1/plugins                     - List installed plugins (admin)
+ * - POST /api/v1/plugins/:name/enable        - Enable a plugin (admin, no auto-restart)
+ * - POST /api/v1/plugins/:name/disable       - Disable a plugin (admin, no auto-restart)
+ * - *    /api/v1/plugins/:name/:action       - Plugin-owned endpoints (admin, via PluginApiRegistry)
  *
  * - POST /api/v1/chaindrop/propose           - Propose tx drop
  * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal
@@ -170,6 +176,7 @@ class ApiController {
                 'p2p' => $this->handleP2p($method, $action, $id, $params, $body),
                 'backup' => $this->handleBackup($method, $action, $params, $body),
                 'requests' => $this->handleRequests($method, $action, $id, $params, $body),
+                'plugins' => $this->handlePlugins($method, $action, $id, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
         } catch (ServiceException $e) {
@@ -264,6 +271,7 @@ class ApiController {
             $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
             $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
             $method === 'POST' && $action === 'start' => $this->startProcessors(),
+            $method === 'POST' && $action === 'restart' => $this->restartNode(),
             $method === 'GET' && $action === 'debug-report' => $this->getDebugReport($params),
             $method === 'POST' && $action === 'debug-report' => $this->submitDebugReport($body),
             default => $this->errorResponse('Unknown system action: ' . $action, 404, 'unknown_action')
@@ -316,6 +324,49 @@ class ApiController {
             $method === 'POST' && $action === 'cleanup' => $this->cleanupBackups(),
             default => $this->errorResponse('Unknown backup action: ' . $action, 404, 'unknown_action')
         };
+    }
+
+    /**
+     * Handle plugin endpoints (admin only)
+     *
+     * Routes:
+     * - GET  /api/v1/plugins                   - List installed plugins
+     * - POST /api/v1/plugins/:name/enable      - Enable a plugin
+     * - POST /api/v1/plugins/:name/disable     - Disable a plugin
+     *
+     * Enable/disable persists the flag but does NOT restart the node.
+     * Follow up with POST /api/v1/system/restart to apply changes.
+     */
+    private function handlePlugins(string $method, ?string $action, ?string $id, array $params, string $body): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        // Core plugin-management endpoints first.
+        if ($method === 'GET' && !$action)                        { return $this->listPluginsApi(); }
+        if ($method === 'POST' && $action && $id === 'enable')    { return $this->togglePluginApi($action, true); }
+        if ($method === 'POST' && $action && $id === 'disable')   { return $this->togglePluginApi($action, false); }
+
+        // Plugin-owned endpoint fallthrough. Shape: /api/v1/plugins/{plugin}/{action}.
+        // The registry inherits admin scope from the gate above — v1 keeps all
+        // plugin-owned endpoints admin-only to sidestep per-endpoint scope
+        // declarations in the manifest.
+        if ($action && $id) {
+            $registry = $this->services->getPluginApiRegistry();
+            if ($registry->has($action, $method, $id)) {
+                $result = $registry->dispatch($action, $method, $id, $params, $body);
+                if ($result['status'] === 200) {
+                    return $this->successResponse($result['payload']);
+                }
+                return $this->errorResponse(
+                    $result['payload']['message'] ?? 'Plugin endpoint failed',
+                    $result['status'],
+                    $result['payload']['error'] ?? 'plugin_error'
+                );
+            }
+        }
+
+        return $this->errorResponse('Unknown plugins action', 404, 'unknown_action');
     }
 
     // ==================== Wallet Endpoints ====================
@@ -1933,6 +1984,110 @@ class ApiController {
     }
 
     /**
+     * POST /api/v1/system/restart
+     *
+     * Request a full in-place node restart (PHP-FPM workers + processors).
+     * The API runs as www-data and cannot signal the root-owned FPM master,
+     * so we write a request marker that the root-side poller in startup.sh
+     * picks up within ~2s and turns into `eiou restart`.
+     *
+     * Use this after toggling plugins via the API, or any other change that
+     * is bound at boot. The request is rate-limited to one restart per 10s
+     * by the poller; rapid duplicate calls return success but only the
+     * first is acted on.
+     */
+    private function restartNode(): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        try {
+            $requester = new \Eiou\Services\RestartRequestService();
+            // Audit field: which API key triggered this. Logged so we can
+            // tell GUI-vs-API-vs-CLI restarts apart in the audit trail.
+            $requestor = (string) ($this->authenticatedKey['key_id'] ?? '');
+
+            if (!$requester->request('api', $requestor)) {
+                return $this->errorResponse(
+                    'Could not write the restart request file',
+                    500,
+                    'request_write_failed'
+                );
+            }
+
+            \Eiou\Utils\Logger::getInstance()->info('node_restart_requested_via_api', [
+                'requestor' => $requestor,
+            ]);
+
+            return $this->successResponse([
+                'message' => 'Restart requested. The node will respawn its workers within a few seconds.',
+                'expected_restart_within_seconds' => 5,
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Restart request failed: ' . $e->getMessage(), 500, 'restart_error');
+        }
+    }
+
+    /**
+     * GET /api/v1/plugins
+     *
+     * Returns the full list of discovered plugins including the optional
+     * metadata fields (author, homepage, changelog, license, has_changelog).
+     * Same payload shape as `pluginsList` in the GUI — no schema split.
+     */
+    private function listPluginsApi(): array {
+        $loader = \Eiou\Core\Application::getInstance()->pluginLoader;
+        if ($loader === null) {
+            return $this->errorResponse('Plugin system not initialized', 500, 'plugin_loader_unavailable');
+        }
+        return $this->successResponse([
+            'plugins' => $loader->listAllPlugins(),
+        ]);
+    }
+
+    /**
+     * POST /api/v1/plugins/{name}/enable
+     * POST /api/v1/plugins/{name}/disable
+     *
+     * Persist the enabled flag; does NOT restart the node. The caller must
+     * follow up with POST /api/v1/system/restart for the change to take
+     * effect in the running process.
+     */
+    private function togglePluginApi(string $name, bool $enabled): array {
+        $loader = \Eiou\Core\Application::getInstance()->pluginLoader;
+        if ($loader === null) {
+            return $this->errorResponse('Plugin system not initialized', 500, 'plugin_loader_unavailable');
+        }
+
+        // Kebab-case alphanumerics only — same guard the CLI + GUI apply.
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            return $this->errorResponse('Invalid plugin name', 400, 'invalid_name');
+        }
+
+        $known = array_column($loader->listAllPlugins(), 'name');
+        if (!in_array($name, $known, true)) {
+            return $this->errorResponse('Unknown plugin: ' . $name, 404, 'unknown_plugin');
+        }
+
+        if (!$loader->setEnabled($name, $enabled)) {
+            return $this->errorResponse('Failed to persist plugin state', 500, 'persist_failed');
+        }
+
+        \Eiou\Utils\Logger::getInstance()->info('plugin_toggled_via_api', [
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'requestor' => $this->authenticatedKey['key_id'] ?? null,
+        ]);
+
+        return $this->successResponse([
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'restart_required' => true,
+            'message' => 'Plugin state persisted. POST /api/v1/system/restart to apply.',
+        ]);
+    }
+
+    /**
      * POST /api/v1/system/start
      *
      * Start processors by removing shutdown flag
@@ -2675,120 +2830,22 @@ class ApiController {
             return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
         }
         $hash = $hashValidation['value'];
-        $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : 0;
+        $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : null;
 
-        try {
-            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
-            $p2p = $p2pRepo->getAwaitingApproval($hash);
-            if (!$p2p) {
-                return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
-            }
-
-            if (empty($p2p['destination_address'])) {
-                return $this->errorResponse('Only the transaction originator can approve', 403, 'not_originator');
-            }
-
-            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
-            $sendService = $this->services->getSendOperationService();
-
-            if ($candidateId > 0) {
-                // Candidate selected by ID
-                $candidate = $rp2pCandidateRepo->getCandidateById($candidateId);
-                if (!$candidate) {
-                    return $this->errorResponse('Selected route candidate not found', 404, 'candidate_not_found');
-                }
-
-                if ($candidate['hash'] !== $hash) {
-                    return $this->errorResponse('Candidate does not belong to this transaction', 400, 'candidate_mismatch');
-                }
-
-                $request = [
-                    'hash' => $candidate['hash'],
-                    'time' => $candidate['time'],
-                    'amount' => $candidate['amount'],
-                    'currency' => $candidate['currency'],
-                    'senderPublicKey' => $candidate['sender_public_key'],
-                    'senderAddress' => $candidate['sender_address'],
-                    'signature' => $candidate['sender_signature'],
-                ];
-
-                $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
-                $rp2pRepo->insertRp2pRequest($request);
-                $p2pRepo->updateStatus($hash, 'found');
-                $sendService->sendP2pEiou($request);
-                $rp2pCandidateRepo->deleteCandidatesByHash($hash);
-
-                return $this->successResponse([
-                    'message' => 'P2P transaction approved and sent',
-                    'hash' => $hash,
-                    'candidate_id' => $candidateId,
-                ]);
-            }
-
-            // No candidate_id - try fast mode (single rp2p)
-            $candidates = $rp2pCandidateRepo->getCandidatesByHash($hash);
-
-            if (!empty($candidates) && count($candidates) > 1) {
-                // Multiple candidates - caller must pick
-                return $this->errorResponse(
-                    'Multiple route candidates available. Provide candidate_id to select one.',
-                    400,
-                    'candidate_selection_required',
-                );
-            }
-
-            if (!empty($candidates) && count($candidates) === 1) {
-                $candidate = $candidates[0];
-                $request = [
-                    'hash' => $candidate['hash'],
-                    'time' => $candidate['time'],
-                    'amount' => $candidate['amount'],
-                    'currency' => $candidate['currency'],
-                    'senderPublicKey' => $candidate['sender_public_key'],
-                    'senderAddress' => $candidate['sender_address'],
-                    'signature' => $candidate['sender_signature'],
-                ];
-
-                $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
-                $rp2pRepo->insertRp2pRequest($request);
-                $p2pRepo->updateStatus($hash, 'found');
-                $sendService->sendP2pEiou($request);
-                $rp2pCandidateRepo->deleteCandidatesByHash($hash);
-
-                return $this->successResponse([
-                    'message' => 'P2P transaction approved and sent',
-                    'hash' => $hash,
-                ]);
-            }
-
-            // No candidates - check for single rp2p (fast mode)
-            $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
-            $rp2p = $rp2pRepo->getByHash($hash);
-
-            if ($rp2p) {
-                $request = [
-                    'hash' => $rp2p['hash'],
-                    'time' => $rp2p['time'],
-                    'amount' => $rp2p['amount'],
-                    'currency' => $rp2p['currency'],
-                    'senderPublicKey' => $rp2p['sender_public_key'],
-                    'senderAddress' => $rp2p['sender_address'],
-                    'signature' => $rp2p['sender_signature'],
-                ];
-
-                $p2pRepo->updateStatus($hash, 'found');
-                $sendService->sendP2pEiou($request);
-
-                return $this->successResponse([
-                    'message' => 'P2P transaction approved and sent (fast mode)',
-                    'hash' => $hash,
-                ]);
-            }
-
-            return $this->errorResponse('No route available for this transaction', 404, 'no_route');
-        } catch (Exception $e) {
-            return $this->errorResponse('Failed to approve P2P transaction: ' . $e->getMessage(), 500, 'p2p_error');
+        $result = $this->services->getP2pApprovalService()->approve($hash, null, $candidateId);
+        if (!$result['success']) {
+            return $this->errorResponse($result['message'], $result['status'] ?? 500, $result['code']);
         }
+
+        $modeSuffix = ($result['mode'] ?? null) === 'fast' ? ' (fast mode)' : '';
+        $response = [
+            'message' => 'P2P transaction approved and sent' . $modeSuffix,
+            'hash' => $result['hash'],
+        ];
+        if ($candidateId !== null && $candidateId > 0) {
+            $response['candidate_id'] = $candidateId;
+        }
+        return $this->successResponse($response);
     }
 
     /**
@@ -2810,34 +2867,14 @@ class ApiController {
         }
         $hash = $hashValidation['value'];
 
-        try {
-            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
-            $p2p = $p2pRepo->getAwaitingApproval($hash);
-            if (!$p2p) {
-                return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
-            }
-
-            if (empty($p2p['destination_address'])) {
-                return $this->errorResponse('Only the transaction originator can reject', 403, 'not_originator');
-            }
-
-            $p2pRepo->updateStatus($hash, Constants::STATUS_CANCELLED);
-
-            // Propagate cancel upstream
-            $p2pService = $this->services->getP2pService();
-            $p2pService->sendCancelNotificationForHash($hash);
-
-            // Clean up any remaining candidates
-            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
-            $rp2pCandidateRepo->deleteCandidatesByHash($hash);
-
-            return $this->successResponse([
-                'message' => 'P2P transaction rejected and cancelled',
-                'hash' => $hash,
-            ]);
-        } catch (Exception $e) {
-            return $this->errorResponse('Failed to reject P2P transaction: ' . $e->getMessage(), 500, 'p2p_error');
+        $result = $this->services->getP2pApprovalService()->reject($hash);
+        if (!$result['success']) {
+            return $this->errorResponse($result['message'], $result['status'] ?? 500, $result['code']);
         }
+        return $this->successResponse([
+            'message' => 'P2P transaction rejected and cancelled',
+            'hash' => $result['hash'],
+        ]);
     }
 
     // ==================== Helper Methods ====================

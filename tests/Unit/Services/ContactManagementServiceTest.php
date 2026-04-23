@@ -22,6 +22,8 @@ use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactCreditRepository;
+use Eiou\Events\ContactEvents;
+use Eiou\Events\EventDispatcher;
 use Eiou\Database\RepositoryFactory;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\ContactSyncServiceInterface;
@@ -45,6 +47,9 @@ class ContactManagementServiceTest extends TestCase
 
     protected function setUp(): void
     {
+        // Clean dispatcher each test so CONTACT_* subscriptions don't leak
+        // across tests and pollute each other's assertions.
+        EventDispatcher::resetInstance();
         $this->contactRepo = $this->createMock(ContactRepository::class);
         $this->addressRepo = $this->createMock(AddressRepository::class);
         $this->balanceRepo = $this->createMock(BalanceRepository::class);
@@ -78,6 +83,11 @@ class ContactManagementServiceTest extends TestCase
             $this->repoFactory,
             $this->syncTrigger
         );
+    }
+
+    protected function tearDown(): void
+    {
+        EventDispatcher::resetInstance();
     }
 
     // =========================================================================
@@ -316,6 +326,63 @@ class ContactManagementServiceTest extends TestCase
         $result = $this->service->acceptContact($pubkey, $name, $fee, $credit, $currency);
 
         $this->assertTrue($result);
+    }
+
+    public function testAcceptContactDispatchesContactAcceptedEvent(): void
+    {
+        $this->contactRepo->method('acceptContact')->willReturn(true);
+
+        $fired = null;
+        EventDispatcher::getInstance()->subscribe(ContactEvents::CONTACT_ACCEPTED, function (array $data) use (&$fired) {
+            $fired = $data;
+        });
+
+        $this->service->acceptContact('pk', 'Name', 1.0, 100.0, 'USD');
+
+        $this->assertNotNull($fired, 'CONTACT_ACCEPTED should fire after acceptContact commits');
+        $this->assertSame('pk', $fired['pubkey']);
+        $this->assertSame('Name', $fired['name']);
+        $this->assertSame('USD', $fired['currency']);
+    }
+
+    public function testAcceptContactDoesNotDispatchOnFailure(): void
+    {
+        $this->contactRepo->method('acceptContact')->willReturn(false);
+
+        $fired = false;
+        EventDispatcher::getInstance()->subscribe(ContactEvents::CONTACT_ACCEPTED, function () use (&$fired) {
+            $fired = true;
+        });
+
+        $this->service->acceptContact('pk', 'Name', 1.0, 100.0, 'USD');
+
+        $this->assertFalse($fired, 'CONTACT_ACCEPTED must not fire when the DB-side accept fails');
+    }
+
+    public function testBlockContactDispatchesContactBlockedWithResolvedPubkey(): void
+    {
+        // Happy path: isAddress → true, contactExists → true, blockContact → true.
+        // Event must carry the pubkey from lookupByAddress, not the address
+        // (address can change per-node; pubkey is the stable ID).
+        $this->transportUtility->method('isAddress')->willReturn(true);
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('contactExists')->willReturn(true);
+        $this->contactRepo->method('blockContact')->willReturn(true);
+        $this->contactRepo->method('lookupByAddress')->willReturn(['pubkey' => 'stable-pk-abc']);
+
+        $output = $this->createMock(CliOutputManager::class);
+
+        $fired = null;
+        EventDispatcher::getInstance()->subscribe(ContactEvents::CONTACT_BLOCKED, function (array $data) use (&$fired) {
+            $fired = $data;
+        });
+
+        $result = $this->service->blockContact('http://contact.example', $output);
+
+        $this->assertTrue($result);
+        $this->assertNotNull($fired, 'CONTACT_BLOCKED should fire on successful block');
+        $this->assertSame('stable-pk-abc', $fired['pubkey']);
+        $this->assertSame('http://contact.example', $fired['address']);
     }
 
     // =========================================================================

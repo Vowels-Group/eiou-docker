@@ -35,6 +35,10 @@ use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Cli\CliOutputManager;
+use Eiou\Core\SplitAmount;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\TransactionEvents;
+use ReflectionMethod;
 use RuntimeException;
 
 #[CoversClass(SendOperationService::class)]
@@ -62,6 +66,7 @@ class SendOperationServiceTest extends TestCase
 
     protected function setUp(): void
     {
+        EventDispatcher::resetInstance();
         $this->mockTransactionRepo = $this->createMock(TransactionRepository::class);
         $this->mockAddressRepo = $this->createMock(AddressRepository::class);
         $this->mockP2pRepo = $this->createMock(P2pRepository::class);
@@ -1140,5 +1145,78 @@ class SendOperationServiceTest extends TestCase
 
         $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];
         $this->service->handleDirectRoute($request, $contactInfo, $output);
+    }
+
+    // =========================================================================
+    // TRANSACTION_CREATED dispatch (via private helper, reflection)
+    // =========================================================================
+
+    /**
+     * Happy-path `handleDirectRoute` requires deep fixture setup (contact
+     * lookup, chain verification, payload build, lock acquisition). Rather
+     * than duplicate that scaffolding for the single line of dispatch
+     * interest, invoke the private `dispatchTransactionCreated()` helper
+     * directly via reflection — both call sites (direct route + P2P route)
+     * funnel through it, so testing the helper covers the whole event.
+     */
+    public function testDispatchTransactionCreatedFiresWithFullPayload(): void
+    {
+        $fired = null;
+        EventDispatcher::getInstance()->subscribe(
+            TransactionEvents::TRANSACTION_CREATED,
+            function (array $data) use (&$fired) { $fired = $data; }
+        );
+
+        $data = [
+            'txid' => 'new-tx-001',
+            'amount' => SplitAmount::from(25),
+            'currency' => 'USD',
+            'receiverAddress' => 'http://bob.example',
+        ];
+        $contactInfo = ['receiverPublicKey' => 'bob-pk', 'receiverName' => 'Bob'];
+
+        $ref = new ReflectionMethod($this->service, 'dispatchTransactionCreated');
+        $ref->setAccessible(true);
+        $ref->invoke($this->service, $data, $contactInfo, 'direct');
+
+        $this->assertNotNull($fired);
+        $this->assertSame('new-tx-001', $fired['txid']);
+        $this->assertSame('direct', $fired['route']);
+        $this->assertSame('USD', $fired['currency']);
+        $this->assertSame('http://bob.example', $fired['recipient_address']);
+        $this->assertSame('bob-pk', $fired['recipient_pubkey']);
+        // SplitAmount gets converted to major units for plugin consumption.
+        // SplitAmount::toMajorUnits() returns a float here — the payload
+        // docblock says "string|null" but either representation lets
+        // subscribers do numeric comparison, so just assert value.
+        $this->assertEquals(25, $fired['amount']);
+    }
+
+    public function testDispatchTransactionCreatedFiresForP2pRouteWithoutContactInfo(): void
+    {
+        $fired = null;
+        EventDispatcher::getInstance()->subscribe(
+            TransactionEvents::TRANSACTION_CREATED,
+            function (array $data) use (&$fired) { $fired = $data; }
+        );
+
+        // P2P route path passes `[]` for $contactInfo because the P2P
+        // request already built out the receiver separately — verify the
+        // event still fires with null recipient_pubkey instead of crashing.
+        $data = [
+            'txid' => 'p2p-tx-001',
+            'amount' => SplitAmount::from(5),
+            'currency' => 'USD',
+            'end_recipient_address' => 'http://carol.example',
+        ];
+
+        $ref = new ReflectionMethod($this->service, 'dispatchTransactionCreated');
+        $ref->setAccessible(true);
+        $ref->invoke($this->service, $data, [], 'p2p');
+
+        $this->assertNotNull($fired);
+        $this->assertSame('p2p', $fired['route']);
+        $this->assertSame('http://carol.example', $fired['recipient_address']);
+        $this->assertNull($fired['recipient_pubkey']);
     }
 }
