@@ -759,6 +759,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         'paybackMethodsUpdate',
         'paybackMethodsDelete',
         'paybackMethodsSharePolicy',
+        'paybackMethodsFetchFromContact',
     ], true)) {
         if (!isset($paybackMethodsController)) {
             $paybackMethodsController = new \Eiou\Gui\Controllers\PaybackMethodsController(

@@ -65,6 +65,9 @@ class PaybackMethodsController
                     $this->requireSensitive();
                     $this->setSharePolicy();
                     break;
+                case 'paybackMethodsFetchFromContact':
+                    $this->fetchFromContact();
+                    break;
                 default:
                     $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
             }
@@ -94,7 +97,13 @@ class PaybackMethodsController
         }
         $enabledOnly = !(isset($_POST['all']) && $_POST['all'] === '1');
         $rows = $this->svc->list($currency, $enabledOnly);
-        $this->respond(['success' => true, 'methods' => $rows, 'count' => count($rows)]);
+        $this->respond([
+            'success' => true,
+            'methods' => $rows,
+            'count' => count($rows),
+            'sensitive_access' => $this->session->hasSensitiveAccess(),
+            'seconds_remaining' => $this->session->sensitiveAccessSecondsRemaining(),
+        ]);
     }
 
     private function getMethod(): void
@@ -203,6 +212,89 @@ class PaybackMethodsController
             'method_id' => $id, 'share_policy' => $policy,
         ]);
         $this->respond(['success' => true, 'method_id' => $id, 'share_policy' => $policy]);
+    }
+
+    /**
+     * Ephemerally fetch a contact's shareable payback methods via a
+     * synchronous E2E round-trip. Nothing about the response is persisted
+     * on this node — the data is returned inline to the GUI and forgotten.
+     * Separate from ReceivedPaybackMethodService's async/persist path.
+     */
+    private function fetchFromContact(): void
+    {
+        $address = trim((string) ($_POST['address'] ?? ''));
+        if ($address === '') {
+            $this->respond(['success' => false, 'error' => 'missing_address'], 400);
+        }
+        $currency = isset($_POST['currency']) ? strtoupper((string) $_POST['currency']) : null;
+        if ($currency === '' || $currency === 'ALL') {
+            $currency = null;
+        }
+
+        $container = \Eiou\Services\ServiceContainer::getInstance();
+        $currentUser = $container->getCurrentUser();
+        $delivery = $container->getMessageDeliveryService();
+        $transport = $container->getUtilityContainer()->getTransportUtility();
+
+        $requestId = $this->generateUuidV4();
+        $payload = [
+            'type'            => 'message',
+            'typeMessage'     => 'payback_methods',
+            'action'          => 'request',
+            'senderAddress'   => $transport->resolveUserAddressForTransport($address),
+            'senderPublicKey' => $currentUser->getPublicKey() ?? '',
+            'payload'         => [
+                'request_id'      => $requestId,
+                'currency'        => $currency,
+                'max_age_seconds' => 0,
+            ],
+        ];
+
+        $messageId = 'payback_methods-fetch-' . $requestId;
+        $result = $delivery->sendMessage('payback_methods', $address, $payload, $messageId, false);
+
+        if (empty($result['success'])) {
+            $this->respond([
+                'success' => false,
+                'error'   => 'delivery_failed',
+                'detail'  => $result['tracking']['stage'] ?? 'unknown',
+            ], 502);
+        }
+
+        // Receiver echoes {success, status: 'received', response: {...}}. We
+        // want the inner "response" with the actual methods list.
+        $outer = $result['response'] ?? [];
+        $inner = is_array($outer) ? ($outer['response'] ?? null) : null;
+        if (!is_array($inner)) {
+            $this->respond([
+                'success' => false,
+                'error'   => 'unexpected_response',
+                'raw'     => $outer,
+            ], 502);
+        }
+
+        $this->respond([
+            'success'     => true,
+            'status'      => $inner['status'] ?? 'unknown',
+            'methods'     => $inner['methods'] ?? [],
+            'ttl_seconds' => (int) ($inner['ttl_seconds'] ?? 0),
+        ]);
+    }
+
+    private function generateUuidV4(): string
+    {
+        $bytes = random_bytes(16);
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+        $hex = bin2hex($bytes);
+        return sprintf(
+            '%s-%s-%s-%s-%s',
+            substr($hex, 0, 8),
+            substr($hex, 8, 4),
+            substr($hex, 12, 4),
+            substr($hex, 16, 4),
+            substr($hex, 20, 12)
+        );
     }
 
     // =========================================================================

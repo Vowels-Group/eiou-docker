@@ -3869,6 +3869,25 @@ function openContactModal(contact, openTab) {
         transactionsEl.innerHTML = html;
     }
 
+    // Show the Payback tab only when this node owes the contact in at
+    // least one currency. Keeps mobile at a 4-tab max; there's nothing
+    // to settle if we're net-even or they owe us.
+    var paybackTabBtn = document.getElementById('modal-tab-payback');
+    if (paybackTabBtn) {
+        var owesSomething = false;
+        var balances = (typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {};
+        Object.keys(balances).forEach(function (code) {
+            var raw = balances[code] && (balances[code].balance != null ? balances[code].balance : balances[code].amount);
+            var n = parseFloat(raw);
+            if (!isNaN(n) && n < 0) { owesSomething = true; }
+        });
+        if (!owesSomething) {
+            var flat = parseFloat(contact.balance);
+            if (!isNaN(flat) && flat < 0) { owesSomething = true; }
+        }
+        paybackTabBtn.style.display = owesSomething ? '' : 'none';
+    }
+
     // Open specified tab or default to info tab
     var tabToOpen = openTab || 'info-tab';
     showModalTab(tabToOpen, null);
@@ -7454,17 +7473,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             // modal behind whichever modal it was stacked on top of.
             //
             // Only opt in / out of the stack when the click came from a
-            // *different* modal. DLQ detail modal → Transaction ID adds
-            // the class; a click from outside any modal clears it so a
-            // stale flag from a previous session doesn't survive.
+            // *different* modal. Contact / DLQ detail → Transaction ID
+            // adds the class; a click from outside any modal clears it
+            // so a stale flag from a previous session doesn't survive.
             var txModalEl = document.getElementById('transactionModal');
             if (txModalEl) {
                 var originModal = el.closest ? el.closest('.modal') : null;
                 var originatedInTxModal = (originModal && originModal.id === 'transactionModal');
                 if (!originatedInTxModal) {
-                    if (originModal
-                        && originModal.style.display !== 'none'
-                        && (originModal.offsetParent !== null || originModal.classList.contains('active'))) {
+                    // Don't use offsetParent here — it's always null for
+                    // position:fixed elements (which every .modal is), so the
+                    // previous check reported the contactModal as "hidden"
+                    // and removed the stack class even when contactModal
+                    // was fully visible on top of the tx modal.
+                    var originVisible = originModal &&
+                        originModal.style.display !== 'none' &&
+                        originModal.getBoundingClientRect().width > 0;
+                    if (originVisible) {
                         txModalEl.classList.add('modal-stack-top');
                     } else {
                         txModalEl.classList.remove('modal-stack-top');
@@ -7518,6 +7543,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'showModalTab': function(el) {
             var tab = el.getAttribute('data-tab');
             showModalTab(tab, el);
+        },
+        'showContactPaybackTab': function(el) {
+            showModalTab('payback-tab', el);
+            if (window.paybackOptions) { window.paybackOptions.openForCurrentContact(); }
+        },
+        'refreshContactPayback': function() {
+            if (window.paybackOptions) { window.paybackOptions.refresh(); }
         },
 
         // Currency slider
@@ -9278,7 +9310,16 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             xhr.onreadystatechange = function () {
                 if (xhr.readyState !== 4) { return; }
                 var data;
-                try { data = JSON.parse(xhr.responseText); } catch (e) { data = { success: false, error: 'bad_json' }; }
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch (e) {
+                    // 302 / 401 / an HTML login page all fail JSON.parse here.
+                    // That's nearly always a session expiring mid-action.
+                    var looksLikeLogin = /<html|<!DOCTYPE/i.test(xhr.responseText || '');
+                    data = (looksLikeLogin || xhr.status === 302 || xhr.status === 401)
+                        ? { success: false, error: 'session_expired', message: 'Session expired — please sign in again, then retry.' }
+                        : { success: false, error: 'bad_response', message: 'Unexpected response from server.' };
+                }
                 cb(data, xhr.status);
             };
             xhr.send(body);
@@ -9289,6 +9330,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 if (!data.success) { return; }
                 state.methods = data.methods || [];
                 state.listLoaded = true;
+                renderAccessState(data.seconds_remaining || 0);
                 render();
             });
         }
@@ -9311,10 +9353,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var html = '<div class="contacts-table-wrapper payback-methods-table-wrapper">' +
                 '<table class="contacts-table payback-methods-table">' +
                 '<thead><tr>' +
-                    '<th class="col-pb-type"     style="width:16%">Type</th>' +
-                    '<th class="col-pb-currency" style="width:10%">Currency</th>' +
-                    '<th class="col-pb-label"    style="width:24%">Label</th>' +
-                    '<th class="col-pb-details"  style="width:36%">Details</th>' +
+                    '<th class="col-pb-type"     style="width:14%">Type</th>' +
+                    '<th class="col-pb-currency" style="width:13%">Currency</th>' +
+                    '<th class="col-pb-label"    style="width:22%">Label</th>' +
+                    '<th class="col-pb-details"  style="width:37%">Details</th>' +
                     '<th class="col-pb-share"    style="width:14%">Share</th>' +
                 '</tr></thead><tbody>';
             state.methods.forEach(function (m) {
@@ -9984,6 +10026,17 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
         function escapeAttr(s) { return escapeHtml(s); }
 
+        function renderAccessState(secondsRemaining) {
+            var el = document.getElementById('payback-methods-access-state');
+            if (!el) { return; }
+            if (secondsRemaining > 0) {
+                el.innerHTML = '<i class="fas fa-unlock-alt"></i> Unlocked for ' +
+                    Math.ceil(secondsRemaining / 60) + ' min';
+            } else {
+                el.textContent = '';
+            }
+        }
+
         // Auto-load on DOM ready if the section is present.
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function () {
@@ -10004,6 +10057,276 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             switchToEdit: switchToEdit,
             selectType: selectType,
             gotoStep:   gotoStep
+        };
+    })();
+
+    // ========================================================================
+    // Payback Options (contact modal "Payback" tab)
+    //
+    // Ephemeral fetch of a contact's shareable payback methods. Synchronous
+    // E2E round-trip through the node; response rendered in the tab and
+    // never persisted anywhere (no DB row, no localStorage). Closing the
+    // modal / switching tab drops the in-memory copy.
+    // ========================================================================
+
+    window.paybackOptions = (function () {
+        var state = {
+            // Identity of the contact whose data is currently on screen. Used
+            // to discard stale responses if the user switches contacts mid-flight.
+            loadedForPubkeyHash: null,
+            lastFetchAddress:    null,
+            currentCurrency:     null,
+            methods:             []
+        };
+
+        function setStateText(msg) {
+            var el = document.getElementById('payback-options-state');
+            if (el) { el.textContent = msg || ''; }
+        }
+
+        // currentContactCurrencies is an array of objects shaped
+        // {currency, status, credit_limit, fee, my_available_credit,
+        //  their_available_credit, ...}. Pull out just the codes.
+        function contactCurrencyCodes() {
+            if (!Array.isArray(currentContactCurrencies)) { return []; }
+            var out = [];
+            currentContactCurrencies.forEach(function (entry) {
+                if (entry && typeof entry === 'object' && entry.currency) {
+                    out.push(entry.currency);
+                } else if (typeof entry === 'string') {
+                    out.push(entry);
+                }
+            });
+            return out;
+        }
+
+        function pickDefaultCurrency() {
+            // Currency of the largest debt this node owes the contact. Balance
+            // from the contact's perspective: negative = we owe them.
+            var balances = (typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {};
+            var codes = contactCurrencyCodes();
+            if (!codes.length) { codes = Object.keys(balances); }
+            if (!codes.length) { return 'USD'; }
+            var best = null, bestOwed = -Infinity;
+            codes.forEach(function (c) {
+                var b = balances[c];
+                var raw = b && (b.balance != null ? b.balance : b.amount);
+                var n = parseFloat(raw);
+                if (isNaN(n)) { n = 0; }
+                var owed = -n; // positive = we owe them
+                if (owed > bestOwed) { bestOwed = owed; best = c; }
+            });
+            return best || codes[0];
+        }
+
+        function renderCurrencyOptions(available) {
+            var sel = document.getElementById('payback-options-currency');
+            if (!sel) { return; }
+            var codes = contactCurrencyCodes();
+            if (!codes.length) {
+                codes = Object.keys((typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {});
+            }
+            // Ensure currencies mentioned in the response are selectable too.
+            (available || []).forEach(function (c) {
+                if (c && codes.indexOf(c) === -1) { codes.push(c); }
+            });
+            if (!codes.length) { codes = ['USD']; }
+            var html = '<option value="">All currencies</option>';
+            codes.forEach(function (c) {
+                html += '<option value="' + escapeAttrSafe(c) + '"' + (c === state.currentCurrency ? ' selected' : '') + '>' + escapeHtmlSafe(c) + '</option>';
+            });
+            sel.innerHTML = html;
+            sel.onchange = function () {
+                state.currentCurrency = sel.value || null;
+                load(true);
+            };
+        }
+
+        function renderContactName() {
+            var el = document.getElementById('payback-contact-name');
+            if (!el) { return; }
+            var nameEl = document.getElementById('modal_contact_name');
+            var name = (nameEl && nameEl.textContent) ? nameEl.textContent.trim() : 'this contact';
+            el.textContent = name || 'this contact';
+        }
+
+        function escapeHtmlSafe(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function escapeAttrSafe(s) { return escapeHtmlSafe(s); }
+
+        function render(payload) {
+            var container = document.getElementById('payback-options-list');
+            if (!container) { return; }
+            var status  = payload && payload.status;
+            var methods = (payload && Array.isArray(payload.methods)) ? payload.methods : [];
+            state.methods = methods;
+
+            if (status === 'denied') {
+                container.innerHTML = '<p class="no-transactions">This contact is not sharing any matching payback methods.</p>';
+                return;
+            }
+            if (status === 'rate_limited') {
+                container.innerHTML = '<p class="no-transactions">Rate-limited by the remote node. Try again later.</p>';
+                return;
+            }
+            if (status === 'pending_approval') {
+                container.innerHTML = '<p class="no-transactions"><i class="fas fa-clock"></i> Waiting for the contact to approve your request. Close and reopen this tab to retry once they do.</p>';
+                return;
+            }
+            if (status !== 'ok' || !methods.length) {
+                container.innerHTML = '<p class="no-transactions">No payback methods available right now.</p>';
+                return;
+            }
+
+            methods = methods.slice().sort(function (a, b) {
+                return (a.priority || 100) - (b.priority || 100);
+            });
+
+            var html = '<div class="contacts-table-wrapper">' +
+                '<table class="contacts-table payback-options-table">' +
+                '<thead><tr>' +
+                    '<th class="col-pbo-type"     style="width:30%">Type</th>' +
+                    '<th class="col-pbo-currency" style="width:28%">Currency</th>' +
+                    '<th class="col-pbo-label"    style="width:42%">Label</th>' +
+                '</tr></thead><tbody>';
+            methods.forEach(function (m, i) {
+                html +=
+                    '<tr class="payback-opt-row is-clickable" data-method-idx="' + i + '" title="Tap for details">' +
+                        '<td class="col-pbo-type"><span class="payback-method-type-badge">' + escapeHtmlSafe(m.type || '') + '</span></td>' +
+                        '<td class="col-pbo-currency">' + escapeHtmlSafe(m.currency || '') + '</td>' +
+                        '<td class="col-pbo-label">' + escapeHtmlSafe(m.label || '') + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('.payback-opt-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                    var idx = parseInt(row.getAttribute('data-method-idx'), 10);
+                    var method = state.methods[idx];
+                    if (method) { openDetailModal(method); }
+                });
+            });
+        }
+
+        function openDetailModal(method) {
+            var fields = (method && typeof method.fields === 'object' && method.fields) ? method.fields : {};
+            var rows = '';
+            Object.keys(fields).forEach(function (k) {
+                var v = fields[k];
+                if (v == null || v === '') { return; }
+                rows +=
+                    '<div class="payback-detail-row">' +
+                        '<div class="payback-detail-key text-muted">' + escapeHtmlSafe(k) + '</div>' +
+                        '<div class="payback-detail-value">' +
+                            '<span class="payback-detail-text">' + escapeHtmlSafe(String(v)) + '</span>' +
+                            ' <button type="button" class="btn btn-sm btn-outline payback-detail-copy" data-copy="' + escapeAttrSafe(String(v)) + '" title="Copy"><i class="fas fa-copy"></i></button>' +
+                        '</div>' +
+                    '</div>';
+            });
+            if (!rows) { rows = '<p class="text-muted">No fields shared.</p>'; }
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'payback-detail-modal';
+            overlay.style.display = 'flex';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:520px">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-hand-holding-usd"></i> ' + escapeHtmlSafe(method.label || method.type || 'Payback method') + '</h3>' +
+                        '<span class="close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1rem 1.5rem;">' +
+                        '<div class="payback-detail-row">' +
+                            '<div class="payback-detail-key text-muted">Type</div>' +
+                            '<div class="payback-detail-value"><span class="payback-method-type-badge">' + escapeHtmlSafe(method.type || '') + '</span></div>' +
+                        '</div>' +
+                        '<div class="payback-detail-row">' +
+                            '<div class="payback-detail-key text-muted">Currency</div>' +
+                            '<div class="payback-detail-value">' + escapeHtmlSafe(method.currency || '') + '</div>' +
+                        '</div>' +
+                        rows +
+                    '</div>' +
+                '</div>';
+
+            function close() {
+                if (document.body.contains(overlay)) { document.body.removeChild(overlay); }
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) { close(); } }
+            overlay.querySelector('.close').onclick = close;
+            overlay.onclick = function (e) { if (e.target === overlay) { close(); } };
+            document.addEventListener('keydown', esc);
+            overlay.querySelectorAll('.payback-detail-copy').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var v = btn.getAttribute('data-copy') || '';
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(v).catch(function () {});
+                    }
+                });
+            });
+            document.body.appendChild(overlay);
+        }
+
+        function load(skipStateReset) {
+            var address = currentContactAddress;
+            var pubkeyHash = currentContactPubkeyHash;
+            if (!address) {
+                setStateText('No contact address available.');
+                return;
+            }
+            var currency = state.currentCurrency;
+            if (!skipStateReset) { setStateText('Fetching from contact…'); }
+            state.lastFetchAddress = address;
+            state.loadedForPubkeyHash = pubkeyHash;
+
+            var csrfEl = document.querySelector('input[name="csrf_token"]');
+            var csrf = csrfEl ? csrfEl.value : '';
+            var body = 'action=paybackMethodsFetchFromContact' +
+                       '&csrf_token=' + encodeURIComponent(csrf) +
+                       '&address=' + encodeURIComponent(address);
+            if (currency) { body += '&currency=' + encodeURIComponent(currency); }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.pathname, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                // Drop stale responses if the user switched contacts mid-flight.
+                if (state.lastFetchAddress !== address) { return; }
+                var data;
+                try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+                if (!data || !data.success) {
+                    setStateText('Fetch failed' + (data && data.error ? ': ' + data.error : '') + '.');
+                    render({ status: 'error', methods: [] });
+                    return;
+                }
+                setStateText('Fetched ' + new Date().toLocaleTimeString() + ' (not stored).');
+                render(data);
+                renderCurrencyOptions((data.methods || []).map(function (m) { return m.currency; }));
+            };
+            xhr.send(body);
+        }
+
+        function openForCurrentContact() {
+            renderContactName();
+            state.currentCurrency = pickDefaultCurrency();
+            renderCurrencyOptions([]);
+            load();
+        }
+
+        function refresh() {
+            if (!state.lastFetchAddress) { openForCurrentContact(); return; }
+            load();
+        }
+
+        return {
+            openForCurrentContact: openForCurrentContact,
+            refresh: refresh
         };
     })();
 

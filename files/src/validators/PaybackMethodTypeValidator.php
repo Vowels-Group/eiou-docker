@@ -314,7 +314,7 @@ class PaybackMethodTypeValidator
 
                 // ── Other ─────────────────────────────────────────────────────
                 [
-                    'id' => self::TYPE_CUSTOM, 'label' => 'Custom / Other', 'group' => 'other',
+                    'id' => self::TYPE_CUSTOM, 'label' => 'Custom', 'group' => 'other',
                     'icon' => 'fas fa-question',
                     'description' => 'Free-form instructions when no canonical rail fits. Currency is whatever you declare.',
                     'currencies' => null,

@@ -184,6 +184,9 @@
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="transactions-tab">
                 <i class="fas fa-exchange-alt"></i> Transactions
             </button>
+            <button type="button" class="modal-tab" id="modal-tab-payback" data-action="showContactPaybackTab" data-tab="payback-tab" style="display:none;">
+                <i class="fas fa-hand-holding-usd"></i> Payback
+            </button>
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="status-tab">
                 <i class="fas fa-signal"></i> Status
             </button>
@@ -296,6 +299,27 @@
                 </div>
                 <div id="modal_transactions" class="contact-modal-tx-wrapper">
                     <p class="no-transactions">No recent transactions with this contact.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payback Tab -->
+        <div id="payback-tab" class="modal-tab-content">
+            <div class="modal-tab-scroll">
+                <p style="margin: 0 0 0.5rem;">
+                    <i class="fas fa-info-circle"></i>
+                    Ways <strong id="payback-contact-name">this contact</strong> accepts settlement.
+                    Fetched live &mdash; nothing is stored on this device.
+                </p>
+                <div class="payback-options-controls">
+                    <select id="payback-options-currency" class="form-control form-control-sm"></select>
+                    <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactPayback">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div id="payback-options-state" class="text-muted" style="padding: 0.25rem 0 0.5rem; font-size: 0.85rem;"></div>
+                <div id="payback-options-list">
+                    <p class="no-transactions">Opening the tab will fetch live from the contact.</p>
                 </div>
             </div>
         </div>

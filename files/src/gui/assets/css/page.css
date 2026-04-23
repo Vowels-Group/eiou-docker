@@ -3094,10 +3094,31 @@ tr.tx-item-in-progress > td:first-child {
 
 .modal-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.25rem;
     border-bottom: 2px solid #dee2e6;
     padding: 0 1rem;
     margin-bottom: 1rem;
+}
+.modal-tabs > .modal-tab { flex: 0 0 auto; white-space: nowrap; }
+
+/* Narrow screens: wrap tabs — 3 per row maximum, a 4th or 5th wraps to a
+   second row. flex-grow:0 keeps each tab at its 1/3 share, so the
+   second row (1 or 2 items) doesn't stretch and is centered with
+   justify-content — Status + Settings cluster together instead of
+   splitting the whole width. */
+@media (max-width: 600px) {
+    .modal-tabs {
+        justify-content: center;
+        row-gap: 0.25rem;
+    }
+    .modal-tabs > .modal-tab {
+        flex: 0 0 calc((100% - 0.5rem) / 3);
+        min-width: 0;
+        text-align: center;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
 }
 
 .modal-tab {
@@ -6082,6 +6103,81 @@ details.payback-type-group > summary.payback-type-group-label:hover { background
 .payback-type-tile:hover:not(:disabled) { border-color: var(--primary, #36c); }
 .payback-type-tile.is-selected { border-color: var(--primary, #36c); background: var(--bg-accent, #e6eef8); }
 .payback-type-tile:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Payback Options (contact modal tab) ──────────────────────────── */
+.payback-options-controls {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin: 0.25rem 0 0.5rem;
+}
+.payback-options-controls > #payback-options-currency {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 12rem;
+    font-size: 0.9rem;
+    padding: 0.35rem 1.75rem 0.35rem 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='none' stroke='%236c757d' stroke-width='1.5' d='M1 1l4 4 4-4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    background-size: 0.6rem 0.4rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+.payback-options-controls > button { flex: 0 0 auto; }
+
+.contacts-table.payback-options-table .col-pbo-type,
+.contacts-table.payback-options-table .col-pbo-currency {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.contacts-table.payback-options-table .col-pbo-label {
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0;
+}
+.contacts-table.payback-options-table tbody tr.is-clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.contacts-table.payback-options-table tbody tr.is-clickable:hover {
+    background: var(--bg-alt, #f6f8fa);
+}
+
+/* Re-show col 3 (Label) on mobile — the generic .contacts-table rule
+   hides col 3+. Details is handled by the tap-to-open detail modal. */
+@media (max-width: 600px) {
+    .contacts-table.payback-options-table thead th:nth-child(3),
+    .contacts-table.payback-options-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .contacts-table.payback-options-table .col-pbo-type { width: 30%; }
+    .contacts-table.payback-options-table .col-pbo-currency { width: 30%; }
+    .contacts-table.payback-options-table .col-pbo-label { width: 40%; }
+}
+
+/* Detail modal — a row per field, key left / value right. */
+.payback-detail-row {
+    display: grid;
+    grid-template-columns: 8rem 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color, #eee);
+}
+.payback-detail-row:last-child { border-bottom: none; }
+.payback-detail-key { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.payback-detail-value { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.payback-detail-text { overflow-wrap: anywhere; word-break: break-word; }
+@media (max-width: 600px) {
+    .payback-detail-row { grid-template-columns: 1fr; gap: 0.1rem; }
+}
 
 .payback-type-fields .form-group + .form-group { margin-top: 0.5rem; }
 .payback-field-group { display: flex; flex-direction: column; gap: 0.25rem; }
