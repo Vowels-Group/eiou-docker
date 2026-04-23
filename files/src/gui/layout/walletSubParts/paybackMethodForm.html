@@ -1,0 +1,75 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+<!--
+    Add/Edit modal for a payback method. Two-step flow:
+      1) Pick type (tile selector)
+      2) Fill in type-specific fields + label + currency + share-policy + priority
+
+    Type tiles and per-type fields are injected from script.js's
+    window.paybackMethods module, which reads the catalog JSON from
+    #payback-methods-catalog.
+-->
+<div class="modal" id="payback-method-modal-overlay" style="display: none;">
+    <div class="modal-content modal-lg" role="dialog" aria-labelledby="payback-method-modal-title">
+        <div class="modal-header">
+            <h3 id="payback-method-modal-title"><i class="fas fa-hand-holding-usd"></i> Add Payback Method</h3>
+            <span class="close" data-action="closePaybackMethodForm" aria-label="Close" role="button">&times;</span>
+        </div>
+
+        <div class="modal-body" style="padding: 1rem 1.5rem;">
+            <!-- Step 1 — type selector -->
+            <div class="payback-step" data-step="1">
+                <label class="form-label">What kind of payback method?</label>
+                <div class="payback-type-grid" id="payback-type-grid">
+                    <!-- Tiles injected by script.js from the catalog. -->
+                </div>
+            </div>
+
+            <!-- Step 2 — per-type fields -->
+            <div class="payback-step" data-step="2" style="display: none;">
+                <div id="payback-form-errors" class="form-errors" role="alert" style="display: none;"></div>
+
+                <div class="form-group">
+                    <label class="form-label" for="payback-label">Label</label>
+                    <input type="text" id="payback-label" class="form-control" maxlength="128"
+                           placeholder="e.g. &quot;Chase checking&quot; or &quot;Cold wallet&quot;" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="payback-currency">Settles in</label>
+                    <select id="payback-currency" class="form-control"></select>
+                    <small class="text-muted payback-currency-hint"></small>
+                </div>
+
+                <!-- Per-type fields slot — populated from script.js based on type choice -->
+                <div id="payback-type-fields" class="payback-type-fields"></div>
+
+                <div class="form-group">
+                    <label class="form-label" for="payback-share-policy">When a contact asks for this method</label>
+                    <select id="payback-share-policy" class="form-control">
+                        <option value="auto">Share automatically (default)</option>
+                        <option value="prompt">Ask me each time</option>
+                        <option value="never">Never share</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="payback-priority">Priority (lower = preferred)</label>
+                    <input type="number" id="payback-priority" class="form-control" min="0" max="9999" value="100">
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-secondary" data-action="closePaybackMethodForm">Cancel</button>
+            <button class="btn btn-secondary payback-step-back" data-action="paybackStepBack" style="display: none;">
+                <i class="fas fa-chevron-left"></i> Back
+            </button>
+            <button class="btn btn-primary payback-step-next" data-action="paybackStepNext" disabled>
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+            <button class="btn btn-primary payback-submit" data-action="submitPaybackMethod" style="display: none;">
+                <i class="fas fa-save"></i> Save Method
+            </button>
+        </div>
+    </div>
+</div>

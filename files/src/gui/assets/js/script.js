@@ -7738,7 +7738,27 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         },
         'openPluginChangelog': function(el) {
             if (window.plugins) window.plugins.openChangelog(el.getAttribute('data-plugin'));
-        }
+        },
+
+        // Payback Methods
+        'openPaybackMethodForm': function(el) {
+            if (window.paybackMethods) {
+                window.paybackMethods.openForm(el.getAttribute('data-payback-mode') || 'add', el.getAttribute('data-method-id') || null);
+            }
+        },
+        'closePaybackMethodForm': function() { if (window.paybackMethods) { window.paybackMethods.closeForm(); } },
+        'submitPaybackMethod': function() { if (window.paybackMethods) { window.paybackMethods.submit(); } },
+        'revealPaybackMethod': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.reveal(el.getAttribute('data-method-id')); }
+        },
+        'deletePaybackMethod': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.remove(el.getAttribute('data-method-id'), el.getAttribute('data-label') || ''); }
+        },
+        'selectPaybackType': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.selectType(el.getAttribute('data-type')); }
+        },
+        'paybackStepNext': function() { if (window.paybackMethods) { window.paybackMethods.gotoStep(2); } },
+        'paybackStepBack': function() { if (window.paybackMethods) { window.paybackMethods.gotoStep(1); } }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -9194,6 +9214,586 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openModal: openModal,
             openChangelog: openChangelogModal,
             requestRestart: requestRestart
+        };
+    })();
+
+    // Payback Methods — list / add / reveal / edit / delete
+    //
+    // Talks to /?ajax=paybackMethodsList etc. via the same XHR pattern as
+    // the API-keys module. CSRF token is pulled from the hidden field the
+    // page layout already puts in the DOM.
+    // =====================================================================
+    window.paybackMethods = (function () {
+        var state = {
+            methods: [],
+            listLoaded: false,
+            formMode: 'add',
+            editingId: null,
+            selectedType: null,
+            currentStep: 1
+        };
+        var catalog = null;
+        var catalogTypesById = {};
+
+        function ensureCatalog() {
+            if (catalog) { return catalog; }
+            var el = document.getElementById('payback-methods-catalog');
+            if (!el) { return null; }
+            try {
+                catalog = JSON.parse(el.textContent || '{}');
+                (catalog.types || []).forEach(function (t) { catalogTypesById[t.id] = t; });
+            } catch (e) { catalog = null; }
+            return catalog;
+        }
+        function getType(id) { ensureCatalog(); return catalogTypesById[id] || null; }
+
+        function csrf() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return el ? el.value : '';
+        }
+
+        function post(action, extra, cb) {
+            var body = 'action=' + encodeURIComponent(action) +
+                       '&csrf_token=' + encodeURIComponent(csrf());
+            Object.keys(extra || {}).forEach(function (k) {
+                body += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(extra[k]);
+            });
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.pathname, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                var data;
+                try { data = JSON.parse(xhr.responseText); } catch (e) { data = { success: false, error: 'bad_json' }; }
+                cb(data, xhr.status);
+            };
+            xhr.send(body);
+        }
+
+        function loadList() {
+            post('paybackMethodsList', {}, function (data) {
+                if (!data.success) { return; }
+                state.methods = data.methods || [];
+                state.listLoaded = true;
+                render();
+            });
+        }
+
+        function render() {
+            var container = document.getElementById('payback-methods-list');
+            if (!container) { return; }
+            if (!state.methods.length) {
+                container.innerHTML =
+                    '<div class="payback-methods-empty text-muted">' +
+                    'No payback methods yet. Click <strong>+ Add</strong> above to set one up.' +
+                    '</div>';
+                return;
+            }
+            var html = '<div class="payback-methods-rows">';
+            state.methods.forEach(function (m) {
+                html += '<div class="payback-method-row" data-method-id="' + escapeAttr(m.method_id) + '">' +
+                    '<span class="payback-method-type-badge">' + escapeHtml(m.type) + '</span>' +
+                    '<span class="payback-method-currency-pill">' + escapeHtml(m.currency) + '</span>' +
+                    '<span class="payback-method-label">' + escapeHtml(m.label) + '</span>' +
+                    '<span class="payback-method-mask">' + escapeHtml(m.masked_display || '') + '</span>' +
+                    '<button class="btn btn-sm btn-outline" ' +
+                        'data-action="revealPaybackMethod" data-method-id="' + escapeAttr(m.method_id) + '" ' +
+                        'title="Reveal full details">' +
+                        '<i class="fas fa-eye"></i>' +
+                    '</button>' +
+                    '<button class="btn btn-sm btn-outline" ' +
+                        'data-action="openPaybackMethodForm" data-payback-mode="edit" ' +
+                        'data-method-id="' + escapeAttr(m.method_id) + '" title="Edit">' +
+                        '<i class="fas fa-pen"></i>' +
+                    '</button>' +
+                    '<button class="btn btn-sm btn-danger" ' +
+                        'data-action="deletePaybackMethod" data-method-id="' + escapeAttr(m.method_id) + '" ' +
+                        'data-label="' + escapeAttr(m.label) + '" title="Delete">' +
+                        '<i class="fas fa-trash"></i>' +
+                    '</button>' +
+                    '</div>';
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        // -------------------------------------------------------------------
+        // Form: open / close / step nav
+        // -------------------------------------------------------------------
+
+        function openForm(mode, methodId) {
+            state.formMode = mode || 'add';
+            state.editingId = methodId || null;
+            state.selectedType = null;
+            state.currentStep = 1;
+
+            ensureCatalog();
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+
+            resetFormInputs();
+            renderTypeTiles();
+            setModalTitle(state.formMode === 'edit' ? 'Edit Payback Method' : 'Add Payback Method');
+            setStepVisibility(1);
+            hideErrors();
+            overlay.style.display = 'flex';
+
+            if (state.formMode === 'edit' && methodId) {
+                post('paybackMethodsGet', { method_id: methodId }, function (data) {
+                    if (!data.success || !data.method) {
+                        showErrors([{ field: null, message: data.error || 'Could not load method' }]);
+                        return;
+                    }
+                    prefillForEdit(data.method);
+                });
+            }
+        }
+
+        function closeForm() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (overlay) { overlay.style.display = 'none'; }
+            state.editingId = null;
+            state.selectedType = null;
+            state.currentStep = 1;
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (t) {
+                t.disabled = false;
+            });
+        }
+
+        function gotoStep(n) {
+            if (n === 2) {
+                if (!state.selectedType) { return; }
+                renderStep2(state.selectedType);
+            }
+            state.currentStep = n;
+            setStepVisibility(n);
+        }
+
+        function setStepVisibility(n) {
+            document.querySelectorAll('#payback-method-modal-overlay .payback-step').forEach(function (s) {
+                s.style.display = s.getAttribute('data-step') === String(n) ? '' : 'none';
+            });
+            var back = document.querySelector('#payback-method-modal-overlay .payback-step-back');
+            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            var save = document.querySelector('#payback-method-modal-overlay .payback-submit');
+            if (back) { back.style.display = n === 2 ? '' : 'none'; }
+            if (next) { next.style.display = n === 1 ? '' : 'none'; }
+            if (save) { save.style.display = n === 2 ? '' : 'none'; }
+        }
+
+        function setModalTitle(title) {
+            var el = document.getElementById('payback-method-modal-title');
+            if (el) {
+                el.innerHTML = '<i class="fas fa-hand-holding-usd"></i> ' + escapeHtml(title);
+            }
+        }
+
+        function resetFormInputs() {
+            var label = document.getElementById('payback-label');
+            if (label) { label.value = ''; }
+            var priority = document.getElementById('payback-priority');
+            if (priority) { priority.value = '100'; }
+            var share = document.getElementById('payback-share-policy');
+            if (share) { share.value = 'auto'; }
+            var fields = document.getElementById('payback-type-fields');
+            if (fields) { fields.innerHTML = ''; }
+            var currency = document.getElementById('payback-currency');
+            if (currency) { currency.innerHTML = ''; }
+            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            if (next) { next.disabled = true; }
+        }
+
+        // -------------------------------------------------------------------
+        // Form: step 1 (type selector)
+        // -------------------------------------------------------------------
+
+        function renderTypeTiles() {
+            var cat = ensureCatalog();
+            var grid = document.getElementById('payback-type-grid');
+            if (!cat || !grid) { return; }
+            var byGroup = {};
+            (cat.types || []).forEach(function (t) {
+                byGroup[t.group] = byGroup[t.group] || [];
+                byGroup[t.group].push(t);
+            });
+            var html = '';
+            var openIndex = 0;  // first non-empty group starts expanded
+            var groupIndex = -1;
+            (cat.groups || []).forEach(function (g) {
+                var types = byGroup[g.id] || [];
+                if (!types.length) { return; }
+                groupIndex += 1;
+                var openAttr = groupIndex === openIndex ? ' open' : '';
+                html += '<details class="payback-type-group"' + openAttr + '>' +
+                        '<summary class="payback-type-group-label">' +
+                            '<i class="fas fa-chevron-right payback-type-group-chevron"></i>' +
+                            '<span>' + escapeHtml(g.label) + '</span>' +
+                            '<span class="payback-type-group-count">' + types.length + '</span>' +
+                        '</summary>' +
+                        '<div class="payback-type-group-tiles">';
+                types.forEach(function (t) {
+                    html += '<button type="button" class="payback-type-tile" ' +
+                            'data-action="selectPaybackType" data-type="' + escapeAttr(t.id) + '" ' +
+                            'title="' + escapeAttr(t.description || '') + '">' +
+                                '<i class="' + escapeAttr(t.icon || 'fas fa-coins') + '"></i>' +
+                                '<span class="payback-type-tile-label">' + escapeHtml(t.label) + '</span>' +
+                            '</button>';
+                });
+                html += '</div></details>';
+            });
+            grid.innerHTML = html;
+        }
+
+        function selectType(typeId) {
+            if (!getType(typeId)) { return; }
+            state.selectedType = typeId;
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (tile) {
+                tile.classList.toggle('is-selected', tile.getAttribute('data-type') === typeId);
+            });
+            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            if (next) { next.disabled = false; }
+        }
+
+        // -------------------------------------------------------------------
+        // Form: step 2 (per-type fields + currency)
+        // -------------------------------------------------------------------
+
+        function renderStep2(typeId) {
+            var type = getType(typeId);
+            if (!type) { return; }
+            renderCurrencyOptions(type, null);
+            renderTypeFields(type);
+        }
+
+        function renderCurrencyOptions(type, preselect) {
+            var select = document.getElementById('payback-currency');
+            var hint = document.querySelector('.payback-currency-hint');
+            if (!select) { return; }
+            var cat = ensureCatalog() || { currencies: [] };
+            var codes = (type.currencies && type.currencies.length)
+                ? type.currencies
+                : cat.currencies.map(function (c) { return c.code; });
+            var html = '';
+            codes.forEach(function (code) {
+                var match = (cat.currencies || []).filter(function (c) { return c.code === code; })[0];
+                var label = match ? match.label : code;
+                var sel = (preselect && preselect === code) ? ' selected' : '';
+                html += '<option value="' + escapeAttr(code) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+            });
+            select.innerHTML = html;
+            if (hint) {
+                hint.textContent = (type.currencies && type.currencies.length)
+                    ? 'Only currencies valid for this method are shown.'
+                    : 'Any ISO-4217 or declared asset code.';
+            }
+        }
+
+        function renderTypeFields(type) {
+            var container = document.getElementById('payback-type-fields');
+            if (!container) { return; }
+            container.innerHTML = '';
+            (type.fields || []).forEach(function (f) {
+                container.appendChild(buildFieldDom(f));
+            });
+            attachConditionalWatchers(type);
+            applyShowWhen(type);
+
+            if (type.currenciesFor && type.currenciesFor.field) {
+                var watched = document.querySelector('#payback-type-fields [data-payback-field="' + type.currenciesFor.field + '"]');
+                if (watched) {
+                    watched.addEventListener('change', function () { applyCurrenciesFor(type, watched.value); });
+                    applyCurrenciesFor(type, watched.value);
+                }
+            }
+        }
+
+        function buildFieldDom(f) {
+            var wrap = document.createElement('div');
+            wrap.className = 'form-group payback-field-group';
+            wrap.setAttribute('data-payback-field-group', f.name);
+            if (f.showWhen) {
+                wrap.setAttribute('data-show-when-field', f.showWhen.field);
+                wrap.setAttribute('data-show-when-in', JSON.stringify(f.showWhen.in || []));
+            }
+
+            var label = document.createElement('label');
+            label.className = 'form-label';
+            label.setAttribute('for', 'payback-field-' + f.name);
+            label.textContent = f.label + (f.required ? ' *' : '');
+            wrap.appendChild(label);
+
+            var input;
+            if (f.type === 'select') {
+                input = document.createElement('select');
+                input.className = 'form-control';
+                (f.options || []).forEach(function (opt) {
+                    var o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.label;
+                    input.appendChild(o);
+                });
+            } else if (f.type === 'textarea') {
+                input = document.createElement('textarea');
+                input.className = 'form-control';
+                input.rows = 3;
+            } else {
+                input = document.createElement('input');
+                input.type = f.type === 'email' ? 'email'
+                           : f.type === 'tel' ? 'tel'
+                           : f.type === 'number' ? 'number'
+                           : 'text';
+                input.className = 'form-control';
+            }
+            input.id = 'payback-field-' + f.name;
+            input.setAttribute('data-payback-field', f.name);
+            if (f.placeholder) { input.placeholder = f.placeholder; }
+            if (f.required) { input.required = true; }
+            wrap.appendChild(input);
+
+            if (f.help) {
+                var help = document.createElement('small');
+                help.className = 'text-muted';
+                help.textContent = f.help;
+                wrap.appendChild(help);
+            }
+            return wrap;
+        }
+
+        function attachConditionalWatchers(type) {
+            var watched = {};
+            (type.fields || []).forEach(function (f) {
+                if (f.showWhen && f.showWhen.field) { watched[f.showWhen.field] = true; }
+            });
+            Object.keys(watched).forEach(function (name) {
+                var el = document.querySelector('#payback-type-fields [data-payback-field="' + name + '"]');
+                if (el && !el.__paybackWatcherAttached) {
+                    el.__paybackWatcherAttached = true;
+                    el.addEventListener('change', function () { applyShowWhen(type); });
+                    el.addEventListener('input',  function () { applyShowWhen(type); });
+                }
+            });
+        }
+
+        function applyShowWhen(type) {
+            (type.fields || []).forEach(function (f) {
+                if (!f.showWhen) { return; }
+                var wrap = document.querySelector('[data-payback-field-group="' + f.name + '"]');
+                if (!wrap) { return; }
+                var watched = document.querySelector('#payback-type-fields [data-payback-field="' + f.showWhen.field + '"]');
+                var val = watched ? watched.value : '';
+                var wanted = f.showWhen.in || [];
+                wrap.style.display = wanted.indexOf(val) !== -1 ? '' : 'none';
+            });
+        }
+
+        function applyCurrenciesFor(type, variantValue) {
+            var map = type.currenciesFor && type.currenciesFor.map;
+            if (!map) { return; }
+            var allowed = Object.prototype.hasOwnProperty.call(map, variantValue) ? map[variantValue] : null;
+            var select = document.getElementById('payback-currency');
+            if (!select) { return; }
+            var cat = ensureCatalog() || { currencies: [] };
+            var codes;
+            if (!allowed) {
+                codes = (type.currencies && type.currencies.length)
+                    ? type.currencies
+                    : cat.currencies.map(function (c) { return c.code; });
+            } else {
+                codes = allowed;
+            }
+            var previous = select.value;
+            var html = '';
+            codes.forEach(function (code) {
+                var match = (cat.currencies || []).filter(function (c) { return c.code === code; })[0];
+                var label = match ? match.label : code;
+                var sel = code === previous ? ' selected' : '';
+                html += '<option value="' + escapeAttr(code) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+            });
+            select.innerHTML = html;
+            if (codes.indexOf(previous) === -1 && codes.length) {
+                select.value = codes[0];
+            }
+        }
+
+        function prefillForEdit(m) {
+            var type = getType(m.type);
+            if (!type) { return; }
+            selectType(m.type);
+            gotoStep(2);
+            var label = document.getElementById('payback-label');
+            if (label) { label.value = m.label || ''; }
+            renderCurrencyOptions(type, m.currency);
+            var share = document.getElementById('payback-share-policy');
+            if (share) { share.value = m.share_policy || 'auto'; }
+            var priority = document.getElementById('payback-priority');
+            if (priority) { priority.value = m.priority != null ? m.priority : 100; }
+            var note = document.createElement('div');
+            note.className = 'form-hint text-muted';
+            note.style.marginTop = '0.5rem';
+            note.textContent = 'Leave sensitive fields blank to keep the stored values unchanged.';
+            var container = document.getElementById('payback-type-fields');
+            if (container) { container.appendChild(note); }
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (t) {
+                if (t.getAttribute('data-type') !== m.type) { t.disabled = true; }
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // Submit / reveal / delete
+        // -------------------------------------------------------------------
+
+        function submit() {
+            hideErrors();
+            var typeId = state.selectedType;
+            if (!typeId) {
+                showErrors([{ field: null, message: 'Pick a payback-method type first.' }]);
+                return;
+            }
+            var type = getType(typeId);
+            if (!type) { return; }
+            var label       = (document.getElementById('payback-label')        || {}).value || '';
+            var currency    = (document.getElementById('payback-currency')     || {}).value || '';
+            var sharePolicy = (document.getElementById('payback-share-policy') || {}).value || 'auto';
+            var priority    = (document.getElementById('payback-priority')     || {}).value || 100;
+
+            var fields = collectVisibleFields();
+
+            var editing = state.formMode === 'edit' && state.editingId;
+            var action  = editing ? 'paybackMethodsUpdate' : 'paybackMethodsCreate';
+            var payload;
+            if (editing) {
+                // Type and currency are immutable after create. Only send fields
+                // the user actually modified; empty objects would fail validation.
+                payload = { method_id: state.editingId };
+                if (label)       { payload.label = label; }
+                if (sharePolicy) { payload.share_policy = sharePolicy; }
+                if (priority !== '' && priority != null) { payload.priority = priority; }
+                if (Object.keys(fields).length > 0) { payload.fields = JSON.stringify(fields); }
+            } else {
+                payload = {
+                    type: typeId,
+                    label: label,
+                    currency: currency,
+                    fields: JSON.stringify(fields),
+                    share_policy: sharePolicy,
+                    priority: priority
+                };
+            }
+
+            post(action, payload, function (data, status) {
+                if (status === 403 && data.error === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { submit(); });
+                    } else {
+                        showErrors([{ field: null, message: 'Please unlock sensitive actions first.' }]);
+                    }
+                    return;
+                }
+                if (!data.success) {
+                    showErrors(data.errors || [{ field: null, message: data.error || 'Save failed' }]);
+                    return;
+                }
+                closeForm();
+                loadList();
+            });
+        }
+
+        function collectVisibleFields() {
+            var out = {};
+            document.querySelectorAll('#payback-type-fields [data-payback-field]').forEach(function (el) {
+                var wrap = el.closest('[data-payback-field-group]');
+                if (wrap && wrap.style.display === 'none') { return; }
+                var name = el.getAttribute('data-payback-field');
+                var v = el.value;
+                if (el.type === 'number' && v !== '' && !isNaN(v)) { v = Number(v); }
+                if (v === '' || v == null) { return; }
+                out[name] = v;
+            });
+            return out;
+        }
+
+        function showErrors(errs) {
+            var box = document.getElementById('payback-form-errors');
+            if (!box) { return; }
+            if (!errs || !errs.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+            var html = '<ul class="form-errors-list">';
+            errs.forEach(function (e) {
+                var prefix = e.field ? (e.field + ': ') : '';
+                html += '<li>' + escapeHtml(prefix + (e.message || e.code || 'Invalid')) + '</li>';
+            });
+            html += '</ul>';
+            box.innerHTML = html;
+            box.style.display = 'block';
+            if (typeof box.scrollIntoView === 'function') {
+                box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+
+        function hideErrors() {
+            var box = document.getElementById('payback-form-errors');
+            if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+        }
+
+        function reveal(methodId) {
+            post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
+                if (status === 403 && data.error === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { reveal(methodId); });
+                    } else {
+                        alert('Please unlock sensitive actions first (re-enter your auth code).');
+                    }
+                    return;
+                }
+                if (!data.success) { alert('Failed to reveal: ' + (data.error || 'unknown')); return; }
+                var m = data.method;
+                var lines = Object.keys(m.fields || {}).map(function (k) {
+                    return k + ': ' + m.fields[k];
+                });
+                alert(m.label + ' (' + m.type + ', ' + m.currency + ')\n\n' + lines.join('\n'));
+            });
+        }
+
+        function remove(methodId, label) {
+            if (!confirm('Remove payback method "' + label + '"? This cannot be undone.')) { return; }
+            post('paybackMethodsDelete', { method_id: methodId }, function (data, status) {
+                if (status === 403 && data.error === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { remove(methodId, label); });
+                    } else {
+                        alert('Please unlock sensitive actions first.');
+                    }
+                    return;
+                }
+                if (!data.success) { alert('Failed to delete: ' + (data.error || 'unknown')); return; }
+                loadList();
+            });
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function escapeAttr(s) { return escapeHtml(s); }
+
+        // Auto-load on DOM ready if the section is present.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                if (document.getElementById('payback-methods-section')) { loadList(); }
+            });
+        } else if (document.getElementById('payback-methods-section')) {
+            loadList();
+        }
+
+        return {
+            loadList:   loadList,
+            openForm:   openForm,
+            closeForm:  closeForm,
+            submit:     submit,
+            reveal:     reveal,
+            remove:     remove,
+            selectType: selectType,
+            gotoStep:   gotoStep
         };
     })();
 

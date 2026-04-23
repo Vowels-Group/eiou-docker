@@ -799,6 +799,54 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PaybackMethodService instance
+     *
+     * Orchestrates CRUD for the user's payback-methods profile, wrapping the
+     * PaybackMethodRepository and per-type validator and transparently
+     * encrypting the sensitive fields via KeyEncryption.
+     *
+     * @return \Eiou\Services\PaybackMethodService
+     */
+    public function getPaybackMethodService(): \Eiou\Services\PaybackMethodService {
+        if (!isset($this->services['PaybackMethodService'])) {
+            $this->services['PaybackMethodService'] = new \Eiou\Services\PaybackMethodService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodRepository::class)
+            );
+        }
+        return $this->services['PaybackMethodService'];
+    }
+
+    /**
+     * Get PaybackMethodCliHandler instance
+     *
+     * Thin CLI surface (list/add/show/edit/remove/share-policy) on top of the
+     * PaybackMethodService.
+     */
+    public function getPaybackMethodCliHandler(CliOutputManager $output): \Eiou\Cli\PaybackMethodCliHandler {
+        return new \Eiou\Cli\PaybackMethodCliHandler(
+            $this->getPaybackMethodService(),
+            $output
+        );
+    }
+
+    /**
+     * Get ReceivedPaybackMethodService instance
+     *
+     * Handles the E2E contact-fetch flow for payback methods: outgoing
+     * requests, incoming request/response/revoke handlers, and the
+     * TTL-cached list surfaced by the contact-modal "Payback Options" view.
+     */
+    public function getReceivedPaybackMethodService(): \Eiou\Services\ReceivedPaybackMethodService {
+        if (!isset($this->services['ReceivedPaybackMethodService'])) {
+            $this->services['ReceivedPaybackMethodService'] = new \Eiou\Services\ReceivedPaybackMethodService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodReceivedRepository::class),
+                $this->getPaybackMethodService()
+            );
+        }
+        return $this->services['ReceivedPaybackMethodService'];
+    }
+
+    /**
      * Get BackupService instance
      *
      * Provides database backup and restore functionality with encryption.

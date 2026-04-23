@@ -371,6 +371,12 @@ elseif($request === "apikey"){
   $apiKeyService = $app->services->getApiKeyService($output);
   $apiKeyService->handleCommand($cleanArgv);
 }
+// Payback Methods
+elseif($request === "payback"){
+  $debugService->output("Executing payback method management request", 'SILENT');
+  $paybackCli = $app->services->getPaybackMethodCliHandler($output);
+  $paybackCli->handleCommand($cleanArgv);
+}
 // Backup Management
 elseif($request === "backup"){
   $debugService->output("Executing backup request", 'SILENT');

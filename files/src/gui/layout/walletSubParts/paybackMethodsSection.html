@@ -1,0 +1,53 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+<!--
+    Payback Methods section on the wallet info tab.
+    Entries listed with their type, currency, label, and a masked display
+    of the sensitive identifier. Full details only reveal after a
+    sensitive-action session unlock (handled in script.js, same pattern
+    as API-keys reveal).
+
+    Data is fetched lazily via the payback-methods GUI controller the
+    first time the user expands the section.
+-->
+<?php
+    $paybackMethodsCatalog = \Eiou\Validators\PaybackMethodTypeValidator::getCatalog();
+?>
+<div class="info-item payback-methods-section" id="payback-methods-section">
+    <div class="info-label" style="display: flex; justify-content: space-between; align-items: center;">
+        <span><i class="fas fa-hand-holding-usd"></i> Payback Methods</span>
+        <button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">
+            <i class="fas fa-plus"></i> Add
+        </button>
+    </div>
+
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>How payback methods work</span>
+        </summary>
+        <div class="section-intro-body">
+            Payback methods are how you prefer to be paid back — a bank wire,
+            a Bitcoin address, Pix, PayPal, Venmo, Wise, and more. Sensitive
+            fields (account numbers, wallet addresses) are encrypted locally
+            and stay masked in this list until you unlock them with your auth
+            code. Each method carries a share policy so you control whether a
+            contact asking how to settle up can receive it automatically, gets
+            asked first, or never sees it.
+        </div>
+    </details>
+
+    <div id="payback-methods-list" class="payback-methods-list">
+        <div class="payback-methods-empty text-muted">
+            <i class="fas fa-spinner fa-spin"></i> Loading payback methods…
+        </div>
+    </div>
+</div>
+
+<!-- Type / field schema consumed by script.js to build the two-step add/edit modal. -->
+<script type="application/json" id="payback-methods-catalog"><?php
+    echo json_encode($paybackMethodsCatalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+?></script>
+
+<!-- Lazily-inserted add/edit modal — kept hidden (display:none) until the
+     user clicks + Add or an Edit button. -->
+<?php include __DIR__ . '/paybackMethodForm.html'; ?>

@@ -780,3 +780,58 @@ function getRouteCancellationsTableSchema() {
         INDEX idx_route_cancel_status (status)
     )";
 }
+
+// ============================================================================
+// PAYBACK METHODS
+// User-defined settlement methods. Core ships bank_wire + custom; additional
+// rail types (BTC, PayPal, etc.) are expected to land as plugins that register
+// themselves against the payback-methods plugin API.
+// Sensitive fields are encrypted via KeyEncryption; row-level AAD binds the
+// ciphertext to method_id to prevent cross-row ciphertext swapping.
+// ============================================================================
+
+// Payback Methods table - local profile of how the user accepts settlement
+function getPaybackMethodsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS payback_methods (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        method_id VARCHAR(36) UNIQUE NOT NULL,           /* uuid v4 — stable id used in API / AAD */
+        type VARCHAR(32) NOT NULL,                       /* e.g. bank_wire, custom, or plugin-registered */
+        label VARCHAR(128) NOT NULL,                     /* user-friendly nickname */
+        currency VARCHAR(8) NOT NULL,                    /* ISO 4217 or asset code (BTC, ETH, USDT, ...) */
+        encrypted_fields JSON NOT NULL,                  /* KeyEncryption result: {ciphertext, iv, tag, aad, version} */
+        fields_version TINYINT NOT NULL DEFAULT 1,       /* Ciphertext format version — for future re-keying */
+        settlement_min_unit BIGINT NOT NULL DEFAULT 1,   /* Smallest settleable integer unit in this currency */
+        settlement_min_unit_exponent TINYINT NOT NULL DEFAULT -8, /* base-10 exponent relative to currency major unit */
+        priority INT NOT NULL DEFAULT 100,               /* lower = preferred when multiple methods match */
+        enabled TINYINT(1) NOT NULL DEFAULT 1,
+        share_policy ENUM('auto', 'prompt', 'never') NOT NULL DEFAULT 'auto',
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+        INDEX idx_pbm_method_id (method_id),
+        INDEX idx_pbm_currency_enabled (currency, enabled),
+        INDEX idx_pbm_priority (priority),
+        INDEX idx_pbm_type (type)
+    )";
+}
+
+// Payback Methods Received table - cache of methods fetched from contacts over E2E
+function getPaybackMethodsReceivedTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS payback_methods_received (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        contact_pubkey_hash VARCHAR(64) NOT NULL,        /* Source contact identity */
+        remote_method_id VARCHAR(36) NOT NULL,           /* method_id on the source node */
+        type VARCHAR(32) NOT NULL,
+        label VARCHAR(128) NOT NULL,
+        currency VARCHAR(8) NOT NULL,
+        fields_json TEXT NOT NULL,                       /* Decrypted plaintext fields (at-rest protected by MariaDB TDE) */
+        settlement_min_unit BIGINT NOT NULL DEFAULT 1,
+        settlement_min_unit_exponent TINYINT NOT NULL DEFAULT -8,
+        priority INT NOT NULL DEFAULT 100,
+        received_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        expires_at TIMESTAMP(6) NOT NULL,                /* TTL-based re-fetch */
+        revoked_at TIMESTAMP(6) NULL,
+        UNIQUE INDEX idx_pmr_contact_remote (contact_pubkey_hash, remote_method_id),
+        INDEX idx_pmr_contact_currency (contact_pubkey_hash, currency),
+        INDEX idx_pmr_expires (expires_at)
+    )";
+}
