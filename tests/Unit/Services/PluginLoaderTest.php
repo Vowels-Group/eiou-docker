@@ -315,6 +315,126 @@ class PluginLoaderTest extends TestCase
         $this->assertSame('A nice description', $rows[0]['description']);
     }
 
+    // -- Optional metadata (author / homepage / changelog / license) -------
+
+    public function testListAllPluginsOmitsOptionalFieldsWhenManifestHasNone(): void
+    {
+        $this->writePlugin('bare', 'Eiou\\Tests\\Plugins\\Bare\\BarePlugin',
+            $this->validPluginSource('Bare'));
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertArrayNotHasKey('author', $row);
+        $this->assertArrayNotHasKey('homepage', $row);
+        $this->assertArrayNotHasKey('changelog', $row);
+        $this->assertArrayNotHasKey('license', $row);
+    }
+
+    public function testListAllPluginsExposesAuthorAsStringAndObject(): void
+    {
+        $this->writePluginWithExtras('str-author',
+            ['author' => 'Acme Co.']);
+        $this->writePluginWithExtras('obj-author',
+            ['author' => ['name' => 'Beta Corp', 'url' => 'https://beta.example']]);
+
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame(['name' => 'Acme Co.'], $rows['str-author']['author']);
+        $this->assertSame(
+            ['name' => 'Beta Corp', 'url' => 'https://beta.example'],
+            $rows['obj-author']['author']
+        );
+    }
+
+    public function testListAllPluginsRejectsNonHttpUrls(): void
+    {
+        // javascript:, data:, and missing-scheme values must not survive into
+        // the GUI — it renders homepage/changelog as clickable <a href> tags.
+        $this->writePluginWithExtras('hostile', [
+            'author'    => ['name' => 'Mallory', 'url' => 'javascript:alert(1)'],
+            'homepage'  => 'javascript:alert(2)',
+            'changelog' => 'not-a-url',
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame(['name' => 'Mallory'], $row['author']);
+        $this->assertArrayNotHasKey('homepage', $row);
+        $this->assertArrayNotHasKey('changelog', $row);
+    }
+
+    public function testListAllPluginsExposesHomepageChangelogAndLicense(): void
+    {
+        $this->writePluginWithExtras('full-meta', [
+            'homepage'  => 'https://example.com/plugin',
+            'changelog' => 'http://example.com/CHANGELOG.md',
+            'license'   => 'MIT',
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame('https://example.com/plugin', $row['homepage']);
+        $this->assertSame('http://example.com/CHANGELOG.md', $row['changelog']);
+        $this->assertSame('MIT', $row['license']);
+    }
+
+    public function testListAllPluginsDropsOverlongLicense(): void
+    {
+        $this->writePluginWithExtras('long-license', [
+            'license' => str_repeat('x', 65),
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertArrayNotHasKey('license', $row);
+    }
+
+    // -- Bundled CHANGELOG.md detection + read -----------------------------
+
+    public function testListAllPluginsFlagsBundledChangelog(): void
+    {
+        $this->writePluginWithExtras('with-log', []);
+        file_put_contents(
+            $this->pluginRoot() . '/with-log/CHANGELOG.md',
+            "# Changelog\n\n## 1.0.0\n- Initial release\n"
+        );
+
+        $this->writePluginWithExtras('without-log', []);
+
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertTrue($rows['with-log']['has_changelog']);
+        $this->assertArrayNotHasKey('has_changelog', $rows['without-log']);
+    }
+
+    public function testReadChangelogReturnsMarkdownForKnownPlugin(): void
+    {
+        $this->writePluginWithExtras('readme-plugin', []);
+        $content = "# Changelog\n\n## 1.0.0\n- First release\n";
+        file_put_contents($this->pluginRoot() . '/readme-plugin/CHANGELOG.md', $content);
+
+        $this->assertSame($content, $this->loader()->readChangelog('readme-plugin'));
+    }
+
+    public function testReadChangelogReturnsNullForUnknownPlugin(): void
+    {
+        // No plugin written — name is unknown on disk.
+        $this->assertNull($this->loader()->readChangelog('ghost'));
+    }
+
+    public function testReadChangelogReturnsNullWhenFileMissing(): void
+    {
+        // Plugin exists but has no CHANGELOG.md on disk.
+        $this->writePluginWithExtras('no-log', []);
+        $this->assertNull($this->loader()->readChangelog('no-log'));
+    }
+
+    public function testReadChangelogRejectsOversizedFile(): void
+    {
+        $this->writePluginWithExtras('huge-log', []);
+        // 256KB + 1 byte — one past the cap.
+        file_put_contents(
+            $this->pluginRoot() . '/huge-log/CHANGELOG.md',
+            str_repeat('x', 256 * 1024 + 1)
+        );
+
+        $this->assertNull($this->loader()->readChangelog('huge-log'));
+    }
+
     // -- Lifecycle idempotency ---------------------------------------------
 
     public function testRegisterAllIsIdempotent(): void
@@ -419,6 +539,37 @@ class PluginLoaderTest extends TestCase
             : [];
         $state[$name] = ['enabled' => true];
         file_put_contents($this->stateFile, json_encode($state));
+    }
+
+    /**
+     * Write an enabled plugin whose manifest merges $extras on top of the
+     * minimum-viable manifest — used by the optional-metadata tests.
+     *
+     * @param array<string, mixed> $extras
+     */
+    private function writePluginWithExtras(string $dirName, array $extras): void
+    {
+        $classBase = str_replace(' ', '', ucwords(str_replace('-', ' ', $dirName)));
+        $className = $classBase . 'Plugin';
+        $namespace = 'Eiou\\Tests\\Plugins\\' . $classBase;
+        $entryClass = $namespace . '\\' . $className;
+
+        $path = $this->pluginRoot() . '/' . $dirName;
+        mkdir($path . '/src', 0777, true);
+
+        $manifest = array_merge([
+            'name' => $dirName,
+            'version' => '1.0.0',
+            'entryClass' => $entryClass,
+            'autoload' => ['psr-4' => [$namespace . '\\' => 'src/']],
+        ], $extras);
+
+        file_put_contents($path . '/plugin.json', json_encode($manifest));
+        file_put_contents(
+            $path . '/src/' . $className . '.php',
+            $this->validPluginSource($classBase)
+        );
+        $this->enableInState($dirName);
     }
 
     /**

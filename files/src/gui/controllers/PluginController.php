@@ -63,6 +63,9 @@ class PluginController
                 case 'pluginsRequestRestart':
                     $this->requestRestart();
                     break;
+                case 'pluginChangelog':
+                    $this->showChangelog();
+                    break;
                 default:
                     $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
             }
@@ -187,6 +190,25 @@ class PluginController
             'plugin' => $name,
             'enabled' => $enabled,
             'restart_required' => true,
+        ]);
+    }
+
+    private function showChangelog(): void
+    {
+        $name = (string) ($_POST['name'] ?? '');
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+        }
+
+        $markdown = $this->loader->readChangelog($name);
+        if ($markdown === null) {
+            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+        }
+
+        $this->respond([
+            'success' => true,
+            'plugin' => $name,
+            'html' => \Eiou\Services\UpdateCheckService::markdownToHtml($markdown),
         ]);
     }
 

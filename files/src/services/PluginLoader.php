@@ -21,8 +21,20 @@ use Throwable;
  *     "version":     "1.0.0",                               // required, semver
  *     "description": "...",                                 // optional
  *     "entryClass":  "Eiou\\Plugins\\HelloEiou\\Plugin",    // required, FQCN
- *     "autoload":    { "psr-4": { "Eiou\\Plugins\\HelloEiou\\": "src/" } }
+ *     "autoload":    { "psr-4": { "Eiou\\Plugins\\HelloEiou\\": "src/" } },
  *                                                           // required, PSR-4 map
+ *
+ *     // Optional metadata — surfaced in the GUI detail modal when present.
+ *     // All URLs must be http(s); anything else is silently dropped so a
+ *     // hostile manifest can't slip in `javascript:` or `data:` links.
+ *     "author":      "Acme Co."                             // string, OR
+ *     "author":      { "name": "Acme Co.",                  // object form
+ *                      "url":  "https://acme.example" },
+ *     "homepage":    "https://acme.example/plugins/hello",
+ *     "changelog":   "https://acme.example/plugins/hello/CHANGELOG.md",
+ *                                                           // per-plugin changelog,
+ *                                                           // not the host project's
+ *     "license":     "MIT"                                  // SPDX id, <= 64 chars
  *   }
  *
  * Lifecycle (driven by Application::__construct):
@@ -180,7 +192,12 @@ class PluginLoader
      * cannot do reliably (a plugin disabled before discover() ran is in
      * metadata, but a plugin disabled in a previous boot lifecycle isn't).
      *
-     * @return list<array{name:string,version:string,description:string,enabled:bool,status:string,error?:string}>
+     * @return list<array{
+     *   name:string,version:string,description:string,enabled:bool,status:string,
+     *   error?:string,
+     *   author?:array{name:string,url?:string},
+     *   homepage?:string,changelog?:string,license?:string,has_changelog?:bool
+     * }>
      */
     public function listAllPlugins(): array
     {
@@ -224,6 +241,27 @@ class PluginLoader
             if (isset($live[$name]['error'])) {
                 $row['error'] = (string) $live[$name]['error'];
             }
+
+            // Optional metadata — only surface when validation passes so the
+            // GUI can do a simple `if (p.homepage)` check without re-validating.
+            $author = $this->normalizeAuthor($manifest['author'] ?? null);
+            if ($author !== null) {
+                $row['author'] = $author;
+            }
+            foreach (['homepage', 'changelog'] as $urlField) {
+                $url = $this->normalizeUrl($manifest[$urlField] ?? null);
+                if ($url !== null) {
+                    $row[$urlField] = $url;
+                }
+            }
+            $license = $this->normalizeLicense($manifest['license'] ?? null);
+            if ($license !== null) {
+                $row['license'] = $license;
+            }
+            if (is_file($this->pluginDir . '/' . $entry . '/CHANGELOG.md')) {
+                $row['has_changelog'] = true;
+            }
+
             $result[] = $row;
         }
 
@@ -243,6 +281,101 @@ class PluginLoader
         $state = $this->readState();
         $state[$name] = ['enabled' => $enabled];
         return $this->writeState($state);
+    }
+
+    /**
+     * Read a plugin's bundled `CHANGELOG.md` file and return its raw markdown.
+     * Returns null if the plugin is unknown, the file is missing, unreadable,
+     * or exceeds the 256KB cap (a sane safety net — a per-plugin changelog
+     * larger than that is either a mistake or an attack vector).
+     *
+     * The plugin name is validated against the on-disk listing rather than
+     * trusted as filesystem input, so `../etc/passwd` style traversal is
+     * impossible even if the controller forgets to validate.
+     */
+    public function readChangelog(string $name): ?string
+    {
+        $known = false;
+        foreach ($this->listAllPlugins() as $row) {
+            if ($row['name'] === $name) { $known = true; break; }
+        }
+        if (!$known) {
+            return null;
+        }
+        $path = $this->pluginDir . '/' . $name . '/CHANGELOG.md';
+        if (!is_file($path)) {
+            return null;
+        }
+        $size = @filesize($path);
+        if ($size === false || $size > 256 * 1024) {
+            return null;
+        }
+        $raw = @file_get_contents($path);
+        return $raw === false ? null : $raw;
+    }
+
+    /**
+     * Normalize the author field to `['name' => string, 'url' => ?string]`.
+     * Accepts a plain string ("Acme Co.") or an object with `name` and an
+     * optional `url`. Returns null for anything else so the row stays clean.
+     *
+     * @return array{name:string,url?:string}|null
+     */
+    private function normalizeAuthor(mixed $raw): ?array
+    {
+        if (is_string($raw)) {
+            $name = trim($raw);
+            return $name === '' ? null : ['name' => $name];
+        }
+        if (is_array($raw) && isset($raw['name']) && is_string($raw['name'])) {
+            $name = trim($raw['name']);
+            if ($name === '') {
+                return null;
+            }
+            $out = ['name' => $name];
+            $url = $this->normalizeUrl($raw['url'] ?? null);
+            if ($url !== null) {
+                $out['url'] = $url;
+            }
+            return $out;
+        }
+        return null;
+    }
+
+    /**
+     * Accept only absolute http(s) URLs so a hostile manifest can't slip
+     * in `javascript:` or `data:` schemes that the GUI would then render
+     * as clickable links. Returns null for anything else.
+     */
+    private function normalizeUrl(mixed $raw): ?string
+    {
+        if (!is_string($raw)) {
+            return null;
+        }
+        $trimmed = trim($raw);
+        if ($trimmed === '' || !preg_match('#^https?://#i', $trimmed)) {
+            return null;
+        }
+        if (filter_var($trimmed, FILTER_VALIDATE_URL) === false) {
+            return null;
+        }
+        return $trimmed;
+    }
+
+    /**
+     * License is rendered as plain text next to the version, so cap it at
+     * a reasonable length and drop anything non-stringy.
+     */
+    private function normalizeLicense(mixed $raw): ?string
+    {
+        if (!is_string($raw)) {
+            return null;
+        }
+        $trimmed = trim($raw);
+        if ($trimmed === '' || strlen($trimmed) > 64) {
+            return null;
+        }
+        return $trimmed;
     }
 
     /**

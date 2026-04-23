@@ -7735,6 +7735,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'restartNodeFromPlugins': function() { if (window.plugins) window.plugins.requestRestart(); },
         'openPluginModal': function(el) {
             if (window.plugins) window.plugins.openModal(el.getAttribute('data-plugin'));
+        },
+        'openPluginChangelog': function(el) {
+            if (window.plugins) window.plugins.openChangelog(el.getAttribute('data-plugin'));
         }
     };
 
@@ -9041,6 +9044,87 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (e.key === 'Escape' || e.keyCode === 27) closeModal();
         }
 
+        // Server normalized these to http(s)-only URLs (see PluginLoader),
+        // so a link tag is safe — we still set rel=noopener to keep the new
+        // window from reaching back through window.opener.
+        function linkLine(url) {
+            var safe = escapeHtml(url);
+            return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' +
+                safe + ' <i class="fas fa-external-link-alt" style="font-size:0.75em"></i></a>';
+        }
+
+        function authorLine(author) {
+            if (!author || !author.name) return '';
+            var nameEsc = escapeHtml(author.name);
+            if (author.url) {
+                var urlEsc = escapeHtml(author.url);
+                return '<a href="' + urlEsc + '" target="_blank" rel="noopener noreferrer">' +
+                    nameEsc + ' <i class="fas fa-external-link-alt" style="font-size:0.75em"></i></a>';
+            }
+            return nameEsc;
+        }
+
+        // A bundled CHANGELOG.md wins over a manifest URL — we can render it
+        // in-place without a round-trip to the open internet (works over Tor
+        // or on an air-gapped node).
+        function changelogLine(p) {
+            if (p.has_changelog) {
+                return '<button type="button" class="btn btn-sm btn-link p-0"' +
+                    ' data-action="openPluginChangelog"' +
+                    ' data-plugin="' + escapeHtml(p.name) + '">' +
+                    'View bundled CHANGELOG.md' +
+                    '</button>';
+            }
+            if (p.changelog) {
+                return linkLine(p.changelog);
+            }
+            return '';
+        }
+
+        function openChangelogModal(name) {
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-changelog-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:720px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem"><i class="fas fa-scroll"></i> ' +
+                            escapeHtml(name) + ' — Changelog</h3>' +
+                        '<span class="close" id="plugin-changelog-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body plugin-changelog-body" id="plugin-changelog-body">' +
+                        '<i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;' +
+                    '</div>' +
+                '</div>';
+
+            function closeChangelog() {
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) closeChangelog(); }
+
+            overlay.querySelector('#plugin-changelog-close').onclick = closeChangelog;
+            overlay.onclick = function(e) { if (e.target === overlay) closeChangelog(); };
+            document.addEventListener('keydown', esc);
+            document.body.appendChild(overlay);
+
+            post({ action: 'pluginChangelog', name: name }).then(function(r) {
+                var body = document.getElementById('plugin-changelog-body');
+                if (!body) return;
+                if (r.data && r.data.success) {
+                    // Server rendered with UpdateCheckService::markdownToHtml,
+                    // which escapes all user content via htmlspecialchars — safe
+                    // to inject as innerHTML here.
+                    body.innerHTML = r.data.html;
+                } else {
+                    body.innerHTML = '<div class="text-muted">No bundled changelog available.</div>';
+                }
+            }).catch(function() {
+                var body = document.getElementById('plugin-changelog-body');
+                if (body) body.innerHTML = '<div class="text-danger">Failed to load changelog.</div>';
+            });
+        }
+
         function openModal(name) {
             var p = findByName(name);
             if (!p) return;
@@ -9064,8 +9148,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     '</div>' +
                     '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem">' +
                         '<dl class="plugin-modal-dl">' +
-                            '<dt>Version</dt><dd><code>' + escapeHtml(p.version || '') + '</code></dd>' +
+                            '<dt>Version</dt><dd><code>' + escapeHtml(p.version || '') + '</code>' +
+                                (p.license ? ' <span class="text-muted">· ' + escapeHtml(p.license) + '</span>' : '') +
+                            '</dd>' +
                             '<dt>Status</dt><dd>' + statusBadge(p.status) + '</dd>' +
+                            (p.author ? '<dt>Author</dt><dd>' + authorLine(p.author) + '</dd>' : '') +
+                            (p.homepage ? '<dt>Website</dt><dd>' + linkLine(p.homepage) + '</dd>' : '') +
+                            (changelogLine(p) ? '<dt>Changelog</dt><dd>' + changelogLine(p) + '</dd>' : '') +
                             '<dt>Description</dt><dd>' + escapeHtml(p.description || '—') + '</dd>' +
                         '</dl>' +
                         '<div class="plugin-modal-toggle-row">' +
@@ -9103,6 +9192,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             toggle: toggle,
             toggleFromModal: toggleFromModal,
             openModal: openModal,
+            openChangelog: openChangelogModal,
             requestRestart: requestRestart
         };
     })();

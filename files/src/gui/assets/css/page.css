@@ -1030,6 +1030,46 @@ tr.paginator-hidden {
     border-radius: 8px;
     background: #f8f9fa;
 }
+
+/* Nested changelog modal — renders plugin-bundled CHANGELOG.md inline so
+   users stay in the wallet. Server escapes content via htmlspecialchars
+   before running it through the shared markdown parser. */
+.plugin-changelog-body {
+    padding: 1.25rem;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+.plugin-changelog-body h1,
+.plugin-changelog-body h2,
+.plugin-changelog-body h3 { margin: 1rem 0 0.5rem; }
+.plugin-changelog-body h1 { font-size: 1.2rem; }
+.plugin-changelog-body h2 { font-size: 1.05rem; }
+.plugin-changelog-body h3 { font-size: 0.95rem; }
+.plugin-changelog-body ul,
+.plugin-changelog-body ol { margin: 0.4rem 0 0.8rem 1.25rem; }
+.plugin-changelog-body li { margin-bottom: 0.25rem; }
+.plugin-changelog-body code {
+    background: #f8f9fa;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+}
+.plugin-changelog-body pre {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    overflow-x: auto;
+    margin: 0.6rem 0;
+}
+.plugin-changelog-body pre code { background: none; padding: 0; }
+.plugin-changelog-body hr {
+    border: 0;
+    border-top: 1px solid #e9ecef;
+    margin: 1rem 0;
+}
 /* Narrow screens: hide credits / status / chain / online — keep Name + Balance only */
 @media (max-width: 600px) {
     .contacts-table thead th:nth-child(n+3),

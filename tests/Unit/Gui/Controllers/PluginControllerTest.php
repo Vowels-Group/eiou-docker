@@ -194,4 +194,50 @@ class PluginControllerTest extends TestCase
         $payload = json_decode(file_get_contents($this->restartFile), true);
         $this->assertSame('gui', $payload['source']);
     }
+
+    #[Test]
+    public function pluginChangelogReturnsRenderedHtmlForKnownPlugin(): void
+    {
+        $_POST = ['action' => 'pluginChangelog', 'csrf_token' => 'x', 'name' => 'hello-eiou'];
+        $this->withCsrf();
+
+        $this->loader->method('readChangelog')
+            ->with('hello-eiou')
+            ->willReturn("## 1.0.0\n- Initial release\n");
+
+        $result = $this->dispatch();
+
+        $this->assertSame(200, $result['status']);
+        $this->assertTrue($result['payload']['success']);
+        $this->assertSame('hello-eiou', $result['payload']['plugin']);
+        // Parser wraps headings + bullets; exact markup comes from the shared
+        // UpdateCheckService rendered — we just need to see both structures.
+        $this->assertStringContainsString('<h2>1.0.0</h2>', $result['payload']['html']);
+        $this->assertStringContainsString('<li>Initial release</li>', $result['payload']['html']);
+    }
+
+    #[Test]
+    public function pluginChangelogReturns404WhenLoaderHasNoFile(): void
+    {
+        $_POST = ['action' => 'pluginChangelog', 'csrf_token' => 'x', 'name' => 'ghost'];
+        $this->withCsrf();
+        $this->loader->method('readChangelog')->willReturn(null);
+
+        $result = $this->dispatch();
+
+        $this->assertSame(404, $result['status']);
+        $this->assertSame('not_found', $result['payload']['error']);
+    }
+
+    #[Test]
+    public function pluginChangelogRejectsInvalidName(): void
+    {
+        $_POST = ['action' => 'pluginChangelog', 'csrf_token' => 'x', 'name' => '../etc/passwd'];
+        $this->withCsrf();
+
+        $result = $this->dispatch();
+
+        $this->assertSame(400, $result['status']);
+        $this->assertSame('invalid_name', $result['payload']['error']);
+    }
 }
