@@ -10,7 +10,13 @@
     first time the user expands the section.
 -->
 <?php
-    $paybackMethodsCatalog = \Eiou\Validators\PaybackMethodTypeValidator::getCatalog();
+    // Route through the container so plugin-registered rail types (BTC,
+    // PayPal, …) layered onto the core bank_wire/custom entries are
+    // included in the GUI type picker. Falls back to the core-only
+    // catalog if the container hasn't wired a registry yet.
+    $paybackMethodsCatalog = (new \Eiou\Validators\PaybackMethodTypeValidator(
+        \Eiou\Services\ServiceContainer::getInstance()->getPaybackMethodTypeRegistry()
+    ))->getCatalog();
 ?>
 <div class="form-container fade-in-up payback-methods-section" id="payback-methods-section">
     <div class="section-header">

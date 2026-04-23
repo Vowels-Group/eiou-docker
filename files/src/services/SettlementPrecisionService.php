@@ -35,16 +35,22 @@ class SettlementPrecisionService
      *   - Bank wire settles at cent (10⁻²) regardless of the node's 10⁻⁸.
      *   - Custom uses the generic fallback (fiat → cent, other → 10⁻⁸).
      *
-     * Plugin-registered rail types are expected to contribute their own
-     * precision metadata via the forthcoming plugin API. Until then, the
-     * generic fallback in `genericFor()` is applied — conservative and
-     * safe for every ISO-4217 currency.
+     * Plugin-registered rail types contribute their own precision via the
+     * `PaybackMethodTypeContract::defaultPrecision()` method, which this
+     * service consults before falling back to `genericFor()`.
      */
     private const DEFAULTS = [
         // bank_wire + custom both defer to the generic fiat/crypto fallback.
         // No per-type override needed — listing them explicitly would duplicate
-        // `genericFor()`. Plugin rail types will extend this table.
+        // `genericFor()`. Plugin rail types extend this table via the registry.
     ];
+
+    private ?PaybackMethodTypeRegistry $registry;
+
+    public function __construct(?PaybackMethodTypeRegistry $registry = null)
+    {
+        $this->registry = $registry;
+    }
 
     /**
      * Resolve the default settlement precision for a type + currency.
@@ -58,6 +64,17 @@ class SettlementPrecisionService
         }
         if (isset(self::DEFAULTS[$type]['*'])) {
             return self::DEFAULTS[$type]['*'];
+        }
+        // Plugin contract gets a chance before the generic fiat/crypto split.
+        if ($this->registry !== null) {
+            $contract = $this->registry->get($type);
+            if ($contract !== null) {
+                $custom = $contract->defaultPrecision($currency);
+                if (is_array($custom) && count($custom) === 2
+                        && is_int($custom[0]) && is_int($custom[1])) {
+                    return $custom;
+                }
+            }
         }
         return $this->genericFor($currency);
     }

@@ -187,9 +187,9 @@ class PaybackMethodServiceTest extends TestCase
         ]);
         $row = $this->svc->get('m-2');
         $this->assertArrayNotHasKey('fields', $row);
-        // Public shape truncates to first 8 chars + ellipsis.
-        $this->assertStringContainsString('DM me fi', $row['masked_display']);
-        $this->assertStringContainsString('…', $row['masked_display']);
+        // `custom` is user-authored free text — short details (≤ 80 chars)
+        // render as-is; only longer ones get a trailing ellipsis.
+        $this->assertSame('DM me first, I will share the QR code.', $row['masked_display']);
     }
 
     public function testGetRevealIncludesFullFields(): void

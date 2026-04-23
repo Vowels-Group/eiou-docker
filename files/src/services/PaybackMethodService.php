@@ -39,16 +39,19 @@ class PaybackMethodService
     private PaybackMethodTypeValidator $validator;
     private SettlementPrecisionService $precision;
     private ?Logger $logger;
+    private ?PaybackMethodTypeRegistry $registry;
 
     public function __construct(
         PaybackMethodRepository $repo,
         ?PaybackMethodTypeValidator $validator = null,
         ?SettlementPrecisionService $precision = null,
-        ?Logger $logger = null
+        ?Logger $logger = null,
+        ?PaybackMethodTypeRegistry $registry = null
     ) {
         $this->repo = $repo;
-        $this->validator = $validator ?? new PaybackMethodTypeValidator();
-        $this->precision = $precision ?? new SettlementPrecisionService();
+        $this->registry = $registry;
+        $this->validator = $validator ?? new PaybackMethodTypeValidator($registry);
+        $this->precision = $precision ?? new SettlementPrecisionService($registry);
         $this->logger = $logger;
     }
 
@@ -330,6 +333,13 @@ class PaybackMethodService
                 // ellipsis handle truncation at the column boundary.
                 $details = (string) ($fields['details'] ?? '');
                 return mb_strlen($details) > 80 ? mb_substr($details, 0, 80) . '…' : $details;
+        }
+        // Plugin-registered types get to define their own masked display.
+        if ($this->registry !== null) {
+            $typeContract = $this->registry->get($type);
+            if ($typeContract !== null) {
+                return $typeContract->mask($fields);
+            }
         }
         return '•••';
     }

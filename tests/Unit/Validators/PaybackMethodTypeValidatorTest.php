@@ -169,7 +169,7 @@ class PaybackMethodTypeValidatorTest extends TestCase
 
     public function testCatalogHasExpectedTopLevelShape(): void
     {
-        $catalog = PaybackMethodTypeValidator::getCatalog();
+        $catalog = (new PaybackMethodTypeValidator())->getCatalog();
         $this->assertIsArray($catalog);
         $this->assertArrayHasKey('groups',     $catalog);
         $this->assertArrayHasKey('types',      $catalog);
@@ -185,7 +185,7 @@ class PaybackMethodTypeValidatorTest extends TestCase
             PaybackMethodTypeValidator::TYPE_BANK_WIRE,
             PaybackMethodTypeValidator::TYPE_CUSTOM,
         ];
-        $catalog = PaybackMethodTypeValidator::getCatalog();
+        $catalog = (new PaybackMethodTypeValidator())->getCatalog();
         $catalogIds = array_column($catalog['types'], 'id');
         foreach ($declared as $typeId) {
             $this->assertContains($typeId, $catalogIds, "Catalog missing entry for type '$typeId'");
@@ -196,7 +196,7 @@ class PaybackMethodTypeValidatorTest extends TestCase
 
     public function testCatalogEveryTypeHasRequiredKeysAndValidGroup(): void
     {
-        $catalog = PaybackMethodTypeValidator::getCatalog();
+        $catalog = (new PaybackMethodTypeValidator())->getCatalog();
         $groupIds = array_column($catalog['groups'], 'id');
         foreach ($catalog['types'] as $type) {
             $this->assertArrayHasKey('id', $type);
@@ -212,7 +212,7 @@ class PaybackMethodTypeValidatorTest extends TestCase
 
     public function testCatalogEveryFieldHasRequiredKeys(): void
     {
-        $catalog = PaybackMethodTypeValidator::getCatalog();
+        $catalog = (new PaybackMethodTypeValidator())->getCatalog();
         $validFieldTypes = ['text', 'select', 'email', 'tel', 'number', 'textarea'];
         foreach ($catalog['types'] as $type) {
             foreach ($type['fields'] as $field) {
@@ -239,7 +239,7 @@ class PaybackMethodTypeValidatorTest extends TestCase
 
     public function testCatalogShowWhenFieldsReferenceSiblingFields(): void
     {
-        $catalog = PaybackMethodTypeValidator::getCatalog();
+        $catalog = (new PaybackMethodTypeValidator())->getCatalog();
         foreach ($catalog['types'] as $type) {
             $names = array_column($type['fields'], 'name');
             foreach ($type['fields'] as $field) {
@@ -255,7 +255,7 @@ class PaybackMethodTypeValidatorTest extends TestCase
 
     public function testCatalogCurrenciesForReferencesExistingField(): void
     {
-        $catalog = PaybackMethodTypeValidator::getCatalog();
+        $catalog = (new PaybackMethodTypeValidator())->getCatalog();
         foreach ($catalog['types'] as $type) {
             if (!isset($type['currenciesFor'])) {
                 continue;

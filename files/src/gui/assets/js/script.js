@@ -8698,12 +8698,19 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             return attempt();
         }
 
-        function openVerifyModal(messageOrCallback, maybeLabel) {
+        function openVerifyModal(messageOrCallback, maybeLabel, onCancel) {
             // Accept either a server-provided message (used internally by
             // withSensitiveAccess) or a callback to run after successful verify
             // (used by other modules that don't route through that helper).
+            // Optional onCancel fires when the user dismisses the modal without
+            // verifying — so callers can tear down their own loading state
+            // (e.g. the "Loading…" spinner inside the Payback View modal).
             if (typeof messageOrCallback === 'function') {
-                pendingAction = { fn: messageOrCallback, label: maybeLabel || 'Confirm' };
+                pendingAction = {
+                    fn:     messageOrCallback,
+                    label:  maybeLabel || 'Confirm',
+                    cancel: typeof onCancel === 'function' ? onCancel : null,
+                };
             }
             var input = document.getElementById('apiKeysVerifyAuthcode');
             var err = document.getElementById('apiKeysVerifyError');
@@ -8715,8 +8722,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function closeVerifyModal() {
+            var cancel = pendingAction && pendingAction.cancel;
             pendingAction = null;
             hideModal('apiKeysVerifyModal');
+            if (typeof cancel === 'function') { cancel(); }
         }
 
         function submitVerify() {
@@ -9419,7 +9428,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
                         if (status === 403 && data.error === 'sensitive_access_required') {
                             if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
-                                window.apiKeys.openVerifyModal(loadForEdit);
+                                // If the user cancels the unlock modal, don't
+                                // leave them staring at an infinite "Loading…"
+                                // inside the View/Edit modal — close it too.
+                                window.apiKeys.openVerifyModal(loadForEdit, 'Unlock to view method', closeForm);
                             } else {
                                 showErrors([{ field: null, message: 'Please unlock sensitive actions first.' }]);
                             }

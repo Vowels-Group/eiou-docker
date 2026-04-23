@@ -809,11 +809,32 @@ class ServiceContainer implements ContainerInterface {
      */
     public function getPaybackMethodService(): \Eiou\Services\PaybackMethodService {
         if (!isset($this->services['PaybackMethodService'])) {
+            $registry = $this->getPaybackMethodTypeRegistry();
             $this->services['PaybackMethodService'] = new \Eiou\Services\PaybackMethodService(
-                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodRepository::class)
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodRepository::class),
+                new \Eiou\Validators\PaybackMethodTypeValidator($registry),
+                new \Eiou\Services\SettlementPrecisionService($registry),
+                null,     // logger — defaults
+                $registry
             );
         }
         return $this->services['PaybackMethodService'];
+    }
+
+    /**
+     * Get PaybackMethodTypeRegistry instance.
+     *
+     * Plugin-extensible map of payback-method rail types (BTC, PayPal, …).
+     * Plugins register types against this during their `register()` phase;
+     * the validator + service consult it for non-core ids. Always returns
+     * the same instance within a process so plugin registrations stick
+     * for every subsequent resolver.
+     */
+    public function getPaybackMethodTypeRegistry(): \Eiou\Services\PaybackMethodTypeRegistry {
+        if (!isset($this->services['PaybackMethodTypeRegistry'])) {
+            $this->services['PaybackMethodTypeRegistry'] = new \Eiou\Services\PaybackMethodTypeRegistry();
+        }
+        return $this->services['PaybackMethodTypeRegistry'];
     }
 
     /**

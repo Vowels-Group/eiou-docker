@@ -29,6 +29,18 @@ class PaybackMethodTypeValidator
 
     private const BANK_RAILS = ['sepa', 'faster_payments', 'ach', 'fednow', 'swift'];
 
+    private ?\Eiou\Services\PaybackMethodTypeRegistry $registry;
+
+    /**
+     * An optional registry enables plugin-provided rail types. Production
+     * code wires one via the service container; standalone unit tests can
+     * omit it to exercise the core `bank_wire` / `custom` dispatch only.
+     */
+    public function __construct(?\Eiou\Services\PaybackMethodTypeRegistry $registry = null)
+    {
+        $this->registry = $registry;
+    }
+
     /**
      * Validate one payback method payload.
      *
@@ -58,9 +70,18 @@ class PaybackMethodTypeValidator
                 return array_merge($errors, $this->validateBankWire($currency, $fields));
             case self::TYPE_CUSTOM:
                 return array_merge($errors, $this->validateCustom($currency, $fields));
-            default:
-                return [$this->err('type', 'unknown_type', "Unknown payback-method type '$type'")];
         }
+
+        // Delegate plugin-registered types. Unknown-to-registry types fall
+        // through to the `unknown_type` error so plugin-less nodes stay
+        // predictable about what they'll accept.
+        if ($this->registry !== null) {
+            $typeContract = $this->registry->get($type);
+            if ($typeContract !== null) {
+                return array_merge($errors, $typeContract->validate($currency, $fields));
+            }
+        }
+        return [$this->err('type', 'unknown_type', "Unknown payback-method type '$type'")];
     }
 
     // =========================================================================
@@ -198,7 +219,58 @@ class PaybackMethodTypeValidator
      *     fields: list<FieldSchema>
      *   }>
      */
-    public static function getCatalog(): array
+    public function getCatalog(): array
+    {
+        $catalog = $this->getCoreCatalog();
+
+        // Merge plugin-registered types. Plugins may also declare new group
+        // ids (e.g. 'crypto', 'fintech', 'mobile') — dedupe those into the
+        // groups list so the GUI's group picker shows each once.
+        if ($this->registry !== null) {
+            $existingGroups = [];
+            foreach ($catalog['groups'] as $g) { $existingGroups[$g['id']] = true; }
+            foreach ($this->registry->all() as $contract) {
+                $entry = $contract->getCatalogEntry();
+                $catalog['types'][] = $entry;
+                $groupId = $entry['group'] ?? null;
+                if (is_string($groupId) && $groupId !== '' && empty($existingGroups[$groupId])) {
+                    $catalog['groups'][] = [
+                        'id'    => $groupId,
+                        'label' => ucfirst(str_replace('_', ' ', $groupId)),
+                    ];
+                    $existingGroups[$groupId] = true;
+                }
+            }
+        }
+
+        // Always render the "other" group last — it's the catch-all and
+        // shouldn't sit between more-specific plugin-provided groups.
+        $catalog['groups'] = array_values(array_merge(
+            array_filter($catalog['groups'], fn($g) => ($g['id'] ?? '') !== 'other'),
+            array_filter($catalog['groups'], fn($g) => ($g['id'] ?? '') === 'other')
+        ));
+        return $catalog;
+    }
+
+    /**
+     * Static accessor kept as a bridge for the few places (unit tests,
+     * ad-hoc scripts) that still call `PaybackMethodTypeValidator::getCatalog()`
+     * without a registry. Returns the core-only catalog — plugin types are
+     * not surfaced through this path.
+     *
+     * @deprecated Prefer the instance method on a registry-backed validator.
+     */
+    public static function getCatalogCoreOnly(): array
+    {
+        return (new self())->getCoreCatalog();
+    }
+
+    /**
+     * Core-only catalog (bank_wire + custom). Kept as a private builder so
+     * the instance `getCatalog()` can layer plugin types on top without
+     * duplicating the bank/custom schema.
+     */
+    private function getCoreCatalog(): array
     {
         $bicBankFields = [
             ['name' => 'recipient_name', 'label' => 'Recipient name', 'type' => 'text', 'required' => true,
