@@ -851,6 +851,40 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginCredentialService instance.
+     *
+     * Generates and stores the encrypted MySQL password for each plugin's
+     * isolated DB user. See docs/PLUGIN_ISOLATION.md §1.
+     */
+    public function getPluginCredentialService(): \Eiou\Services\PluginCredentialService {
+        if (!isset($this->services['PluginCredentialService'])) {
+            $this->services['PluginCredentialService'] = new \Eiou\Services\PluginCredentialService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PluginCredentialRepository::class)
+            );
+        }
+        return $this->services['PluginCredentialService'];
+    }
+
+    /**
+     * Get PluginDbUserService instance.
+     *
+     * Manages MySQL user lifecycle (create / grant / revoke / drop) for
+     * plugins that declare `database.user: true` in their manifest. Runs
+     * as the root/app PDO — user-management DDL is a privileged operation
+     * the plugin users themselves will never hold.
+     *
+     * See docs/PLUGIN_ISOLATION.md §2, §3, §5.
+     */
+    public function getPluginDbUserService(): \Eiou\Services\PluginDbUserService {
+        if (!isset($this->services['PluginDbUserService'])) {
+            $this->services['PluginDbUserService'] = new \Eiou\Services\PluginDbUserService(
+                $this->getPdo()
+            );
+        }
+        return $this->services['PluginDbUserService'];
+    }
+
+    /**
      * Get ReceivedPaybackMethodService instance
      *
      * Handles the E2E contact-fetch flow for payback methods: outgoing

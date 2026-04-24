@@ -131,6 +131,14 @@ class Application {
             // Discover plugins and run their register() phase BEFORE wireAllServices
             // so plugins can add services that participate in dependency wiring.
             $this->pluginLoader = new PluginLoader();
+            // Wire isolation services before setEnabled() can be called from
+            // CLI/REST/GUI. These fire the CREATE USER / GRANT / REVOKE DDL
+            // on every enable/disable when the plugin's manifest declares
+            // `database.user: true`. See docs/PLUGIN_ISOLATION.md.
+            $this->pluginLoader->setIsolationServices(
+                $this->services->getPluginCredentialService(),
+                $this->services->getPluginDbUserService()
+            );
             $this->pluginLoader->discover();
             $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services

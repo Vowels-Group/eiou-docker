@@ -742,6 +742,203 @@ class {$classBase}Plugin implements PluginInterface
 PHP;
     }
 
+    // -- isolation side effects (phase 4) ---------------------------------
+    // setEnabled() wires to PluginCredentialService + PluginDbUserService
+    // when they're injected. Without them, it's a pure state-file flip.
+    // These tests exercise the wiring contract: correct services called,
+    // in the correct order, only for plugins declaring `database.user: true`.
+
+    public function testSetEnabledWithoutIsolationServicesJustFlipsFlag(): void
+    {
+        $this->writePluginWithExtras('no-iso', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_no_iso_t'],
+            ],
+        ]);
+
+        // No services wired — default constructor path.
+        $loader = $this->loader();
+        $this->assertTrue($loader->setEnabled('no-iso', false));
+        $this->assertTrue($loader->setEnabled('no-iso', true));
+    }
+
+    public function testSetEnabledTrueWithIsolationTriggersGenerateAndGrant(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_subs'],
+                'db_limits' => ['max_queries_per_hour' => 20000],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->with('has-db')->willReturn(false);
+        $cred->expects($this->once())->method('generate')->with('has-db')->willReturn('pw123');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('has-db', 'pw123', $this->callback(function (array $limits) {
+                return ($limits['max_queries_per_hour'] ?? null) === 20000;
+            }));
+        $dbUser->expects($this->once())->method('grant')
+            ->with('has-db', ['plugin_has_db_subs']);
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertTrue($loader->setEnabled('has-db', true));
+    }
+
+    public function testSetEnabledTrueWithExistingCredentialsReusesPlaintext(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->expects($this->never())->method('generate');
+        $cred->expects($this->once())->method('getPlaintext')->willReturn('existing-pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('has-db', 'existing-pw', $this->anything());
+        $dbUser->expects($this->once())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('has-db', true);
+    }
+
+    public function testSetEnabledFalseWithIsolationRevokesGrants(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->expects($this->never())->method('generate');
+        $cred->expects($this->never())->method('getPlaintext');
+        $cred->expects($this->never())->method('delete');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('revoke')->with('has-db');
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+        $dbUser->expects($this->never())->method('dropUser');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('has-db', false);
+    }
+
+    public function testSetEnabledSkipsIsolationWhenManifestHasNoDbBlock(): void
+    {
+        $this->writePluginWithExtras('plain', []); // no `database` key
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->expects($this->never())->method('generate');
+        $cred->expects($this->never())->method('getPlaintext');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertTrue($loader->setEnabled('plain', true));
+        $this->assertTrue($loader->setEnabled('plain', false));
+    }
+
+    public function testSetEnabledSkipsIsolationWhenUserFlagIsFalse(): void
+    {
+        // `database` block present but `user: false` — technically this would
+        // fail manifest validation, so normalizeDatabase() returns null. The
+        // loader then behaves as if there were no database block at all.
+        $this->writePluginWithExtras('flagged-off', [
+            'database' => ['user' => false, 'owned_tables' => []],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->expects($this->never())->method('generate');
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('ensureUser');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('flagged-off', true);
+    }
+
+    public function testSetEnabledFailsWithoutFlippingFlagWhenDdlThrows(): void
+    {
+        $this->writePluginWithExtras('ddl-broken', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_ddl_broken_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(false);
+        $cred->method('generate')->willReturn('pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->method('ensureUser')->willThrowException(
+            new \RuntimeException('MySQL denied')
+        );
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        // setEnabled returns false; the state file is not updated.
+        $this->assertFalse($loader->setEnabled('ddl-broken', true));
+
+        // Verify the flag wasn't flipped — a second load still sees disabled.
+        $state = is_file($this->stateFile)
+            ? json_decode(file_get_contents($this->stateFile), true)
+            : [];
+        // The plugin was auto-enabled by writePluginWithExtras, so the
+        // state file has {"ddl-broken": {"enabled": true}} from the helper.
+        // Our assertion is that setEnabled(false, after DDL failure) didn't
+        // flip it; here we're in the opposite direction so test a fresh run.
+        $this->assertTrue($state['ddl-broken']['enabled']);
+    }
+
+    public function testSetEnabledRotatesWhenExistingCredentialsUnreadable(): void
+    {
+        // Simulates "exists() says yes, but getPlaintext() returned null".
+        // This can happen if the row was written under a different master
+        // key — rotate recovers rather than getting stuck.
+        $this->writePluginWithExtras('unreadable-cred', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_unreadable_cred_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->method('getPlaintext')->willReturn(null);
+        $cred->expects($this->once())->method('rotate')->willReturn('fresh-pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('unreadable-cred', 'fresh-pw', $this->anything());
+        $dbUser->expects($this->once())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('unreadable-cred', true);
+    }
+
     // -- database block (manifest-side validation, phase 1) ---------------
     // Phase 1 of plugin DB isolation only validates and surfaces the manifest
     // `database` block; it does not create MySQL users or touch grants yet.

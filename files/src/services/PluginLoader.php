@@ -63,6 +63,15 @@ class PluginLoader
     /** @var array<string, array<string, mixed>> name => ['version' => x, 'status' => y, 'enabled' => bool, 'description' => z?, 'error' => err?] */
     private array $metadata = [];
 
+    /**
+     * Optional plugin-isolation services. When both are present, setEnabled()
+     * generates MySQL credentials + grants / revokes privileges as side
+     * effects. In test and bootstrap contexts where the DB isn't up yet,
+     * leave them unset and the loader degrades to "just flip the flag".
+     */
+    private ?PluginCredentialService $credentialService = null;
+    private ?PluginDbUserService $dbUserService = null;
+
     public function __construct(
         string $pluginDir = '/etc/eiou/plugins',
         ?Logger $logger = null,
@@ -71,6 +80,20 @@ class PluginLoader
         $this->pluginDir = rtrim($pluginDir, '/');
         $this->stateFile = $stateFile ?? self::DEFAULT_STATE_FILE;
         $this->logger = $logger ?? Logger::getInstance();
+    }
+
+    /**
+     * Wire the isolation services after construction. Called by
+     * Application::__construct once the ServiceContainer has them wired.
+     * If either argument is null, isolation is effectively disabled
+     * (setEnabled/setDisabled falls back to just flipping the flag).
+     */
+    public function setIsolationServices(
+        ?PluginCredentialService $credentialService,
+        ?PluginDbUserService $dbUserService
+    ): void {
+        $this->credentialService = $credentialService;
+        $this->dbUserService = $dbUserService;
     }
 
     /**
@@ -300,12 +323,112 @@ class PluginLoader
      * Note: state changes only take effect on the next process boot.
      * Plugins that have already booted in this process keep their event
      * subscriptions and registered services until a restart.
+     *
+     * Isolation side effects (only when isolation services are wired —
+     * see setIsolationServices() — and the plugin's manifest declares
+     * `database.user: true`):
+     *
+     *   enable  → generate credentials on first call, ensureUser(), grant()
+     *   disable → revoke()  (credentials + user row stay in place; a later
+     *                        re-enable re-grants without a password rotation)
+     *
+     * DDL runs BEFORE the state flip so a failure leaves the flag at its
+     * previous value and the operator can retry. Partial-success states
+     * are the boot-time reconciler's problem to heal (phase 5).
      */
     public function setEnabled(string $name, bool $enabled): bool
     {
+        // Run the DDL side-effects first — if they fail, we don't flip
+        // the flag, so the operator can retry without a stale state file.
+        try {
+            $this->applyIsolationSideEffects($name, $enabled);
+        } catch (Throwable $e) {
+            $this->logger->error("Plugin isolation side-effect failed; state flip aborted", [
+                'plugin' => $name,
+                'target_enabled' => $enabled,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+
         $state = $this->readState();
         $state[$name] = ['enabled' => $enabled];
         return $this->writeState($state);
+    }
+
+    /**
+     * Look up the plugin's manifest database block and, when the caller
+     * has wired isolation services, drive the matching DDL:
+     *
+     *   - enable  + database.user = true  → credentials + CREATE/ALTER USER + GRANT
+     *   - disable + database.user = true  → REVOKE
+     *
+     * No-op if isolation services aren't wired, or the plugin doesn't declare
+     * a `database.user` block, or the plugin is unknown. The no-op fallback
+     * means callers (CLI, REST, GUI) stay unchanged — a node running without
+     * the services just flips the flag like it did before.
+     */
+    private function applyIsolationSideEffects(string $name, bool $enabled): void
+    {
+        if ($this->credentialService === null || $this->dbUserService === null) {
+            return;
+        }
+        $dbConfig = $this->getManifestDatabase($name);
+        if ($dbConfig === null || ($dbConfig['user'] ?? false) !== true) {
+            return;
+        }
+
+        if ($enabled) {
+            $plaintext = $this->credentialService->exists($name)
+                ? $this->credentialService->getPlaintext($name)
+                : $this->credentialService->generate($name);
+            if ($plaintext === null) {
+                // getPlaintext() returned null despite exists() saying true —
+                // a race, or a decryption failure surfaced as null upstream.
+                // Regenerate so the plugin can proceed rather than being
+                // stuck in a "exists but unreadable" state.
+                $plaintext = $this->credentialService->rotate($name);
+            }
+            $limits = (array) ($dbConfig['db_limits'] ?? self::DEFAULT_DB_LIMITS);
+            $owned = (array) ($dbConfig['owned_tables'] ?? []);
+
+            $this->dbUserService->ensureUser($name, $plaintext, $limits);
+            $this->dbUserService->grant($name, $owned);
+        } else {
+            // Leave credentials + user + tables in place. Disable is
+            // meant to be cheaply reversible; uninstall is the path that
+            // drops everything, and it goes through a separate method.
+            $this->dbUserService->revoke($name);
+        }
+    }
+
+    /**
+     * Fresh-read the manifest for a single plugin and return the normalized
+     * `database` block (or null if absent). Avoids depending on state that
+     * discover() may not have populated yet — setEnabled() can legitimately
+     * be called in an early-boot context where nothing is in $this->metadata.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function getManifestDatabase(string $name): ?array
+    {
+        if (!is_dir($this->pluginDir)) {
+            return null;
+        }
+        $manifestPath = $this->pluginDir . '/' . $name . '/plugin.json';
+        if (!is_file($manifestPath)) {
+            return null;
+        }
+        $raw = @file_get_contents($manifestPath);
+        if ($raw === false) {
+            return null;
+        }
+        $manifest = json_decode($raw, true);
+        if (!is_array($manifest)) {
+            return null;
+        }
+        $result = $this->normalizeDatabase($manifest['database'] ?? null, $name);
+        return $result['valid'] ? ($result['config'] ?? null) : null;
     }
 
     /**
