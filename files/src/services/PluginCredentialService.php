@@ -22,7 +22,7 @@ use RuntimeException;
  * passwords. Downstream (user creation, PDO factory) always calls
  * getPlaintext() — the plaintext never lives outside a single function scope.
  *
- * See docs/PLUGIN_ISOLATION.md §1 and §12.
+ * See docs/PLUGINS.md (Database Isolation).
  */
 class PluginCredentialService
 {

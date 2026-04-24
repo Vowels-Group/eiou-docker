@@ -366,7 +366,7 @@ class PluginLoader
      *
      * DDL runs BEFORE the state flip so a failure leaves the flag at its
      * previous value and the operator can retry. Partial-success states
-     * are the boot-time reconciler's problem to heal (phase 5).
+     * are healed by the boot-time reconciler on the next boot.
      */
     public function setEnabled(string $name, bool $enabled): bool
     {
@@ -631,7 +631,7 @@ class PluginLoader
      * doesn't override them. Chosen to be non-restrictive for honest plugins
      * but cap a runaway loop at roughly 3 queries/second sustained.
      *
-     * See docs/PLUGIN_ISOLATION.md §11 for rationale.
+     * See docs/PLUGINS.md (Database Isolation)for rationale.
      */
     public const DEFAULT_DB_LIMITS = [
         'max_queries_per_hour'     => 10000,
@@ -665,7 +665,7 @@ class PluginLoader
      * rejected with a clear error, same as missing required top-level
      * fields.
      *
-     * See docs/PLUGIN_ISOLATION.md §4 and §11.
+     * See docs/PLUGINS.md (Database Isolation).
      *
      * @param mixed $raw The raw manifest value at the `database` key
      * @param string $pluginId The plugin's `name` field — used to validate
@@ -908,7 +908,7 @@ class PluginLoader
         // Validate the optional database-isolation block. A malformed block
         // rejects the plugin outright — a half-wired DB manifest would leave
         // the plugin with no tables / no grants / no way to know it was
-        // broken until its first query. See docs/PLUGIN_ISOLATION.md.
+        // broken until its first query. See docs/PLUGINS.md (Database Isolation).
         $dbResult = $this->normalizeDatabase($manifest['database'] ?? null, $name);
         if (!$dbResult['valid']) {
             $this->logger->warning("PluginLoader: invalid database block in manifest", [

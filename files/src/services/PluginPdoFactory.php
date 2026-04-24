@@ -26,7 +26,7 @@ use RuntimeException;
  * MySQL — integration of the real-connection path stays covered by the
  * existing Docker test suite which has MySQL available.
  *
- * See docs/PLUGIN_ISOLATION.md §8.
+ * See docs/PLUGINS.md (Database Isolation).
  */
 class PluginPdoFactory
 {

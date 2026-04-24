@@ -742,7 +742,7 @@ class {$classBase}Plugin implements PluginInterface
 PHP;
     }
 
-    // -- reconcileIsolation (phase 5) -------------------------------------
+    // -- reconcileIsolation (boot-time replay) ----------------------------
     // Boot-time replay of CREATE USER / GRANT / REVOKE for every plugin.
     // Self-heals against mysql-data volume loss, manual user drops, and
     // operator db_limits changes between boots.
@@ -896,7 +896,7 @@ PHP;
         $this->assertSame('granted', $results['healthy']);
     }
 
-    // -- isolation side effects (phase 4) ---------------------------------
+    // -- isolation side effects (enable/disable wiring) -------------------
     // setEnabled() wires to PluginCredentialService + PluginDbUserService
     // when they're injected. Without them, it's a pure state-file flip.
     // These tests exercise the wiring contract: correct services called,
@@ -1093,10 +1093,11 @@ PHP;
         $loader->setEnabled('unreadable-cred', true);
     }
 
-    // -- database block (manifest-side validation, phase 1) ---------------
-    // Phase 1 of plugin DB isolation only validates and surfaces the manifest
-    // `database` block; it does not create MySQL users or touch grants yet.
-    // See docs/PLUGIN_ISOLATION.md for the full design.
+    // -- database block (manifest-side validation) ------------------------
+    // These tests cover the manifest-parser side of plugin DB isolation —
+    // validation and surfacing of the `database` block. The setEnabled()
+    // wiring tests above cover the DDL side. See docs/PLUGINS.md for the
+    // operator-facing write-up.
 
     public function testListAllPluginsOmitsDatabaseWhenAbsent(): void
     {
@@ -1247,7 +1248,7 @@ PHP;
     {
         // Empty list is a deliberate "I'll run CREATE TABLE at runtime but
         // haven't listed them yet" trade-off — legal but uninstall won't
-        // drop anything. See docs/PLUGIN_ISOLATION.md §4.
+        // drop anything. See docs/PLUGINS.md (Database Isolation).
         $this->writePluginWithExtras('blank-tables', [
             'database' => [
                 'user' => true,

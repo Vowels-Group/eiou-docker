@@ -134,7 +134,7 @@ class Application {
             // Wire isolation services before setEnabled() can be called from
             // CLI/REST/GUI. These fire the CREATE USER / GRANT / REVOKE DDL
             // on every enable/disable when the plugin's manifest declares
-            // `database.user: true`. See docs/PLUGIN_ISOLATION.md.
+            // `database.user: true`. See docs/PLUGINS.md (Database Isolation).
             $this->pluginLoader->setIsolationServices(
                 $this->services->getPluginCredentialService(),
                 $this->services->getPluginDbUserService()

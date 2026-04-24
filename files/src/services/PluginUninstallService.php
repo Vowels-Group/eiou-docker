@@ -30,7 +30,7 @@ use Throwable;
  * uninstall is permanent. The GUI surfaces this as a two-step flow
  * (disable → confirm uninstall); the CLI / REST both enforce it.
  *
- * See docs/PLUGIN_ISOLATION.md §10.
+ * See docs/PLUGINS.md (Database Isolation).
  */
 class PluginUninstallService
 {

@@ -848,7 +848,7 @@ function getPaybackMethodsReceivedTableSchema() {
 // get it for free via EIOU_VOLUME_KEY — the master key itself is encrypted
 // at rest, which transitively protects every wrapped blob in this table.
 //
-// See docs/PLUGIN_ISOLATION.md §1 for rationale.
+// See docs/PLUGINS.md (Database Isolation)for rationale.
 function getPluginCredentialsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS plugin_credentials (
         plugin_id VARCHAR(64) NOT NULL PRIMARY KEY,      /* Matches the plugin's manifest `name` field */

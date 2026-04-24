@@ -29,7 +29,7 @@ use RuntimeException;
  * exactly one hostname so a network compromise can't reach it via remote
  * MySQL auth.
  *
- * See docs/PLUGIN_ISOLATION.md §2, §3, §5.
+ * See docs/PLUGINS.md (Database Isolation).
  */
 class PluginDbUserService
 {

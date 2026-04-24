@@ -13,7 +13,7 @@ use PDO;
  * PluginCredentialService via KeyEncryption) — this repository stays a
  * thin PDO wrapper around the `plugin_credentials` table.
  *
- * See docs/PLUGIN_ISOLATION.md §1.
+ * See docs/PLUGINS.md (Database Isolation).
  */
 class PluginCredentialRepository extends AbstractRepository
 {
@@ -84,7 +84,7 @@ class PluginCredentialRepository extends AbstractRepository
 
     /**
      * List every plugin that currently has credentials stored. Used by the
-     * boot-time reconciler in a later phase to replay CREATE USER / GRANT
+     * boot-time reconciler to replay CREATE USER / GRANT
      * for every enabled plugin.
      *
      * @return array<int, array<string, mixed>>

@@ -854,7 +854,7 @@ class ServiceContainer implements ContainerInterface {
      * Get PluginCredentialService instance.
      *
      * Generates and stores the encrypted MySQL password for each plugin's
-     * isolated DB user. See docs/PLUGIN_ISOLATION.md §1.
+     * isolated DB user. See docs/PLUGINS.md (Database Isolation).
      */
     public function getPluginCredentialService(): \Eiou\Services\PluginCredentialService {
         if (!isset($this->services['PluginCredentialService'])) {
@@ -873,7 +873,7 @@ class ServiceContainer implements ContainerInterface {
      * as the root/app PDO — user-management DDL is a privileged operation
      * the plugin users themselves will never hold.
      *
-     * See docs/PLUGIN_ISOLATION.md §2, §3, §5.
+     * See docs/PLUGINS.md (Database Isolation).
      */
     public function getPluginDbUserService(): \Eiou\Services\PluginDbUserService {
         if (!isset($this->services['PluginDbUserService'])) {
@@ -894,7 +894,7 @@ class ServiceContainer implements ContainerInterface {
      * Not to be confused with `getPdo()` — that returns the root/app
      * PDO and should never be called from plugin code.
      *
-     * See docs/PLUGIN_ISOLATION.md §8.
+     * See docs/PLUGINS.md (Database Isolation).
      */
     public function getPluginPdoFactory(): \Eiou\Services\PluginPdoFactory {
         if (!isset($this->services['PluginPdoFactory'])) {

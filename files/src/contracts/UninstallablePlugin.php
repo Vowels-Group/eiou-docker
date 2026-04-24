@@ -24,7 +24,7 @@ use Eiou\Services\ServiceContainer;
  * interface — the core uninstall flow handles table + user + file
  * removal automatically from the manifest-declared owned_tables list.
  *
- * See docs/PLUGIN_ISOLATION.md §10.
+ * See docs/PLUGINS.md (Database Isolation).
  */
 interface UninstallablePlugin extends PluginInterface
 {
