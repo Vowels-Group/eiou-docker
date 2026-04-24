@@ -972,33 +972,9 @@ tr.paginator-hidden {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.plugins-table .col-enabled     { width: 12%; }
+.plugins-table .col-enabled     { width: 9%; }
 .plugins-table tbody td { vertical-align: middle; }
 .plugins-table tbody tr:hover { background: #f8f9fa; }
-
-/* Enabled column packs the trash (disabled plugins only) + toggle on one
-   row, right-aligned so the toggle sits against the table edge like it
-   did before we added the inline icon. Gap is small so the two controls
-   read as a pair, not two separate columns. */
-.plugins-table .plugin-enabled-cell {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.5rem;
-}
-.plugins-table .plugin-uninstall-icon {
-    background: none;
-    border: none;
-    padding: 0.25rem 0.4rem;
-    color: var(--text-muted, #888);
-    cursor: pointer;
-    border-radius: 3px;
-    transition: background-color 0.1s, color 0.1s;
-}
-.plugins-table .plugin-uninstall-icon:hover {
-    color: #b02020;
-    background: #fdf0f0;
-}
 
 /* Mobile: inherit the .contacts-table rule that hides col 3+, then
    re-show col 3 (Version) so users see dot + name + version. Cols 4–5

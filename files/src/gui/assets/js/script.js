@@ -8880,21 +8880,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 var descCell = p.error
                     ? '<i class="fas fa-exclamation-triangle text-danger"></i> ' + escapeHtml(desc || p.error)
                     : escapeHtml(desc);
-                // Trash icon for disabled plugins only — enabled plugins can't
-                // be uninstalled (the service refuses), so hiding the button is
-                // both honest and enforces the two-step disable-then-uninstall
-                // flow. Clicking opens the same typed-confirmation modal the
-                // detail-modal Uninstall button uses.
-                var uninstallBtn = !p.enabled
-                    ? '<button type="button" class="btn-icon plugin-uninstall-icon"'
-                      + ' data-action="openPluginUninstall"'
-                      + ' data-plugin="' + escapeHtml(p.name) + '"'
-                      + ' data-stop-propagation="true"'
-                      + ' title="Uninstall this plugin">'
-                      +   '<i class="fas fa-trash"></i>'
-                      + '</button>'
-                    : '';
-
                 return ''
                     + '<tr class="cursor-pointer"'
                     +   ' data-action="openPluginModal"'
@@ -8904,17 +8889,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     +   '<td class="col-version"><code>' + escapeHtml(p.version) + '</code></td>'
                     +   '<td class="col-description" title="' + escapeHtml(tooltip) + '">' + descCell + '</td>'
                     +   '<td class="col-enabled text-right">'
-                    +     '<div class="plugin-enabled-cell">'
-                    +       uninstallBtn
-                    +       '<label class="toggle-switch" for="' + checkId + '" data-stop-propagation="true">'
-                    +         '<input type="checkbox" id="' + checkId + '"'
-                    +           ' data-action-change="togglePlugin"'
-                    +           ' data-plugin="' + escapeHtml(p.name) + '"'
-                    +           ' data-stop-propagation="true"'
-                    +           (p.enabled ? ' checked' : '') + '>'
-                    +         '<span class="toggle-slider"></span>'
-                    +       '</label>'
-                    +     '</div>'
+                    +     '<label class="toggle-switch" for="' + checkId + '" data-stop-propagation="true">'
+                    +       '<input type="checkbox" id="' + checkId + '"'
+                    +         ' data-action-change="togglePlugin"'
+                    +         ' data-plugin="' + escapeHtml(p.name) + '"'
+                    +         ' data-stop-propagation="true"'
+                    +         (p.enabled ? ' checked' : '') + '>'
+                    +       '<span class="toggle-slider"></span>'
+                    +     '</label>'
                     +   '</td>'
                     + '</tr>';
             });
