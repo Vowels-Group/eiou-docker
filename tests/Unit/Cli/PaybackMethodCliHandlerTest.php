@@ -159,9 +159,9 @@ class PaybackMethodCliHandlerTest extends TestCase
     {
         $this->svc->expects($this->once())
             ->method('setSharePolicy')
-            ->with('m', 'prompt')
+            ->with('m', 'never')
             ->willReturn([]);
-        $this->handler->handleCommand(['eiou', 'payback', 'share-policy', 'm', 'prompt']);
+        $this->handler->handleCommand(['eiou', 'payback', 'share-policy', 'm', 'never']);
         $this->assertOutputKey('success', 'Share policy updated');
     }
 

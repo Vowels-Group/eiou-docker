@@ -33,7 +33,7 @@ use RuntimeException;
  */
 class PaybackMethodService
 {
-    public const SHARE_POLICIES = ['auto', 'prompt', 'never'];
+    public const SHARE_POLICIES = ['auto', 'never'];
 
     private PaybackMethodRepository $repo;
     private PaybackMethodTypeValidator $validator;

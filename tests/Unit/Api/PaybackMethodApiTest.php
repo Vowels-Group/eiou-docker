@@ -281,9 +281,9 @@ class PaybackMethodApiTest extends TestCase
         $this->authAs(['payback:write']);
         $this->svc->expects($this->once())
             ->method('setSharePolicy')
-            ->with('m', 'prompt')
+            ->with('m', 'never')
             ->willReturn([]);
-        $res = $this->dispatch('PUT', 'm', 'share-policy', [], json_encode(['share_policy' => 'prompt']));
+        $res = $this->dispatch('PUT', 'm', 'share-policy', [], json_encode(['share_policy' => 'never']));
         $this->assertTrue($res['success']);
     }
 

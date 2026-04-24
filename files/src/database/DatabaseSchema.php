@@ -804,7 +804,7 @@ function getPaybackMethodsTableSchema() {
         settlement_min_unit_exponent TINYINT NOT NULL DEFAULT -8, /* base-10 exponent relative to currency major unit */
         priority INT NOT NULL DEFAULT 100,               /* lower = preferred when multiple methods match */
         enabled TINYINT(1) NOT NULL DEFAULT 1,
-        share_policy ENUM('auto', 'prompt', 'never') NOT NULL DEFAULT 'auto',
+        share_policy ENUM('auto', 'never') NOT NULL DEFAULT 'auto',
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
         INDEX idx_pbm_method_id (method_id),

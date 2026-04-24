@@ -16,10 +16,9 @@ use Eiou\Utils\Logger;
  *      methods. Shape: {request_id, currency?, max_age_seconds}.
  *
  *   2. Incoming REQUEST handler — responder side. Consults the owner's
- *      PaybackMethodService to collect every method with share_policy != never
- *      matching the requested currency. If any matching method is policy=prompt,
- *      defers and returns status=pending_approval; on policy=auto, returns
- *      status=ok immediately.
+ *      PaybackMethodService to collect every method with share_policy=auto
+ *      matching the requested currency and returns status=ok with those methods.
+ *      Methods with share_policy=never are silently omitted.
  *
  *   3. Incoming RESPONSE handler — requester side. Upserts the received rows
  *      into the payback_methods_received cache with TTL.
@@ -43,7 +42,6 @@ class ReceivedPaybackMethodService
 
     public const STATUS_OK                = 'ok';
     public const STATUS_DENIED            = 'denied';
-    public const STATUS_PENDING_APPROVAL  = 'pending_approval';
     public const STATUS_RATE_LIMITED      = 'rate_limited';
 
     private PaybackMethodReceivedRepository $receivedRepo;
@@ -127,37 +125,12 @@ class ReceivedPaybackMethodService
             return ['request_id' => $requestId, 'status' => self::STATUS_DENIED];
         }
 
-        // Split into auto-approved vs prompt-gated.
-        $auto = [];
-        $pending = [];
-        foreach ($methods as $m) {
-            if (($m['share_policy'] ?? 'auto') === 'prompt') {
-                $pending[] = $m;
-            } else {
-                $auto[] = $m;
-            }
-        }
-
-        if ($pending !== [] && $auto === []) {
-            $this->log('info', 'payback_methods_request_pending', [
-                'sender' => $senderPubkeyHash, 'request_id' => $requestId,
-                'pending_count' => count($pending),
-            ]);
-            return ['request_id' => $requestId, 'status' => self::STATUS_PENDING_APPROVAL];
-        }
-
-        $response = [
+        return [
             'request_id' => $requestId,
             'status' => self::STATUS_OK,
-            'methods' => array_map([$this, 'toWireShape'], $auto),
+            'methods' => array_map([$this, 'toWireShape'], $methods),
             'ttl_seconds' => self::DEFAULT_TTL_SECONDS,
         ];
-        if ($pending !== []) {
-            // Any prompt-gated matches will arrive in a follow-up response sharing
-            // the same request_id once the owner approves.
-            $response['pending_count'] = count($pending);
-        }
-        return $response;
     }
 
     /**

@@ -9342,7 +9342,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var cat = ensureCatalog() || { types: [] };
             var typeLabels = {};
             (cat.types || []).forEach(function (t) { typeLabels[t.id] = t.label; });
-            var sharePolicyLabels = { auto: 'Auto', prompt: 'Ask first', never: 'Never' };
+            var sharePolicyLabels = { auto: 'Auto', never: 'Never' };
 
             // Filter option sets drawn from the current methods so users only
             // see choices that would actually match something.
@@ -10254,10 +10254,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             }
             if (status === 'rate_limited') {
                 container.innerHTML = '<p class="no-transactions">Rate-limited by the remote node. Try again later.</p>';
-                return;
-            }
-            if (status === 'pending_approval') {
-                container.innerHTML = '<p class="no-transactions"><i class="fas fa-clock"></i> Waiting for the contact to approve your request. Close and reopen this tab to retry once they do.</p>';
                 return;
             }
             if (status !== 'ok' || !methods.length) {

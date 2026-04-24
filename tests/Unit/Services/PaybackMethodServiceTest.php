@@ -304,7 +304,7 @@ class PaybackMethodServiceTest extends TestCase
             'method_id' => 'm', 'type' => 'paypal', 'currency' => 'USD',
         ]);
         $this->repo->expects($this->once())->method('updateByMethodId');
-        $this->assertSame([], $this->svc->setSharePolicy('m', 'prompt'));
+        $this->assertSame([], $this->svc->setSharePolicy('m', 'never'));
     }
 
     public function testSetSharePolicyRejectsInvalid(): void

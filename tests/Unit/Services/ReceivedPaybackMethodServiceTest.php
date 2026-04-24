@@ -113,33 +113,21 @@ class ReceivedPaybackMethodServiceTest extends TestCase
         $this->assertEquals('denied', $response['status']);
     }
 
-    public function testHandleIncomingRequestPromptOnly(): void
+    public function testHandleIncomingRequestReturnsAllShareableMethods(): void
     {
-        $this->localSvc->method('listShareable')->willReturn([[
-            'method_id' => 'm-2', 'type' => 'bank_wire', 'label' => 'Chase',
-            'currency' => 'USD', 'share_policy' => 'prompt',
-            'fields' => [],
-            'priority' => 100,
-            'settlement_min_unit' => 1, 'settlement_min_unit_exponent' => -2,
-        ]]);
-        $response = $this->svc->handleIncomingRequest('bobhash', [
-            'request_id' => 'req-4', 'currency' => 'USD',
-        ]);
-        $this->assertEquals('pending_approval', $response['status']);
-    }
-
-    public function testHandleIncomingRequestMixedAutoAndPrompt(): void
-    {
+        // Repository filters share_policy='never' out before this service sees
+        // the list (listShareableForCurrency WHERE share_policy != 'never'), so
+        // everything the service receives is shareable and should be returned.
         $this->localSvc->method('listShareable')->willReturn([
             [
-                'method_id' => 'm-auto', 'type' => 'paypal', 'label' => 'a',
+                'method_id' => 'm-a', 'type' => 'paypal', 'label' => 'a',
                 'currency' => 'USD', 'share_policy' => 'auto',
                 'fields' => ['email' => 'a@b.c'], 'priority' => 10,
                 'settlement_min_unit' => 1, 'settlement_min_unit_exponent' => -2,
             ],
             [
-                'method_id' => 'm-prompt', 'type' => 'bank_wire', 'label' => 'b',
-                'currency' => 'USD', 'share_policy' => 'prompt',
+                'method_id' => 'm-b', 'type' => 'bank_wire', 'label' => 'b',
+                'currency' => 'USD', 'share_policy' => 'auto',
                 'fields' => [], 'priority' => 20,
                 'settlement_min_unit' => 1, 'settlement_min_unit_exponent' => -2,
             ],
@@ -148,9 +136,10 @@ class ReceivedPaybackMethodServiceTest extends TestCase
             'request_id' => 'req-5', 'currency' => 'USD',
         ]);
         $this->assertEquals('ok', $response['status']);
-        $this->assertCount(1, $response['methods']);
-        $this->assertEquals('m-auto', $response['methods'][0]['remote_id']);
-        $this->assertEquals(1, $response['pending_count']);
+        $this->assertCount(2, $response['methods']);
+        $this->assertEquals('m-a', $response['methods'][0]['remote_id']);
+        $this->assertEquals('m-b', $response['methods'][1]['remote_id']);
+        $this->assertArrayNotHasKey('pending_count', $response);
     }
 
     // =========================================================================
