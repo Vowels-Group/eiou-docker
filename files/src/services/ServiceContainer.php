@@ -885,6 +885,40 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get the plugin-authenticated PDO factory. Plugins call
+     * `$container->getPluginPdo('my-plugin')` from their boot() or
+     * runtime code to obtain a PDO that authenticates as their own
+     * isolated MySQL user. Root/app credentials are never exposed to
+     * plugin code.
+     *
+     * Not to be confused with `getPdo()` — that returns the root/app
+     * PDO and should never be called from plugin code.
+     *
+     * See docs/PLUGIN_ISOLATION.md §8.
+     */
+    public function getPluginPdoFactory(): \Eiou\Services\PluginPdoFactory {
+        if (!isset($this->services['PluginPdoFactory'])) {
+            $this->services['PluginPdoFactory'] = new \Eiou\Services\PluginPdoFactory(
+                $this->getPluginCredentialService()
+            );
+        }
+        return $this->services['PluginPdoFactory'];
+    }
+
+    /**
+     * Convenience wrapper that returns a PDO authenticated as the given
+     * plugin's MySQL user. Identical to calling
+     * `$container->getPluginPdoFactory()->getFor($pluginId)`. Cached
+     * per-plugin for the lifetime of the request.
+     *
+     * @throws \InvalidArgumentException Plugin id fails validation
+     * @throws \RuntimeException Plugin has no stored credentials, or connect failed
+     */
+    public function getPluginPdo(string $pluginId): \PDO {
+        return $this->getPluginPdoFactory()->getFor($pluginId);
+    }
+
+    /**
      * Get ReceivedPaybackMethodService instance
      *
      * Handles the E2E contact-fetch flow for payback methods: outgoing
