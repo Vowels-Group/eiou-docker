@@ -742,6 +742,210 @@ class {$classBase}Plugin implements PluginInterface
 PHP;
     }
 
+    // -- database block (manifest-side validation, phase 1) ---------------
+    // Phase 1 of plugin DB isolation only validates and surfaces the manifest
+    // `database` block; it does not create MySQL users or touch grants yet.
+    // See docs/PLUGIN_ISOLATION.md for the full design.
+
+    public function testListAllPluginsOmitsDatabaseWhenAbsent(): void
+    {
+        $this->writePlugin('no-db', 'Eiou\\Tests\\Plugins\\NoDb\\NoDbPlugin',
+            $this->validPluginSource('NoDb'));
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertArrayNotHasKey('database', $row);
+    }
+
+    public function testListAllPluginsExposesWellFormedDatabaseBlock(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => [
+                    'plugin_has_db_subscriptions',
+                    'plugin_has_db_notifications',
+                ],
+                'db_limits' => [
+                    'max_queries_per_hour' => 50000,
+                    'max_user_connections' => 25,
+                ],
+            ],
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame(true, $row['database']['user']);
+        $this->assertSame(
+            ['plugin_has_db_subscriptions', 'plugin_has_db_notifications'],
+            $row['database']['owned_tables']
+        );
+        // Supplied overrides win, unsupplied limits fall back to core defaults.
+        $this->assertSame(50000, $row['database']['db_limits']['max_queries_per_hour']);
+        $this->assertSame(25,    $row['database']['db_limits']['max_user_connections']);
+        $this->assertSame(5000,  $row['database']['db_limits']['max_updates_per_hour']);
+        $this->assertSame(500,   $row['database']['db_limits']['max_connections_per_hour']);
+    }
+
+    public function testMalformedDatabaseBlockRejectsPluginLoad(): void
+    {
+        // user flag missing → plugin should not load (no entry in getLoadedPlugins).
+        $this->writePluginWithExtras('bad-db', [
+            'database' => [
+                'owned_tables' => ['plugin_bad_db_t'],
+            ],
+        ]);
+
+        $loader = $this->loader();
+        $this->assertArrayNotHasKey('bad-db', $loader->getLoadedPlugins());
+
+        // But it should still surface in listAllPlugins with a failed status
+        // + error message so the operator can see why it didn't load instead
+        // of wondering where it went.
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertArrayHasKey('bad-db', $rows);
+        $this->assertSame('failed', $rows['bad-db']['status']);
+        $this->assertStringContainsString('database.user', $rows['bad-db']['error']);
+    }
+
+    public function testOwnedTablesMustStartWithPluginNamePrefix(): void
+    {
+        // Table named for a different plugin — trying to claim tables we don't own.
+        $this->writePluginWithExtras('sneaky', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_other_plugin_contacts'],
+            ],
+        ]);
+
+        $loader = $this->loader();
+        $this->assertArrayNotHasKey('sneaky', $loader->getLoadedPlugins());
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['sneaky']['status']);
+        $this->assertStringContainsString('plugin_sneaky_', $rows['sneaky']['error']);
+    }
+
+    public function testKebabCasePluginNameSnakesForTablePrefix(): void
+    {
+        // `my-awesome-plugin` → `plugin_my_awesome_plugin_` (hyphen→underscore).
+        $this->writePluginWithExtras('my-awesome-plugin', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_my_awesome_plugin_rows'],
+            ],
+        ]);
+
+        $loader = $this->loader();
+        $loader->discover();
+        $this->assertArrayHasKey('my-awesome-plugin', $loader->getLoadedPlugins());
+    }
+
+    public function testOwnedTableMustNotBeJustThePrefix(): void
+    {
+        // `plugin_bare_` with no suffix — not a real table name.
+        $this->writePluginWithExtras('bare', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_bare_'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['bare']['status']);
+    }
+
+    public function testOwnedTableRejectsUppercaseAndSpecialChars(): void
+    {
+        $this->writePluginWithExtras('upper', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_upper_MyTable'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['upper']['status']);
+    }
+
+    public function testOwnedTableRejectsOverlongIdentifier(): void
+    {
+        $longSuffix = str_repeat('x', 80);
+        $this->writePluginWithExtras('longtbl', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_longtbl_' . $longSuffix],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['longtbl']['status']);
+        $this->assertStringContainsString('64-char', $rows['longtbl']['error']);
+    }
+
+    public function testUserFlagMustBeLiteralTrue(): void
+    {
+        // `"user": 1` is truthy but not literally true — reject so plugins
+        // can't accidentally succeed with a typo.
+        $this->writePluginWithExtras('truthy', [
+            'database' => [
+                'user' => 1,
+                'owned_tables' => ['plugin_truthy_t'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['truthy']['status']);
+        $this->assertStringContainsString('literally `true`', $rows['truthy']['error']);
+    }
+
+    public function testEmptyOwnedTablesListIsAllowed(): void
+    {
+        // Empty list is a deliberate "I'll run CREATE TABLE at runtime but
+        // haven't listed them yet" trade-off — legal but uninstall won't
+        // drop anything. See docs/PLUGIN_ISOLATION.md §4.
+        $this->writePluginWithExtras('blank-tables', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => [],
+            ],
+        ]);
+        $loader = $this->loader();
+        $loader->discover();
+        $this->assertArrayHasKey('blank-tables', $loader->getLoadedPlugins());
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertSame([], $rows['blank-tables']['database']['owned_tables']);
+    }
+
+    public function testInvalidDbLimitsAreDroppedNotFailed(): void
+    {
+        // An operator typo on a limit value shouldn't brick the plugin —
+        // defaults should kick in and the plugin still loads.
+        $this->writePluginWithExtras('bad-limits', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_bad_limits_t'],
+                'db_limits' => [
+                    'max_queries_per_hour' => 'not-a-number',
+                    'max_user_connections' => -5,
+                ],
+            ],
+        ]);
+        $loader = $this->loader();
+        $loader->discover();
+        $this->assertArrayHasKey('bad-limits', $loader->getLoadedPlugins());
+        $row = array_column($loader->listAllPlugins(), null, 'name')['bad-limits'];
+        $this->assertSame(10000, $row['database']['db_limits']['max_queries_per_hour']);
+        $this->assertSame(10,    $row['database']['db_limits']['max_user_connections']);
+    }
+
+    public function testOverlongPluginIdRejectedForTableBudget(): void
+    {
+        $longId = str_repeat('a', 30); // > 24-char budget
+        $this->writePluginWithExtras($longId, [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_' . $longId . '_t'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows[$longId]['status']);
+        $this->assertStringContainsString('too long', $rows[$longId]['error']);
+    }
+
     private function removeDir(string $path): void
     {
         if (!is_dir($path)) {

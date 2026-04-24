@@ -272,6 +272,21 @@ class PluginLoader
                 $row['has_changelog'] = true;
             }
 
+            // Surface the normalized database block so the GUI / REST list
+            // can show operators which plugins want their own MySQL user
+            // before they enable. An invalid block here (same validation as
+            // loadPlugin uses) also surfaces an error row so the GUI can
+            // render a disabled-with-warning state rather than silently
+            // skipping — otherwise an operator would wonder why a plugin
+            // they can see on disk isn't in the list at all.
+            $dbResult = $this->normalizeDatabase($manifest['database'] ?? null, $name);
+            if (!$dbResult['valid']) {
+                $row['status'] = 'failed';
+                $row['error'] = 'manifest: ' . $dbResult['error'];
+            } elseif ($dbResult['config'] !== null) {
+                $row['database'] = $dbResult['config'];
+            }
+
             $result[] = $row;
         }
 
@@ -370,6 +385,175 @@ class PluginLoader
             return null;
         }
         return $trimmed;
+    }
+
+    /**
+     * Default MySQL resource limits applied to plugin users when the manifest
+     * doesn't override them. Chosen to be non-restrictive for honest plugins
+     * but cap a runaway loop at roughly 3 queries/second sustained.
+     *
+     * See docs/PLUGIN_ISOLATION.md §11 for rationale.
+     */
+    public const DEFAULT_DB_LIMITS = [
+        'max_queries_per_hour'     => 10000,
+        'max_updates_per_hour'     => 5000,
+        'max_connections_per_hour' => 500,
+        'max_user_connections'     => 10,
+    ];
+
+    /**
+     * Maximum length of the plugin id prefix baked into plugin_<id>_<table>
+     * names. Enough to hold any reasonable plugin id without pushing table
+     * names near MySQL's 64-char identifier cap once the table suffix is
+     * appended. `plugin_` (7) + 24 + `_` (1) + 32 = 64 — exact budget.
+     */
+    private const MAX_TABLE_NAME_PLUGIN_ID_LEN = 24;
+
+    /**
+     * Validate and normalize the optional `database` block from a manifest.
+     *
+     * Returns:
+     *   - ['valid' => true, 'config' => null] when the block is absent
+     *     (plugin declared no DB needs — legal and common)
+     *   - ['valid' => true, 'config' => array] when the block is well-formed
+     *   - ['valid' => false, 'error' => string] when the block is present
+     *     but malformed — caller refuses to load the plugin
+     *
+     * Invalid `db_limits` values are dropped silently (logged at debug) and
+     * core defaults fill in — an operator typo on a limit should not brick
+     * the plugin. But `user`, `owned_tables`, and the presence/absence of
+     * the block itself are strict: get those wrong and the plugin is
+     * rejected with a clear error, same as missing required top-level
+     * fields.
+     *
+     * See docs/PLUGIN_ISOLATION.md §4 and §11.
+     *
+     * @param mixed $raw The raw manifest value at the `database` key
+     * @param string $pluginId The plugin's `name` field — used to validate
+     *                         the `plugin_<snake_case(id)>_` owned-table prefix
+     * @return array{valid: bool, config?: ?array, error?: string}
+     */
+    private function normalizeDatabase(mixed $raw, string $pluginId): array
+    {
+        if ($raw === null) {
+            return ['valid' => true, 'config' => null];
+        }
+        if (!is_array($raw)) {
+            return ['valid' => false, 'error' => '`database` must be an object'];
+        }
+
+        // `database.user` is an explicit acknowledgement — an operator reading
+        // the manifest sees "yes I really want a DB user" before enabling.
+        // If the block is present but `user` is missing or falsy, refuse —
+        // silently treating a typo'd key as "no user" would be surprising.
+        if (!array_key_exists('user', $raw)) {
+            return ['valid' => false, 'error' => '`database.user` is required when the database block is present'];
+        }
+        if ($raw['user'] !== true) {
+            return ['valid' => false, 'error' => '`database.user` must be literally `true`'];
+        }
+
+        // Plugin id → table-name prefix: plugin names are kebab-case
+        // (enforced elsewhere at registration time); MySQL identifiers use
+        // underscore. A plugin called `my-plugin` owns tables prefixed
+        // `plugin_my_plugin_`.
+        $snakeId = str_replace('-', '_', $pluginId);
+        if (strlen($snakeId) > self::MAX_TABLE_NAME_PLUGIN_ID_LEN) {
+            return ['valid' => false, 'error' => sprintf(
+                'plugin name is too long (%d) for MySQL identifier budget — max %d chars once snake-cased',
+                strlen($snakeId),
+                self::MAX_TABLE_NAME_PLUGIN_ID_LEN
+            )];
+        }
+        $expectedPrefix = 'plugin_' . $snakeId . '_';
+
+        if (!array_key_exists('owned_tables', $raw)) {
+            return ['valid' => false, 'error' => '`database.owned_tables` is required when `database.user` is true'];
+        }
+        if (!is_array($raw['owned_tables'])) {
+            return ['valid' => false, 'error' => '`database.owned_tables` must be an array'];
+        }
+        $ownedTables = [];
+        foreach ($raw['owned_tables'] as $i => $table) {
+            if (!is_string($table)) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` must be a string',
+                    $i
+                )];
+            }
+            // MySQL identifiers are case-insensitive on most platforms but
+            // filename-sensitive on others; lowercase-only keeps the grant
+            // pattern portable. Limit to safe charset — no backticks, no
+            // quotes, no spaces.
+            if (!preg_match('/^plugin_[a-z0-9_]+$/', $table)) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) must match /^plugin_[a-z0-9_]+$/',
+                    $i,
+                    $table
+                )];
+            }
+            if (strpos($table, $expectedPrefix) !== 0) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) must start with `%s` (derived from plugin name)',
+                    $i,
+                    $table,
+                    $expectedPrefix
+                )];
+            }
+            // Must have content after the prefix — `plugin_myplugin_` alone
+            // is not a valid table name.
+            if (strlen($table) <= strlen($expectedPrefix)) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) has no table-name suffix after `%s`',
+                    $i,
+                    $table,
+                    $expectedPrefix
+                )];
+            }
+            // MySQL identifier length cap (64 chars). Cheaper to reject here
+            // than to catch a MySQL syntax error during grant.
+            if (strlen($table) > 64) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) exceeds MySQL 64-char identifier limit',
+                    $i,
+                    $table
+                )];
+            }
+            $ownedTables[] = $table;
+        }
+
+        $limits = self::DEFAULT_DB_LIMITS;
+        if (isset($raw['db_limits'])) {
+            if (!is_array($raw['db_limits'])) {
+                return ['valid' => false, 'error' => '`database.db_limits` must be an object'];
+            }
+            foreach (array_keys(self::DEFAULT_DB_LIMITS) as $key) {
+                if (!isset($raw['db_limits'][$key])) {
+                    continue;
+                }
+                $v = $raw['db_limits'][$key];
+                if (!is_int($v) || $v <= 0) {
+                    // Bad values are silently dropped and the default stays;
+                    // a single typo on a limit shouldn't prevent the plugin
+                    // from loading. Logged at debug so operators can notice.
+                    $this->logger->debug(
+                        "PluginLoader: ignoring invalid db_limits.{$key}, using default",
+                        ['plugin' => $pluginId, 'value' => $v, 'default' => $limits[$key]]
+                    );
+                    continue;
+                }
+                $limits[$key] = $v;
+            }
+        }
+
+        return [
+            'valid' => true,
+            'config' => [
+                'user' => true,
+                'owned_tables' => $ownedTables,
+                'db_limits' => $limits,
+            ],
+        ];
     }
 
     /**
@@ -482,6 +666,21 @@ class PluginLoader
             return;
         }
 
+        // Validate the optional database-isolation block. A malformed block
+        // rejects the plugin outright — a half-wired DB manifest would leave
+        // the plugin with no tables / no grants / no way to know it was
+        // broken until its first query. See docs/PLUGIN_ISOLATION.md.
+        $dbResult = $this->normalizeDatabase($manifest['database'] ?? null, $name);
+        if (!$dbResult['valid']) {
+            $this->logger->warning("PluginLoader: invalid database block in manifest", [
+                'name' => $name,
+                'path' => $manifestPath,
+                'error' => $dbResult['error'],
+            ]);
+            return;
+        }
+        $dbConfig = $dbResult['config'];
+
         // Default: DISABLED. A newly discovered plugin is inert until the
         // user explicitly enables it via the GUI (or by editing plugins.json
         // and restarting). This is a safety stance — a malicious or merely
@@ -495,6 +694,7 @@ class PluginLoader
                 'description' => $manifest['description'] ?? '',
                 'status' => 'disabled',
                 'enabled' => false,
+                'database' => $dbConfig,
             ];
             return;
         }
@@ -544,6 +744,7 @@ class PluginLoader
             'description' => $manifest['description'] ?? '',
             'status' => 'discovered',
             'enabled' => true,
+            'database' => $dbConfig,
         ];
     }
 
