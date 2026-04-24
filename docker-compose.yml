@@ -260,6 +260,9 @@ services:
     #   CRITICAL — mysql-data (transactions, contacts, balances)
     #   CRITICAL — config (wallet keys, encryption keys, config)
     #   CRITICAL — backups (encrypted database backups)
+    #   IMPORTANT — plugins (installed plugin files; bundled plugins are seeded
+    #               from the image on first boot, but operator-added ones only
+    #               live here — rebuilding the image does not restore them)
     #
     # =========================================================================
     volumes:
@@ -271,6 +274,13 @@ services:
       # Without this, your wallet identity is lost — back this up.
       # Note: Source code lives in /app/eiou/ (image filesystem, not this volume).
       - config:/etc/eiou/config
+
+      # Plugins: installed plugin directories under /etc/eiou/plugins/<name>/.
+      # Bundled plugins (e.g. hello-eiou) are baked into the image at /app/plugins/
+      # and seeded into this volume on first boot via startup.sh using `cp -rn`,
+      # so operator-added plugins survive container rebuilds AND removed bundled
+      # plugins stay removed across upgrades.
+      - plugins:/etc/eiou/plugins
 
       # Backups: encrypted daily database backups (AES-256-GCM)
       # Off-site storage recommended for disaster recovery.
@@ -366,6 +376,8 @@ volumes:
     name: ${NODE_NAME:-eiou-node}-mysql-data
   config:
     name: ${NODE_NAME:-eiou-node}-config
+  plugins:
+    name: ${NODE_NAME:-eiou-node}-plugins
   backups:
     name: ${NODE_NAME:-eiou-node}-backups
   letsencrypt:

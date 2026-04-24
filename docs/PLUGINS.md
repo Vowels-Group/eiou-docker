@@ -104,6 +104,19 @@ Plugins shipped inside the Docker image (currently just `hello-eiou`) live at
 boot via `cp -rn` — `-n` means "no clobber", so if an operator has removed or
 modified a bundled plugin, the change persists across container rebuilds.
 
+### Volume persistence
+
+`/etc/eiou/plugins/` is mounted on a named Docker volume (`{node}-plugins`,
+declared in `docker-compose.yml` and in the Dockerfile `VOLUME` directive).
+The volume is what makes the `cp -rn` behaviour above actually hold: on a
+container rebuild (`docker compose down && docker compose up --build`) the
+volume persists, so operator-installed plugins, operator-removed bundled
+plugins, and any plugin-owned on-disk state all survive unchanged. Without
+the volume an image rebuild would re-seed every bundled plugin from scratch
+and silently drop everything the operator added. See
+[DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md) for the full volume list
+and backup-priority guidance.
+
 ---
 
 ## Manifest Schema
