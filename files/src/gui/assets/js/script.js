@@ -9269,7 +9269,8 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             formMode: 'add',
             editingId: null,
             selectedType: null,
-            currentStep: 1
+            currentStep: 1,
+            filters: { type: '', currency: '' }
         };
         var catalog = null;
         var catalogTypesById = {};
@@ -9343,7 +9344,55 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             (cat.types || []).forEach(function (t) { typeLabels[t.id] = t.label; });
             var sharePolicyLabels = { auto: 'Auto', prompt: 'Ask first', never: 'Never' };
 
-            var html = '<div class="contacts-table-wrapper payback-methods-table-wrapper">' +
+            // Filter option sets drawn from the current methods so users only
+            // see choices that would actually match something.
+            var typeSet = {}, currencySet = {};
+            state.methods.forEach(function (m) {
+                if (m.type) { typeSet[m.type] = typeLabels[m.type] || m.type; }
+                if (m.currency) { currencySet[m.currency] = true; }
+            });
+            var typeIds = Object.keys(typeSet).sort(function (a, b) {
+                return (typeSet[a] || '').localeCompare(typeSet[b] || '');
+            });
+            var currencies = Object.keys(currencySet).sort();
+
+            var fType = state.filters.type || '';
+            var fCur  = state.filters.currency || '';
+            var filtered = state.methods.filter(function (m) {
+                if (fType && m.type !== fType) { return false; }
+                if (fCur && m.currency !== fCur) { return false; }
+                return true;
+            });
+
+            var filtersHtml = '';
+            // Only show filters if there's more than one option on either axis.
+            // Styling reuses the shared .contacts-filters / .contacts-filter-select
+            // chrome also used by the Recent Transactions section.
+            if (typeIds.length > 1 || currencies.length > 1) {
+                filtersHtml = '<div class="contacts-filters mb-md">';
+                if (typeIds.length > 1) {
+                    filtersHtml += '<select id="payback-filter-type" class="contacts-filter-select" data-payback-filter="type" aria-label="Filter by type">' +
+                        '<option value="">Any type</option>';
+                    typeIds.forEach(function (id) {
+                        var sel = (id === fType) ? ' selected' : '';
+                        filtersHtml += '<option value="' + escapeAttr(id) + '"' + sel + '>' + escapeHtml(typeSet[id]) + '</option>';
+                    });
+                    filtersHtml += '</select>';
+                }
+                if (currencies.length > 1) {
+                    filtersHtml += '<select id="payback-filter-currency" class="contacts-filter-select" data-payback-filter="currency" aria-label="Filter by currency">' +
+                        '<option value="">Any currency</option>';
+                    currencies.forEach(function (c) {
+                        var sel = (c === fCur) ? ' selected' : '';
+                        filtersHtml += '<option value="' + escapeAttr(c) + '"' + sel + '>' + escapeHtml(c) + '</option>';
+                    });
+                    filtersHtml += '</select>';
+                }
+                filtersHtml += '</div>';
+            }
+
+            var html = filtersHtml +
+                '<div class="contacts-table-wrapper payback-methods-table-wrapper">' +
                 '<table class="contacts-table payback-methods-table">' +
                 '<thead><tr>' +
                     '<th class="col-pb-type"     style="width:14%">Type</th>' +
@@ -9352,7 +9401,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     '<th class="col-pb-details"  style="width:37%">Details</th>' +
                     '<th class="col-pb-share"    style="width:14%">Share</th>' +
                 '</tr></thead><tbody>';
-            state.methods.forEach(function (m) {
+            if (!filtered.length) {
+                html += '<tr><td colspan="5" class="text-muted" style="padding:0.75rem; text-align:center;">' +
+                    'No methods match the current filters.</td></tr>';
+            }
+            filtered.forEach(function (m) {
                 var typeLabel = typeLabels[m.type] || m.type;
                 var shareLabel = sharePolicyLabels[m.share_policy] || (m.share_policy || 'auto');
                 html +=
@@ -9368,6 +9421,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             });
             html += '</tbody></table></div>';
             container.innerHTML = html;
+
+            container.querySelectorAll('[data-payback-filter]').forEach(function (sel) {
+                sel.addEventListener('change', function () {
+                    state.filters[sel.getAttribute('data-payback-filter')] = sel.value;
+                    render();
+                });
+            });
         }
 
         // -------------------------------------------------------------------
@@ -9622,7 +9682,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             }
             host.style.display = '';
             host.innerHTML =
-                '<details class="section-intro text-muted" open>' +
+                '<details class="section-intro text-muted">' +
                     '<summary>' +
                         '<i class="' + escapeAttr(type.icon || 'fas fa-info-circle') + '"></i> ' +
                         '<span>About ' + escapeHtml(type.label || type.id) + '</span>' +
@@ -10247,7 +10307,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                         '<div class="payback-detail-key text-muted">' + escapeHtmlSafe(k) + '</div>' +
                         '<div class="payback-detail-value">' +
                             '<span class="payback-detail-text">' + escapeHtmlSafe(String(v)) + '</span>' +
-                            ' <button type="button" class="btn btn-sm btn-outline payback-detail-copy" data-copy="' + escapeAttrSafe(String(v)) + '" title="Copy"><i class="fas fa-copy"></i></button>' +
+                            ' <button type="button" class="btn btn-sm btn-outline payback-detail-copy" data-copy="' + escapeAttrSafe(String(v)) + '" data-copy-label="' + escapeAttrSafe(String(k)) + '" title="Copy"><i class="fas fa-copy"></i></button>' +
                         '</div>' +
                     '</div>';
             });
@@ -10288,9 +10348,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 btn.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var v = btn.getAttribute('data-copy') || '';
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(v).catch(function () {});
-                    }
+                    if (!v) { return; }
+                    var label = btn.getAttribute('data-copy-label') || 'Value';
+                    copyToClipboard(v, label + ' copied!');
                 });
             });
             document.body.appendChild(overlay);

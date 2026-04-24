@@ -6018,11 +6018,9 @@ label.api-keys-permission .api-keys-permission-text {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.02em;
-    padding: 0.15rem 0.4rem;
-    border-radius: 3px;
-    background: var(--bg-accent, #e6eef8);
-    color: var(--text-accent, #224);
+    color: var(--text-muted, #555);
 }
+
 .payback-method-currency-pill {
     font-size: 0.75rem;
     font-weight: 600;

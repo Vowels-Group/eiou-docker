@@ -43,10 +43,10 @@
             database, whatever the type. How much is hidden <em>in this list</em>
             depends on the rail.
             <br><br>
-            <strong>Bank wire</strong> and similar typed rails redact the
-            sensitive tail (<code>••••</code> + last 4 of the IBAN or account
-            number); the full value is released only after you unlock with
-            your auth code.
+            <strong>Bank wire</strong> and similar typed rails show only the
+            last 4 of the IBAN or account number (<code>••••</code> + last 4)
+            and redact everything before it; the full value is released only
+            after you unlock with your auth code.
             <br><br>
             <strong>Custom</strong> is free-text you write yourself — the
             list shows the first 80 characters as a preview since the whole

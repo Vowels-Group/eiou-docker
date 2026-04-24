@@ -363,7 +363,9 @@
                         <br><br>
                         Tap any row to see the full details with copy-to-clipboard buttons for each
                         field. Use the currency selector to filter to a specific currency when the
-                        contact shares methods in more than one.
+                        contact shares methods in more than one &mdash; changing the filter refetches
+                        automatically. To pull a completely fresh copy at any time, close and reopen
+                        this tab.
                         <br><br>
                         If the tab says the contact is not sharing anything, it means either they
                         haven't added any payback methods yet or they've chosen not to share them
@@ -372,9 +374,6 @@
                 </details>
                 <div class="payback-options-controls">
                     <select id="payback-options-currency" class="form-control form-control-sm"></select>
-                    <button type="button" class="btn btn-sm btn-secondary" data-action="refreshContactPayback">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
                 </div>
                 <div id="payback-options-state" class="text-muted" style="padding: 0.25rem 0 0.5rem; font-size: 0.85rem;"></div>
                 <div id="payback-options-list">
