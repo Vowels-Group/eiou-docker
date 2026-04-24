@@ -177,6 +177,7 @@ class ApiController {
                 'backup' => $this->handleBackup($method, $action, $params, $body),
                 'requests' => $this->handleRequests($method, $action, $id, $params, $body),
                 'plugins' => $this->handlePlugins($method, $action, $id, $params, $body),
+                'payback-methods' => $this->handlePaybackMethods($method, $action, $id, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
         } catch (ServiceException $e) {
@@ -3252,5 +3253,193 @@ class ApiController {
         if ($this->logger) {
             $this->logger->$level($message, $context);
         }
+    }
+
+    // =========================================================================
+    // Payback Methods endpoints
+    //
+    //   GET    /api/v1/payback-methods                  → list (read)
+    //   POST   /api/v1/payback-methods                  → create (write)
+    //   GET    /api/v1/payback-methods/{id}             → get (read, public shape)
+    //   GET    /api/v1/payback-methods/{id}/reveal      → reveal (write — plaintext)
+    //   PUT    /api/v1/payback-methods/{id}             → update (write)
+    //   DELETE /api/v1/payback-methods/{id}             → delete (write)
+    //   PUT    /api/v1/payback-methods/{id}/share-policy → set share policy (write)
+    //
+    // Permissions: 'payback:read' for the two GET endpoints; 'payback:write'
+    // (or 'admin') for every mutation and the reveal endpoint — reveal exposes
+    // sensitive plaintext and is treated as a write-class operation.
+    // =========================================================================
+
+    private function handlePaybackMethods(string $method, ?string $action, ?string $id, array $params, string $body): array
+    {
+        $svc = $this->services->getPaybackMethodService();
+
+        if ($method === 'GET' && $action === null) {
+            if (!$this->hasPermission('payback:read')) {
+                return $this->errorResponse('Permission required: payback:read', 403, 'permission_denied');
+            }
+            return $this->listPaybackMethods($svc, $params);
+        }
+
+        if ($method === 'POST' && $action === null) {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->createPaybackMethod($svc, $body);
+        }
+
+        if ($action === null) {
+            return $this->errorResponse('Method not allowed', 405, 'method_not_allowed');
+        }
+
+        // The second path segment (action) is the method_id for per-row routes.
+        $methodId = $action;
+        $subAction = $id; // third segment, e.g. 'reveal' | 'share-policy'
+
+        if ($method === 'GET' && $subAction === 'reveal') {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->revealPaybackMethod($svc, $methodId);
+        }
+
+        if ($method === 'PUT' && $subAction === 'share-policy') {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->setPaybackMethodSharePolicy($svc, $methodId, $body);
+        }
+
+        if ($method === 'GET' && $subAction === null) {
+            if (!$this->hasPermission('payback:read')) {
+                return $this->errorResponse('Permission required: payback:read', 403, 'permission_denied');
+            }
+            return $this->getPaybackMethod($svc, $methodId);
+        }
+
+        if ($method === 'PUT' && $subAction === null) {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->updatePaybackMethod($svc, $methodId, $body);
+        }
+
+        if ($method === 'DELETE' && $subAction === null) {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->deletePaybackMethod($svc, $methodId);
+        }
+
+        return $this->errorResponse('Unknown payback-methods action', 404, 'unknown_action');
+    }
+
+    private function listPaybackMethods(\Eiou\Services\PaybackMethodService $svc, array $params): array
+    {
+        $currency = isset($params['currency']) ? strtoupper((string) $params['currency']) : null;
+        $enabledOnly = !(isset($params['all']) && $params['all'] === '1');
+        $rows = $svc->list($currency, $enabledOnly);
+        return $this->successResponse(['methods' => $rows, 'count' => count($rows)]);
+    }
+
+    private function createPaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $body): array
+    {
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        foreach (['type', 'label', 'currency', 'fields'] as $required) {
+            if (!isset($data[$required])) {
+                return $this->errorResponse("Missing required field: $required", 400, 'missing_field');
+            }
+        }
+        if (!is_array($data['fields'])) {
+            return $this->errorResponse('`fields` must be an object', 400, 'invalid_field_type');
+        }
+        $result = $svc->add(
+            (string) $data['type'],
+            (string) $data['label'],
+            strtoupper((string) $data['currency']),
+            $data['fields'],
+            isset($data['share_policy']) ? (string) $data['share_policy'] : 'auto',
+            isset($data['priority']) ? (int) $data['priority'] : 100
+        );
+        if ($result['errors'] !== []) {
+            return $this->errorResponse('Validation failed', 400, 'validation_failed') + [
+                'data' => ['errors' => $result['errors']],
+            ];
+        }
+        return $this->successResponse(['method_id' => $result['method_id']], 201);
+    }
+
+    private function getPaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId): array
+    {
+        $row = $svc->get($methodId);
+        if ($row === null) {
+            return $this->errorResponse('Payback method not found', 404, 'not_found');
+        }
+        return $this->successResponse(['method' => $row]);
+    }
+
+    private function revealPaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId): array
+    {
+        $row = $svc->getReveal($methodId);
+        if ($row === null) {
+            return $this->errorResponse('Payback method not found', 404, 'not_found');
+        }
+        return $this->successResponse(['method' => $row]);
+    }
+
+    private function updatePaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId, string $body): array
+    {
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        $changes = [];
+        foreach (['label', 'share_policy', 'priority', 'enabled', 'fields'] as $key) {
+            if (array_key_exists($key, $data)) {
+                $changes[$key] = $data[$key];
+            }
+        }
+        $errors = $svc->update($methodId, $changes);
+        if ($errors !== []) {
+            $codes = array_column($errors, 'code');
+            if (in_array('not_found', $codes, true)) {
+                return $this->errorResponse('Payback method not found', 404, 'not_found');
+            }
+            return $this->errorResponse('Validation failed', 400, 'validation_failed') + [
+                'data' => ['errors' => $errors],
+            ];
+        }
+        return $this->successResponse(['method_id' => $methodId]);
+    }
+
+    private function deletePaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId): array
+    {
+        if (!$svc->remove($methodId)) {
+            return $this->errorResponse('Payback method not found', 404, 'not_found');
+        }
+        return $this->successResponse(['method_id' => $methodId, 'deleted' => true]);
+    }
+
+    private function setPaybackMethodSharePolicy(\Eiou\Services\PaybackMethodService $svc, string $methodId, string $body): array
+    {
+        $data = json_decode($body, true);
+        if (!is_array($data) || !isset($data['share_policy'])) {
+            return $this->errorResponse('Missing required field: share_policy', 400, 'missing_field');
+        }
+        $errors = $svc->setSharePolicy($methodId, (string) $data['share_policy']);
+        if ($errors !== []) {
+            $codes = array_column($errors, 'code');
+            if (in_array('not_found', $codes, true)) {
+                return $this->errorResponse('Payback method not found', 404, 'not_found');
+            }
+            return $this->errorResponse('Validation failed', 400, 'validation_failed') + [
+                'data' => ['errors' => $errors],
+            ];
+        }
+        return $this->successResponse(['method_id' => $methodId, 'share_policy' => $data['share_policy']]);
     }
 }

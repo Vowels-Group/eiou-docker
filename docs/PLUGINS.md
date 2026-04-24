@@ -17,10 +17,11 @@ default until the operator explicitly enables them.
 8. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
 9. [Writing a Plugin](#writing-a-plugin)
 10. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-11. [Testing a Plugin](#testing-a-plugin)
-12. [Safety Model and Limitations](#safety-model-and-limitations)
-13. [Troubleshooting](#troubleshooting)
-14. [Related Documentation](#related-documentation)
+11. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+12. [Testing a Plugin](#testing-a-plugin)
+13. [Safety Model and Limitations](#safety-model-and-limitations)
+14. [Troubleshooting](#troubleshooting)
+15. [Related Documentation](#related-documentation)
 
 ---
 
@@ -42,6 +43,9 @@ boot.
 - Register their own CLI subcommands via `PluginCliRegistry` (`eiou <plugin> ...`)
 - Register their own REST endpoints via `PluginApiRegistry`
   (`* /api/v1/plugins/<plugin>/<action>`, admin-scoped)
+- Register new payback-method rail types (Bitcoin, PayPal, Bizum, …)
+  via `PaybackMethodTypeRegistry` so they appear in the GUI type
+  picker and route through validation/masking/precision like core types
 
 ### What plugins cannot do (by design)
 
@@ -657,6 +661,185 @@ name.
 See `hello-eiou` — `eiou hello-eiou` returns a random fortune from the
 CLI, and `GET /api/v1/plugins/hello-eiou/fortune` returns one as JSON.
 Both registrations live in `HelloEiouPlugin::boot()`.
+
+---
+
+## Registering Payback-Method Rail Types
+
+Core ships two payback-method rail types — `bank_wire` (with SEPA /
+Faster Payments / ACH / FedNow / SWIFT) and `custom` (free-text
+instructions). Every other rail — Bitcoin, PayPal, Bizum, Lightning,
+EVM, Pix, UPI, etc. — is a plugin opportunity. A plugin registers one
+type by implementing `Eiou\Contracts\PaybackMethodTypeContract` and
+calling `PaybackMethodTypeRegistry::register()` from its `register()`
+phase:
+
+```php
+namespace Eiou\Plugins\PaybackBtc;
+
+use Eiou\Contracts\PluginInterface;
+use Eiou\Contracts\PaybackMethodTypeContract;
+use Eiou\Services\ServiceContainer;
+
+class PaybackBtcPlugin implements PluginInterface
+{
+    public function getName(): string    { return 'payback-btc'; }
+    public function getVersion(): string { return '0.1.0'; }
+
+    public function register(ServiceContainer $container): void
+    {
+        $container->getPaybackMethodTypeRegistry()->register(new BtcType());
+    }
+
+    public function boot(ServiceContainer $container): void { /* no-op */ }
+}
+
+class BtcType implements PaybackMethodTypeContract
+{
+    public function getId(): string { return 'btc'; }
+
+    public function getCatalogEntry(): array
+    {
+        return [
+            'id'          => 'btc',
+            'label'       => 'Bitcoin',
+            'group'       => 'crypto',
+            'icon'        => 'fab fa-bitcoin',
+            'description' => 'Settle in BTC. Accepts a mainnet address.',
+            'currencies'  => ['BTC'],          // null = any ISO-4217
+            'fields'      => [
+                ['name' => 'address', 'label' => 'Bitcoin address', 'type' => 'text',
+                 'required' => true, 'placeholder' => 'bc1q…'],
+            ],
+        ];
+    }
+
+    public function validate(string $currency, array $fields): array
+    {
+        if ($currency !== 'BTC') {
+            return [['field' => 'currency', 'code' => 'invalid_currency_for_type',
+                     'message' => 'Bitcoin settles in BTC']];
+        }
+        if (empty($fields['address'])) {
+            return [['field' => 'address', 'code' => 'required',
+                     'message' => 'address is required']];
+        }
+        return [];
+    }
+
+    public function mask(array $fields): string
+    {
+        $a = (string) ($fields['address'] ?? '');
+        return $a === '' ? '•••' : substr($a, 0, 6) . '…' . substr($a, -4);
+    }
+
+    public function defaultPrecision(string $currency): ?array
+    {
+        return $currency === 'BTC' ? [1, -8] : null;   // satoshi
+    }
+}
+```
+
+### What the contract plugs into
+
+The registry is consulted from four places in core:
+
+| Caller                                          | Uses                       |
+| ----------------------------------------------- | -------------------------- |
+| `PaybackMethodTypeValidator::getCatalog()`      | `getCatalogEntry()` — merges the entry into the GUI type-picker catalog. Any new `group` id declared by a plugin is auto-injected into the groups list (between `bank` and `other`). |
+| `PaybackMethodTypeValidator::validate()`        | `validate()` — delegated for unknown type ids. Return `[]` on success, or a list of `['field' => string\|null, 'code' => string, 'message' => string]` error records. |
+| `PaybackMethodService::maskForType()`           | `mask()` — short redacted string for the list-row cell. Return `'•••'` on missing fields rather than throwing. |
+| `SettlementPrecisionService::defaultFor()`      | `defaultPrecision()` — return `[min_unit, exponent]` (e.g. `[1, -8]` for satoshi) or `null` to fall back to the generic fiat/crypto defaults. |
+
+### Registration rules
+
+- `getId()` must match `^[a-z][a-z0-9_]{0,31}$`
+- `bank_wire` and `custom` are reserved — a plugin can't shadow them
+- Each id can only be registered once per process; registering a
+  duplicate raises `InvalidArgumentException`, which the plugin loader
+  catches and marks the offending plugin `failed` without taking the
+  node down
+- Register in `register()`, not `boot()` — the validator is
+  instantiated as part of `ServiceContainer::getPaybackMethodService()`
+  which is wired during `ServiceContainer::wireAllServices()`, right
+  after the `register()` phase
+
+### Field schema — what the GUI renders
+
+`getCatalogEntry()['fields']` is an array of field descriptors the
+GUI's two-step "Add method" modal iterates over. Each entry has:
+
+| Key         | Required | Notes                                                                            |
+| ----------- | -------- | -------------------------------------------------------------------------------- |
+| `name`      | yes      | POSTed field key. Must be unique within the type's fields.                       |
+| `label`     | yes      | Shown above the input.                                                           |
+| `type`      | yes      | `text` \| `email` \| `tel` \| `number` \| `select` \| `textarea`                 |
+| `required`  | no       | Adds the red `*` and sets HTML5 `required`. Default false.                       |
+| `placeholder` | no     | Shown inside empty inputs.                                                       |
+| `help`      | no       | Small muted text under the input.                                                |
+| `options`   | no       | `select`-only. Array of `{value, label}` entries.                                |
+| `showWhen`  | no       | Conditional visibility: `{field: 'otherFieldName', in: ['value1', 'value2']}`. Use it to hide per-sub-rail fields (e.g. a `memo` that only applies for one of several options in a select above). |
+
+The validator is the source of truth for validity — `required` in the
+schema is a UX hint, not a check. Your `validate()` implementation is
+what the server enforces.
+
+### Long-form info (catalog `info` key)
+
+In addition to `description` (one-liner, shown on the tile), an entry
+may include `info` — an HTML string rendered as a collapsible **About
+<rail name>** banner at the top of step 2 of the Add Payback Method
+modal. Use it for the friction points that trip users up: which
+address format to paste, what the per-rail masking looks like, whether
+a given currency is supported, external constraints the validator
+can't enforce (like "your PayPal account must have Send-to-email
+enabled"). The GUI sanitises only structural aspects — the string is
+inserted as-is into the DOM, so stick to the same restricted HTML
+subset the rest of the app uses (`<strong>`, `<em>`, `<code>`, `<br>`,
+`<ul>`, `<li>` are common and safe). Core's `bank_wire` and `custom`
+entries both populate `info`; the three reference plugins
+(`payback-btc`, `payback-paypal`, `payback-bizum`) demonstrate how a
+plugin fills this out.
+
+### Currency binding
+
+- `currencies: ['BTC']` — method can only be saved with that currency
+- `currencies: ['EUR', 'GBP', 'USD']` — restricted to a set
+- `currencies: null` — accept any ISO-4217 code (useful for rails like
+  PayPal that auto-convert on receipt). The GUI falls back to the
+  shared ISO-4217 dropdown in the catalog when `currencies` is null
+
+The validator enforces the binding, not the GUI. If a plugin declares
+`currencies: ['EUR']` but the incoming `$currency` is `'USD'`, `validate()`
+should return a `invalid_currency_for_type` error record.
+
+### Testing a payback-method type plugin
+
+Instantiate the type directly and exercise its surface:
+
+```php
+public function testValidateRejectsWrongCurrency(): void
+{
+    $t = new BtcType();
+    $errs = $t->validate('USD', ['address' => 'bc1q...xyz']);
+    $this->assertSame('currency', $errs[0]['field']);
+    $this->assertSame('invalid_currency_for_type', $errs[0]['code']);
+}
+```
+
+For end-to-end coverage, drive the validator directly with a real
+`PaybackMethodTypeRegistry`:
+
+```php
+$reg = new PaybackMethodTypeRegistry();
+$reg->register(new BtcType());
+$v = new PaybackMethodTypeValidator($reg);
+$this->assertSame([], $v->validate('btc', 'BTC', ['address' => 'bc1q...xyz']));
+```
+
+The core test suite's `PaybackMethodTypeRegistryTest` is a good
+reference for id-shape / core-shadow / duplicate-registration /
+catalog-merge / precision-override patterns.
 
 ---
 

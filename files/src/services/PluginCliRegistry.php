@@ -44,6 +44,7 @@ class PluginCliRegistry
         'viewsettings', 'changesettings', 'sync', 'out', 'in',
         'shutdown', 'start', 'restart', 'plugin', 'apikey', 'backup',
         'verify-chain', 'chaindrop', 'request', 'report', 'updatecheck',
+        'payback',
     ];
 
     /** @var array<string, callable> */

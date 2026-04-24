@@ -750,6 +750,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
+    // AJAX-only Payback Methods actions (returns JSON, exits immediately)
+    if (in_array($action, [
+        'paybackMethodsList',
+        'paybackMethodsGet',
+        'paybackMethodsReveal',
+        'paybackMethodsCreate',
+        'paybackMethodsUpdate',
+        'paybackMethodsDelete',
+        'paybackMethodsSharePolicy',
+        'paybackMethodsFetchFromContact',
+    ], true)) {
+        if (!isset($paybackMethodsController)) {
+            $paybackMethodsController = new \Eiou\Gui\Controllers\PaybackMethodsController(
+                $secureSession,
+                $serviceContainer->getPaybackMethodService()
+            );
+        }
+        try {
+            $paybackMethodsController->routeAction();
+        } catch (\Eiou\Gui\Controllers\PaybackMethodsControllerResponseSent $e) {
+            // Response already emitted.
+        }
+        exit;
+    }
+
     // AJAX-only DLQ actions (returns JSON, exits immediately)
     if (in_array($action, ['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'])) {
         try {

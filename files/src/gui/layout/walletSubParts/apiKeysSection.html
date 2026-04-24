@@ -11,14 +11,30 @@
     <details class="section-intro text-muted">
         <summary>
             <i class="fas fa-info-circle"></i>
-            <span>Grant external apps programmatic access</span>
+            <span>About API Keys</span>
         </summary>
         <div class="section-intro-body">
-            Keys authenticate via HMAC-SHA256; the shared secret is shown once at
-            creation and cannot be retrieved again. Re-enter your auth code to
-            create, disable, or delete keys — a short-lived grant covers a few
-            minutes of edits before prompting again, independent of
-            &ldquo;Remember me&rdquo;.
+            API keys let external tools &mdash; scripts, accounting importers,
+            monitoring dashboards, mobile apps &mdash; talk to this node over
+            HTTPS without ever seeing your auth code. Each key carries a fixed
+            subset of <strong>permissions</strong> (scopes) granted at creation:
+            a read-only key for an accounting importer never needs to send, a
+            send-only key for a point-of-sale app never needs to list contacts.
+            Scopes are locked at creation time and cannot be widened afterwards
+            &mdash; create a new key instead.
+            <br><br>
+            Keys authenticate via <strong>HMAC-SHA256</strong> over the request
+            body plus a timestamp, so even a passive observer on the wire
+            can't replay or modify the call. The shared secret is shown
+            <strong>once</strong> on the create screen and is never retrievable
+            again &mdash; copy it straight into the tool that will use it. If
+            you lose it, disable the key and make a new one.
+            <br><br>
+            Creating, disabling, or deleting a key is a sensitive action and
+            re-prompts for your auth code. The re-auth covers a short window
+            (a few minutes) so you can make several edits in a row without
+            typing the code again, but it expires on its own and is
+            independent of <em>Remember me</em> on login.
         </div>
     </details>
 
@@ -104,41 +120,6 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
     </div>
 </div>
 
-<!-- Re-auth modal -->
-<div id="apiKeysVerifyModal" class="modal d-none">
-    <div class="modal-content modal-content-sm">
-        <div class="modal-header">
-            <h3><i class="fas fa-lock"></i> Confirm it&rsquo;s you</h3>
-            <span class="close" data-action="closeApiKeysVerifyModal">&times;</span>
-        </div>
-        <div class="modal-body modal-body-padded">
-            <p class="text-muted">
-                API key operations need a fresh confirmation. Remembered
-                devices stay logged in, but creating or revoking keys always
-                requires your auth code.
-            </p>
-            <form>
-                <input type="hidden" name="action" value="apiKeysVerify">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                <div class="form-group">
-                    <label for="apiKeysVerifyAuthcode">Auth Code</label>
-                    <input type="password" id="apiKeysVerifyAuthcode" name="authcode"
-                           autocomplete="current-password" required>
-                </div>
-                <div id="apiKeysVerifyError" class="form-error d-none"></div>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeysVerifyModal">
-                Cancel
-            </button>
-            <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeysVerify">
-                Unlock
-            </button>
-        </div>
-    </div>
-</div>
-
 <!-- Create API key modal -->
 <div id="apiKeysCreateModal" class="modal d-none">
     <div class="modal-content modal-content-md">
@@ -147,6 +128,36 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
             <span class="close" data-action="closeApiKeyCreateModal">&times;</span>
         </div>
         <div class="modal-body modal-body-padded">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About creating an API key</span>
+                </summary>
+                <div class="section-intro-body">
+                    API keys let external tools — scripts, accounting importers,
+                    monitoring dashboards — talk to this node over HTTPS without
+                    sharing your auth code. Each key carries a fixed subset of
+                    <strong>permissions</strong> (scopes) granted at creation
+                    time and cannot be upgraded afterwards — create a new key
+                    instead.
+                    <br><br>
+                    <strong>Label</strong> is for you — something that will help
+                    you recognise what the key is for in the list later.
+                    <strong>Presets</strong> fill the permission checkboxes with
+                    common bundles (Read-only, Full access); you can always
+                    tick or untick individual scopes afterwards.
+                    <br><br>
+                    <strong>Rate limit</strong> caps how many requests per
+                    minute the key is allowed; default 100, max 1000.
+                    <strong>Expires</strong> sets a hard cut-off after which
+                    the key is rejected — for scripts that should never live
+                    forever. Pick <em>Never</em> for keys you manage lifecycle
+                    of yourself.
+                    <br><br>
+                    The secret is shown once on the next screen and never
+                    again. Copy it somewhere safe before closing the modal.
+                </div>
+            </details>
             <form id="apiKeysCreateForm">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 

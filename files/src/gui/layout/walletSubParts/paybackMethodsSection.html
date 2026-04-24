@@ -1,0 +1,78 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+<!--
+    Payback Methods section on the wallet info tab.
+    Entries listed with their type, currency, label, and a masked display
+    of the sensitive identifier. Full details only reveal after a
+    sensitive-action session unlock (handled in script.js, same pattern
+    as API-keys reveal).
+
+    Data is fetched lazily via the payback-methods GUI controller the
+    first time the user expands the section.
+-->
+<?php
+    // Route through the container so plugin-registered rail types (BTC,
+    // PayPal, …) layered onto the core bank_wire/custom entries are
+    // included in the GUI type picker. Falls back to the core-only
+    // catalog if the container hasn't wired a registry yet.
+    $paybackMethodsCatalog = (new \Eiou\Validators\PaybackMethodTypeValidator(
+        \Eiou\Services\ServiceContainer::getInstance()->getPaybackMethodTypeRegistry()
+    ))->getCatalog();
+?>
+<div class="form-container fade-in-up payback-methods-section" id="payback-methods-section">
+    <div class="section-header">
+        <h2><i class="fas fa-hand-holding-usd"></i> Payback Methods</h2>
+        <div class="dlq-section-header-actions">
+            <span id="payback-methods-access-state" class="text-muted" style="font-size: 0.85rem; margin-right: 0.75rem;"></span>
+            <button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">
+                <i class="fas fa-plus"></i> Add
+            </button>
+        </div>
+    </div>
+
+    <details class="section-intro text-muted">
+        <summary>
+            <i class="fas fa-info-circle"></i>
+            <span>How payback methods work</span>
+        </summary>
+        <div class="section-intro-body">
+            Payback methods are how you prefer to be paid back — a bank wire,
+            a Bitcoin address, Pix, PayPal, Venmo, Wise, and more.
+            <br><br>
+            <strong>Every method is encrypted at rest on this node</strong>
+            (per-row, AES-256-GCM keyed to the wallet) before it hits the
+            database, whatever the type. How much is hidden <em>in this list</em>
+            depends on the rail.
+            <br><br>
+            <strong>Bank wire</strong> and similar typed rails show only the
+            last 4 of the IBAN or account number (<code>••••</code> + last 4)
+            and redact everything before it; the full value is released only
+            after you unlock with your auth code.
+            <br><br>
+            <strong>Custom</strong> is free-text you write yourself — the
+            list shows the first 80 characters as a preview since the whole
+            point of the field is to be descriptive. Treat it like a note,
+            not a secret: anything after that 80-char cut-off is hidden
+            until unlock, but don't paste bank details into it and expect the
+            same redaction as a typed rail.
+            <br><br>
+            Each method also carries a share policy so you control whether a
+            contact asking how to settle up receives it automatically or never
+            sees it at all.
+        </div>
+    </details>
+
+    <div id="payback-methods-list" class="payback-methods-list">
+        <div class="payback-methods-empty text-muted">
+            <i class="fas fa-spinner fa-spin"></i> Loading payback methods…
+        </div>
+    </div>
+</div>
+
+<!-- Type / field schema consumed by script.js to build the two-step add/edit modal. -->
+<script type="application/json" id="payback-methods-catalog"><?php
+    echo json_encode($paybackMethodsCatalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+?></script>
+
+<!-- Lazily-inserted add/edit modal — kept hidden (display:none) until the
+     user clicks + Add or an Edit button. -->
+<?php include __DIR__ . '/paybackMethodForm.html'; ?>

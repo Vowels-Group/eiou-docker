@@ -3094,10 +3094,31 @@ tr.tx-item-in-progress > td:first-child {
 
 .modal-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.25rem;
     border-bottom: 2px solid #dee2e6;
     padding: 0 1rem;
     margin-bottom: 1rem;
+}
+.modal-tabs > .modal-tab { flex: 0 0 auto; white-space: nowrap; }
+
+/* Narrow screens: wrap tabs — 3 per row maximum, a 4th or 5th wraps to a
+   second row. flex-grow:0 keeps each tab at its 1/3 share, so the
+   second row (1 or 2 items) doesn't stretch and is centered with
+   justify-content — Status + Settings cluster together instead of
+   splitting the whole width. */
+@media (max-width: 600px) {
+    .modal-tabs {
+        justify-content: center;
+        row-gap: 0.25rem;
+    }
+    .modal-tabs > .modal-tab {
+        flex: 0 0 calc((100% - 0.5rem) / 3);
+        min-width: 0;
+        text-align: center;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
 }
 
 .modal-tab {
@@ -5984,3 +6005,218 @@ label.api-keys-permission .api-keys-permission-text {
     font-size: 0.9rem;
     margin-top: 0.5rem;
 }
+
+/* ==========================================================================
+ * Payback Methods
+ * ========================================================================== */
+.payback-methods-section { margin-top: 1rem; }
+.payback-methods-list { margin-top: 0.5rem; }
+.payback-methods-empty { padding: 0.75rem; border: 1px dashed var(--border-color, #ccc); border-radius: 4px; }
+
+.payback-method-type-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--text-muted, #555);
+}
+
+.payback-method-currency-pill {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 999px;
+    background: var(--bg-soft, #eef);
+    text-align: center;
+}
+.payback-method-label { font-weight: 500; }
+.payback-method-mask { font-family: var(--font-mono, ui-monospace, monospace); color: var(--text-muted, #555); }
+
+.payback-type-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+details.payback-type-group { border: 1px solid var(--border-color, #e0e0e0); border-radius: 4px; }
+details.payback-type-group + details.payback-type-group { margin-top: 0.4rem; }
+details.payback-type-group > summary.payback-type-group-label {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, #6c757d);
+    user-select: none;
+}
+details.payback-type-group > summary.payback-type-group-label::-webkit-details-marker { display: none; }
+details.payback-type-group > summary.payback-type-group-label > .payback-type-group-chevron {
+    font-size: 0.7rem;
+    transition: transform 0.15s ease;
+    color: var(--text-muted, #6c757d);
+}
+details.payback-type-group[open] > summary.payback-type-group-label > .payback-type-group-chevron {
+    transform: rotate(90deg);
+}
+details.payback-type-group > summary.payback-type-group-label > span:first-of-type { flex: 1 1 auto; }
+.payback-type-group-count {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: var(--bg-soft, #eef);
+    color: var(--text-muted, #6c757d);
+    letter-spacing: 0;
+}
+details.payback-type-group > summary.payback-type-group-label:hover { background: var(--bg-alt, #fafafa); }
+.payback-type-group-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem 0.75rem;
+}
+.payback-type-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.75rem 0.5rem;
+    min-height: 78px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    background: var(--bg-alt, #fff);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .15s, background .15s;
+}
+.payback-type-tile > i { font-size: 1.1rem; color: var(--text-muted, #6c757d); }
+.payback-type-tile-label { font-size: 0.8rem; line-height: 1.15; }
+.payback-type-tile:hover:not(:disabled) { border-color: var(--primary, #36c); }
+.payback-type-tile.is-selected { border-color: var(--primary, #36c); background: var(--bg-accent, #e6eef8); }
+.payback-type-tile:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Payback Options (contact modal tab) ──────────────────────────── */
+.payback-options-controls {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin: 0.25rem 0 0.5rem;
+}
+.payback-options-controls > #payback-options-currency {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 12rem;
+    font-size: 0.9rem;
+    padding: 0.35rem 1.75rem 0.35rem 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='none' stroke='%236c757d' stroke-width='1.5' d='M1 1l4 4 4-4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    background-size: 0.6rem 0.4rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+.payback-options-controls > button { flex: 0 0 auto; }
+
+.contacts-table.payback-options-table .col-pbo-type,
+.contacts-table.payback-options-table .col-pbo-currency {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.contacts-table.payback-options-table .col-pbo-label {
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0;
+}
+.contacts-table.payback-options-table tbody tr.is-clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.contacts-table.payback-options-table tbody tr.is-clickable:hover {
+    background: var(--bg-alt, #f6f8fa);
+}
+
+/* Re-show col 3 (Label) on mobile — the generic .contacts-table rule
+   hides col 3+. Details is handled by the tap-to-open detail modal. */
+@media (max-width: 600px) {
+    .contacts-table.payback-options-table thead th:nth-child(3),
+    .contacts-table.payback-options-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .contacts-table.payback-options-table .col-pbo-type { width: 30%; }
+    .contacts-table.payback-options-table .col-pbo-currency { width: 30%; }
+    .contacts-table.payback-options-table .col-pbo-label { width: 40%; }
+}
+
+/* Detail modal — a row per field, key left / value right. */
+.payback-detail-row {
+    display: grid;
+    grid-template-columns: 8rem 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color, #eee);
+}
+.payback-detail-row:last-child { border-bottom: none; }
+.payback-detail-key { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.payback-detail-value { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.payback-detail-text { overflow-wrap: anywhere; word-break: break-word; }
+@media (max-width: 600px) {
+    .payback-detail-row { grid-template-columns: 1fr; gap: 0.1rem; }
+}
+
+.payback-type-fields .form-group + .form-group { margin-top: 0.5rem; }
+.payback-field-group { display: flex; flex-direction: column; gap: 0.25rem; }
+.payback-swift-id-btns { display: flex; gap: 0.5rem; }
+.payback-swift-id-btns > .btn { flex: 1 1 auto; }
+.payback-methods-table tbody tr.is-clickable { cursor: pointer; transition: background 0.15s; }
+.payback-methods-table tbody tr.is-clickable:hover { background: var(--bg-alt, #f6f8fa); }
+.contacts-table.payback-methods-table .col-pb-type     { width: 14%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-currency { width: 10%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-label    {
+    width: 22%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.contacts-table.payback-methods-table .col-pb-details  {
+    width: 30%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.contacts-table.payback-methods-table .col-pb-share    { width: 14%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-actions  { width: 10%; white-space: nowrap; }
+
+/* Mobile (≤600px): the generic .contacts-table rule hides cols 3+.
+   Re-show Label (3) + Actions (6) and let everything size naturally. */
+@media (max-width: 600px) {
+    .contacts-table.payback-methods-table thead th:nth-child(3),
+    .contacts-table.payback-methods-table tbody td:nth-child(3),
+    .contacts-table.payback-methods-table thead th:nth-child(6),
+    .contacts-table.payback-methods-table tbody td:nth-child(6) {
+        display: table-cell;
+    }
+    .contacts-table.payback-methods-table .col-pb-type     { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-currency { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-label    { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-actions  { width: 1%; }
+}
+
+.form-errors {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--status-failure-border, #f5c2c7);
+    background: var(--status-failure-soft-bg, #f8d7da);
+    color: var(--status-failure-soft-fg, #842029);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.form-errors-list { margin: 0; padding-left: 1.1rem; }
+

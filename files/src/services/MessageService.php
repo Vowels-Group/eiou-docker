@@ -410,6 +410,54 @@ class MessageService implements MessageServiceInterface {
         elseif($request['typeMessage'] === "payment_request"){
             $this->handlePaymentRequestMessage($request);
         }
+        // Handle Payback Methods messages (E2E fetch + response + revoke)
+        elseif($request['typeMessage'] === "payback_methods"){
+            $this->handlePaybackMethodsMessage($request);
+        }
+    }
+
+    /**
+     * Handle payback_methods messages
+     *
+     * Routes to ReceivedPaybackMethodService based on the action field:
+     *   action=request  → responder side — build and send a response
+     *   action=response → requester side — cache received methods with TTL
+     *   action=revoke   → requester side — mark received methods revoked
+     *
+     * The response dispatch itself is left to the message delivery layer —
+     * this handler produces the response payload and logs the decision.
+     */
+    private function handlePaybackMethodsMessage(array $request): void {
+        $service = null;
+        try {
+            $service = \Eiou\Services\ServiceContainer::getInstance()->getReceivedPaybackMethodService();
+        } catch (\Throwable $e) {
+            Logger::getInstance()->warning("payback_methods message received but service unavailable", [
+                'error' => $e->getMessage(),
+            ]);
+            return;
+        }
+
+        $senderPubkeyHash = (string) ($request['senderPubkeyHash'] ?? $request['senderPublicKeyHash'] ?? '');
+        $action = $request['action'] ?? null;
+        $payload = $request['payload'] ?? $request;
+
+        switch ($action) {
+            case 'request':
+                $response = $service->handleIncomingRequest($senderPubkeyHash, $payload);
+                echo json_encode(['success' => true, 'status' => 'received', 'response' => $response]);
+                return;
+            case 'response':
+                $count = $service->handleIncomingResponse($senderPubkeyHash, $payload);
+                echo json_encode(['success' => true, 'status' => 'received', 'methods_cached' => $count]);
+                return;
+            case 'revoke':
+                $count = $service->handleIncomingRevoke($senderPubkeyHash, $payload);
+                echo json_encode(['success' => true, 'status' => 'received', 'methods_revoked' => $count]);
+                return;
+            default:
+                Logger::getInstance()->warning("Unknown payback_methods action", ['action' => $action]);
+        }
     }
 
     /**

@@ -110,6 +110,10 @@ function freshInstall(){
                 $dbConn->exec(getApiRequestLogTableSchema());
                 $dbConn->exec(getApiNoncesTableSchema());
 
+                // Payback Methods (profile of settlement methods + v2 received cache)
+                $dbConn->exec(getPaybackMethodsTableSchema());
+                $dbConn->exec(getPaybackMethodsReceivedTableSchema());
+
                 // System & Security
                 $dbConn->exec(getDebugTableSchema());
                 $dbConn->exec(getRateLimitsTableSchema());
@@ -197,6 +201,8 @@ function runMigrations(PDO $pdo): array {
         'remember_tokens'                => 'Eiou\Database\getRememberTokensTableSchema',
         'transactions_archive'           => 'Eiou\Database\getTransactionsArchiveTableSchema',
         'transaction_chain_checkpoints'  => 'Eiou\Database\getTransactionChainCheckpointsTableSchema',
+        'payback_methods'                => 'Eiou\Database\getPaybackMethodsTableSchema',
+        'payback_methods_received'       => 'Eiou\Database\getPaybackMethodsReceivedTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {

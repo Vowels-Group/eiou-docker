@@ -3869,7 +3869,10 @@ function openContactModal(contact, openTab) {
         transactionsEl.innerHTML = html;
     }
 
-    // Open specified tab or default to info tab
+    // Open specified tab or default to info tab. The Payback tab is always
+    // visible — even when net-even or being owed, the user may want to
+    // offer a partial pre-settlement or just inspect the contact's
+    // declared rails.
     var tabToOpen = openTab || 'info-tab';
     showModalTab(tabToOpen, null);
 
@@ -7454,17 +7457,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             // modal behind whichever modal it was stacked on top of.
             //
             // Only opt in / out of the stack when the click came from a
-            // *different* modal. DLQ detail modal → Transaction ID adds
-            // the class; a click from outside any modal clears it so a
-            // stale flag from a previous session doesn't survive.
+            // *different* modal. Contact / DLQ detail → Transaction ID
+            // adds the class; a click from outside any modal clears it
+            // so a stale flag from a previous session doesn't survive.
             var txModalEl = document.getElementById('transactionModal');
             if (txModalEl) {
                 var originModal = el.closest ? el.closest('.modal') : null;
                 var originatedInTxModal = (originModal && originModal.id === 'transactionModal');
                 if (!originatedInTxModal) {
-                    if (originModal
-                        && originModal.style.display !== 'none'
-                        && (originModal.offsetParent !== null || originModal.classList.contains('active'))) {
+                    // Don't use offsetParent here — it's always null for
+                    // position:fixed elements (which every .modal is), so the
+                    // previous check reported the contactModal as "hidden"
+                    // and removed the stack class even when contactModal
+                    // was fully visible on top of the tx modal.
+                    var originVisible = originModal &&
+                        originModal.style.display !== 'none' &&
+                        originModal.getBoundingClientRect().width > 0;
+                    if (originVisible) {
                         txModalEl.classList.add('modal-stack-top');
                     } else {
                         txModalEl.classList.remove('modal-stack-top');
@@ -7518,6 +7527,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'showModalTab': function(el) {
             var tab = el.getAttribute('data-tab');
             showModalTab(tab, el);
+        },
+        'showContactPaybackTab': function(el) {
+            showModalTab('payback-tab', el);
+            if (window.paybackOptions) { window.paybackOptions.openForCurrentContact(); }
+        },
+        'refreshContactPayback': function() {
+            if (window.paybackOptions) { window.paybackOptions.refresh(); }
         },
 
         // Currency slider
@@ -7738,7 +7754,33 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         },
         'openPluginChangelog': function(el) {
             if (window.plugins) window.plugins.openChangelog(el.getAttribute('data-plugin'));
-        }
+        },
+
+        // Payback Methods
+        'openPaybackMethodForm': function(el) {
+            if (window.paybackMethods) {
+                window.paybackMethods.openForm(el.getAttribute('data-payback-mode') || 'add', el.getAttribute('data-method-id') || null);
+            }
+        },
+        'closePaybackMethodForm': function() { if (window.paybackMethods) { window.paybackMethods.closeForm(); } },
+        'submitPaybackMethod': function() { if (window.paybackMethods) { window.paybackMethods.submit(); } },
+        'revealPaybackMethod': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.reveal(el.getAttribute('data-method-id')); }
+        },
+        'deletePaybackMethod': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.remove(el.getAttribute('data-method-id'), el.getAttribute('data-label') || ''); }
+        },
+        'deletePaybackMethodFromModal': function() {
+            if (window.paybackMethods) { window.paybackMethods.removeCurrent(); }
+        },
+        'paybackSwitchToEdit': function() {
+            if (window.paybackMethods) { window.paybackMethods.switchToEdit(); }
+        },
+        'selectPaybackType': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.selectType(el.getAttribute('data-type')); }
+        },
+        'paybackStepNext': function() { if (window.paybackMethods) { window.paybackMethods.gotoStep(2); } },
+        'paybackStepBack': function() { if (window.paybackMethods) { window.paybackMethods.gotoStep(1); } }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -8640,9 +8682,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             return attempt();
         }
 
-        function openVerifyModal(message) {
+        function openVerifyModal(messageOrCallback, maybeLabel, onCancel) {
+            // Accept either a server-provided message (used internally by
+            // withSensitiveAccess) or a callback to run after successful verify
+            // (used by other modules that don't route through that helper).
+            // Optional onCancel fires when the user dismisses the modal without
+            // verifying — so callers can tear down their own loading state
+            // (e.g. the "Loading…" spinner inside the Payback View modal).
+            if (typeof messageOrCallback === 'function') {
+                pendingAction = {
+                    fn:     messageOrCallback,
+                    label:  maybeLabel || 'Confirm',
+                    cancel: typeof onCancel === 'function' ? onCancel : null,
+                };
+            }
             var input = document.getElementById('apiKeysVerifyAuthcode');
             var err = document.getElementById('apiKeysVerifyError');
+            if (!input) { return; }
             input.value = '';
             if (err) { err.classList.add('d-none'); err.textContent = ''; }
             showModal('apiKeysVerifyModal');
@@ -8650,8 +8706,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function closeVerifyModal() {
+            var cancel = pendingAction && pendingAction.cancel;
             pendingAction = null;
             hideModal('apiKeysVerifyModal');
+            if (typeof cancel === 'function') { cancel(); }
         }
 
         function submitVerify() {
@@ -8716,6 +8774,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             copyDetailKeyId: copyDetailKeyId,
             closeRevealModal: closeRevealModal,
             copyToClipboard: copyToClipboard,
+            openVerifyModal: openVerifyModal,
             closeVerifyModal: closeVerifyModal,
             submitVerify: submitVerify
         };
@@ -9194,6 +9253,1160 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openModal: openModal,
             openChangelog: openChangelogModal,
             requestRestart: requestRestart
+        };
+    })();
+
+    // Payback Methods — list / add / reveal / edit / delete
+    //
+    // Talks to /?ajax=paybackMethodsList etc. via the same XHR pattern as
+    // the API-keys module. CSRF token is pulled from the hidden field the
+    // page layout already puts in the DOM.
+    // =====================================================================
+    window.paybackMethods = (function () {
+        var state = {
+            methods: [],
+            listLoaded: false,
+            formMode: 'add',
+            editingId: null,
+            selectedType: null,
+            currentStep: 1,
+            filters: { type: '', currency: '' }
+        };
+        var catalog = null;
+        var catalogTypesById = {};
+
+        function ensureCatalog() {
+            if (catalog) { return catalog; }
+            var el = document.getElementById('payback-methods-catalog');
+            if (!el) { return null; }
+            try {
+                catalog = JSON.parse(el.textContent || '{}');
+                (catalog.types || []).forEach(function (t) { catalogTypesById[t.id] = t; });
+            } catch (e) { catalog = null; }
+            return catalog;
+        }
+        function getType(id) { ensureCatalog(); return catalogTypesById[id] || null; }
+
+        function csrf() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return el ? el.value : '';
+        }
+
+        function post(action, extra, cb) {
+            var body = 'action=' + encodeURIComponent(action) +
+                       '&csrf_token=' + encodeURIComponent(csrf());
+            Object.keys(extra || {}).forEach(function (k) {
+                body += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(extra[k]);
+            });
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.pathname, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                var data;
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch (e) {
+                    // 302 / 401 / an HTML login page all fail JSON.parse here.
+                    // That's nearly always a session expiring mid-action.
+                    var looksLikeLogin = /<html|<!DOCTYPE/i.test(xhr.responseText || '');
+                    data = (looksLikeLogin || xhr.status === 302 || xhr.status === 401)
+                        ? { success: false, error: 'session_expired', message: 'Session expired — please sign in again, then retry.' }
+                        : { success: false, error: 'bad_response', message: 'Unexpected response from server.' };
+                }
+                cb(data, xhr.status);
+            };
+            xhr.send(body);
+        }
+
+        function loadList() {
+            post('paybackMethodsList', {}, function (data) {
+                if (!data.success) { return; }
+                state.methods = data.methods || [];
+                state.listLoaded = true;
+                renderAccessState(data.seconds_remaining || 0);
+                render();
+            });
+        }
+
+        function render() {
+            var container = document.getElementById('payback-methods-list');
+            if (!container) { return; }
+            if (!state.methods.length) {
+                container.innerHTML =
+                    '<div class="payback-methods-empty text-muted">' +
+                    'No payback methods yet. Click <strong>+ Add</strong> above to set one up.' +
+                    '</div>';
+                return;
+            }
+            var cat = ensureCatalog() || { types: [] };
+            var typeLabels = {};
+            (cat.types || []).forEach(function (t) { typeLabels[t.id] = t.label; });
+            var sharePolicyLabels = { auto: 'Auto', never: 'Never' };
+
+            // Filter option sets drawn from the current methods so users only
+            // see choices that would actually match something.
+            var typeSet = {}, currencySet = {};
+            state.methods.forEach(function (m) {
+                if (m.type) { typeSet[m.type] = typeLabels[m.type] || m.type; }
+                if (m.currency) { currencySet[m.currency] = true; }
+            });
+            var typeIds = Object.keys(typeSet).sort(function (a, b) {
+                return (typeSet[a] || '').localeCompare(typeSet[b] || '');
+            });
+            var currencies = Object.keys(currencySet).sort();
+
+            var fType = state.filters.type || '';
+            var fCur  = state.filters.currency || '';
+            var filtered = state.methods.filter(function (m) {
+                if (fType && m.type !== fType) { return false; }
+                if (fCur && m.currency !== fCur) { return false; }
+                return true;
+            });
+
+            var filtersHtml = '';
+            // Only show filters if there's more than one option on either axis.
+            // Styling reuses the shared .contacts-filters / .contacts-filter-select
+            // chrome also used by the Recent Transactions section.
+            if (typeIds.length > 1 || currencies.length > 1) {
+                filtersHtml = '<div class="contacts-filters mb-md">';
+                if (typeIds.length > 1) {
+                    filtersHtml += '<select id="payback-filter-type" class="contacts-filter-select" data-payback-filter="type" aria-label="Filter by type">' +
+                        '<option value="">Any type</option>';
+                    typeIds.forEach(function (id) {
+                        var sel = (id === fType) ? ' selected' : '';
+                        filtersHtml += '<option value="' + escapeAttr(id) + '"' + sel + '>' + escapeHtml(typeSet[id]) + '</option>';
+                    });
+                    filtersHtml += '</select>';
+                }
+                if (currencies.length > 1) {
+                    filtersHtml += '<select id="payback-filter-currency" class="contacts-filter-select" data-payback-filter="currency" aria-label="Filter by currency">' +
+                        '<option value="">Any currency</option>';
+                    currencies.forEach(function (c) {
+                        var sel = (c === fCur) ? ' selected' : '';
+                        filtersHtml += '<option value="' + escapeAttr(c) + '"' + sel + '>' + escapeHtml(c) + '</option>';
+                    });
+                    filtersHtml += '</select>';
+                }
+                filtersHtml += '</div>';
+            }
+
+            var html = filtersHtml +
+                '<div class="contacts-table-wrapper payback-methods-table-wrapper">' +
+                '<table class="contacts-table payback-methods-table">' +
+                '<thead><tr>' +
+                    '<th class="col-pb-type"     style="width:14%">Type</th>' +
+                    '<th class="col-pb-currency" style="width:13%">Currency</th>' +
+                    '<th class="col-pb-label"    style="width:22%">Label</th>' +
+                    '<th class="col-pb-details"  style="width:37%">Details</th>' +
+                    '<th class="col-pb-share"    style="width:14%">Share</th>' +
+                '</tr></thead><tbody>';
+            if (!filtered.length) {
+                html += '<tr><td colspan="5" class="text-muted" style="padding:0.75rem; text-align:center;">' +
+                    'No methods match the current filters.</td></tr>';
+            }
+            filtered.forEach(function (m) {
+                var typeLabel = typeLabels[m.type] || m.type;
+                var shareLabel = sharePolicyLabels[m.share_policy] || (m.share_policy || 'auto');
+                html +=
+                    '<tr class="is-clickable" ' +
+                        'data-action="openPaybackMethodForm" data-payback-mode="view" ' +
+                        'data-method-id="' + escapeAttr(m.method_id) + '" title="Click to view">' +
+                        '<td class="col-pb-type"><span class="payback-method-type-badge">' + escapeHtml(typeLabel) + '</span></td>' +
+                        '<td class="col-pb-currency">' + escapeHtml(m.currency) + '</td>' +
+                        '<td class="col-pb-label payback-method-label" title="' + escapeAttr(m.label) + '">' + escapeHtml(m.label) + '</td>' +
+                        '<td class="col-pb-details payback-method-mask text-muted" title="' + escapeAttr(m.masked_display || '') + '">' + escapeHtml(m.masked_display || '') + '</td>' +
+                        '<td class="col-pb-share">' + escapeHtml(shareLabel) + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('[data-payback-filter]').forEach(function (sel) {
+                sel.addEventListener('change', function () {
+                    state.filters[sel.getAttribute('data-payback-filter')] = sel.value;
+                    render();
+                });
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // Form: open / close / step nav
+        // -------------------------------------------------------------------
+
+        function openForm(mode, methodId) {
+            state.formMode = mode || 'add';
+            state.editingId = methodId || null;
+            state.selectedType = null;
+            state.currentStep = 1;
+
+            ensureCatalog();
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+
+            resetFormInputs();
+            clearReadOnlyView();
+            var isEditOrView = state.formMode === 'edit' || state.formMode === 'view';
+            if (!isEditOrView) { renderTypeTiles(); }
+            setModalTitle(
+                state.formMode === 'view' ? 'View Payback Method' :
+                state.formMode === 'edit' ? 'Edit Payback Method' :
+                'Add Payback Method'
+            );
+            setStepVisibility(isEditOrView ? 0 : 1);
+            hideErrors();
+            overlay.style.display = 'flex';
+
+            if (!overlay.__paybackBackdropBound) {
+                overlay.__paybackBackdropBound = true;
+                overlay.addEventListener('click', function (e) {
+                    if (e.target === overlay) { closeForm(); }
+                });
+            }
+
+            if ((state.formMode === 'edit' || state.formMode === 'view') && methodId) {
+                // Use reveal so sensitive fields decrypt for pre-fill. The
+                // endpoint is gated by sensitive-access; on 403 we pop the
+                // unlock modal and retry after the user enters their code.
+                var loadForEdit = function () {
+                    post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
+                        if (status === 403 && data.error === 'sensitive_access_required') {
+                            if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                                // If the user cancels the unlock modal, don't
+                                // leave them staring at an infinite "Loading…"
+                                // inside the View/Edit modal — close it too.
+                                window.apiKeys.openVerifyModal(loadForEdit, 'Unlock to view method', closeForm);
+                            } else {
+                                showErrors([{ field: null, message: 'Please unlock sensitive actions first.' }]);
+                            }
+                            return;
+                        }
+                        if (!data.success || !data.method) {
+                            showErrors([{ field: null, message: data.error || 'Could not load method' }]);
+                            return;
+                        }
+                        prefillForEdit(data.method);
+                        if (state.formMode === 'view') { applyReadOnlyView(); }
+                    });
+                };
+                loadForEdit();
+            }
+        }
+
+        function closeForm() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (overlay) { overlay.style.display = 'none'; }
+            state.editingId = null;
+            state.selectedType = null;
+            state.currentStep = 1;
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (t) {
+                t.disabled = false;
+            });
+        }
+
+        function gotoStep(n) {
+            if (n === 2) {
+                if (!state.selectedType) { return; }
+                renderStep2(state.selectedType);
+            }
+            state.currentStep = n;
+            setStepVisibility(n);
+        }
+
+        // View mode reuses the edit form but locks every input. Toggled on
+        // after prefillForEdit populates, and cleared on next openForm.
+        function applyReadOnlyView() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+            overlay.classList.add('is-view-mode');
+            overlay.querySelectorAll('.modal-body input, .modal-body textarea').forEach(function (el) {
+                el.setAttribute('readonly', 'readonly');
+            });
+            overlay.querySelectorAll('.modal-body select, .modal-body button').forEach(function (el) {
+                el.disabled = true;
+            });
+        }
+        function clearReadOnlyView() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+            overlay.classList.remove('is-view-mode');
+            overlay.querySelectorAll('.modal-body [readonly]').forEach(function (el) {
+                el.removeAttribute('readonly');
+            });
+            overlay.querySelectorAll('.modal-body select, .modal-body button').forEach(function (el) {
+                el.disabled = false;
+            });
+        }
+
+        // Delete the method currently open in the edit form.
+        function removeCurrent() {
+            if (!state.editingId) { return; }
+            var label = (document.getElementById('payback-label') || {}).value || 'this method';
+            remove(state.editingId, label);
+        }
+
+        // Flip the open modal from view → edit without refetching. Data is
+        // already loaded; we just unlock the inputs and swap footer actions.
+        function switchToEdit() {
+            if (state.formMode !== 'view' || !state.editingId) { return; }
+            state.formMode = 'edit';
+            clearReadOnlyView();
+            setModalTitle('Edit Payback Method');
+            setStepVisibility(2);
+        }
+
+        function setStepVisibility(n) {
+            // n=0 → loading placeholder (edit/view while revealing); n=1/2 → step panels
+            var loading = document.querySelector('#payback-method-modal-overlay .payback-loading');
+            if (loading) { loading.style.display = (n === 0) ? '' : 'none'; }
+            document.querySelectorAll('#payback-method-modal-overlay .payback-step').forEach(function (s) {
+                s.style.display = (n !== 0 && s.getAttribute('data-step') === String(n)) ? '' : 'none';
+            });
+            var viewing = state.formMode === 'view';
+            var editing = state.formMode === 'edit';
+            var back    = document.querySelector('#payback-method-modal-overlay .payback-step-back');
+            var next    = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            var save    = document.querySelector('#payback-method-modal-overlay .payback-submit');
+            var del     = document.querySelector('#payback-method-modal-overlay .payback-delete');
+            var cancel  = document.querySelector('#payback-method-modal-overlay .payback-cancel');
+            var edit    = document.querySelector('#payback-method-modal-overlay .payback-edit-from-view');
+            var banner  = document.querySelector('#payback-method-modal-overlay .payback-view-banner');
+            // In view/edit we jump straight to step 2 and hide the type-picker nav.
+            if (back)   { back.style.display   = (n === 2 && !viewing && !editing) ? '' : 'none'; }
+            if (next)   { next.style.display   = (n === 1 && !viewing && !editing) ? '' : 'none'; }
+            if (save)   { save.style.display   = (n === 2 && !viewing) ? '' : 'none'; }
+            if (del)    { del.style.display    = (n === 2 && editing) ? '' : 'none'; }
+            if (edit)   { edit.style.display   = (n === 2 && viewing) ? '' : 'none'; }
+            if (banner) { banner.style.display = (n === 2 && viewing) ? '' : 'none'; }
+            if (cancel) { cancel.textContent = viewing ? 'Close' : 'Cancel'; }
+        }
+
+        function setModalTitle(title) {
+            var el = document.getElementById('payback-method-modal-title');
+            if (el) {
+                el.innerHTML = '<i class="fas fa-hand-holding-usd"></i> ' + escapeHtml(title);
+            }
+        }
+
+        function resetFormInputs() {
+            var label = document.getElementById('payback-label');
+            if (label) { label.value = ''; }
+            var priority = document.getElementById('payback-priority');
+            if (priority) { priority.value = '100'; }
+            var share = document.getElementById('payback-share-policy');
+            if (share) { share.value = 'auto'; }
+            var fields = document.getElementById('payback-type-fields');
+            if (fields) { fields.innerHTML = ''; }
+            var currency = document.getElementById('payback-currency');
+            if (currency) { currency.innerHTML = ''; }
+            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            if (next) { next.disabled = true; }
+        }
+
+        // -------------------------------------------------------------------
+        // Form: step 1 (type selector)
+        // -------------------------------------------------------------------
+
+        function renderTypeTiles() {
+            var cat = ensureCatalog();
+            var grid = document.getElementById('payback-type-grid');
+            if (!cat || !grid) { return; }
+            var byGroup = {};
+            (cat.types || []).forEach(function (t) {
+                byGroup[t.group] = byGroup[t.group] || [];
+                byGroup[t.group].push(t);
+            });
+            var html = '';
+            var openIndex = 0;  // first non-empty group starts expanded
+            var groupIndex = -1;
+            (cat.groups || []).forEach(function (g) {
+                var types = byGroup[g.id] || [];
+                if (!types.length) { return; }
+                groupIndex += 1;
+                var openAttr = groupIndex === openIndex ? ' open' : '';
+                html += '<details class="payback-type-group"' + openAttr + '>' +
+                        '<summary class="payback-type-group-label">' +
+                            '<i class="fas fa-chevron-right payback-type-group-chevron"></i>' +
+                            '<span>' + escapeHtml(g.label) + '</span>' +
+                            '<span class="payback-type-group-count">' + types.length + '</span>' +
+                        '</summary>' +
+                        '<div class="payback-type-group-tiles">';
+                types.forEach(function (t) {
+                    html += '<button type="button" class="payback-type-tile" ' +
+                            'data-action="selectPaybackType" data-type="' + escapeAttr(t.id) + '" ' +
+                            'title="' + escapeAttr(t.description || '') + '">' +
+                                '<i class="' + escapeAttr(t.icon || 'fas fa-coins') + '"></i>' +
+                                '<span class="payback-type-tile-label">' + escapeHtml(t.label) + '</span>' +
+                            '</button>';
+                });
+                html += '</div></details>';
+            });
+            grid.innerHTML = html;
+        }
+
+        function selectType(typeId) {
+            if (!getType(typeId)) { return; }
+            state.selectedType = typeId;
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (tile) {
+                tile.classList.toggle('is-selected', tile.getAttribute('data-type') === typeId);
+            });
+            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            if (next) { next.disabled = false; }
+        }
+
+        // -------------------------------------------------------------------
+        // Form: step 2 (per-type fields + currency)
+        // -------------------------------------------------------------------
+
+        function renderStep2(typeId) {
+            var type = getType(typeId);
+            if (!type) { return; }
+            renderTypeInfo(type);
+            renderCurrencyOptions(type, null);
+            renderTypeFields(type);
+        }
+
+        // Per-type info block. The catalog entry may carry an `info` string
+        // (plain text or limited HTML — plugins opt in by setting this key in
+        // their getCatalogEntry() return). Rendered as a collapsible details
+        // banner at the top of step 2 so it doesn't shove the form down for
+        // returning users who don't need the refresher.
+        function renderTypeInfo(type) {
+            var host = document.getElementById('payback-type-info');
+            if (!host) { return; }
+            var info = type && type.info ? String(type.info).trim() : '';
+            if (info === '') {
+                host.style.display = 'none';
+                host.innerHTML = '';
+                return;
+            }
+            host.style.display = '';
+            host.innerHTML =
+                '<details class="section-intro text-muted">' +
+                    '<summary>' +
+                        '<i class="' + escapeAttr(type.icon || 'fas fa-info-circle') + '"></i> ' +
+                        '<span>About ' + escapeHtml(type.label || type.id) + '</span>' +
+                    '</summary>' +
+                    '<div class="section-intro-body">' + info + '</div>' +
+                '</details>';
+        }
+
+        function renderCurrencyOptions(type, preselect) {
+            var select = document.getElementById('payback-currency');
+            var hint = document.querySelector('.payback-currency-hint');
+            if (!select) { return; }
+            var cat = ensureCatalog() || { currencies: [] };
+            var codes = (type.currencies && type.currencies.length)
+                ? type.currencies
+                : cat.currencies.map(function (c) { return c.code; });
+            var html = '';
+            codes.forEach(function (code) {
+                var match = (cat.currencies || []).filter(function (c) { return c.code === code; })[0];
+                var label = match ? match.label : code;
+                var sel = (preselect && preselect === code) ? ' selected' : '';
+                html += '<option value="' + escapeAttr(code) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+            });
+            select.innerHTML = html;
+            if (hint) {
+                hint.textContent = (type.currencies && type.currencies.length)
+                    ? 'Only currencies valid for this method are shown.'
+                    : 'Any ISO-4217 or declared asset code.';
+            }
+        }
+
+        function renderTypeFields(type) {
+            var container = document.getElementById('payback-type-fields');
+            if (!container) { return; }
+            container.innerHTML = '';
+            (type.fields || []).forEach(function (f, i) {
+                container.appendChild(buildFieldDom(f, i));
+            });
+            attachConditionalWatchers(type);
+            applyShowWhen(type);
+            applySwiftIdentifierToggle(type);
+
+            if (type.currenciesFor && type.currenciesFor.field) {
+                var watched = document.querySelector('#payback-type-fields [data-payback-field="' + type.currenciesFor.field + '"]');
+                if (watched) {
+                    watched.addEventListener('change', function () { applyCurrenciesFor(type, watched.value); });
+                    applyCurrenciesFor(type, watched.value);
+                }
+            }
+        }
+
+        function buildFieldDom(f, index) {
+            var inputId = 'payback-field-' + f.name + '-' + index;
+            var wrap = document.createElement('div');
+            wrap.className = 'form-group payback-field-group';
+            wrap.setAttribute('data-payback-field-group', f.name);
+            wrap.setAttribute('data-payback-field-index', String(index));
+            if (f.showWhen) {
+                wrap.setAttribute('data-show-when-field', f.showWhen.field);
+                wrap.setAttribute('data-show-when-in', JSON.stringify(f.showWhen.in || []));
+            }
+
+            var label = document.createElement('label');
+            label.className = 'form-label';
+            label.setAttribute('for', inputId);
+            label.textContent = f.label + (f.required ? ' *' : '');
+            wrap.appendChild(label);
+
+            var input;
+            if (f.type === 'select') {
+                input = document.createElement('select');
+                input.className = 'form-control';
+                (f.options || []).forEach(function (opt) {
+                    var o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.label;
+                    input.appendChild(o);
+                });
+            } else if (f.type === 'textarea') {
+                input = document.createElement('textarea');
+                input.className = 'form-control';
+                input.rows = 3;
+            } else {
+                input = document.createElement('input');
+                input.type = f.type === 'email' ? 'email'
+                           : f.type === 'tel' ? 'tel'
+                           : f.type === 'number' ? 'number'
+                           : 'text';
+                input.className = 'form-control';
+            }
+            input.id = inputId;
+            input.setAttribute('data-payback-field', f.name);
+            if (f.placeholder) { input.placeholder = f.placeholder; }
+            if (f.required) { input.required = true; }
+            wrap.appendChild(input);
+
+            if (f.help) {
+                var help = document.createElement('small');
+                help.className = 'text-muted';
+                help.textContent = f.help;
+                wrap.appendChild(help);
+            }
+            return wrap;
+        }
+
+        function attachConditionalWatchers(type) {
+            var watched = {};
+            (type.fields || []).forEach(function (f) {
+                if (f.showWhen && f.showWhen.field) { watched[f.showWhen.field] = true; }
+            });
+            Object.keys(watched).forEach(function (name) {
+                var el = document.querySelector('#payback-type-fields [data-payback-field="' + name + '"]');
+                if (el && !el.__paybackWatcherAttached) {
+                    el.__paybackWatcherAttached = true;
+                    var refresh = function () { applyShowWhen(type); applySwiftIdentifierToggle(type); };
+                    el.addEventListener('change', refresh);
+                    el.addEventListener('input',  refresh);
+                }
+            });
+        }
+
+        function applyShowWhen(type) {
+            (type.fields || []).forEach(function (f, i) {
+                if (!f.showWhen) { return; }
+                var wrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"]');
+                if (!wrap) { return; }
+                var watched = document.querySelector('#payback-type-fields [data-payback-field="' + f.showWhen.field + '"]');
+                var val = watched ? watched.value : '';
+                var wanted = f.showWhen.in || [];
+                wrap.style.display = wanted.indexOf(val) !== -1 ? '' : 'none';
+            });
+        }
+
+        // SWIFT uniquely accepts *either* an IBAN or a local account number,
+        // not both. Rather than render two separate text fields side by side
+        // (confusing, looks like duplicates), render a segmented toggle and
+        // display only the chosen field. Activated only when rail=swift.
+        function applySwiftIdentifierToggle(type) {
+            var container = document.getElementById('payback-type-fields');
+            var railEl = document.querySelector('#payback-type-fields [data-payback-field="rail"]');
+            if (!container || !railEl) { return; }
+
+            var indices = { iban: -1, account_number: -1 };
+            (type.fields || []).forEach(function (f, i) {
+                if (f.showWhen && f.showWhen.field === 'rail'
+                        && Array.isArray(f.showWhen.in) && f.showWhen.in.length === 1
+                        && f.showWhen.in[0] === 'swift'
+                        && (f.name === 'iban' || f.name === 'account_number')) {
+                    indices[f.name] = i;
+                }
+            });
+
+            var existing = document.getElementById('payback-swift-id-toggle');
+            if (railEl.value !== 'swift' || indices.iban === -1 || indices.account_number === -1) {
+                if (existing) { existing.parentNode.removeChild(existing); }
+                return;
+            }
+
+            var ibanWrap = container.querySelector('[data-payback-field-index="' + indices.iban + '"]');
+            var acctWrap = container.querySelector('[data-payback-field-index="' + indices.account_number + '"]');
+            if (!ibanWrap || !acctWrap) { return; }
+
+            if (!existing) {
+                existing = document.createElement('div');
+                existing.id = 'payback-swift-id-toggle';
+                existing.className = 'form-group payback-swift-id-toggle';
+                existing.innerHTML =
+                    '<label class="form-label">Identifier *</label>' +
+                    '<div class="payback-swift-id-btns" role="tablist" aria-label="SWIFT identifier type">' +
+                        '<button type="button" class="btn btn-primary btn-compact" data-swift-id="iban">IBAN</button>' +
+                        '<button type="button" class="btn btn-secondary btn-compact" data-swift-id="account_number">Account number</button>' +
+                    '</div>' +
+                    '<small class="text-muted">SWIFT accepts either an IBAN or a local account number.</small>';
+                ibanWrap.parentNode.insertBefore(existing, ibanWrap);
+                existing.querySelectorAll('[data-swift-id]').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        setSwiftIdentifier(b.getAttribute('data-swift-id'), indices);
+                    });
+                });
+            }
+            // Strip the redundant "IBAN (or account_number)" / "Account
+            // number (or IBAN)" labels — the toggle now communicates that.
+            [[ibanWrap, 'IBAN'], [acctWrap, 'Account number']].forEach(function (pair) {
+                var lbl = pair[0].querySelector('label.form-label');
+                if (lbl) { lbl.textContent = pair[1]; }
+            });
+            setSwiftIdentifier(existing.getAttribute('data-current') || 'iban', indices);
+        }
+
+        function setSwiftIdentifier(choice, indices) {
+            var toggle = document.getElementById('payback-swift-id-toggle');
+            if (!toggle) { return; }
+            toggle.setAttribute('data-current', choice);
+            toggle.querySelectorAll('[data-swift-id]').forEach(function (b) {
+                var active = b.getAttribute('data-swift-id') === choice;
+                b.classList.toggle('btn-primary',   active);
+                b.classList.toggle('btn-secondary', !active);
+            });
+            var ibanWrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + indices.iban + '"]');
+            var acctWrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + indices.account_number + '"]');
+            if (ibanWrap) { ibanWrap.style.display = (choice === 'iban')           ? '' : 'none'; }
+            if (acctWrap) { acctWrap.style.display = (choice === 'account_number') ? '' : 'none'; }
+        }
+
+        function applyCurrenciesFor(type, variantValue) {
+            var map = type.currenciesFor && type.currenciesFor.map;
+            if (!map) { return; }
+            var allowed = Object.prototype.hasOwnProperty.call(map, variantValue) ? map[variantValue] : null;
+            var select = document.getElementById('payback-currency');
+            if (!select) { return; }
+            var cat = ensureCatalog() || { currencies: [] };
+            var codes;
+            if (!allowed) {
+                codes = (type.currencies && type.currencies.length)
+                    ? type.currencies
+                    : cat.currencies.map(function (c) { return c.code; });
+            } else {
+                codes = allowed;
+            }
+            var previous = select.value;
+            var html = '';
+            codes.forEach(function (code) {
+                var match = (cat.currencies || []).filter(function (c) { return c.code === code; })[0];
+                var label = match ? match.label : code;
+                var sel = code === previous ? ' selected' : '';
+                html += '<option value="' + escapeAttr(code) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+            });
+            select.innerHTML = html;
+            if (codes.indexOf(previous) === -1 && codes.length) {
+                select.value = codes[0];
+            }
+        }
+
+        function prefillForEdit(m) {
+            var type = getType(m.type);
+            if (!type) { return; }
+            selectType(m.type);
+            gotoStep(2);
+            var labelEl = document.getElementById('payback-label');
+            if (labelEl) { labelEl.value = m.label || ''; }
+            renderCurrencyOptions(type, m.currency);
+            var share = document.getElementById('payback-share-policy');
+            if (share) { share.value = m.share_policy || 'auto'; }
+            var priority = document.getElementById('payback-priority');
+            if (priority) { priority.value = m.priority != null ? m.priority : 100; }
+
+            var stored = m.fields || {};
+
+            // First pass: set values on watched/unconditional fields (e.g., rail
+            // selects) so applyShowWhen resolves correctly.
+            (type.fields || []).forEach(function (f, i) {
+                if (f.showWhen) { return; }
+                if (stored[f.name] == null) { return; }
+                var el = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"] [data-payback-field]');
+                if (el) { el.value = stored[f.name]; }
+            });
+            applyShowWhen(type);
+
+            // For SWIFT, pick the identifier branch that actually has a value.
+            if (stored.rail === 'swift') {
+                var prefer = (stored.iban && String(stored.iban).length) ? 'iban'
+                           : (stored.account_number && String(stored.account_number).length) ? 'account_number'
+                           : 'iban';
+                var toggle = document.getElementById('payback-swift-id-toggle');
+                if (!toggle) { applySwiftIdentifierToggle(type); toggle = document.getElementById('payback-swift-id-toggle'); }
+                if (toggle) { toggle.setAttribute('data-current', prefer); }
+            }
+            applySwiftIdentifierToggle(type);
+
+            // Second pass: fill every conditional field whose showWhen matches
+            // the stored watched value.
+            (type.fields || []).forEach(function (f, i) {
+                if (stored[f.name] == null) { return; }
+                if (f.showWhen) {
+                    var watchedVal = stored[f.showWhen.field];
+                    if ((f.showWhen.in || []).indexOf(watchedVal) === -1) { return; }
+                }
+                var input = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"] [data-payback-field]');
+                if (input) { input.value = stored[f.name]; }
+            });
+
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (t) {
+                if (t.getAttribute('data-type') !== m.type) { t.disabled = true; }
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // Submit / reveal / delete
+        // -------------------------------------------------------------------
+
+        function submit() {
+            hideErrors();
+            var typeId = state.selectedType;
+            if (!typeId) {
+                showErrors([{ field: null, message: 'Pick a payback-method type first.' }]);
+                return;
+            }
+            var type = getType(typeId);
+            if (!type) { return; }
+            var label       = (document.getElementById('payback-label')        || {}).value || '';
+            var currency    = (document.getElementById('payback-currency')     || {}).value || '';
+            var sharePolicy = (document.getElementById('payback-share-policy') || {}).value || 'auto';
+            var priority    = (document.getElementById('payback-priority')     || {}).value || 100;
+
+            var fields = collectVisibleFields();
+
+            var editing = state.formMode === 'edit' && state.editingId;
+            var action  = editing ? 'paybackMethodsUpdate' : 'paybackMethodsCreate';
+            var payload;
+            if (editing) {
+                // Type and currency are immutable after create. Only send fields
+                // the user actually modified; empty objects would fail validation.
+                payload = { method_id: state.editingId };
+                if (label)       { payload.label = label; }
+                if (sharePolicy) { payload.share_policy = sharePolicy; }
+                if (priority !== '' && priority != null) { payload.priority = priority; }
+                if (Object.keys(fields).length > 0) { payload.fields = JSON.stringify(fields); }
+            } else {
+                payload = {
+                    type: typeId,
+                    label: label,
+                    currency: currency,
+                    fields: JSON.stringify(fields),
+                    share_policy: sharePolicy,
+                    priority: priority
+                };
+            }
+
+            post(action, payload, function (data, status) {
+                if (status === 403 && data.error === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { submit(); });
+                    } else {
+                        showErrors([{ field: null, message: 'Please unlock sensitive actions first.' }]);
+                    }
+                    return;
+                }
+                if (!data.success) {
+                    showErrors(data.errors || [{ field: null, message: data.error || 'Save failed' }]);
+                    return;
+                }
+                closeForm();
+                loadList();
+            });
+        }
+
+        function collectVisibleFields() {
+            var out = {};
+            document.querySelectorAll('#payback-type-fields [data-payback-field]').forEach(function (el) {
+                var wrap = el.closest('[data-payback-field-group]');
+                if (wrap && wrap.style.display === 'none') { return; }
+                var name = el.getAttribute('data-payback-field');
+                var v = el.value;
+                if (el.type === 'number' && v !== '' && !isNaN(v)) { v = Number(v); }
+                if (v === '' || v == null) { return; }
+                out[name] = v;
+            });
+            return out;
+        }
+
+        function showErrors(errs) {
+            var box = document.getElementById('payback-form-errors');
+            if (!box) { return; }
+            if (!errs || !errs.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+            var html = '<ul class="form-errors-list">';
+            errs.forEach(function (e) {
+                var prefix = e.field ? (e.field + ': ') : '';
+                html += '<li>' + escapeHtml(prefix + (e.message || e.code || 'Invalid')) + '</li>';
+            });
+            html += '</ul>';
+            box.innerHTML = html;
+            box.style.display = 'block';
+            if (typeof box.scrollIntoView === 'function') {
+                box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+
+        function hideErrors() {
+            var box = document.getElementById('payback-form-errors');
+            if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+        }
+
+        function reveal(methodId) {
+            post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
+                if (status === 403 && data.error === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { reveal(methodId); });
+                    } else {
+                        alert('Please unlock sensitive actions first (re-enter your auth code).');
+                    }
+                    return;
+                }
+                if (!data.success) { alert('Failed to reveal: ' + (data.error || 'unknown')); return; }
+                var m = data.method;
+                var lines = Object.keys(m.fields || {}).map(function (k) {
+                    return k + ': ' + m.fields[k];
+                });
+                alert(m.label + ' (' + m.type + ', ' + m.currency + ')\n\n' + lines.join('\n'));
+            });
+        }
+
+        function remove(methodId, label) {
+            if (!confirm('Remove payback method "' + label + '"? This cannot be undone.')) { return; }
+            post('paybackMethodsDelete', { method_id: methodId }, function (data, status) {
+                if (status === 403 && data.error === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { remove(methodId, label); });
+                    } else {
+                        alert('Please unlock sensitive actions first.');
+                    }
+                    return;
+                }
+                if (!data.success) { alert('Failed to delete: ' + (data.error || 'unknown')); return; }
+                closeForm();
+                loadList();
+            });
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function escapeAttr(s) { return escapeHtml(s); }
+
+        function renderAccessState(secondsRemaining) {
+            var el = document.getElementById('payback-methods-access-state');
+            if (!el) { return; }
+            if (secondsRemaining > 0) {
+                el.innerHTML = '<i class="fas fa-unlock-alt"></i> Unlocked for ' +
+                    Math.ceil(secondsRemaining / 60) + ' min';
+            } else {
+                el.textContent = '';
+            }
+        }
+
+        // Auto-load on DOM ready if the section is present.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                if (document.getElementById('payback-methods-section')) { loadList(); }
+            });
+        } else if (document.getElementById('payback-methods-section')) {
+            loadList();
+        }
+
+        return {
+            loadList:   loadList,
+            openForm:   openForm,
+            closeForm:  closeForm,
+            submit:     submit,
+            reveal:     reveal,
+            remove:     remove,
+            removeCurrent: removeCurrent,
+            switchToEdit: switchToEdit,
+            selectType: selectType,
+            gotoStep:   gotoStep
+        };
+    })();
+
+    // ========================================================================
+    // Payback Options (contact modal "Payback" tab)
+    //
+    // Ephemeral fetch of a contact's shareable payback methods. Synchronous
+    // E2E round-trip through the node; response rendered in the tab and
+    // never persisted anywhere (no DB row, no localStorage). Closing the
+    // modal / switching tab drops the in-memory copy.
+    // ========================================================================
+
+    window.paybackOptions = (function () {
+        var state = {
+            // Identity of the contact whose data is currently on screen. Used
+            // to discard stale responses if the user switches contacts mid-flight.
+            loadedForPubkeyHash: null,
+            lastFetchAddress:    null,
+            currentCurrency:     null,
+            methods:             []
+        };
+
+        function setStateText(msg) {
+            var el = document.getElementById('payback-options-state');
+            if (el) { el.textContent = msg || ''; }
+        }
+
+        // currentContactCurrencies is an array of objects shaped
+        // {currency, status, credit_limit, fee, my_available_credit,
+        //  their_available_credit, ...}. Pull out just the codes.
+        function contactCurrencyCodes() {
+            if (!Array.isArray(currentContactCurrencies)) { return []; }
+            var out = [];
+            currentContactCurrencies.forEach(function (entry) {
+                if (entry && typeof entry === 'object' && entry.currency) {
+                    out.push(entry.currency);
+                } else if (typeof entry === 'string') {
+                    out.push(entry);
+                }
+            });
+            return out;
+        }
+
+        function pickDefaultCurrency() {
+            // Currency of the largest debt this node owes the contact. Balance
+            // from the contact's perspective: negative = we owe them.
+            var balances = (typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {};
+            var codes = contactCurrencyCodes();
+            if (!codes.length) { codes = Object.keys(balances); }
+            if (!codes.length) { return 'USD'; }
+            var best = null, bestOwed = -Infinity;
+            codes.forEach(function (c) {
+                var b = balances[c];
+                var raw = b && (b.balance != null ? b.balance : b.amount);
+                var n = parseFloat(raw);
+                if (isNaN(n)) { n = 0; }
+                var owed = -n; // positive = we owe them
+                if (owed > bestOwed) { bestOwed = owed; best = c; }
+            });
+            return best || codes[0];
+        }
+
+        function renderCurrencyOptions(available) {
+            var sel = document.getElementById('payback-options-currency');
+            if (!sel) { return; }
+            var codes = contactCurrencyCodes();
+            if (!codes.length) {
+                codes = Object.keys((typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {});
+            }
+            // Ensure currencies mentioned in the response are selectable too.
+            (available || []).forEach(function (c) {
+                if (c && codes.indexOf(c) === -1) { codes.push(c); }
+            });
+            if (!codes.length) { codes = ['USD']; }
+            var html = '<option value="">All currencies</option>';
+            codes.forEach(function (c) {
+                html += '<option value="' + escapeAttrSafe(c) + '"' + (c === state.currentCurrency ? ' selected' : '') + '>' + escapeHtmlSafe(c) + '</option>';
+            });
+            sel.innerHTML = html;
+            sel.onchange = function () {
+                state.currentCurrency = sel.value || null;
+                load(true);
+            };
+        }
+
+        function renderContactName() {
+            // The short inline label was merged into the info details; we
+            // now populate the contact name inside the expandable section.
+            var el = document.getElementById('payback-contact-name-info');
+            if (!el) { return; }
+            var nameEl = document.getElementById('modal_contact_name');
+            var name = (nameEl && nameEl.textContent) ? nameEl.textContent.trim() : 'this contact';
+            el.textContent = name || 'this contact';
+        }
+
+        function escapeHtmlSafe(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function escapeAttrSafe(s) { return escapeHtmlSafe(s); }
+
+        function render(payload) {
+            var container = document.getElementById('payback-options-list');
+            if (!container) { return; }
+            var status  = payload && payload.status;
+            var methods = (payload && Array.isArray(payload.methods)) ? payload.methods : [];
+            state.methods = methods;
+
+            if (status === 'denied') {
+                container.innerHTML = '<p class="no-transactions">This contact is not sharing any matching payback methods.</p>';
+                return;
+            }
+            if (status === 'rate_limited') {
+                container.innerHTML = '<p class="no-transactions">Rate-limited by the remote node. Try again later.</p>';
+                return;
+            }
+            if (status !== 'ok' || !methods.length) {
+                container.innerHTML = '<p class="no-transactions">No payback methods available right now.</p>';
+                return;
+            }
+
+            methods = methods.slice().sort(function (a, b) {
+                return (a.priority || 100) - (b.priority || 100);
+            });
+
+            var html = '<div class="contacts-table-wrapper">' +
+                '<table class="contacts-table payback-options-table">' +
+                '<thead><tr>' +
+                    '<th class="col-pbo-type"     style="width:30%">Type</th>' +
+                    '<th class="col-pbo-currency" style="width:28%">Currency</th>' +
+                    '<th class="col-pbo-label"    style="width:42%">Label</th>' +
+                '</tr></thead><tbody>';
+            methods.forEach(function (m, i) {
+                html +=
+                    '<tr class="payback-opt-row is-clickable" data-method-idx="' + i + '" title="Tap for details">' +
+                        '<td class="col-pbo-type"><span class="payback-method-type-badge">' + escapeHtmlSafe(m.type || '') + '</span></td>' +
+                        '<td class="col-pbo-currency">' + escapeHtmlSafe(m.currency || '') + '</td>' +
+                        '<td class="col-pbo-label">' + escapeHtmlSafe(m.label || '') + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('.payback-opt-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                    var idx = parseInt(row.getAttribute('data-method-idx'), 10);
+                    var method = state.methods[idx];
+                    if (method) { openDetailModal(method); }
+                });
+            });
+        }
+
+        function openDetailModal(method) {
+            var fields = (method && typeof method.fields === 'object' && method.fields) ? method.fields : {};
+            var rows = '';
+            Object.keys(fields).forEach(function (k) {
+                var v = fields[k];
+                if (v == null || v === '') { return; }
+                rows +=
+                    '<div class="payback-detail-row">' +
+                        '<div class="payback-detail-key text-muted">' + escapeHtmlSafe(k) + '</div>' +
+                        '<div class="payback-detail-value">' +
+                            '<span class="payback-detail-text">' + escapeHtmlSafe(String(v)) + '</span>' +
+                            ' <button type="button" class="btn btn-sm btn-outline payback-detail-copy" data-copy="' + escapeAttrSafe(String(v)) + '" data-copy-label="' + escapeAttrSafe(String(k)) + '" title="Copy"><i class="fas fa-copy"></i></button>' +
+                        '</div>' +
+                    '</div>';
+            });
+            if (!rows) { rows = '<p class="text-muted">No fields shared.</p>'; }
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'payback-detail-modal';
+            overlay.style.display = 'flex';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:520px">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-hand-holding-usd"></i> ' + escapeHtmlSafe(method.label || method.type || 'Payback method') + '</h3>' +
+                        '<span class="close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1rem 1.5rem;">' +
+                        '<div class="payback-detail-row">' +
+                            '<div class="payback-detail-key text-muted">Type</div>' +
+                            '<div class="payback-detail-value"><span class="payback-method-type-badge">' + escapeHtmlSafe(method.type || '') + '</span></div>' +
+                        '</div>' +
+                        '<div class="payback-detail-row">' +
+                            '<div class="payback-detail-key text-muted">Currency</div>' +
+                            '<div class="payback-detail-value">' + escapeHtmlSafe(method.currency || '') + '</div>' +
+                        '</div>' +
+                        rows +
+                    '</div>' +
+                '</div>';
+
+            function close() {
+                if (document.body.contains(overlay)) { document.body.removeChild(overlay); }
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) { close(); } }
+            overlay.querySelector('.close').onclick = close;
+            overlay.onclick = function (e) { if (e.target === overlay) { close(); } };
+            document.addEventListener('keydown', esc);
+            overlay.querySelectorAll('.payback-detail-copy').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var v = btn.getAttribute('data-copy') || '';
+                    if (!v) { return; }
+                    var label = btn.getAttribute('data-copy-label') || 'Value';
+                    copyToClipboard(v, label + ' copied!');
+                });
+            });
+            document.body.appendChild(overlay);
+        }
+
+        function load(skipStateReset) {
+            var address = currentContactAddress;
+            var pubkeyHash = currentContactPubkeyHash;
+            if (!address) {
+                setStateText('No contact address available.');
+                return;
+            }
+            var currency = state.currentCurrency;
+            if (!skipStateReset) { setStateText('Fetching from contact…'); }
+            state.lastFetchAddress = address;
+            state.loadedForPubkeyHash = pubkeyHash;
+
+            var csrfEl = document.querySelector('input[name="csrf_token"]');
+            var csrf = csrfEl ? csrfEl.value : '';
+            var body = 'action=paybackMethodsFetchFromContact' +
+                       '&csrf_token=' + encodeURIComponent(csrf) +
+                       '&address=' + encodeURIComponent(address);
+            if (currency) { body += '&currency=' + encodeURIComponent(currency); }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.pathname, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                // Drop stale responses if the user switched contacts mid-flight.
+                if (state.lastFetchAddress !== address) { return; }
+                var data;
+                try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+                if (!data || !data.success) {
+                    setStateText('Fetch failed' + (data && data.error ? ': ' + data.error : '') + '.');
+                    render({ status: 'error', methods: [] });
+                    return;
+                }
+                setStateText('Fetched ' + new Date().toLocaleTimeString() + ' (not stored).');
+                render(data);
+                renderCurrencyOptions((data.methods || []).map(function (m) { return m.currency; }));
+            };
+            xhr.send(body);
+        }
+
+        function openForCurrentContact() {
+            renderContactName();
+            state.currentCurrency = pickDefaultCurrency();
+            renderCurrencyOptions([]);
+            load();
+        }
+
+        function refresh() {
+            if (!state.lastFetchAddress) { openForCurrentContact(); return; }
+            load();
+        }
+
+        return {
+            openForCurrentContact: openForCurrentContact,
+            refresh: refresh
         };
     })();
 

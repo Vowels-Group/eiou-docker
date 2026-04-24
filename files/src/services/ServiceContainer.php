@@ -799,6 +799,75 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PaybackMethodService instance
+     *
+     * Orchestrates CRUD for the user's payback-methods profile, wrapping the
+     * PaybackMethodRepository and per-type validator and transparently
+     * encrypting the sensitive fields via KeyEncryption.
+     *
+     * @return \Eiou\Services\PaybackMethodService
+     */
+    public function getPaybackMethodService(): \Eiou\Services\PaybackMethodService {
+        if (!isset($this->services['PaybackMethodService'])) {
+            $registry = $this->getPaybackMethodTypeRegistry();
+            $this->services['PaybackMethodService'] = new \Eiou\Services\PaybackMethodService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodRepository::class),
+                new \Eiou\Validators\PaybackMethodTypeValidator($registry),
+                new \Eiou\Services\SettlementPrecisionService($registry),
+                null,     // logger — defaults
+                $registry
+            );
+        }
+        return $this->services['PaybackMethodService'];
+    }
+
+    /**
+     * Get PaybackMethodTypeRegistry instance.
+     *
+     * Plugin-extensible map of payback-method rail types (BTC, PayPal, …).
+     * Plugins register types against this during their `register()` phase;
+     * the validator + service consult it for non-core ids. Always returns
+     * the same instance within a process so plugin registrations stick
+     * for every subsequent resolver.
+     */
+    public function getPaybackMethodTypeRegistry(): \Eiou\Services\PaybackMethodTypeRegistry {
+        if (!isset($this->services['PaybackMethodTypeRegistry'])) {
+            $this->services['PaybackMethodTypeRegistry'] = new \Eiou\Services\PaybackMethodTypeRegistry();
+        }
+        return $this->services['PaybackMethodTypeRegistry'];
+    }
+
+    /**
+     * Get PaybackMethodCliHandler instance
+     *
+     * Thin CLI surface (list/add/show/edit/remove/share-policy) on top of the
+     * PaybackMethodService.
+     */
+    public function getPaybackMethodCliHandler(CliOutputManager $output): \Eiou\Cli\PaybackMethodCliHandler {
+        return new \Eiou\Cli\PaybackMethodCliHandler(
+            $this->getPaybackMethodService(),
+            $output
+        );
+    }
+
+    /**
+     * Get ReceivedPaybackMethodService instance
+     *
+     * Handles the E2E contact-fetch flow for payback methods: outgoing
+     * requests, incoming request/response/revoke handlers, and the
+     * TTL-cached list surfaced by the contact-modal "Payback Options" view.
+     */
+    public function getReceivedPaybackMethodService(): \Eiou\Services\ReceivedPaybackMethodService {
+        if (!isset($this->services['ReceivedPaybackMethodService'])) {
+            $this->services['ReceivedPaybackMethodService'] = new \Eiou\Services\ReceivedPaybackMethodService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodReceivedRepository::class),
+                $this->getPaybackMethodService()
+            );
+        }
+        return $this->services['ReceivedPaybackMethodService'];
+    }
+
+    /**
      * Get BackupService instance
      *
      * Provides database backup and restore functionality with encryption.
