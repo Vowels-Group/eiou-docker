@@ -7755,6 +7755,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'openPluginChangelog': function(el) {
             if (window.plugins) window.plugins.openChangelog(el.getAttribute('data-plugin'));
         },
+        'openPluginUninstall': function(el) {
+            if (window.plugins) window.plugins.openUninstall(el.getAttribute('data-plugin'));
+        },
 
         // Payback Methods
         'openPaybackMethodForm': function(el) {
@@ -9230,6 +9233,24 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             'Toggles persist immediately but take effect after a node restart.' +
                         '</div>' +
                         errBlock +
+                        // Uninstall is a permanent action — only offered when
+                        // the plugin is already disabled, so the operator has
+                        // to take two deliberate steps: disable, then uninstall.
+                        // Hidden for enabled plugins to prevent an accidental
+                        // double-click from doing the destructive thing.
+                        (!p.enabled
+                            ? '<div class="plugin-modal-uninstall-row" style="margin-top:1rem;border-top:1px solid var(--border-color,#ccc);padding-top:0.75rem">' +
+                                '<button type="button" class="btn btn-sm btn-danger"' +
+                                    ' data-action="openPluginUninstall"' +
+                                    ' data-plugin="' + escapeHtml(p.name) + '">' +
+                                    '<i class="fas fa-trash"></i> Uninstall' +
+                                '</button>' +
+                                '<div class="text-muted text-xs" style="margin-top:0.5rem">' +
+                                    'Removes the plugin\'s files, MySQL tables, and credentials. This cannot be undone.' +
+                                '</div>' +
+                              '</div>'
+                            : ''
+                        ) +
                     '</div>' +
                 '</div>';
 
@@ -9237,6 +9258,112 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
             document.addEventListener('keydown', modalEsc);
             document.body.appendChild(overlay);
+        }
+
+        // Two-step uninstall modal: operator types the plugin name to confirm
+        // (same pattern as "Delete API Key"). Runs the full uninstall and
+        // then renders the per-step result so the operator can see exactly
+        // what happened.
+        function openUninstallModal(name) {
+            var p = findByName(name);
+            if (!p) return;
+            closeModal(); // close the detail modal if it's open
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-uninstall-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:520px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem;color:#b02020"><i class="fas fa-trash"></i> Uninstall ' +
+                            escapeHtml(p.name) + '</h3>' +
+                        '<span class="close" id="plugin-uninstall-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem">' +
+                        '<div class="alert alert-danger">' +
+                            '<strong>Permanent action.</strong> This removes the plugin\'s files and every MySQL table it owns. There is no undo — a fresh install will issue a new credential, new tables, and a new MySQL user.' +
+                        '</div>' +
+                        '<p>To confirm, type <code>' + escapeHtml(p.name) + '</code> below:</p>' +
+                        '<input type="text" id="plugin-uninstall-input" class="form-control"' +
+                            ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">' +
+                        '<div id="plugin-uninstall-steps" style="margin-top:1rem;display:none"></div>' +
+                    '</div>' +
+                    '<div class="modal-footer" style="padding:0.75rem 1.25rem;display:flex;justify-content:flex-end;gap:0.5rem">' +
+                        '<button type="button" class="btn btn-sm btn-secondary" id="plugin-uninstall-cancel">Cancel</button>' +
+                        '<button type="button" class="btn btn-sm btn-danger" id="plugin-uninstall-confirm" disabled>' +
+                            '<i class="fas fa-trash"></i> Uninstall' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+            function closeUninst() {
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) closeUninst(); }
+
+            overlay.querySelector('#plugin-uninstall-close').onclick = closeUninst;
+            overlay.querySelector('#plugin-uninstall-cancel').onclick = closeUninst;
+            overlay.onclick = function(e) { if (e.target === overlay) closeUninst(); };
+            document.addEventListener('keydown', esc);
+            document.body.appendChild(overlay);
+
+            var input = overlay.querySelector('#plugin-uninstall-input');
+            var confirmBtn = overlay.querySelector('#plugin-uninstall-confirm');
+            input.focus();
+            input.addEventListener('input', function() {
+                confirmBtn.disabled = input.value !== p.name;
+            });
+
+            confirmBtn.addEventListener('click', function() {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Working…';
+
+                post({ action: 'pluginsUninstall', name: name }).then(function(r) {
+                    var stepsEl = overlay.querySelector('#plugin-uninstall-steps');
+                    if (!stepsEl) return;
+                    stepsEl.style.display = '';
+
+                    var steps = (r.data && r.data.steps) || {};
+                    var html = '<table class="contacts-table" style="font-size:0.85rem"><tbody>';
+                    Object.keys(steps).forEach(function(k) {
+                        var v = String(steps[k]);
+                        var icon, color;
+                        if (v === 'ok')       { icon = 'fa-check';  color = '#28a745'; }
+                        else if (v === 'skipped') { icon = 'fa-minus'; color = '#888'; }
+                        else                  { icon = 'fa-times';  color = '#b02020'; }
+                        html += '<tr>' +
+                            '<td style="width:1.5em;color:' + color + '"><i class="fas ' + icon + '"></i></td>' +
+                            '<td><code>' + escapeHtml(k) + '</code></td>' +
+                            '<td style="color:' + color + '">' + escapeHtml(v) + '</td>' +
+                        '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    stepsEl.innerHTML = html;
+
+                    if (r.data && r.data.success) {
+                        if (typeof showToast === 'function') {
+                            showToast('Plugin uninstalled', p.name, 'success');
+                        }
+                        // Refresh the list so the row disappears.
+                        refresh();
+                        confirmBtn.innerHTML = '<i class="fas fa-check"></i> Done';
+                        setTimeout(closeUninst, 1200);
+                    } else {
+                        if (typeof showToast === 'function') {
+                            showToast('Uninstall partial failure', 'Some steps errored; see modal for detail.', 'error');
+                        }
+                        confirmBtn.innerHTML = '<i class="fas fa-redo"></i> Retry';
+                        confirmBtn.disabled = false;
+                    }
+                }).catch(function() {
+                    if (typeof showToast === 'function') {
+                        showToast('Error', 'Network error during uninstall', 'error');
+                    }
+                    confirmBtn.innerHTML = '<i class="fas fa-trash"></i> Uninstall';
+                    confirmBtn.disabled = false;
+                });
+            });
         }
 
         function toggleFromModal(name, enabled) {
@@ -9251,6 +9378,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             toggle: toggle,
             toggleFromModal: toggleFromModal,
             openModal: openModal,
+            openUninstall: openUninstallModal,
             openChangelog: openChangelogModal,
             requestRestart: requestRestart
         };

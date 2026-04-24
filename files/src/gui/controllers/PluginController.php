@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\PluginLoader;
+use Eiou\Services\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
 use Eiou\Utils\Logger;
 use Throwable;
@@ -26,15 +27,18 @@ class PluginController
     private Session $session;
     private PluginLoader $loader;
     private RestartRequestService $restartRequester;
+    private ?PluginUninstallService $uninstallService;
 
     public function __construct(
         Session $session,
         PluginLoader $loader,
-        ?RestartRequestService $restartRequester = null
+        ?RestartRequestService $restartRequester = null,
+        ?PluginUninstallService $uninstallService = null
     ) {
         $this->session = $session;
         $this->loader = $loader;
         $this->restartRequester = $restartRequester ?? new RestartRequestService();
+        $this->uninstallService = $uninstallService;
     }
 
     /**
@@ -65,6 +69,9 @@ class PluginController
                     break;
                 case 'pluginChangelog':
                     $this->showChangelog();
+                    break;
+                case 'pluginsUninstall':
+                    $this->uninstallPlugin();
                     break;
                 default:
                     $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
@@ -191,6 +198,56 @@ class PluginController
             'enabled' => $enabled,
             'restart_required' => true,
         ]);
+    }
+
+    /**
+     * Uninstall a plugin. Requires the plugin to be already disabled —
+     * the GUI's two-step flow (disable, confirm) matches this.
+     *
+     * Returns the per-step status map so the modal can show which parts
+     * succeeded and which didn't.
+     */
+    private function uninstallPlugin(): void
+    {
+        $name = (string) ($_POST['name'] ?? '');
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+        }
+
+        if ($this->uninstallService === null) {
+            $this->respond([
+                'success' => false,
+                'error' => 'uninstall_unavailable',
+                'message' => 'Plugin uninstall service is not wired in this context.',
+            ], 500);
+        }
+
+        try {
+            $result = $this->uninstallService->uninstall($name);
+        } catch (\InvalidArgumentException $e) {
+            $this->respond(['success' => false, 'error' => 'unknown_plugin', 'message' => $e->getMessage()], 404);
+        } catch (\RuntimeException $e) {
+            // "Cannot uninstall enabled plugin" lands here.
+            $this->respond([
+                'success' => false,
+                'error' => 'plugin_still_enabled',
+                'message' => $e->getMessage(),
+            ], 409);
+        }
+
+        Logger::getInstance()->info('plugin_uninstalled_via_gui', [
+            'plugin' => $name,
+            'success' => $result['success'],
+        ]);
+
+        $this->respond([
+            'success' => $result['success'],
+            'plugin_id' => $result['plugin_id'],
+            'steps' => $result['steps'],
+            'message' => $result['success']
+                ? 'Plugin uninstalled.'
+                : 'Uninstall completed with errors. Check the step list for details.',
+        ], $result['success'] ? 200 : 500);
     }
 
     private function showChangelog(): void
