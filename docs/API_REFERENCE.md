@@ -13,7 +13,8 @@ Complete API documentation for the eIOU Docker node REST API.
 7. [System Endpoints](#system-endpoints)
 8. [Tx Drop Endpoints](#tx-drop-endpoints)
 9. [Backup Endpoints](#backup-endpoints)
-10. [API Key Management](#api-key-management)
+10. [Payback Methods Endpoints](#payback-methods-endpoints)
+11. [API Key Management](#api-key-management)
 
 ---
 
@@ -2303,6 +2304,262 @@ Remove old backup files, keeping only the most recent (default: 3).
     }
 }
 ```
+
+---
+
+## Payback Methods Endpoints
+
+Manage this node's own payback methods — the settlement rails (bank wire, PayPal, Bitcoin, custom free-text, etc.) you offer contacts so they can settle debts they owe you. Every row is encrypted at rest per-row (AES-256-GCM keyed to the wallet); sensitive fields only leave the node via the explicit `reveal` endpoint or when a contact fetches them over the E2E fetch flow.
+
+**Permissions:**
+
+| Scope | Grants |
+|-------|--------|
+| `payback:read` | `GET /api/v1/payback-methods`, `GET /api/v1/payback-methods/{id}` — list and view with masked sensitive fields |
+| `payback:write` | every mutation (`POST`, `PUT`, `DELETE`) **and** `GET /api/v1/payback-methods/{id}/reveal` — the reveal endpoint returns plaintext so it's treated as a write-class operation |
+| `admin` | everything above |
+
+Types on the wire: core ships `bank_wire` (sub-rails `sepa`, `faster_payments`, `ach`, `fednow`, `swift`) and `custom` (free-text ≤ 1024 chars). Plugins register additional rails (`btc`, `paypal`, `bizum`, `pix`, `upi`, etc.) — see `docs/PLUGINS.md`.
+
+### GET /api/v1/payback-methods
+
+List this node's payback methods. Sensitive fields are returned as a short `masked_display` string; the full field values are only accessible via `/reveal`.
+
+**Permission:** `payback:read`
+
+**Query Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `currency` | string | Filter to a single currency code (uppercase). If omitted, returns all currencies. |
+| `all` | `0` / `1` | Set to `1` to also include disabled rows. Default `0` (enabled-only). |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "methods": [
+            {
+                "method_id": "pbm_01HV6...",
+                "type": "bank_wire",
+                "label": "Chase checking",
+                "currency": "USD",
+                "priority": 100,
+                "enabled": true,
+                "share_policy": "auto",
+                "settlement_min_unit": 1,
+                "settlement_min_unit_exponent": -2,
+                "masked_display": "••••4409",
+                "created_at": "2026-04-01T10:30:00Z",
+                "updated_at": "2026-04-01T10:30:00Z"
+            }
+        ],
+        "count": 1
+    }
+}
+```
+
+Rows are ordered by `priority ASC, created_at DESC`.
+
+---
+
+### POST /api/v1/payback-methods
+
+Create a new payback method.
+
+**Permission:** `payback:write`
+
+**Request Body:**
+
+```json
+{
+    "type": "bank_wire",
+    "label": "Chase checking",
+    "currency": "USD",
+    "fields": {
+        "rail": "ach",
+        "recipient_name": "Jane Doe",
+        "routing_number": "021000021",
+        "account_number": "1234567890",
+        "account_type": "checking"
+    },
+    "share_policy": "auto",
+    "priority": 100
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `type` | string | Yes | — | `bank_wire`, `custom`, or a plugin-registered type id |
+| `label` | string | Yes | — | Human label (≤ 128 chars) — not encrypted, shown in lists |
+| `currency` | string | Yes | — | ISO-4217 or declared asset code (uppercased server-side) |
+| `fields` | object | Yes | — | Type-specific fields. Shape depends on `type` / `rail` — see the relevant `PaybackMethodTypeContract` for the schema |
+| `share_policy` | string | No | `auto` | `auto`, `prompt`, or `never` |
+| `priority` | integer | No | `100` | 0–9999, lower = preferred when multiple methods match the same currency |
+
+**Response (201 Created):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6..."
+    }
+}
+```
+
+**Validation errors (400):**
+
+```json
+{
+    "success": false,
+    "error": "validation_failed",
+    "message": "Validation failed",
+    "data": {
+        "errors": [
+            { "field": "fields.iban", "code": "iban_checksum", "message": "IBAN mod-97 checksum failed" }
+        ]
+    }
+}
+```
+
+---
+
+### GET /api/v1/payback-methods/:id
+
+Fetch a single payback method with sensitive fields masked.
+
+**Permission:** `payback:read`
+
+**Response:** same row shape as the list endpoint, wrapped in `{"method": {...}}`.
+
+**404 Not Found** if the `method_id` does not exist.
+
+---
+
+### GET /api/v1/payback-methods/:id/reveal
+
+Fetch a single payback method with **all fields decrypted** to plaintext. Use this when the caller needs to actually display or copy the IBAN / account number / Bitcoin address / etc.
+
+**Permission:** `payback:write` — reveal exposes sensitive plaintext and is treated as a write-class operation so a read-only key cannot exfiltrate it.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method": {
+            "method_id": "pbm_01HV6...",
+            "type": "bank_wire",
+            "label": "Chase checking",
+            "currency": "USD",
+            "priority": 100,
+            "share_policy": "auto",
+            "fields": {
+                "rail": "ach",
+                "recipient_name": "Jane Doe",
+                "routing_number": "021000021",
+                "account_number": "1234567890",
+                "account_type": "checking"
+            },
+            "settlement_min_unit": 1,
+            "settlement_min_unit_exponent": -2,
+            "created_at": "2026-04-01T10:30:00Z",
+            "updated_at": "2026-04-01T10:30:00Z"
+        }
+    }
+}
+```
+
+---
+
+### PUT /api/v1/payback-methods/:id
+
+Update an existing payback method. All fields in the body are optional — only those present are applied. To atomically re-encrypt the sensitive fields, send the complete `fields` object (partial field updates are not supported since the encrypted blob is rewritten wholesale).
+
+**Permission:** `payback:write`
+
+**Request Body (all fields optional):**
+
+```json
+{
+    "label": "Chase – primary",
+    "share_policy": "auto",
+    "priority": 50,
+    "enabled": true,
+    "fields": { ... }
+}
+```
+
+Only `label`, `share_policy`, `priority`, `enabled`, and `fields` are accepted — every other key in the body is silently ignored.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6..."
+    }
+}
+```
+
+**404 Not Found** if the id does not exist. Validation errors follow the same shape as `POST`.
+
+---
+
+### PUT /api/v1/payback-methods/:id/share-policy
+
+Update only the share policy on an existing method. Equivalent to `PUT /api/v1/payback-methods/:id` with `{"share_policy": "..."}` but scoped so automation that only touches share policies can document intent clearly.
+
+**Permission:** `payback:write`
+
+**Request Body:**
+
+```json
+{
+    "share_policy": "never"
+}
+```
+
+Accepted values: `auto`, `prompt`, `never`.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6...",
+        "share_policy": "never"
+    }
+}
+```
+
+---
+
+### DELETE /api/v1/payback-methods/:id
+
+Permanently delete a payback method. The encrypted row is dropped; there is no soft-delete / tombstone — a fresh ID is issued if you recreate a method with the same label.
+
+**Permission:** `payback:write`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6...",
+        "deleted": true
+    }
+}
+```
+
+**404 Not Found** if the id does not exist.
 
 ---
 

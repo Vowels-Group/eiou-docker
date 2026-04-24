@@ -13,7 +13,8 @@ Complete command-line interface documentation for the eIOU Docker node.
 7. [Settings Commands](#settings-commands)
 8. [System Commands](#system-commands)
 9. [API Key Management](#api-key-management)
-10. [Payment Request Commands](#payment-request-commands)
+10. [Payback Methods](#payback-methods)
+11. [Payment Request Commands](#payment-request-commands)
 11. [Tx Drop Commands](#tx-drop-commands)
 11. [Backup Commands](#backup-commands)
 12. [Report Commands](#report-commands)
@@ -1286,6 +1287,82 @@ eiou apikey enable eiou_abc123
 ```
 
 **Important:** The API secret is only shown once at creation time. Store it securely.
+
+---
+
+## Payback Methods
+
+### payback
+
+Manage your own payback methods — the settlement rails (bank wire, PayPal, Bitcoin, custom free-text, etc.) you offer contacts so they can settle debts they owe you. Each method is encrypted at rest per-row; sensitive fields only leave the node when you explicitly reveal them (via `show`) or a contact fetches them over E2E.
+
+**Syntax:**
+```bash
+eiou payback <action> [args...]
+```
+
+**Actions:**
+
+| Action | Syntax | Description |
+|--------|--------|-------------|
+| `list` | `payback list [--currency <c>] [--all]` | List all enabled methods. `--currency` filters to one code; `--all` also includes disabled rows. |
+| `add` | `payback add <type> <label> <currency> [--share auto\|prompt\|never] [--priority N]` | Create a new method. Type-specific fields are prompted interactively (sensitive inputs use `stty -echo` when stdin is a TTY). |
+| `show` | `payback show <method_id>` | Display a single method with **all fields decrypted** to plaintext. |
+| `edit` | `payback edit <method_id>` | Re-enter the type-specific fields. Label, priority, and share policy have their own subcommands. |
+| `remove` | `payback remove <method_id>` | Permanently delete a method. |
+| `share-policy` | `payback share-policy <method_id> auto\|prompt\|never` | Update only the share policy on an existing method. |
+| `help` | `payback help` | Show detailed help. |
+
+**Supported Types (core):**
+
+| Type | Description |
+|------|-------------|
+| `bank_wire` | Bank wire with sub-rails: `sepa`, `faster_payments`, `ach`, `fednow`, `swift`. Validates IBAN mod-97 and ABA-routing checksum. |
+| `custom` | Free-text instructions (≤ 1024 chars). For anything without a dedicated rail type. |
+
+Additional rail types (`btc`, `paypal`, `bizum`, `pix`, `upi`, `lightning`, etc.) arrive via plugins that register a `PaybackMethodTypeContract` — see `docs/PLUGINS.md` for authoring.
+
+**Share Policies:**
+
+| Policy | Behaviour when a contact's node fetches your methods |
+|--------|------------------------------------------------------|
+| `auto` | Any accepted contact can fetch without owner approval (default) |
+| `prompt` | Fetches trigger an approval notification on the owner |
+| `never` | Method is never shared via the E2E fetch flow |
+
+**Priority:** Integer 0–9999, lower = preferred. Used as a tiebreaker when several methods of yours match the same currency (defaults to 100).
+
+**Examples:**
+```bash
+# List all enabled methods
+eiou payback list
+
+# List only USD methods, including disabled ones
+eiou payback list --currency USD --all
+
+# JSON output for scripting
+eiou payback list --json
+
+# Add a SEPA bank-wire method (prompts for rail, name, IBAN)
+eiou payback add bank_wire "My Revolut" EUR
+
+# Add a custom free-text method, share only on prompt, top priority
+eiou payback add custom "Monzo – DM me" GBP --share prompt --priority 10
+
+# Reveal a method's plaintext fields (does not re-prompt for auth — CLI is trusted)
+eiou payback show pbm_abc123
+
+# Update the share policy on an existing method
+eiou payback share-policy pbm_abc123 never
+
+# Remove a method
+eiou payback remove pbm_abc123
+```
+
+**Notes:**
+- `show` prints **fully-decrypted plaintext**. The GUI and REST API gate plaintext reveal behind a sensitive-action authcode prompt, but the CLI is considered already-authenticated by virtue of having shell/container access.
+- `edit` only re-enters the type-specific fields (re-encrypts the whole blob atomically). To change just the label or priority, use the REST API or GUI.
+- Method IDs are UUIDs returned in the `add` response and visible in `list` output.
 
 ---
 
