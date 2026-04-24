@@ -742,6 +742,160 @@ class {$classBase}Plugin implements PluginInterface
 PHP;
     }
 
+    // -- reconcileIsolation (phase 5) -------------------------------------
+    // Boot-time replay of CREATE USER / GRANT / REVOKE for every plugin.
+    // Self-heals against mysql-data volume loss, manual user drops, and
+    // operator db_limits changes between boots.
+
+    public function testReconcileReturnsEmptyWhenNoIsolationServicesWired(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+        $this->assertSame([], $this->loader()->reconcileIsolation());
+    }
+
+    public function testReconcileReGrantsEnabledPluginWithExistingCredentials(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_t'],
+                'db_limits' => ['max_queries_per_hour' => 99999],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->method('getPlaintext')->willReturn('existing-pw');
+        $cred->expects($this->never())->method('generate');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('has-db', 'existing-pw', $this->callback(function ($limits) {
+                return ($limits['max_queries_per_hour'] ?? null) === 99999;
+            }));
+        $dbUser->expects($this->once())->method('grant')
+            ->with('has-db', ['plugin_has_db_t']);
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $results = $loader->reconcileIsolation();
+        $this->assertSame(['has-db' => 'granted'], $results);
+    }
+
+    public function testReconcileRegeneratesMissingCredentialsForEnabledPlugin(): void
+    {
+        // Credentials row was lost (mysql-data volume was recreated) but
+        // the plugin is still enabled in plugins.json. Reconciler must
+        // regenerate + re-provision from scratch.
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(false);
+        $cred->expects($this->once())->method('generate')->willReturn('new-pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser');
+        $dbUser->expects($this->once())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['has-db' => 'granted'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileRevokesDisabledPluginStillHoldingCredentials(): void
+    {
+        // Plugin disabled in plugins.json but credential row exists — self
+        // heals cases where a pre-phase-4 partial failure left a grant behind.
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+        // Override to disabled.
+        file_put_contents($this->stateFile, json_encode(['has-db' => ['enabled' => false]]));
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('revoke')->with('has-db');
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['has-db' => 'revoked'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileSkipsDisabledPluginWithoutCredentials(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+        file_put_contents($this->stateFile, json_encode(['has-db' => ['enabled' => false]]));
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(false);
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('revoke');
+        $dbUser->expects($this->never())->method('ensureUser');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['has-db' => 'skipped'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileSkipsPluginsWithoutDatabaseBlock(): void
+    {
+        $this->writePluginWithExtras('plain', []);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['plain' => 'skipped'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileCapturesErrorAndContinuesToNextPlugin(): void
+    {
+        // Two plugins both need reconciling. First one throws; second
+        // must still get reconciled — reconcile is not all-or-nothing.
+        $this->writePluginWithExtras('broken', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_broken_t']],
+        ]);
+        $this->writePluginWithExtras('healthy', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_healthy_t']],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->method('getPlaintext')->willReturnCallback(function ($id) {
+            return $id === 'broken' ? null : 'pw-healthy';
+        });
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        // broken never reaches ensureUser (throws before); healthy does.
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('healthy', 'pw-healthy', $this->anything());
+        $dbUser->expects($this->once())->method('grant')->with('healthy', ['plugin_healthy_t']);
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $results = $loader->reconcileIsolation();
+
+        $this->assertStringStartsWith('error:', $results['broken']);
+        $this->assertStringContainsString('master-key mismatch', $results['broken']);
+        $this->assertSame('granted', $results['healthy']);
+    }
+
     // -- isolation side effects (phase 4) ---------------------------------
     // setEnabled() wires to PluginCredentialService + PluginDbUserService
     // when they're injected. Without them, it's a pure state-file flip.

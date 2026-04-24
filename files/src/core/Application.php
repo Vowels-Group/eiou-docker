@@ -140,6 +140,12 @@ class Application {
                 $this->services->getPluginDbUserService()
             );
             $this->pluginLoader->discover();
+            // Reconcile MySQL users / grants against the on-disk manifest +
+            // plugin_credentials table. Self-heals after a mysql-data volume
+            // rebuild, a manual DROP USER, or an operator db_limits edit in
+            // plugins.json. Runs before registerAll() so plugins needing DB
+            // access during register() find their user ready.
+            $this->pluginLoader->reconcileIsolation();
             $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services
             $this->services->wireAllServices();

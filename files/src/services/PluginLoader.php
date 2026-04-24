@@ -403,6 +403,90 @@ class PluginLoader
     }
 
     /**
+     * Boot-time reconciliation — re-apply the correct MySQL state for every
+     * plugin on every node boot. Idempotent: CREATE USER IF NOT EXISTS,
+     * ALTER USER with current credentials, GRANT (or REVOKE for disabled
+     * plugins). Self-heals after:
+     *
+     *   - mysql-data volume recreation (plugin users and grants are gone;
+     *     we restore them using the still-encrypted password from the
+     *     plugin_credentials table)
+     *   - someone manually DROP USER / REVOKE on a plugin
+     *   - operator changing `db_limits` in plugins.json between boots
+     *   - master-key rotation (credentials were re-wrapped; the new
+     *     plaintext is applied via ALTER USER)
+     *
+     * No-op when isolation services aren't wired. Failures are logged but
+     * do NOT abort node boot — a plugin with a broken MySQL user is simply
+     * non-functional; the operator investigates via the plugin list which
+     * now surfaces the error.
+     *
+     * Call once per boot, after discover() and before bootAll().
+     *
+     * @return array<string, string> Map of plugin_id → 'granted' / 'revoked' / 'skipped' / 'error:<msg>'.
+     *                               Returned for tests and operator logs; production callers can ignore.
+     */
+    public function reconcileIsolation(): array
+    {
+        if ($this->credentialService === null || $this->dbUserService === null) {
+            return [];
+        }
+
+        $results = [];
+        foreach ($this->listAllPlugins() as $row) {
+            $pluginId = $row['name'];
+            $db = $row['database'] ?? null;
+            if (!is_array($db) || ($db['user'] ?? false) !== true) {
+                $results[$pluginId] = 'skipped';
+                continue;
+            }
+            $enabled = (bool) ($row['enabled'] ?? false);
+            try {
+                if ($enabled) {
+                    $plaintext = $this->credentialService->exists($pluginId)
+                        ? $this->credentialService->getPlaintext($pluginId)
+                        : $this->credentialService->generate($pluginId);
+                    if ($plaintext === null) {
+                        // Corrupted credential row (null plaintext despite
+                        // exists()). Reconciler can't recover blindly — a
+                        // silent rotate() would lock out whatever still
+                        // holds the old password. Surface the error so the
+                        // operator decides between manual rotate-and-reset
+                        // or dropping the plugin entirely.
+                        throw new \RuntimeException(
+                            "credential row exists for '{$pluginId}' but plaintext is null — likely master-key mismatch; manual intervention required"
+                        );
+                    }
+                    $limits = (array) ($db['db_limits'] ?? self::DEFAULT_DB_LIMITS);
+                    $owned = (array) ($db['owned_tables'] ?? []);
+                    $this->dbUserService->ensureUser($pluginId, $plaintext, $limits);
+                    $this->dbUserService->grant($pluginId, $owned);
+                    $results[$pluginId] = 'granted';
+                } else {
+                    // For disabled plugins that *have* credentials, make
+                    // sure privileges are revoked — self-heals cases where
+                    // the row says disabled but a grant leaked through a
+                    // partial-failure in setEnabled(false) from before the
+                    // DDL-first ordering was added.
+                    if ($this->credentialService->exists($pluginId)) {
+                        $this->dbUserService->revoke($pluginId);
+                        $results[$pluginId] = 'revoked';
+                    } else {
+                        $results[$pluginId] = 'skipped';
+                    }
+                }
+            } catch (Throwable $e) {
+                $this->logger->error("Plugin isolation reconcile failed", [
+                    'plugin' => $pluginId,
+                    'error' => $e->getMessage(),
+                ]);
+                $results[$pluginId] = 'error:' . $e->getMessage();
+            }
+        }
+        return $results;
+    }
+
+    /**
      * Fresh-read the manifest for a single plugin and return the normalized
      * `database` block (or null if absent). Avoids depending on state that
      * discover() may not have populated yet — setEnabled() can legitimately
