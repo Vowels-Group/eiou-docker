@@ -72,6 +72,25 @@ class PluginLoader
     private ?PluginCredentialService $credentialService = null;
     private ?PluginDbUserService $dbUserService = null;
 
+    /**
+     * Optional signature verifier + enforcement mode. Enforcement is a
+     * global policy (one setting controls behaviour for every plugin):
+     *
+     *   - 'off'     — don't verify at all; load every plugin regardless
+     *                 of whether it has a signature. Backwards-compatible
+     *                 default; any future rollout path turns this up
+     *                 through 'warn' first before 'require'.
+     *   - 'warn'    — verify, log failures, but still load the plugin.
+     *                 The `sig_status` field on the plugin's metadata
+     *                 surfaces the result so operators can fix before
+     *                 flipping to 'require'.
+     *   - 'require' — verify and refuse to load any plugin whose
+     *                 signature is missing, malformed, bound to an
+     *                 untrusted key, or fails verification.
+     */
+    private ?PluginSignatureVerifier $sigVerifier = null;
+    private string $sigMode = PluginSignatureVerifier::MODE_OFF;
+
     public function __construct(
         string $pluginDir = '/etc/eiou/plugins',
         ?Logger $logger = null,
@@ -80,6 +99,27 @@ class PluginLoader
         $this->pluginDir = rtrim($pluginDir, '/');
         $this->stateFile = $stateFile ?? self::DEFAULT_STATE_FILE;
         $this->logger = $logger ?? Logger::getInstance();
+    }
+
+    /**
+     * Wire the signature verifier + enforcement mode. Accepted modes:
+     * 'off', 'warn', 'require' — anything else collapses to 'off' to
+     * prevent a typo from silently allowing unsigned plugins through
+     * in an operator that thought they had verification on.
+     */
+    public function setSignatureVerifier(
+        ?PluginSignatureVerifier $verifier,
+        string $mode = PluginSignatureVerifier::MODE_OFF
+    ): void {
+        $this->sigVerifier = $verifier;
+        $validModes = [
+            PluginSignatureVerifier::MODE_OFF,
+            PluginSignatureVerifier::MODE_WARN,
+            PluginSignatureVerifier::MODE_REQUIRE,
+        ];
+        $this->sigMode = in_array($mode, $validModes, true)
+            ? $mode
+            : PluginSignatureVerifier::MODE_OFF;
     }
 
     /**
@@ -308,6 +348,16 @@ class PluginLoader
                 $row['error'] = 'manifest: ' . $dbResult['error'];
             } elseif ($dbResult['config'] !== null) {
                 $row['database'] = $dbResult['config'];
+            }
+
+            // Surface signature verification status. Verifier may be null
+            // in tests and early-boot paths; when null, emit `sig_mode:off`
+            // so consumers can distinguish "not checked" from "no signature".
+            if ($this->sigVerifier !== null && $this->sigMode !== PluginSignatureVerifier::MODE_OFF) {
+                $sigResult = $this->sigVerifier->verify($this->pluginDir . '/' . $entry);
+                $row['signature'] = $sigResult + ['mode' => $this->sigMode];
+            } else {
+                $row['signature'] = ['status' => 'disabled', 'mode' => $this->sigMode];
             }
 
             $result[] = $row;
@@ -920,6 +970,41 @@ class PluginLoader
         }
         $dbConfig = $dbResult['config'];
 
+        // Verify the plugin signature when a verifier is wired. The result
+        // is always captured in metadata (so the plugin list surfaces it);
+        // enforcement is policy-driven: in 'require' mode a failure blocks
+        // load, in 'warn' mode it's logged but the plugin proceeds, in
+        // 'off' mode verification is skipped entirely.
+        $sigResult = ['status' => 'disabled']; // no verifier wired
+        if ($this->sigVerifier !== null && $this->sigMode !== PluginSignatureVerifier::MODE_OFF) {
+            $sigResult = $this->sigVerifier->verify($pluginPath);
+            if ($sigResult['status'] !== 'ok') {
+                $logCtx = [
+                    'name' => $name,
+                    'status' => $sigResult['status'],
+                    'key_fingerprint' => $sigResult['key_fingerprint'] ?? null,
+                    'error' => $sigResult['error'] ?? null,
+                ];
+                if ($this->sigMode === PluginSignatureVerifier::MODE_REQUIRE) {
+                    $this->logger->warning('PluginLoader: signature verification failed; refusing to load', $logCtx);
+                    // Record as failed so the plugin list surfaces it
+                    // — "disappeared entirely" would be confusing.
+                    $this->metadata[$name] = [
+                        'version' => $manifest['version'],
+                        'description' => $manifest['description'] ?? '',
+                        'status' => 'failed',
+                        'enabled' => (bool) ($state[$name]['enabled'] ?? false),
+                        'error' => 'signature: ' . $sigResult['status']
+                            . (isset($sigResult['error']) ? ' (' . $sigResult['error'] . ')' : ''),
+                        'database' => $dbConfig,
+                        'signature' => $sigResult,
+                    ];
+                    return;
+                }
+                $this->logger->info('PluginLoader: signature verification failed (warn mode)', $logCtx);
+            }
+        }
+
         // Default: DISABLED. A newly discovered plugin is inert until the
         // user explicitly enables it via the GUI (or by editing plugins.json
         // and restarting). This is a safety stance — a malicious or merely
@@ -934,6 +1019,7 @@ class PluginLoader
                 'status' => 'disabled',
                 'enabled' => false,
                 'database' => $dbConfig,
+                'signature' => $sigResult,
             ];
             return;
         }
@@ -984,6 +1070,7 @@ class PluginLoader
             'status' => 'discovered',
             'enabled' => true,
             'database' => $dbConfig,
+            'signature' => $sigResult,
         ];
     }
 

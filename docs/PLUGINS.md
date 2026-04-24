@@ -11,18 +11,19 @@ default until the operator explicitly enables them.
 2. [Directory Layout](#directory-layout)
 3. [Manifest Schema](#manifest-schema)
 4. [Database Isolation](#database-isolation)
-5. [Lifecycle](#lifecycle)
-6. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
-7. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
-8. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
-9. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
-10. [Writing a Plugin](#writing-a-plugin)
-11. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-12. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-13. [Testing a Plugin](#testing-a-plugin)
-14. [Safety Model and Limitations](#safety-model-and-limitations)
-15. [Troubleshooting](#troubleshooting)
-16. [Related Documentation](#related-documentation)
+5. [Plugin Signatures](#plugin-signatures)
+6. [Lifecycle](#lifecycle)
+7. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
+8. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
+9. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
+10. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
+11. [Writing a Plugin](#writing-a-plugin)
+12. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+13. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+14. [Testing a Plugin](#testing-a-plugin)
+15. [Safety Model and Limitations](#safety-model-and-limitations)
+16. [Troubleshooting](#troubleshooting)
+17. [Related Documentation](#related-documentation)
 
 ---
 
@@ -461,6 +462,183 @@ query can still starve the instance (the `MAX_*_PER_HOUR` caps reduce but
 don't eliminate this). Separate MySQL instances would be stronger but are
 an operational step-change — revisit if a real starvation incident
 materializes.
+
+---
+
+## Plugin Signatures
+
+Plugins can ship with an **Ed25519 detached signature** that binds every
+byte of the manifest and source tree. Operators trust a set of public keys
+up front; unsigned plugins (or plugins signed by an untrusted key) are
+rejected when signature enforcement is on. This closes the "a plugin I
+installed yesterday was swapped for a backdoored copy today" supply-chain
+window at the file-on-disk level.
+
+Signatures are **complementary** to, not a replacement for,
+[Database Isolation](#database-isolation). DB isolation limits what a
+running plugin can touch; signatures limit what code can run in the first
+place.
+
+### Trust model
+
+Two layers of trusted-key directories, both scanned on every plugin-load
+pass:
+
+| Layer | Path | Source | When to use |
+|-------|------|--------|-------------|
+| Baked-in | `/app/eiou/config/trusted-plugin-keys/` | Image (read-only) | First-party / eIOU-official keys that ship with every node |
+| Operator | `/etc/eiou/config/trusted-plugin-keys/` | Config volume | Third-party publishers you've vetted and decided to trust |
+
+Both directories accept `*.pub` files — plain text, one or more base64
+Ed25519 public keys per file, `#` lines are comments. Multiple keys per
+file are fine; duplicates across files are de-duplicated silently.
+
+Adding a key is a **deliberate operator action** that says "I trust
+whoever holds the corresponding private key to publish plugins on my
+node." The verifier cannot distinguish "this plugin is safe" from "this
+key is trusted" — trust is a human decision, signatures are the
+machine-enforceable bit.
+
+### Enforcement modes
+
+Controlled by `Constants::PLUGIN_SIGNATURE_MODE`:
+
+| Mode | Behaviour |
+|------|-----------|
+| `off` (default) | Don't verify. Load every plugin regardless of signature state. Backwards-compatible default so existing unsigned plugins keep working during rollout. |
+| `warn` | Verify, log failures, but still load the plugin. The plugin list surfaces `signature.status` (`ok` / `unsigned` / `untrusted_key` / `bad_signature` / `malformed_sig` / `malformed_manifest`) so operators can fix signing before flipping to `require`. |
+| `require` | Verify and **refuse to load** any plugin whose signature is missing, malformed, bound to an untrusted key, or fails verification. Failed plugins surface in the plugin list with `status: failed` and an explanatory error. |
+
+Recommended rollout: ship an image with `off` as the default → turn your
+node to `warn` locally to see what would fail → sign everything you want
+to keep → flip to `require`. The verifier cost is roughly one Ed25519
+verification per plugin per boot (~1ms each) so leaving it on `warn` or
+`require` long-term is free.
+
+### Wire format
+
+Every signed plugin has a `plugin.sig` file alongside `plugin.json`:
+
+```json
+{
+  "algorithm": "ed25519",
+  "key_fingerprint": "sha256:<64-hex-chars>",
+  "signature": "<base64 of raw 64-byte Ed25519 signature>"
+}
+```
+
+The signed payload is deterministic:
+
+```
+plugin.json bytes  +  0x00  +  sha256-hex-of-src-tree
+```
+
+Where `sha256-hex-of-src-tree` is:
+
+```
+SHA-256 ( concat, in sorted path order, for every file under src/:
+    relpath + 0x00 + SHA-256(file contents) + 0x00
+)
+```
+
+Any byte change in the manifest or any source file invalidates the
+signature on the next verification pass — the attack window between sign
+time and install time doesn't extend past boot.
+
+### Key format
+
+`*.pub` files — one or more keys per file, plain text:
+
+```
+# eIOU official release signing key
+# fingerprint: sha256:abc123...
+# issued: 2026-04-24
+Ab3+k/...base64 of raw 32-byte Ed25519 public key...==
+```
+
+Private keys use the same format (base64 of the raw 64-byte Ed25519
+secret key, with a leading comment). File mode should be `0600` — the
+signing helper chmods it for you on generation.
+
+### Signing your own plugins
+
+The runtime image bundles `plugin-sign.php` at
+`/app/eiou/scripts/plugin-sign.php`. Three subcommands:
+
+**1. Generate a keypair** (one-time):
+
+```bash
+docker exec -it <node> sh -c 'cd /tmp && php /app/eiou/scripts/plugin-sign.php generate-key'
+# Writes <fingerprint>.pub and <fingerprint>.key into /tmp.
+# Copy them out:
+docker cp <node>:/tmp/<fingerprint>.key ./my-plugins.key
+docker cp <node>:/tmp/<fingerprint>.pub ./my-plugins.pub
+```
+
+Keep `.key` secret — it's the signing authority for anything that says
+"I'm this publisher." Treat it like an SSH private key: chmod 600, keep
+out of backups/CI images, use a password manager or hardware token if
+available. The `.pub` is safe to share.
+
+**2. Install the public key into the operator trust store**:
+
+```bash
+docker cp ./my-plugins.pub <node>:/etc/eiou/config/trusted-plugin-keys/my-plugins.pub
+```
+
+From this moment, any plugin signed with the corresponding private key
+loads on this node.
+
+**3. Sign a plugin**:
+
+```bash
+docker cp ./my-plugins.key <node>:/tmp/my-plugins.key
+docker exec <node> php /app/eiou/scripts/plugin-sign.php sign \
+    --key=/tmp/my-plugins.key \
+    --plugin=/etc/eiou/plugins/my-plugin
+# Writes /etc/eiou/plugins/my-plugin/plugin.sig
+docker exec <node> rm /tmp/my-plugins.key   # remove the private key ASAP
+```
+
+Re-sign whenever you change `plugin.json` or any source file — the
+deterministic hash means even a whitespace edit invalidates the previous
+signature.
+
+**4. Verify** (useful in CI before publishing):
+
+```bash
+docker exec <node> php /app/eiou/scripts/plugin-sign.php verify \
+    --plugin=/etc/eiou/plugins/my-plugin
+# Exit 0 on valid, 1 on any failure.
+```
+
+### What you can and can't do with a stolen private key
+
+- An attacker with your private key **can** publish plugins that load on
+  any node that trusts your public key.
+- An attacker with your private key **cannot** reach into nodes where
+  your public key isn't in the trust directory.
+- If you suspect a key is compromised: remove the `.pub` from every
+  node's `/etc/eiou/config/trusted-plugin-keys/` immediately. On next
+  boot every plugin signed by that key becomes `untrusted_key`. Generate
+  a new keypair, distribute the new public key, re-sign your plugins.
+
+### Threat model honesty
+
+Signatures close the "installed file was tampered with / swapped after
+install" attack surface — that's the most common real-world supply-chain
+vector. They don't close:
+
+- **Compromised publisher** — if the private-key holder is itself
+  malicious (or their key was stolen and is being used to sign a
+  backdoored plugin by the attacker), verification succeeds and the
+  plugin loads. Mitigations there are human: review the code, pin
+  plugin versions, publish reproducible builds.
+- **Malicious plugin that was always malicious** — signatures don't
+  attest to behaviour, only to origin. A well-known attacker with a
+  trusted key can still ship a well-signed malicious plugin.
+- **PHP execution sandbox** — plugins still run in the node process.
+  See [Safety Model and Limitations](#safety-model-and-limitations).
 
 ---
 

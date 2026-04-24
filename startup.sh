@@ -804,6 +804,16 @@ if [ -d /app/plugins ]; then
     chown -R www-data:www-data /etc/eiou/plugins
 fi
 
+# Operator-added trusted plugin-signing keys live on the config volume so
+# removing / rotating a key doesn't need a rebuild. Directory is created
+# empty on first boot; operators drop *.pub files here (or via the GUI
+# once that lands) to trust third-party publishers. The baked-in keys at
+# /app/eiou/config/trusted-plugin-keys/ are scanned alongside this one
+# on every plugin-load pass.
+mkdir -p /etc/eiou/config/trusted-plugin-keys
+chown -R www-data:www-data /etc/eiou/config/trusted-plugin-keys
+chmod 750 /etc/eiou/config/trusted-plugin-keys
+
 # =============================================================================
 # PRE-SERVICE ENCRYPTION SETUP
 # =============================================================================

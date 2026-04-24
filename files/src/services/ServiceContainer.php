@@ -866,6 +866,21 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginSignatureVerifier instance.
+     *
+     * Verifies Ed25519 signatures on plugins against trusted public keys
+     * at /app/eiou/config/trusted-plugin-keys/ (baked-in, first-party)
+     * and /etc/eiou/config/trusted-plugin-keys/ (operator-added). See
+     * docs/PLUGINS.md (Plugin Signatures) for the trust model.
+     */
+    public function getPluginSignatureVerifier(): \Eiou\Services\PluginSignatureVerifier {
+        if (!isset($this->services['PluginSignatureVerifier'])) {
+            $this->services['PluginSignatureVerifier'] = new \Eiou\Services\PluginSignatureVerifier();
+        }
+        return $this->services['PluginSignatureVerifier'];
+    }
+
+    /**
      * Get PluginDbUserService instance.
      *
      * Manages MySQL user lifecycle (create / grant / revoke / drop) for

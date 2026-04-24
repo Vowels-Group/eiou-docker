@@ -742,6 +742,115 @@ class {$classBase}Plugin implements PluginInterface
 PHP;
     }
 
+    // -- signature enforcement --------------------------------------------
+    // Verifier wiring + mode semantics. Uses ephemeral sodium keypairs
+    // so we never need a real .pub file on disk.
+
+    public function testSignatureModeOffSkipsVerificationEntirely(): void
+    {
+        $this->writePlugin('no-check', 'Eiou\\Tests\\Plugins\\NoCheck\\NoCheckPlugin',
+            $this->validPluginSource('NoCheck'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->expects($this->never())->method('verify');
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_OFF);
+        $this->assertArrayHasKey('no-check', $loader->discover());
+    }
+
+    public function testSignatureModeRequireBlocksUnsignedPlugin(): void
+    {
+        $this->writePlugin('unsigned', 'Eiou\\Tests\\Plugins\\Unsigned\\UnsignedPlugin',
+            $this->validPluginSource('Unsigned'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn(['status' => 'unsigned']);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_REQUIRE);
+        $plugins = $loader->discover();
+        $this->assertArrayNotHasKey('unsigned', $plugins);
+        $meta = $loader->getLoadedPlugins();
+        $this->assertArrayHasKey('unsigned', $meta);
+        $this->assertSame('failed', $meta['unsigned']['status']);
+        $this->assertStringStartsWith('signature: unsigned', $meta['unsigned']['error']);
+    }
+
+    public function testSignatureModeWarnAllowsLoadButRecordsStatus(): void
+    {
+        $this->writePlugin('warn-only', 'Eiou\\Tests\\Plugins\\WarnOnly\\WarnOnlyPlugin',
+            $this->validPluginSource('WarnOnly'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn([
+            'status' => 'untrusted_key',
+            'key_fingerprint' => 'sha256:abc',
+        ]);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_WARN);
+        $plugins = $loader->discover();
+        $this->assertArrayHasKey('warn-only', $plugins, 'warn mode must not block load');
+        $meta = $loader->getLoadedPlugins();
+        $this->assertSame('discovered', $meta['warn-only']['status']);
+        $this->assertSame('untrusted_key', $meta['warn-only']['signature']['status']);
+    }
+
+    public function testSignatureOkPluginLoadsNormally(): void
+    {
+        $this->writePlugin('signed-ok', 'Eiou\\Tests\\Plugins\\SignedOk\\SignedOkPlugin',
+            $this->validPluginSource('SignedOk'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn([
+            'status' => 'ok',
+            'key_fingerprint' => 'sha256:abc',
+        ]);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_REQUIRE);
+        $plugins = $loader->discover();
+        $this->assertArrayHasKey('signed-ok', $plugins);
+        $meta = $loader->getLoadedPlugins();
+        $this->assertSame('ok', $meta['signed-ok']['signature']['status']);
+    }
+
+    public function testInvalidSignatureModeCollapsesToOff(): void
+    {
+        // Typo in the mode setting — prefer "silently off" over "silently
+        // enforcing something the operator didn't ask for", which would
+        // surprise them if it blocked plugins.
+        $this->writePlugin('bogus-mode', 'Eiou\\Tests\\Plugins\\BogusMode\\BogusModePlugin',
+            $this->validPluginSource('BogusMode'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->expects($this->never())->method('verify');
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, 'REQUIRED'); // not 'require'
+        $this->assertArrayHasKey('bogus-mode', $loader->discover());
+    }
+
+    public function testListAllPluginsCarriesSignatureStatus(): void
+    {
+        $this->writePlugin('listed', 'Eiou\\Tests\\Plugins\\Listed\\ListedPlugin',
+            $this->validPluginSource('Listed'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn([
+            'status' => 'ok',
+            'key_fingerprint' => 'sha256:abcdef',
+        ]);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_WARN);
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertArrayHasKey('signature', $rows['listed']);
+        $this->assertSame('ok', $rows['listed']['signature']['status']);
+        $this->assertSame('warn', $rows['listed']['signature']['mode']);
+    }
+
     // -- reconcileIsolation (boot-time replay) ----------------------------
     // Boot-time replay of CREATE USER / GRANT / REVOKE for every plugin.
     // Self-heals against mysql-data volume loss, manual user drops, and

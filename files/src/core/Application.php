@@ -139,6 +139,14 @@ class Application {
                 $this->services->getPluginCredentialService(),
                 $this->services->getPluginDbUserService()
             );
+            // Wire the signature verifier with the configured mode. Default
+            // 'off' keeps backwards compat; operators opt in via Constants
+            // (will move to userconfig.json in a follow-up once other
+            // runtime-configurable plugin settings land).
+            $this->pluginLoader->setSignatureVerifier(
+                $this->services->getPluginSignatureVerifier(),
+                \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
+            );
             $this->pluginLoader->discover();
             // Reconcile MySQL users / grants against the on-disk manifest +
             // plugin_credentials table. Self-heals after a mysql-data volume
