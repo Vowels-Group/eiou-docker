@@ -56,4 +56,27 @@ class PluginEvents
      *   - error: string   - Exception message
      */
     public const PLUGIN_FAILED = 'plugin.failed';
+
+    /**
+     * Dispatched at the start of uninstall — before any side effects
+     * (onUninstall hook, MySQL revoke, file deletion) run. Subscribers
+     * that need to observe the PLUGIN's final state (before data is
+     * wiped) should listen here.
+     *
+     * Event data:
+     *   - name: string - Plugin name
+     */
+    public const PLUGIN_UNINSTALLING = 'plugin.uninstalling';
+
+    /**
+     * Dispatched after every uninstall step has run. The plugin's files,
+     * MySQL user, tables, and credentials are all gone by the time this
+     * fires (unless a step reported an error — see `steps` in the payload).
+     *
+     * Event data:
+     *   - name: string    - Plugin name
+     *   - success: bool   - True iff every step completed without error
+     *   - steps: array    - Per-step status map: 'ok' / 'skipped' / 'error:<msg>'
+     */
+    public const PLUGIN_UNINSTALLED = 'plugin.uninstalled';
 }

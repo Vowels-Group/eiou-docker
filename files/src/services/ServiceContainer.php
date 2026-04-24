@@ -906,6 +906,28 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginUninstallService instance.
+     *
+     * Runs the full uninstall flow (onUninstall hook, revoke, drop tables,
+     * drop user, delete credentials, rm -rf plugin dir, clean state file).
+     * The plugin must be disabled first — the service refuses to uninstall
+     * an enabled plugin.
+     */
+    public function getPluginUninstallService(): \Eiou\Services\PluginUninstallService {
+        if (!isset($this->services['PluginUninstallService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PluginUninstallService'] = new \Eiou\Services\PluginUninstallService(
+                $app->pluginLoader,
+                $this->getPluginCredentialService(),
+                $this->getPluginDbUserService(),
+                $this->getPluginPdoFactory(),
+                $this->getPdo()
+            );
+        }
+        return $this->services['PluginUninstallService'];
+    }
+
+    /**
      * Convenience wrapper that returns a PDO authenticated as the given
      * plugin's MySQL user. Identical to calling
      * `$container->getPluginPdoFactory()->getFor($pluginId)`. Cached

@@ -318,6 +318,38 @@ class PluginLoader
     }
 
     /**
+     * Return the live PluginInterface instance for a plugin, or null if
+     * it isn't currently loaded (disabled, failed, or never discovered).
+     * Used by the uninstall flow to locate an UninstallablePlugin's
+     * onUninstall() hook. Most plugins are disabled at uninstall time
+     * (uninstall requires disabled first) so this usually returns null —
+     * which is fine, the hook is optional.
+     */
+    public function getPluginInstance(string $name): ?PluginInterface
+    {
+        return $this->plugins[$name] ?? null;
+    }
+
+    /**
+     * Remove a plugin's entry from the persisted state file entirely
+     * (as opposed to setEnabled(false) which just flips the flag).
+     * Used by the uninstall flow after the plugin's files and MySQL
+     * artefacts are gone.
+     *
+     * Returns true if an entry was removed, false if the plugin had no
+     * state entry to begin with (idempotent on re-run).
+     */
+    public function removeFromState(string $name): bool
+    {
+        $state = $this->readState();
+        if (!array_key_exists($name, $state)) {
+            return false;
+        }
+        unset($state[$name]);
+        return $this->writeState($state);
+    }
+
+    /**
      * Persist a plugin's enabled flag. Returns true on success.
      *
      * Note: state changes only take effect on the next process boot.
