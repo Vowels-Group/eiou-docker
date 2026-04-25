@@ -4591,7 +4591,12 @@ tr.tx-item-in-progress > td:first-child {
     opacity: 0.85;
 }
 
-/* Apply button row */
+/* Apply button row.
+   Override the generic `.modal-content form { padding: 1.5rem; }` rule —
+   that 24px of padding sat between the Apply button and Delete/Block,
+   making the two action clusters feel disconnected. Higher specificity
+   here so the override wins. */
+.modal-content form.apply-decisions-form,
 .apply-decisions-form {
     margin: 0;
     padding: 0;
@@ -4751,15 +4756,23 @@ hr.currency-separator-double {
 }
 
 .pending-contact-actions {
-    display: -webkit-box; display: -ms-flexbox; display: flex;
+    display: flex;
     gap: 0.5rem;
-    margin-top: 1rem;
-    -webkit-flex-wrap: wrap; -ms-flex-wrap: wrap; flex-wrap: wrap;
+    margin-top: 0.5rem;
 }
 
 .pending-contact-action-col {
-    -webkit-box-flex: 1; -ms-flex: 1; flex: 1;
-    min-width: 120px;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* On narrow screens, side-by-side Delete + Block tend to wrap their
+   labels onto two lines (mismatched heights, ugly). Stack each on its
+   own row so they read cleanly + match the full-width Apply above. */
+@media (max-width: 576px) {
+    .pending-contact-actions {
+        flex-direction: column;
+    }
 }
 
 /* Chain gap section */

@@ -2265,11 +2265,19 @@ function initializeCurrencyAcceptHandlers() {
             var applyLabel = form.querySelector('.apply-decisions-label');
 
             function setDecision(accordion, value) {
+                var prev = accordion.getAttribute('data-decision') || 'accept';
                 accordion.setAttribute('data-decision', value);
                 var btns = accordion.querySelectorAll('.currency-decision-btn');
                 for (var b = 0; b < btns.length; b++) {
                     btns[b].classList.toggle('is-active', btns[b].getAttribute('data-decision-value') === value);
                     btns[b].setAttribute('aria-checked', btns[b].getAttribute('data-decision-value') === value ? 'true' : 'false');
+                }
+                // Collapse the body when there's nothing left to configure
+                // (Decline/Defer rows have no fee/credit). Accept rows
+                // re-open. Skipped when the previous state already
+                // matched, so manual user expand/collapse is preserved.
+                if (prev !== value) {
+                    accordion.open = (value === 'accept');
                 }
                 updateApplyLabel();
             }
