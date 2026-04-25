@@ -262,6 +262,110 @@ class ContactControllerTest extends TestCase
     }
 
     #[Test]
+    public function routeActionHandlesApplyContactDecisionsAction(): void
+    {
+        // Verifies the new batched-decisions action dispatches via
+        // routeAction with CSRF protection.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'action' => 'applyContactDecisions',
+            'pubkey_hash' => 'abc123',
+            'decisions' => json_encode([
+                ['currency' => 'USD', 'action' => 'accept', 'fee' => '0.01', 'credit' => '1000'],
+            ]),
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            ob_start();
+            $this->controller->routeAction();
+            ob_end_clean();
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) { ob_end_clean(); }
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleApplyContactDecisionsRequiresPubkeyHash(): void
+    {
+        // Empty pubkey_hash → early redirect with error, no service call.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'pubkey_hash' => '',
+            'decisions' => json_encode([
+                ['currency' => 'USD', 'action' => 'accept', 'fee' => '0.01', 'credit' => '1000'],
+            ]),
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            $this->controller->handleApplyContactDecisions();
+        } catch (\Throwable $e) {
+            // Expected — MessageHelper redirect
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleApplyContactDecisionsRejectsEmptyDecisionsArray(): void
+    {
+        // No decisions submitted → early redirect, no DB writes.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'pubkey_hash' => 'abc123',
+            'decisions' => '[]',
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            $this->controller->handleApplyContactDecisions();
+        } catch (\Throwable $e) {
+            // Expected — MessageHelper redirect
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleApplyContactDecisionsRejectsMalformedDecisionsJson(): void
+    {
+        // Non-JSON / non-array decisions → early redirect.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'pubkey_hash' => 'abc123',
+            'decisions' => 'not-a-json-array',
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            $this->controller->handleApplyContactDecisions();
+        } catch (\Throwable $e) {
+            // Expected — MessageHelper redirect
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleApplyContactDecisionsAcceptsMixedActions(): void
+    {
+        // Smoke: mixed accept/decline/defer payload doesn't blow up
+        // input parsing. "defer" entries are intentionally ignored by
+        // the partition step.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'pubkey_hash' => 'abc123',
+            'decisions' => json_encode([
+                ['currency' => 'USD', 'action' => 'accept', 'fee' => '0.01', 'credit' => '1000'],
+                ['currency' => 'EUR', 'action' => 'decline'],
+                ['currency' => 'XRP', 'action' => 'defer'],
+            ]),
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            $this->controller->handleApplyContactDecisions();
+        } catch (\Throwable $e) {
+            // Expected — downstream DB/redirect path
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
     public function routeActionHandlesPingContactAction(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';

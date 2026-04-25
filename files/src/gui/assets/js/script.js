@@ -2250,53 +2250,121 @@ function initializeFormLoaders() {
 }
 
 /**
- * Initializes shared name fields and Accept All buttons for pending contact currency forms.
- *
- * Shared name: A single Name input above all currency forms for a contact.
- * On form submit, the name value is copied to a hidden field inside the form.
- *
- * Accept All: Sequentially submits all currency forms for a contact via fetch,
- * then reloads the page to show results.
+ * Initialize the per-currency segmented decision controls + the bottom
+ * Apply button for pending contact-request modals. The user picks
+ * Accept / Decline / Defer per currency (with a smart default), tweaks
+ * fee / credit on Accept rows, and submits everything via a single
+ * applyContactDecisions POST. Defer rows are dropped from the payload.
  */
 function initializeCurrencyAcceptHandlers() {
-    // Before form submit, copy shared name to hidden field
-    var currencyForms = document.querySelectorAll('.currency-accept-form');
-    for (var i = 0; i < currencyForms.length; i++) {
-        (function(form) {
-            form.addEventListener('submit', function(e) {
-                var sharedNameId = form.getAttribute('data-shared-name-id');
-                if (sharedNameId) {
-                    var nameInput = document.getElementById(sharedNameId);
-                    var target = form.querySelector('.shared-name-target');
-                    if (nameInput && target) {
-                        var nameVal = nameInput.value.trim();
-                        if (!nameVal) {
-                            e.preventDefault();
-                            nameInput.focus();
-                            nameInput.style.borderColor = '#dc3545';
-                            if (typeof showToast === 'function') {
-                                showToast('Required', 'Please enter a name for this contact', 'warning');
-                            }
-                            return false;
-                        }
-                        target.value = nameVal;
-                    }
+    var forms = document.querySelectorAll('.apply-decisions-form');
+    for (var i = 0; i < forms.length; i++) {
+        (function (form) {
+            var accordions = form.querySelectorAll('.pending-currency-accordion');
+            var applyBtn = form.querySelector('.apply-decisions-btn');
+            var applyLabel = form.querySelector('.apply-decisions-label');
+
+            function setDecision(accordion, value) {
+                var prev = accordion.getAttribute('data-decision') || 'accept';
+                accordion.setAttribute('data-decision', value);
+                var btns = accordion.querySelectorAll('.currency-decision-btn');
+                for (var b = 0; b < btns.length; b++) {
+                    btns[b].classList.toggle('is-active', btns[b].getAttribute('data-decision-value') === value);
+                    btns[b].setAttribute('aria-checked', btns[b].getAttribute('data-decision-value') === value ? 'true' : 'false');
                 }
-            });
-        })(currencyForms[i]);
-    }
+                // Collapse the body when there's nothing left to configure
+                // (Decline/Defer rows have no fee/credit). Accept rows
+                // re-open. Skipped when the previous state already
+                // matched, so manual user expand/collapse is preserved.
+                if (prev !== value) {
+                    accordion.open = (value === 'accept');
+                }
+                updateApplyLabel();
+            }
 
-    // Accept All form handler — collects fee/credit from individual currency forms
-    var acceptAllForms = document.querySelectorAll('.accept-all-form');
-    for (var j = 0; j < acceptAllForms.length; j++) {
-        (function(form) {
-            form.addEventListener('submit', function(e) {
-                var card = form.closest('.pending-contact-accept-form');
-                if (!card) { e.preventDefault(); return; }
+            function tally() {
+                var counts = { accept: 0, decline: 0, defer: 0 };
+                for (var k = 0; k < accordions.length; k++) {
+                    var d = accordions[k].getAttribute('data-decision') || 'defer';
+                    if (counts[d] === undefined) { counts[d] = 0; }
+                    counts[d]++;
+                }
+                return counts;
+            }
 
-                // Validate shared name first
-                var nameInput = card.querySelector('.shared-name-input');
-                if (nameInput && !nameInput.value.trim()) {
+            function updateApplyLabel() {
+                var c = tally();
+                var actionable = c.accept + c.decline;
+                if (!applyBtn || !applyLabel) return;
+                if (actionable === 0) {
+                    applyLabel.textContent = 'Apply (nothing to do)';
+                    applyBtn.disabled = true;
+                    return;
+                }
+                applyBtn.disabled = false;
+                if (c.accept > 0 && c.decline === 0 && c.defer === 0) {
+                    applyLabel.textContent = c.accept === 1 ? 'Accept request' : 'Accept all ' + c.accept + ' currencies';
+                } else if (c.decline > 0 && c.accept === 0) {
+                    applyLabel.textContent = c.decline === 1 ? 'Decline 1 currency' : 'Decline ' + c.decline + ' currencies';
+                } else {
+                    var parts = [];
+                    if (c.accept > 0) parts.push(c.accept + ' accept');
+                    if (c.decline > 0) parts.push(c.decline + ' decline');
+                    if (c.defer > 0) parts.push(c.defer + ' defer');
+                    applyLabel.textContent = 'Apply: ' + parts.join(', ');
+                }
+            }
+
+            // Wire each accordion: click on a decision button updates state;
+            // initialize active styling from the data-decision PHP set.
+            for (var k = 0; k < accordions.length; k++) {
+                (function (accordion) {
+                    var initial = accordion.getAttribute('data-decision') || 'accept';
+                    setDecision(accordion, initial);
+
+                    var btns = accordion.querySelectorAll('.currency-decision-btn');
+                    for (var b = 0; b < btns.length; b++) {
+                        btns[b].addEventListener('click', function (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDecision(accordion, this.getAttribute('data-decision-value'));
+                        });
+                    }
+                })(accordions[k]);
+            }
+
+            updateApplyLabel();
+
+            // Write the decisions JSON + the new-contact name into the
+            // form's hidden inputs, set the button to a busy state. Used
+            // both by the in-line happy path (before letting the event
+            // continue to native submission) and by the guard-confirmed
+            // path that calls form.submit() programmatically.
+            function writePayload(decisions, isNewContact, nameInput) {
+                if (isNewContact && nameInput) {
+                    var nameTarget = form.querySelector('.apply-decisions-name-target');
+                    if (nameTarget) { nameTarget.value = nameInput.value.trim(); }
+                }
+                form.querySelector('.apply-decisions-data').value = JSON.stringify(decisions);
+                if (applyBtn) {
+                    applyBtn.disabled = true;
+                    if (applyLabel) { applyLabel.textContent = 'Applying…'; }
+                }
+            }
+
+            form.addEventListener('submit', function (e) {
+                var counts = tally();
+                if (counts.accept === 0 && counts.decline === 0) {
+                    e.preventDefault();
+                    return;
+                }
+
+                // Name validation: required only when at least one Accept on a
+                // new contact (a name is needed to establish the relationship).
+                var isNewContact = form.getAttribute('data-is-new-contact') === '1';
+                var sharedNameId = form.getAttribute('data-shared-name-id');
+                var nameInput = sharedNameId ? document.getElementById(sharedNameId) : null;
+                if (isNewContact && counts.accept > 0 && nameInput && !nameInput.value.trim()) {
                     e.preventDefault();
                     nameInput.focus();
                     nameInput.style.borderColor = '#dc3545';
@@ -2306,78 +2374,65 @@ function initializeCurrencyAcceptHandlers() {
                     return;
                 }
 
-                // Copy shared name into the Accept All form's hidden field (for new contacts)
-                var nameTarget = form.querySelector('.accept-all-name-target');
-                if (nameTarget && nameInput) {
-                    nameTarget.value = nameInput.value.trim();
-                }
-
-                // Collect currency data from individual forms
-                // Field names differ: existing contacts use "currency"/"fee"/"credit",
-                // new contacts use "contact_currency"/"contact_fee"/"contact_credit"
-                var currencyForms = card.querySelectorAll('.currency-accept-form');
-                var currencies = [];
-                for (var k = 0; k < currencyForms.length; k++) {
-                    var cf = currencyForms[k];
-                    var currency = cf.querySelector('input[name="currency"]') || cf.querySelector('input[name="contact_currency"]');
-                    var fee = cf.querySelector('input[name="fee"]') || cf.querySelector('input[name="contact_fee"]');
-                    var credit = cf.querySelector('input[name="credit"]') || cf.querySelector('input[name="contact_credit"]');
-                    if (currency && fee && credit) {
-                        currencies.push({
-                            currency: currency.value,
-                            fee: fee.value,
-                            credit: credit.value
+                // Build decisions payload. Defer rows omitted; accept rows
+                // include fee/credit; decline rows are bare.
+                var decisions = [];
+                for (var n = 0; n < accordions.length; n++) {
+                    var ac = accordions[n];
+                    var decision = ac.getAttribute('data-decision') || 'defer';
+                    var currency = ac.getAttribute('data-currency') || '';
+                    if (!currency || decision === 'defer') continue;
+                    if (decision === 'accept') {
+                        var feeEl = ac.querySelector('.currency-fee-input');
+                        var creditEl = ac.querySelector('.currency-credit-input');
+                        decisions.push({
+                            currency: currency,
+                            action: 'accept',
+                            fee: feeEl ? feeEl.value : '',
+                            credit: creditEl ? creditEl.value : ''
                         });
+                    } else if (decision === 'decline') {
+                        decisions.push({ currency: currency, action: 'decline' });
                     }
                 }
+                if (decisions.length === 0) { e.preventDefault(); return; }
 
-                if (currencies.length === 0) {
-                    e.preventDefault();
-                    return;
-                }
-
-                // Defaults guard — if any currency is at both the default
-                // fee AND default credit, warn before accepting. User's
-                // defaults come from data attributes on the accept-all form
-                // (emitted by PHP from user settings). Skipped if all
-                // currencies were customized.
+                // Defaults guard for Accept rows — warn once if any are at
+                // both the default fee AND default credit.
                 var defaultFee = form.getAttribute('data-default-fee');
                 var defaultCredit = form.getAttribute('data-default-credit');
-                if (defaultFee !== null && defaultCredit !== null) {
+                if (defaultFee !== null && defaultCredit !== null && !form.dataset.guardConfirmed) {
                     var untouched = [];
-                    for (var m = 0; m < currencies.length; m++) {
-                        // Number comparison — the rendered value may have
-                        // trailing zeros etc. that string-compare would miss.
-                        if (parseFloat(currencies[m].fee) === parseFloat(defaultFee)
-                            && parseFloat(currencies[m].credit) === parseFloat(defaultCredit)) {
-                            untouched.push(currencies[m].currency);
+                    for (var m = 0; m < decisions.length; m++) {
+                        if (decisions[m].action !== 'accept') continue;
+                        if (parseFloat(decisions[m].fee) === parseFloat(defaultFee)
+                            && parseFloat(decisions[m].credit) === parseFloat(defaultCredit)) {
+                            untouched.push(decisions[m].currency);
                         }
                     }
-                    if (untouched.length > 0 && !form.dataset.guardConfirmed) {
+                    if (untouched.length > 0) {
                         e.preventDefault();
-                        var msg = untouched.length === currencies.length
-                            ? 'You\'re accepting all ' + currencies.length + ' currencies with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
-                            : 'The following currencies are at your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
-                        if (!confirm(msg)) return;
-                        // One-shot bypass — set a flag, re-submit, skip the
-                        // guard on the second pass.
-                        form.dataset.guardConfirmed = '1';
-                        form.submit();
+                        var acceptCount = counts.accept;
+                        var msg = untouched.length === acceptCount
+                            ? 'You\'re accepting ' + acceptCount + ' currenc' + (acceptCount === 1 ? 'y' : 'ies') + ' with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
+                            : 'The following currencies use your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
+                        showConfirmModal(msg, { title: 'Accept with defaults?', confirmText: 'Continue' }).then(function (ok) {
+                            if (!ok) return;
+                            form.dataset.guardConfirmed = '1';
+                            // form.submit() does NOT fire the submit event,
+                            // so we must populate the hidden fields first.
+                            writePayload(decisions, isNewContact, nameInput);
+                            HTMLFormElement.prototype.submit.call(form);
+                        });
                         return;
                     }
                 }
 
-                // Set the JSON data into the hidden field
-                form.querySelector('.accept-all-currencies-data').value = JSON.stringify(currencies);
-
-                // Show loading state
-                var btn = form.querySelector('.accept-all-btn');
-                if (btn) {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
-                }
+                // Happy path: write payload and let the event continue —
+                // the natural submission picks up the just-set hidden field.
+                writePayload(decisions, isNewContact, nameInput);
             });
-        })(acceptAllForms[j]);
+        })(forms[i]);
     }
 }
 
@@ -3380,6 +3435,149 @@ function showInfoModal(el) {
     overlay.onclick = function(e) { if (e.target === overlay) { closeInfoModal(); } };
     document.addEventListener('keydown', escHandler);
     document.body.appendChild(overlay);
+}
+
+/**
+ * Custom confirm dialog — replaces the browser-native confirm() prompt with a
+ * styled modal matching the rest of the GUI. Returns a Promise resolving to
+ * true (confirmed) or false (cancelled / dismissed). Falls back to native
+ * confirm() if Promise is unavailable.
+ *
+ * @param {string} message - The message to display
+ * @param {Object} [options]
+ * @param {string} [options.title='Confirm'] - Header text
+ * @param {string} [options.confirmText='OK'] - Confirm button label
+ * @param {string} [options.cancelText='Cancel'] - Cancel button label
+ * @param {string} [options.confirmClass='btn-primary'] - Confirm button class
+ * @param {string} [options.icon='fa-question-circle'] - Header icon
+ * @returns {Promise<boolean>}
+ */
+function showConfirmModal(message, options) {
+    options = options || {};
+    var title = options.title || 'Confirm';
+    var confirmText = options.confirmText || 'OK';
+    var cancelText = options.cancelText || 'Cancel';
+    var confirmClass = options.confirmClass || 'btn-primary';
+    var icon = options.icon || 'fa-question-circle';
+
+    if (typeof Promise === 'undefined') {
+        return { then: function (cb) { cb(window.confirm(message)); return this; } };
+    }
+
+    return new Promise(function (resolve) {
+        var overlay = document.createElement('div');
+        overlay.className = 'modal modal-stack-top';
+        overlay.innerHTML =
+            '<div class="modal-content modal-confirm">' +
+                '<div class="modal-header">' +
+                    '<h3><i class="fas ' + icon + '"></i> ' + escapeHtml(title) + '</h3>' +
+                    '<span class="close" data-confirm-close="1" title="Close">&times;</span>' +
+                '</div>' +
+                '<div class="modal-body modal-confirm-body">' +
+                    escapeHtml(message) +
+                '</div>' +
+                '<div class="modal-footer modal-confirm-footer">' +
+                    '<button type="button" class="btn btn-secondary modal-confirm-cancel">' + escapeHtml(cancelText) + '</button>' +
+                    '<button type="button" class="btn ' + confirmClass + ' modal-confirm-ok">' + escapeHtml(confirmText) + '</button>' +
+                '</div>' +
+            '</div>';
+
+        function cleanup(result) {
+            document.removeEventListener('keydown', keyHandler);
+            if (document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+            resolve(result);
+        }
+
+        function keyHandler(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) { cleanup(false); }
+            else if (e.key === 'Enter' || e.keyCode === 13) { cleanup(true); }
+        }
+
+        overlay.querySelector('.modal-confirm-ok').onclick = function () { cleanup(true); };
+        overlay.querySelector('.modal-confirm-cancel').onclick = function () { cleanup(false); };
+        overlay.querySelector('[data-confirm-close]').onclick = function () { cleanup(false); };
+        overlay.onclick = function (e) { if (e.target === overlay) { cleanup(false); } };
+
+        document.addEventListener('keydown', keyHandler);
+        document.body.appendChild(overlay);
+
+        var okBtn = overlay.querySelector('.modal-confirm-ok');
+        if (okBtn) { try { okBtn.focus(); } catch (e) {} }
+    });
+}
+
+/**
+ * Custom alert dialog — styled replacement for the browser-native alert().
+ * Returns a Promise that resolves when the user dismisses the modal.
+ *
+ * @param {string} message
+ * @param {Object} [options]
+ * @param {string} [options.title='Notice'] - Header text
+ * @param {string} [options.okText='OK']
+ * @param {string} [options.type='info'] - 'info' | 'success' | 'warning' | 'error'
+ * @returns {Promise<void>}
+ */
+function showAlertModal(message, options) {
+    options = options || {};
+    var type = options.type || 'info';
+    var title = options.title || (type === 'error' ? 'Error' : (type === 'warning' ? 'Warning' : (type === 'success' ? 'Success' : 'Notice')));
+    var okText = options.okText || 'OK';
+    var icons = {
+        info: 'fa-info-circle',
+        success: 'fa-check-circle',
+        warning: 'fa-exclamation-triangle',
+        error: 'fa-exclamation-circle'
+    };
+    var btnClass = (type === 'error' || type === 'warning') ? 'btn-warning' : 'btn-primary';
+
+    if (typeof Promise === 'undefined') {
+        window.alert(message);
+        return { then: function (cb) { cb(); return this; } };
+    }
+
+    return new Promise(function (resolve) {
+        var overlay = document.createElement('div');
+        overlay.className = 'modal modal-stack-top';
+        overlay.innerHTML =
+            '<div class="modal-content modal-confirm">' +
+                '<div class="modal-header">' +
+                    '<h3><i class="fas ' + (icons[type] || icons.info) + '"></i> ' + escapeHtml(title) + '</h3>' +
+                    '<span class="close" data-alert-close="1" title="Close">&times;</span>' +
+                '</div>' +
+                '<div class="modal-body modal-confirm-body">' +
+                    escapeHtml(message) +
+                '</div>' +
+                '<div class="modal-footer modal-confirm-footer">' +
+                    '<button type="button" class="btn ' + btnClass + ' modal-alert-ok">' + escapeHtml(okText) + '</button>' +
+                '</div>' +
+            '</div>';
+
+        function cleanup() {
+            document.removeEventListener('keydown', keyHandler);
+            if (document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+            resolve();
+        }
+
+        function keyHandler(e) {
+            if (e.key === 'Escape' || e.keyCode === 27 || e.key === 'Enter' || e.keyCode === 13) {
+                cleanup();
+            }
+        }
+
+        overlay.querySelector('.modal-alert-ok').onclick = cleanup;
+        overlay.querySelector('[data-alert-close]').onclick = cleanup;
+        overlay.onclick = function (e) { if (e.target === overlay) { cleanup(); } };
+
+        document.addEventListener('keydown', keyHandler);
+        document.body.appendChild(overlay);
+
+        var okBtn = overlay.querySelector('.modal-alert-ok');
+        if (okBtn) { try { okBtn.focus(); } catch (e) {} }
+    });
 }
 
 /**
@@ -6452,10 +6650,18 @@ function revokeAllRememberSessions(btn) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function abandonDlqItem(dlqId, btn) {
-    if (!confirm('Abandon this message? It will no longer be retried and this cannot be undone.')) {
-        return;
-    }
+    showConfirmModal('Abandon this message? It will no longer be retried and this cannot be undone.', {
+        title: 'Abandon message?',
+        confirmText: 'Abandon',
+        confirmClass: 'btn-danger',
+        icon: 'fa-exclamation-triangle'
+    }).then(function (ok) {
+        if (!ok) return;
+        abandonDlqItemConfirmed(dlqId, btn);
+    });
+}
 
+function abandonDlqItemConfirmed(dlqId, btn) {
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -6513,10 +6719,17 @@ function abandonDlqItem(dlqId, btn) {
  */
 function retryAllDlqItems(btn) {
     var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
-    if (!confirm('Retry all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '?')) {
-        return;
-    }
+    showConfirmModal('Retry all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '?', {
+        title: 'Retry pending messages?',
+        confirmText: 'Retry all'
+    }).then(function (ok) {
+        if (!ok) return;
+        retryAllDlqItemsConfirmed(btn);
+    });
+}
 
+function retryAllDlqItemsConfirmed(btn) {
+    var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -6581,10 +6794,18 @@ function retryAllDlqItems(btn) {
  */
 function abandonAllDlqItems(btn) {
     var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
-    if (!confirm('Abandon all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '? This cannot be undone.')) {
-        return;
-    }
+    showConfirmModal('Abandon all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '? This cannot be undone.', {
+        title: 'Abandon all messages?',
+        confirmText: 'Abandon all',
+        confirmClass: 'btn-danger',
+        icon: 'fa-exclamation-triangle'
+    }).then(function (ok) {
+        if (!ok) return;
+        abandonAllDlqItemsConfirmed(btn);
+    });
+}
 
+function abandonAllDlqItemsConfirmed(btn) {
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -7242,62 +7463,71 @@ window.addEventListener('beforeunload', liveStopPolling);
 // P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
 function approveP2pTransaction(hash, candidateId) {
     var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
-    if (!confirm(msg)) return;
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken) { alert('CSRF token not found'); return; }
-    var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
-    if (candidateId) {
-        body = body + '&candidate_id=' + encodeURIComponent(candidateId);
-    }
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 60000;
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    if (data.success) { window.location.reload(); }
-                    else { alert('Error: ' + (data.message || 'Unknown error')); }
-                } catch (e) {
-                    alert('Error parsing response');
-                }
-            } else {
-                alert('Network error');
-            }
+    showConfirmModal(msg, { title: 'Approve transaction?', confirmText: 'Send' }).then(function (ok) {
+        if (!ok) return;
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
+        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        if (candidateId) {
+            body = body + '&candidate_id=' + encodeURIComponent(candidateId);
         }
-    };
-    xhr.ontimeout = function() { alert('Request timed out'); };
-    xhr.send(body);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.pathname, true);
+        xhr.timeout = 60000;
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.success) { window.location.reload(); }
+                        else { showAlertModal(data.message || 'Unknown error', { title: 'Error', type: 'error' }); }
+                    } catch (e) {
+                        showAlertModal('Error parsing response', { type: 'error' });
+                    }
+                } else {
+                    showAlertModal('Network error', { type: 'error' });
+                }
+            }
+        };
+        xhr.ontimeout = function() { showAlertModal('Request timed out', { type: 'warning' }); };
+        xhr.send(body);
+    });
 }
 
 function rejectP2pTransaction(hash) {
-    if (!confirm('Are you sure you want to reject this transaction?')) return;
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken) { alert('CSRF token not found'); return; }
-    var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 60000;
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    if (data.success) { window.location.reload(); }
-                    else { alert('Error: ' + (data.message || 'Unknown error')); }
-                } catch (e) {
-                    alert('Error parsing response');
+    showConfirmModal('Are you sure you want to reject this transaction?', {
+        title: 'Reject transaction?',
+        confirmText: 'Reject',
+        confirmClass: 'btn-danger',
+        icon: 'fa-exclamation-triangle'
+    }).then(function (ok) {
+        if (!ok) return;
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
+        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.pathname, true);
+        xhr.timeout = 60000;
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.success) { window.location.reload(); }
+                        else { showAlertModal(data.message || 'Unknown error', { title: 'Error', type: 'error' }); }
+                    } catch (e) {
+                        showAlertModal('Error parsing response', { type: 'error' });
+                    }
+                } else {
+                    showAlertModal('Network error', { type: 'error' });
                 }
-            } else {
-                alert('Network error');
             }
-        }
-    };
-    xhr.ontimeout = function() { alert('Request timed out'); };
-    xhr.send(body);
+        };
+        xhr.ontimeout = function() { showAlertModal('Request timed out', { type: 'warning' }); };
+        xhr.send(body);
+    });
 }
 
 function loadP2pCandidates(hash, container) {
@@ -7613,12 +7843,26 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'revokeRememberSession': function(el) {
             var id = parseInt(el.getAttribute('data-session-id'), 10);
             if (!id) return;
-            if (!confirm('Sign out this browser? It will need to enter the auth code again.')) return;
-            revokeRememberSession(id, el);
+            showConfirmModal('Sign out this browser? It will need to enter the auth code again.', {
+                title: 'Sign out browser?',
+                confirmText: 'Sign out',
+                confirmClass: 'btn-warning',
+                icon: 'fa-sign-out-alt'
+            }).then(function (ok) {
+                if (!ok) return;
+                revokeRememberSession(id, el);
+            });
         },
         'revokeAllRememberSessions': function(el) {
-            if (!confirm('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.')) return;
-            revokeAllRememberSessions(el);
+            showConfirmModal('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.', {
+                title: 'Sign out everywhere?',
+                confirmText: 'Sign out all',
+                confirmClass: 'btn-danger',
+                icon: 'fa-exclamation-triangle'
+            }).then(function (ok) {
+                if (!ok) return;
+                revokeAllRememberSessions(el);
+            });
         },
         'openPendingContactModal': function(el) {
             // Row-click handler for the pending-contacts table. Reads the
@@ -7803,11 +8047,30 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 return; // let the default action (e.g. href) proceed
             }
 
-            // data-confirm: confirmation dialog for form submit buttons
-            if (el.getAttribute('data-confirm')) {
-                if (!confirm(el.getAttribute('data-confirm'))) {
-                    event.preventDefault();
-                }
+            // data-confirm: confirmation dialog for form submit buttons.
+            // Uses the custom showConfirmModal — since it's async, we always
+            // preventDefault, then re-submit via the owning form once
+            // confirmed. Skip the modal on the synthetic re-click we trigger
+            // ourselves (data-confirmed marker), so the form actually posts.
+            if (el.getAttribute('data-confirm') && !el.hasAttribute('data-confirmed')) {
+                event.preventDefault();
+                event.stopPropagation();
+                var btn = el;
+                var msg = btn.getAttribute('data-confirm');
+                var isDanger = btn.classList.contains('btn-danger');
+                var isWarning = btn.classList.contains('btn-warning');
+                var opts = {
+                    title: isDanger ? 'Confirm action' : (isWarning ? 'Please confirm' : 'Confirm'),
+                    confirmText: btn.getAttribute('data-confirm-text') || 'Yes',
+                    cancelText: 'Cancel',
+                    confirmClass: isDanger ? 'btn-danger' : (isWarning ? 'btn-warning' : 'btn-primary'),
+                    icon: isDanger ? 'fa-exclamation-triangle' : 'fa-question-circle'
+                };
+                showConfirmModal(msg, opts).then(function (ok) {
+                    if (!ok) { return; }
+                    btn.setAttribute('data-confirmed', '1');
+                    try { btn.click(); } finally { btn.removeAttribute('data-confirmed'); }
+                });
                 return;
             }
 
@@ -9008,31 +9271,35 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function requestRestart() {
-            if (!window.confirm(
-                'Restart the node now?\n\n' +
-                'PHP-FPM workers and background processors will recycle. ' +
-                'Active sessions stay logged in, but pages may reload briefly. ' +
-                'Plugin toggles take effect after this restart.'
-            )) return;
-
-            showRestartOverlay();
-            post({ action: 'pluginsRequestRestart' }).then(function(r) {
-                if (!(r.data && r.data.success)) {
+            showConfirmModal(
+                'Restart the node now?\n\nPHP-FPM workers and background processors will recycle. Active sessions stay logged in, but pages may reload briefly. Plugin toggles take effect after this restart.',
+                {
+                    title: 'Restart node?',
+                    confirmText: 'Restart',
+                    confirmClass: 'btn-warning',
+                    icon: 'fa-power-off'
+                }
+            ).then(function (ok) {
+                if (!ok) return;
+                showRestartOverlay();
+                post({ action: 'pluginsRequestRestart' }).then(function(r) {
+                    if (!(r.data && r.data.success)) {
+                        var overlay = document.getElementById('plugins-restart-overlay');
+                        if (overlay) overlay.remove();
+                        var msg = (r.data && r.data.message) || 'Restart request failed';
+                        if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                        return;
+                    }
+                    // Wait briefly for the request poller (~2s cycle) to pick
+                    // it up + run `eiou restart`, THEN start polling — checking
+                    // immediately would just see the still-running old worker
+                    // and "succeed" before the restart even started.
+                    setTimeout(function() { pollUntilBackOnline(0); }, 3000);
+                }).catch(function() {
                     var overlay = document.getElementById('plugins-restart-overlay');
                     if (overlay) overlay.remove();
-                    var msg = (r.data && r.data.message) || 'Restart request failed';
-                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
-                    return;
-                }
-                // Wait briefly for the request poller (~2s cycle) to pick
-                // it up + run `eiou restart`, THEN start polling — checking
-                // immediately would just see the still-running old worker
-                // and "succeed" before the restart even started.
-                setTimeout(function() { pollUntilBackOnline(0); }, 3000);
-            }).catch(function() {
-                var overlay = document.getElementById('plugins-restart-overlay');
-                if (overlay) overlay.remove();
-                if (typeof showToast === 'function') showToast('Error', 'Network error while requesting restart', 'error');
+                    if (typeof showToast === 'function') showToast('Error', 'Network error while requesting restart', 'error');
+                });
             });
         }
 
@@ -10199,33 +10466,40 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
                         window.apiKeys.openVerifyModal(function () { reveal(methodId); });
                     } else {
-                        alert('Please unlock sensitive actions first (re-enter your auth code).');
+                        showAlertModal('Please unlock sensitive actions first (re-enter your auth code).', { title: 'Locked', type: 'warning' });
                     }
                     return;
                 }
-                if (!data.success) { alert('Failed to reveal: ' + (data.error || 'unknown')); return; }
+                if (!data.success) { showAlertModal('Failed to reveal: ' + (data.error || 'unknown'), { type: 'error' }); return; }
                 var m = data.method;
                 var lines = Object.keys(m.fields || {}).map(function (k) {
                     return k + ': ' + m.fields[k];
                 });
-                alert(m.label + ' (' + m.type + ', ' + m.currency + ')\n\n' + lines.join('\n'));
+                showAlertModal(m.label + ' (' + m.type + ', ' + m.currency + ')\n\n' + lines.join('\n'), { title: 'Payback method', type: 'info' });
             });
         }
 
         function remove(methodId, label) {
-            if (!confirm('Remove payback method "' + label + '"? This cannot be undone.')) { return; }
-            post('paybackMethodsDelete', { method_id: methodId }, function (data, status) {
-                if (status === 403 && data.error === 'sensitive_access_required') {
-                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
-                        window.apiKeys.openVerifyModal(function () { remove(methodId, label); });
-                    } else {
-                        alert('Please unlock sensitive actions first.');
+            showConfirmModal('Remove payback method "' + label + '"? This cannot be undone.', {
+                title: 'Remove payback method?',
+                confirmText: 'Remove',
+                confirmClass: 'btn-danger',
+                icon: 'fa-exclamation-triangle'
+            }).then(function (ok) {
+                if (!ok) return;
+                post('paybackMethodsDelete', { method_id: methodId }, function (data, status) {
+                    if (status === 403 && data.error === 'sensitive_access_required') {
+                        if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                            window.apiKeys.openVerifyModal(function () { remove(methodId, label); });
+                        } else {
+                            showAlertModal('Please unlock sensitive actions first.', { title: 'Locked', type: 'warning' });
+                        }
+                        return;
                     }
-                    return;
-                }
-                if (!data.success) { alert('Failed to delete: ' + (data.error || 'unknown')); return; }
-                closeForm();
-                loadList();
+                    if (!data.success) { showAlertModal('Failed to delete: ' + (data.error || 'unknown'), { type: 'error' }); return; }
+                    closeForm();
+                    loadList();
+                });
             });
         }
 

@@ -153,6 +153,7 @@ Handles all contact-related operations.
 | `handleAcceptCurrency()` | `acceptCurrency` | Accept pending incoming currency | `pubkey_hash`, `currency`, `fee`, `credit` |
 | `handleAddCurrency()` | `addCurrency` | Add a new currency to an existing contact (AJAX) | `pubkey`, `currency`, `fee`, `credit` |
 | `handleAcceptAllCurrencies()` | `acceptAllCurrencies` | Accept all pending currencies for a contact (AJAX) | `pubkey_hash`, `currencies` (JSON array), `is_new_contact`, `contact_address`, `contact_name` |
+| `handleApplyContactDecisions()` | `applyContactDecisions` | Batched per-currency decisions for a pending contact request — accept some, decline others, leave the rest deferred. Used by the Contact Request modal in place of the per-row Accept/Decline + Accept-All buttons | `pubkey_hash`, `decisions` (JSON array of `{currency, action: "accept"\|"decline", fee?, credit?}` — defer rows omitted by client), `is_new_contact`, `contact_address`, `contact_name` |
 
 **AJAX Response Format (pingContact):**
 
@@ -568,10 +569,17 @@ Every tab has a collapsible **About <tab>** info panel at the top explaining wha
 **Pending Contact Requests Section:**
 - Lists incoming requests with direction-aware currency display
 - Outgoing currencies shown as read-only badges ("Awaiting their acceptance")
-- Incoming currencies shown as actionable accept forms ("They requested") with fee/credit fields
-- Per-currency accept forms when multiple currencies are requested
-- Legacy fallback form for contacts without `contact_currencies` data
-- Delete/block options
+- Incoming currencies shown in a **batched-decision modal** ("They requested"):
+  - Each currency renders as an accordion with a 3-state segmented control (**Accept** / **Decline** / **Defer**) and fee/credit inputs visible only when Accept
+  - Smart default: Accept for currencies in the user's allowed list, Defer for "new" currencies (not in `Allowed Currencies`)
+  - State badge in each accordion summary (✓ Accept / ✗ Decline / ⏳ Defer) — visible without expanding
+  - Accordion auto-collapses on Decline/Defer (nothing to configure), re-opens on Accept
+  - **Apply** button at the bottom commits everything in a single `applyContactDecisions` POST. Label updates live: "Accept request" / "Accept all N currencies" / "Decline N" / "Apply: X accept, Y decline"; disabled when every row is Defer
+  - Defaults guard: one confirmation modal if any Accept rows are at both default fee + default credit
+  - Inline help disclosure ("How to handle this request") collapsed by default at the top of the modal
+  - "About this contact" reference section below the action area (addresses, public key)
+- **Delete Request** silently drops the whole request (other side not notified). **Block Contact** prevents future requests
+- Legacy fallback form preserved for contacts without `contact_currencies` data
 
 ---
 
