@@ -176,20 +176,82 @@ class ContactManagementService implements ContactManagementServiceInterface
     // =========================================================================
 
     /**
-     * Add a contact
+     * Add a contact — dispatcher for the three semantically distinct branches.
      *
-     * This method validates all input data using InputValidator and Security classes
-     * to ensure data integrity and prevent injection attacks.
+     * Validates inputs once and routes to one of:
+     *   - addCurrencyToExisting()  : contact is already accepted and the
+     *                                requested currency is new for them.
+     *   - acceptIncoming()         : contact row already exists (incoming
+     *                                pending request, blocked, etc.).
+     *   - createOutgoing()         : no contact row — start an outbound
+     *                                contact request.
+     *
+     * The new top-level CLI namespace (`eiou contact add` / `accept` /
+     * `currency add`) calls the branch methods directly. This dispatcher
+     * is retained because it remains the entry point for the legacy
+     * `eiou add` shim and the existing controllers.
      *
      * @param array $data Command line arguments
      * @param CliOutputManager|null $output Optional output manager for JSON support
-     * @return void
      */
     public function addContact(array $data, ?CliOutputManager $output = null): void
     {
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Validate and sanitize address
+        $validated = $this->validateAddContactInput($data, $output);
+        if ($validated === null) {
+            return;
+        }
+
+        $contact = $this->contactRepository->getContactByAddress(
+            $validated['transportIndex'],
+            $validated['address']
+        );
+
+        $currencyAlreadyExists = false;
+        if ($contact && $this->contactCurrencyRepository !== null) {
+            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
+            $currencyAlreadyExists = $this->contactCurrencyRepository->hasCurrency(
+                $pubkeyHash,
+                $validated['currency']
+            );
+        }
+
+        if ($contact
+            && $contact['status'] === Constants::CONTACT_STATUS_ACCEPTED
+            && !$currencyAlreadyExists
+        ) {
+            $this->addCurrencyToExisting($validated, $contact, $output);
+            return;
+        }
+
+        if ($contact) {
+            $this->acceptIncoming($validated, $contact, $output);
+            return;
+        }
+
+        $this->createOutgoing($validated, $output);
+    }
+
+    /**
+     * Validate and sanitise the argv-shaped `add contact` input.
+     *
+     * Errors are written to $output and the method returns null. On success
+     * returns a normalised struct with everything the branch methods need.
+     *
+     * @return array{
+     *     address: string,
+     *     name: string,
+     *     fee: int|float,
+     *     credit: SplitAmount,
+     *     currency: string,
+     *     transportIndex: string,
+     *     requestedCreditLimit: SplitAmount|null,
+     *     description: string|null
+     * }|null
+     */
+    private function validateAddContactInput(array $data, CliOutputManager $output): ?array
+    {
         $addressValidation = $this->inputValidator->validateAddress($data[2] ?? '');
         if (!$addressValidation['valid']) {
             $this->secureLogger->warning("Invalid contact address", [
@@ -197,16 +259,15 @@ class ContactManagementService implements ContactManagementServiceInterface
                 'error' => $addressValidation['error']
             ]);
             $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-            return;
+            return null;
         }
         $address = $addressValidation['value'];
 
         if (in_array($address, $this->currentUser->getUserAddresses())) {
             $output->error("Cannot add yourself as a contact", ErrorCodes::SELF_CONTACT, 400);
-            return;
+            return null;
         }
 
-        // Validate and sanitize contact name
         $nameValidation = $this->inputValidator->validateContactName($data[3] ?? '');
         if (!$nameValidation['valid']) {
             $this->secureLogger->warning("Invalid contact name", [
@@ -214,11 +275,10 @@ class ContactManagementService implements ContactManagementServiceInterface
                 'error' => $nameValidation['error']
             ]);
             $output->error("Invalid name: " . $nameValidation['error'], ErrorCodes::INVALID_NAME, 400);
-            return;
+            return null;
         }
         $name = $nameValidation['value'];
 
-        // Validate fee percentage
         $feeValidation = $this->inputValidator->validateFeePercent($data[4] ?? 0);
         if (!$feeValidation['valid']) {
             $this->secureLogger->warning("Invalid fee percentage", [
@@ -226,11 +286,10 @@ class ContactManagementService implements ContactManagementServiceInterface
                 'error' => $feeValidation['error']
             ]);
             $output->error("Invalid Fee: " . $feeValidation['error'], ErrorCodes::INVALID_FEE, 400);
-            return;
+            return null;
         }
         $fee = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
 
-        // Validate credit limit
         $creditValidation = $this->inputValidator->validateCreditLimit($data[5] ?? 0);
         if (!$creditValidation['valid']) {
             $this->secureLogger->warning("Invalid credit limit", [
@@ -238,9 +297,9 @@ class ContactManagementService implements ContactManagementServiceInterface
                 'error' => $creditValidation['error']
             ]);
             $output->error("Invalid credit: " . $creditValidation['error'], ErrorCodes::INVALID_CREDIT, 400);
-            return;
+            return null;
         }
-        // Validate currency (needed before credit conversion)
+
         $currencyValidation = $this->inputValidator->validateCurrency($data[6] ?? 'USD');
         if (!$currencyValidation['valid']) {
             $this->secureLogger->warning("Invalid currency", [
@@ -248,12 +307,11 @@ class ContactManagementService implements ContactManagementServiceInterface
                 'error' => $currencyValidation['error']
             ]);
             $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
-            return;
+            return null;
         }
         $currency = $currencyValidation['value'];
         $credit = SplitAmount::from($creditValidation['value']);
 
-        // Auto-add currency to allowed list if not already present
         $allowedCurrencies = $this->currentUser->getAllowedCurrencies();
         if (!in_array($currency, $allowedCurrencies)) {
             $allowedCurrencies[] = $currency;
@@ -267,22 +325,19 @@ class ContactManagementService implements ContactManagementServiceInterface
             }
         }
 
-        // Log successful validation
         $this->secureLogger->info("Contact addition validated", [
             'address_type' => $addressValidation['type'] ?? 'unknown',
             'name_length' => strlen($name)
         ]);
 
-        // Get contact if exists in database in some form
         $transportIndex = $this->transportUtility->determineTransportType($address);
         if ($transportIndex === null) {
             $this->secureLogger->warning("Could not determine transport type for address", [
                 'address_length' => strlen($address)
             ]);
             $output->error("Invalid address: could not determine transport type", ErrorCodes::INVALID_ADDRESS, 400);
-            return;
+            return null;
         }
-        $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
         // Optional requested credit limit (what we'd like the contact to set for us)
         // Position: $data[7] = requested credit limit, $data[8] = description
@@ -302,31 +357,101 @@ class ContactManagementService implements ContactManagementServiceInterface
             $description = null;
         }
 
-        // If contact is already accepted and a new currency is requested,
-        // add the currency locally and send P2P request so remote side can accept
-        $currencyAlreadyExists = false;
-        if ($contact && $this->contactCurrencyRepository !== null) {
-            $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
-            $currencyAlreadyExists = $this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency);
-        }
-        if ($contact && $contact['status'] === Constants::CONTACT_STATUS_ACCEPTED && !$currencyAlreadyExists) {
-            if ($this->addCurrencyToContact($contact['pubkey'], $currency, $fee, $credit)) {
-                // Send P2P request so the remote side is notified of the new currency
-                $syncService = $this->getContactSyncService();
-                $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description, $requestedCreditLimit);
-            } else {
-                $output->error("Failed to add currency {$currency} to contact {$name}. Currency may already exist or contact is not accepted.", ErrorCodes::CONTACT_EXISTS, 409);
-            }
+        return [
+            'address' => $address,
+            'name' => $name,
+            'fee' => $fee,
+            'credit' => $credit,
+            'currency' => $currency,
+            'transportIndex' => $transportIndex,
+            'requestedCreditLimit' => $requestedCreditLimit,
+            'description' => $description,
+        ];
+    }
+
+    /**
+     * Initiate an outbound contact request.
+     *
+     * Used when no local contact row exists yet for the target address.
+     * Sends the P2P contact request via ContactSyncService::handleNewContact().
+     *
+     * @param array $validated  Output of validateAddContactInput()
+     */
+    public function createOutgoing(array $validated, CliOutputManager $output): void
+    {
+        $this->getContactSyncService()->handleNewContact(
+            $validated['address'],
+            $validated['name'],
+            $validated['fee'],
+            $validated['credit'],
+            $validated['currency'],
+            $output,
+            $validated['description'],
+            $validated['requestedCreditLimit'],
+        );
+    }
+
+    /**
+     * Accept (or otherwise update) a contact request that already has a row
+     * in the local database — typically an incoming pending request.
+     *
+     * Delegates the P2P exchange to ContactSyncService::handleExistingContact()
+     * which decides whether to send an acceptance, retry an update, etc.
+     *
+     * @param array $validated  Output of validateAddContactInput()
+     * @param array $contact    The existing contact row (must not be null)
+     */
+    public function acceptIncoming(array $validated, array $contact, CliOutputManager $output): void
+    {
+        $this->getContactSyncService()->handleExistingContact(
+            $contact,
+            $validated['address'],
+            $validated['name'],
+            $validated['fee'],
+            $validated['credit'],
+            $validated['currency'],
+            $output,
+            $validated['description'],
+            $validated['requestedCreditLimit'],
+        );
+    }
+
+    /**
+     * Propose adding a new currency to an already-accepted contact.
+     *
+     * Persists the local contact_currency row and sends a P2P request so the
+     * remote side is notified and can accept the new currency.
+     *
+     * @param array $validated  Output of validateAddContactInput()
+     * @param array $contact    The existing contact row (status must be accepted)
+     */
+    public function addCurrencyToExisting(array $validated, array $contact, CliOutputManager $output): void
+    {
+        if (!$this->addCurrencyToContact(
+            $contact['pubkey'],
+            $validated['currency'],
+            $validated['fee'],
+            $validated['credit']
+        )) {
+            $output->error(
+                "Failed to add currency {$validated['currency']} to contact {$validated['name']}. Currency may already exist or contact is not accepted.",
+                ErrorCodes::CONTACT_EXISTS,
+                409
+            );
             return;
         }
 
-        // Delegate to sync service for P2P exchange handling
-        $syncService = $this->getContactSyncService();
-        if ($contact) {
-            $syncService->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output, $description, $requestedCreditLimit);
-        } else {
-            $syncService->handleNewContact($address, $name, $fee, $credit, $currency, $output, $description, $requestedCreditLimit);
-        }
+        // Send P2P request so the remote side is notified of the new currency.
+        $this->getContactSyncService()->handleNewContact(
+            $validated['address'],
+            $validated['name'],
+            $validated['fee'],
+            $validated['credit'],
+            $validated['currency'],
+            $output,
+            $validated['description'],
+            $validated['requestedCreditLimit'],
+        );
     }
 
     /**

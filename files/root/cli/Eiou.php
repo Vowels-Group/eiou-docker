@@ -96,7 +96,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
     // Define rate limits for different CLI commands
     $cliRateLimits = [
         'send' => ['max' => 30, 'window' => 60, 'block' => 300],      // 30 transactions per minute
-        'add' => ['max' => 20, 'window' => 60, 'block' => 300],       // 20 contact additions per minute
+        'contact' => ['max' => 20, 'window' => 60, 'block' => 300],   // 20 contact ops per minute
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
         'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
         'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 tx drop operations per minute
@@ -130,80 +130,12 @@ if ($request === "info") {
   $cliService = $app->services->getCliService();
   $cliService->displayUserInfo($cleanArgv, $output);
 }
-// Contacts
-elseif($request === "add"){
-  // Add Contact - validate input before processing
-  $debugService->output("Executing add contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->addContact($cleanArgv, $output);
-}
-elseif($request === "viewcontact"){
-  // View Contact
-  $debugService->output("Executing read contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->viewContact($cleanArgv, $output);
-}
-elseif($request === "update"){
-  // Update Contact
-  $debugService->output("Executing update contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->updateContact($cleanArgv, $output);
-}
-elseif($request === "block"){
-  // Block Contact
-  $debugService->output("Executing block contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  if (!$contactService->blockContact($cleanArgv[2] ?? null, $output)) {
-    exit(1);
-  }
-}
-elseif($request === "unblock"){
-  // Unblock Contact
-  $debugService->output("Executing unblock contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  if (!$contactService->unblockContact($cleanArgv[2] ?? null, $output)) {
-    exit(1);
-  }
-}
-elseif($request === "delete"){
-  // Delete Contact
-  $debugService->output("Executing delete contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  if (!$contactService->deleteContact($cleanArgv[2] ?? null, $output)) {
-    exit(1);
-  }
-}
-elseif($request === "search"){
-  // Search Contacts
-  $debugService->output("Executing search contacts request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->searchContacts($cleanArgv, $output);
-}
-elseif($request === "ping"){
-  // Ping a contact to check online status
-  $debugService->output("Executing ping contact request", 'SILENT');
-
-  $identifier = $cleanArgv[2] ?? null;
-  if (!$identifier) {
-    $output->error("Contact name or address required", ErrorCodes::MISSING_ARGUMENT);
-    exit(1);
-  }
-
-  $contactStatusService = $app->services->getContactStatusService();
-  $result = $contactStatusService->pingContact($identifier);
-
-  if ($result['success']) {
-    $output->success("Ping complete: {$result['contact_name']} is {$result['online_status']}", [
-      'contact_name' => $result['contact_name'],
-      'online_status' => $result['online_status'],
-      'chain_valid' => $result['chain_valid'],
-      'message' => $result['message']
-    ]);
-  } else {
-    $output->error($result['message'], $result['error'] === 'contact_not_found' ? ErrorCodes::CONTACT_NOT_FOUND : ErrorCodes::GENERAL_ERROR);
-    exit(1);
-  }
-}
+// Contacts: all contact operations live under the `eiou contact …` namespace
+// (see ContactCliHandler). The legacy top-level verbs (add / delete / block /
+// unblock / viewcontact / update / search / ping) were dropped in v0.1.14 in
+// favour of subcommands so apply / decline / per-currency operations have a
+// home and identifier parsing is consistent.
+//
 // Transactions
 elseif($request === "send"){
   // Send eIOU
@@ -222,12 +154,6 @@ elseif($request === "history"){
   $debugService->output("Executing transaction history request", 'SILENT');
   $cliService = $app->services->getCliService();
   $cliService->viewTransactionHistory($cleanArgv, $output);
-}
-elseif($request === "pending"){
-  // View pending contact requests
-  $debugService->output("Executing pending contacts request", 'SILENT');
-  $cliService = $app->services->getCliService();
-  $cliService->displayPendingContacts($cleanArgv, $output);
 }
 elseif($request === "overview"){
   // View wallet overview
@@ -381,6 +307,14 @@ elseif($request === "payback"){
   $debugService->output("Executing payback method management request", 'SILENT');
   $paybackCli = $app->services->getPaybackMethodCliHandler($output);
   $paybackCli->handleCommand($cleanArgv);
+}
+// Contacts (new namespace) — replaces the deprecated top-level
+// eiou add/accept/delete/block/unblock/viewcontact/ping/pending/search.
+// See docs/CLI_REFERENCE.md for the full subcommand tree.
+elseif($request === "contact"){
+  $debugService->output("Executing contact request", 'SILENT');
+  $contactCli = $app->services->getContactCliHandler($output);
+  $contactCli->handleCommand($cleanArgv);
 }
 // Backup Management
 elseif($request === "backup"){

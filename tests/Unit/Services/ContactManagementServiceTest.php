@@ -741,6 +741,238 @@ class ContactManagementServiceTest extends TestCase
     }
 
     // =========================================================================
+    // addContact() dispatcher + branch methods (post contact-CLI rework)
+    // =========================================================================
+    //
+    // After the rework, addContact() validates argv once and routes to one of
+    // three public branch methods. The tests above exercise the dispatcher's
+    // createOutgoing path through addContact() (legacy entry point). The
+    // tests below cover the dispatcher routing logic and the branch methods
+    // called directly with a pre-built validated struct, so they don't need
+    // bcmath / the full validator pipeline.
+
+    /**
+     * Build a pre-validated input struct, matching the shape that
+     * validateAddContactInput() returns.
+     */
+    private function validatedInput(array $overrides = []): array
+    {
+        return array_merge([
+            'address' => 'http://bob:8080',
+            'name' => 'Bob',
+            'fee' => 100,
+            'credit' => SplitAmount::from('500'),
+            'currency' => 'USD',
+            'transportIndex' => 'http',
+            'requestedCreditLimit' => null,
+            'description' => null,
+        ], $overrides);
+    }
+
+    /**
+     * createOutgoing forwards to ContactSyncService::handleNewContact and
+     * passes through the optional description/requested-credit fields.
+     */
+    public function testCreateOutgoingForwardsToSyncService(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                'http://bob:8080',
+                'Bob',
+                100,
+                $this->isInstanceOf(SplitAmount::class),
+                'USD',
+                $this->anything(),
+                'optional message',
+                $this->isInstanceOf(SplitAmount::class),
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->createOutgoing(
+            $this->validatedInput([
+                'description' => 'optional message',
+                'requestedCreditLimit' => SplitAmount::from('250'),
+            ]),
+            $output,
+        );
+    }
+
+    /**
+     * acceptIncoming forwards the existing contact row + validated fields to
+     * ContactSyncService::handleExistingContact verbatim.
+     */
+    public function testAcceptIncomingForwardsToHandleExistingContact(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+        $contact = ['pubkey' => 'pubkey-bob', 'status' => Constants::CONTACT_STATUS_PENDING];
+
+        $mockSync->expects($this->once())
+            ->method('handleExistingContact')
+            ->with(
+                $contact,
+                'http://bob:8080',
+                'Bob',
+                100,
+                $this->isInstanceOf(SplitAmount::class),
+                'USD',
+                $this->anything(),
+                null,
+                null,
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->acceptIncoming($this->validatedInput(), $contact, $output);
+    }
+
+    /**
+     * addCurrencyToExisting persists the new currency locally then notifies
+     * the remote side via handleNewContact.
+     */
+    public function testAddCurrencyToExistingPersistsAndNotifies(): void
+    {
+        if (!extension_loaded('bcmath')) {
+            $this->markTestSkipped('bcmath required for addCurrencyToContact internals');
+        }
+        $mockSync = $this->createServiceWithMockSync();
+        $contact = ['pubkey' => 'pubkey-bob', 'status' => Constants::CONTACT_STATUS_ACCEPTED];
+
+        // The actual addCurrencyToContact() implementation hits the
+        // contactCurrencyRepository — stub the success path.
+        $this->contactRepo->method('isAcceptedContactPubkey')->willReturn(true);
+        $this->contactCurrencyRepo->method('hasCurrency')->willReturn(false);
+        $this->contactCurrencyRepo->method('upsertCurrencyConfig')->willReturn(true);
+
+        $mockSync->expects($this->once())
+            ->method('handleNewContact')
+            ->with(
+                'http://bob:8080',
+                'Bob',
+                100,
+                $this->isInstanceOf(SplitAmount::class),
+                'EUR',
+                $this->anything(),
+                null,
+                null,
+            );
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addCurrencyToExisting(
+            $this->validatedInput(['currency' => 'EUR']),
+            $contact,
+            $output,
+        );
+    }
+
+    /**
+     * If the local persistence fails, addCurrencyToExisting writes a
+     * structured error and does NOT send the P2P request — so we don't
+     * notify the peer of a state we couldn't actually save.
+     */
+    public function testAddCurrencyToExistingErrorsWhenPersistenceFails(): void
+    {
+        $mockSync = $this->createServiceWithMockSync();
+        $contact = ['pubkey' => 'pubkey-bob', 'status' => Constants::CONTACT_STATUS_ACCEPTED];
+
+        // Persistence failure — addCurrencyToContact returns false when the
+        // contact isn't in accepted state, so simulate that path.
+        $this->contactRepo->method('isAcceptedContactPubkey')->willReturn(false);
+
+        $mockSync->expects($this->never())->method('handleNewContact');
+
+        $output = $this->createMock(CliOutputManager::class);
+        $output->expects($this->once())
+            ->method('error')
+            ->with(
+                $this->stringContains('Failed to add currency EUR to contact Bob'),
+                ErrorCodes::CONTACT_EXISTS,
+                409,
+            );
+
+        $this->service->addCurrencyToExisting(
+            $this->validatedInput(['currency' => 'EUR']),
+            $contact,
+            $output,
+        );
+    }
+
+    /**
+     * Dispatcher: an existing accepted contact + a brand-new currency lands
+     * on the addCurrencyToExisting branch (NOT on acceptIncoming or
+     * createOutgoing). Tested through the actual addContact entry point so
+     * we cover the routing logic — but we only assert the sync-side calls
+     * because the validator path needs bcmath.
+     */
+    public function testAddContactDispatchesToAddCurrencyForAcceptedContactWithNewCurrency(): void
+    {
+        if (!extension_loaded('bcmath')) {
+            $this->markTestSkipped('bcmath required for full addContact validation pipeline');
+        }
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD', 'EUR']);
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn([
+            'pubkey' => 'pubkey-bob',
+            'status' => Constants::CONTACT_STATUS_ACCEPTED,
+        ]);
+        $this->contactRepo->method('isAcceptedContactPubkey')->willReturn(true);
+        $this->contactCurrencyRepo->method('hasCurrency')
+            ->willReturnMap([
+                // Initial existence check (no direction): currency is not yet set up.
+                ['', 'EUR', null, false],
+                // addCurrencyToContact's internal hasCurrency check: also false.
+            ]);
+        $this->contactCurrencyRepo->method('upsertCurrencyConfig')->willReturn(true);
+
+        // The hallmark of the addCurrencyToExisting branch: handleNewContact
+        // is fired even though the contact already exists (because we need
+        // to notify the peer of the new currency). handleExistingContact
+        // must NOT be called.
+        $mockSync->expects($this->once())->method('handleNewContact');
+        $mockSync->expects($this->never())->method('handleExistingContact');
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact(
+            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'EUR'],
+            $output,
+        );
+    }
+
+    /**
+     * Dispatcher: an existing not-yet-accepted contact lands on
+     * acceptIncoming.
+     */
+    public function testAddContactDispatchesToAcceptIncomingForExistingPendingContact(): void
+    {
+        if (!extension_loaded('bcmath')) {
+            $this->markTestSkipped('bcmath required for full addContact validation pipeline');
+        }
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn([
+            'pubkey' => 'pubkey-bob',
+            'status' => Constants::CONTACT_STATUS_PENDING,
+        ]);
+        $this->contactCurrencyRepo->method('hasCurrency')->willReturn(false);
+
+        $mockSync->expects($this->once())->method('handleExistingContact');
+        $mockSync->expects($this->never())->method('handleNewContact');
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact(
+            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD'],
+            $output,
+        );
+    }
+
+    // =========================================================================
     // getAcceptedContactsPage() — pagination delegation
     // =========================================================================
 

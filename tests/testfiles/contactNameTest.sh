@@ -37,7 +37,7 @@ echo -e "\n[Multi-word Contact Name Update]"
 totaltests=$(( totaltests + 1 ))
 
 echo -e "\t-> Updating contact name to 'Test User' on ${sender}"
-updateOutput=$(docker exec ${sender} eiou update ${receiverAddress} name "Test User" --json 2>&1)
+updateOutput=$(docker exec ${sender} eiou contact update ${receiverAddress} name "Test User" --json 2>&1)
 
 if echo "$updateOutput" | grep -q '"success"'; then
     printf "\t   Multi-word name update ${GREEN}PASSED${NC}\n"
@@ -53,7 +53,7 @@ echo -e "\n[Multi-word Contact Name Search]"
 totaltests=$(( totaltests + 1 ))
 
 echo -e "\t-> Searching for 'Test User' on ${sender}"
-searchOutput=$(docker exec ${sender} eiou search "Test User" --json 2>&1)
+searchOutput=$(docker exec ${sender} eiou contact search "Test User" --json 2>&1)
 
 if echo "$searchOutput" | grep -q '"Test User"'; then
     printf "\t   Multi-word name search ${GREEN}PASSED${NC}\n"
@@ -69,7 +69,7 @@ echo -e "\n[Name Validation on Update]"
 totaltests=$(( totaltests + 1 ))
 
 echo -e "\t-> Attempting invalid name update on ${sender}"
-invalidOutput=$(docker exec ${sender} eiou update ${receiverAddress} name '!!invalid<>!!' --json 2>&1)
+invalidOutput=$(docker exec ${sender} eiou contact update ${receiverAddress} name '!!invalid<>!!' --json 2>&1)
 
 if echo "$invalidOutput" | grep -q '"error"' && echo "$invalidOutput" | grep -q 'INVALID_NAME'; then
     printf "\t   Invalid name rejection ${GREEN}PASSED${NC}\n"
@@ -133,8 +133,8 @@ if [[ -n "$dupTestSender" ]]; then
 
     # Set both contacts to the same name "Test User"
     echo -e "\t-> Setting duplicate name 'Test User' on ${dupTestSender} for two contacts"
-    docker exec ${dupTestSender} eiou update ${dupContact1Address} name "Test User" --json 2>&1 > /dev/null
-    docker exec ${dupTestSender} eiou update ${dupContact2Address} name "Test User" --json 2>&1 > /dev/null
+    docker exec ${dupTestSender} eiou contact update ${dupContact1Address} name "Test User" --json 2>&1 > /dev/null
+    docker exec ${dupTestSender} eiou contact update ${dupContact2Address} name "Test User" --json 2>&1 > /dev/null
 
     # Now try to send to "Test User" in JSON mode - should get multiple_matches error
     echo -e "\t-> Sending to duplicate name 'Test User' in JSON mode"
@@ -151,8 +151,8 @@ if [[ -n "$dupTestSender" ]]; then
 
     # Restore original names to avoid interfering with other tests
     echo -e "\t-> Restoring original contact names..."
-    docker exec ${dupTestSender} eiou update ${dupContact1Address} name "${dupContact1Name}" --json 2>&1 > /dev/null
-    docker exec ${dupTestSender} eiou update ${dupContact2Address} name "${dupContact2Name}" --json 2>&1 > /dev/null
+    docker exec ${dupTestSender} eiou contact update ${dupContact1Address} name "${dupContact1Name}" --json 2>&1 > /dev/null
+    docker exec ${dupTestSender} eiou contact update ${dupContact2Address} name "${dupContact2Name}" --json 2>&1 > /dev/null
 else
     echo -e "\t   Skipping duplicate name test - no container found with 2+ accepted contacts"
     # Don't count as a test if we can't run it
@@ -161,6 +161,6 @@ fi
 # Restore original name from Test 1
 echo -e "\n[Cleanup]"
 echo -e "\t-> Restoring contact name on ${sender}"
-docker exec ${sender} eiou update ${receiverAddress} name "${receiver}" --json 2>&1 > /dev/null
+docker exec ${sender} eiou contact update ${receiverAddress} name "${receiver}" --json 2>&1 > /dev/null
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'contact name'"

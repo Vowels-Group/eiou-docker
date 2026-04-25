@@ -974,6 +974,174 @@ Unblock a contact.
 
 ---
 
+### POST /api/v1/contacts/:hash/decisions
+
+Apply a batched mix of accept / decline / defer decisions on an incoming contact request — the API mirror of the GUI batched-apply modal and `eiou contact apply`. Implementation is shared via `ContactDecisionService::apply()` so all three surfaces have identical partition + declines-first + first-accept-via-add semantics.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{
+    "decisions": [
+        {"currency": "USD", "action": "accept", "fee": "0.01", "credit": "1000"},
+        {"currency": "EUR", "action": "decline"},
+        {"currency": "XRP", "action": "defer"}
+    ],
+    "is_new_contact": true,
+    "contact_address": "http://bob.local:8080",
+    "contact_name": "Bob"
+}
+```
+
+`defer` rows are intentional no-ops — drop them from the payload to skip a currency. `is_new_contact`, `contact_address`, `contact_name` are required only when the contact is still pending; for an already-accepted contact those three are ignored.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"accepted": ["USD"], "declined": ["EUR"], "errors": []}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/decline
+
+Decline every pending currency on an incoming contact request in one shot. Idempotent — returns a 200 with an empty `declined[]` if there were no pending currencies.
+
+**Permission:** `contacts:write`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Contact request declined", "declined": ["USD", "EUR"]}
+}
+```
+
+If a per-currency decline throws, the endpoint returns 500 with `partial_decline_failure` and both `declined` and `errors` in the error context so callers don't need to re-query.
+
+---
+
+### GET /api/v1/contacts/:hash/currencies
+
+List every currency configured for a contact (incoming + outgoing, pending + accepted + declined). Mirrors `eiou contact currency list`.
+
+**Permission:** `contacts:read`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "pubkey_hash": "abc123...",
+        "currencies": [
+            {"currency": "USD", "status": "accepted", "direction": "incoming", "fee_percent": 100, "credit_limit": "1000"},
+            {"currency": "EUR", "status": "pending",  "direction": "incoming"}
+        ]
+    }
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currencies
+
+Propose a new currency to an already-accepted contact. Persists the local `contact_currency` row and sends a P2P request so the remote side can accept. Mirrors `eiou contact currency add`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR", "fee": "0.02", "credit": "500"}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Currency added", "currency": "EUR"}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currency-accept
+
+Accept a single pending currency. Routes through `ContactDecisionService::apply()` so the new-contact-first-accept-via-add semantics match the GUI batched-apply flow. Mirrors `eiou contact currency accept`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR", "fee": "0.02", "credit": "500"}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"accepted": ["EUR"], "declined": [], "errors": []}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currency-decline
+
+Decline a single pending currency. Mirrors `eiou contact currency decline`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR"}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Currency EUR declined", "currency": "EUR"}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currency-remove
+
+Locally remove a currency configuration. Local-only — the peer is not notified. Use `currency-decline` to reject an incoming pending request, not this. Mirrors `eiou contact currency remove`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR"}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Currency EUR removed locally", "currency": "EUR"}
+}
+```
+
+---
+
 ## Payment Request Endpoints
 
 Payment requests let a user ask a contact to pay them a specific amount. The recipient can approve (which triggers `sendEiou` automatically) or decline. Both sides store the request locally; status updates are delivered via `payment_request` messages.

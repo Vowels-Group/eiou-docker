@@ -2569,9 +2569,9 @@ Contacts progress through states managed by the `contacts` table:
                +----+-----+             +-----------+
                     |                         ^
                     |                         |
-                    +--- eiou block ----------+
+                    +--- eiou contact block --+
                     |
-                    +--- eiou delete --> (row deleted from DB)
+                    +--- eiou contact delete --> (row deleted from DB)
 ```
 
 | State | Description |
@@ -2596,12 +2596,12 @@ currency's chain heads don't match.
 ```
   Node A                                        Node B
     |                                             |
-    +-- eiou add <address>                        |
+    +-- eiou contact add <address> <name>         |
     |     +-- Send contact request -------------->|
     |         (tx_type='contact', amount=0,       +-- Contact appears as 'pending'
     |          currency=<requested currency>)     |
     |                                             |
-    |                                             +-- eiou accept <name>
+    |                                             +-- eiou contact accept <hash> ...
     |                                             |     +-- Update contact to 'accepted'
     |                                             |     +-- Calculate available credit
     |<-- Send acceptance (+ availableCredit) -----+     +-- Complete contact transaction

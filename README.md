@@ -66,10 +66,10 @@ docker compose logs -f
 # Execute CLI commands inside the container
 docker exec eiou-node eiou info              # Node address, Tor address, public key
 docker exec eiou-node eiou info detail       # Detailed info including balances
-docker exec eiou-node eiou search             # List contacts
+docker exec eiou-node eiou contact search    # List contacts
 
 # Add a contact (address is the other node's HTTP/HTTPS/Tor URL)
-docker exec eiou-node eiou add <address> <name> <fee> <credit> <currency>
+docker exec eiou-node eiou contact add <address> <name> --fee <fee> --credit <credit> --currency <currency>
 
 # Send a transaction (by contact name or address)
 docker exec eiou-node eiou send <contact-name-or-address> <amount> <currency>

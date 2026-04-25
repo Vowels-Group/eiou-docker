@@ -296,6 +296,30 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get ContactDecisionService instance
+     *
+     * Shared implementation of the batched contact-currency decision flow used
+     * by the GUI batched-apply modal, the `eiou contact apply` CLI, and the
+     * POST /api/v1/contacts/:hash/decisions API endpoint.
+     *
+     * @return \Eiou\Services\ContactDecisionService
+     */
+    public function getContactDecisionService(): \Eiou\Services\ContactDecisionService {
+        if (!isset($this->services['ContactDecisionService'])) {
+            $this->services['ContactDecisionService'] = new \Eiou\Services\ContactDecisionService(
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(ContactCurrencyRepository::class),
+                $this->getRepositoryFactory()->get(ContactCreditRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getContactSyncService(),
+                $this->getContactService(),
+                $this->currentUser,
+            );
+        }
+        return $this->services['ContactDecisionService'];
+    }
+
+    /**
      * Get TransactionService instance
      *
      * Integrates MessageDeliveryService for reliable transaction message delivery
@@ -847,6 +871,26 @@ class ServiceContainer implements ContainerInterface {
         return new \Eiou\Cli\PaybackMethodCliHandler(
             $this->getPaybackMethodService(),
             $output
+        );
+    }
+
+    /**
+     * Get ContactCliHandler instance
+     *
+     * The full `eiou contact …` and `eiou contact currency …` subcommand
+     * tree. Handler is stateless beyond the injected $output; constructed
+     * per-invocation so tests can pass their own CliOutputManager.
+     */
+    public function getContactCliHandler(CliOutputManager $output): \Eiou\Cli\ContactCliHandler {
+        return new \Eiou\Cli\ContactCliHandler(
+            $this->getContactService(),
+            $this->getContactManagementService(),
+            $this->getContactDecisionService(),
+            $this->getContactStatusService(),
+            $this->getCliService(),
+            $this->getRepositoryFactory()->get(ContactRepository::class),
+            $this->getRepositoryFactory()->get(ContactCurrencyRepository::class),
+            $output,
         );
     }
 

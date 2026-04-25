@@ -7,6 +7,7 @@ use Eiou\Core\Application;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Gui\Includes\Session;
+use Eiou\Services\ContactDecisionService;
 use Eiou\Services\ContactService;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
@@ -39,18 +40,37 @@ class ContactController
     private $contactService;
 
     /**
+     * @var ContactDecisionService|null Lazy-resolved when null.
+     */
+    private ?ContactDecisionService $decisionService;
+
+    /**
      * Constructor
      *
      * @param Session $session
      * @param ContactService $contactService
+     * @param ContactDecisionService|null $decisionService Optional injection (resolved from
+     *        ServiceContainer when null). Tests pass a mock; runtime defers to the container.
      */
     public function __construct(
         Session $session,
-        ContactService $contactService
+        ContactService $contactService,
+        ?ContactDecisionService $decisionService = null
         )
     {
         $this->session = $session;
         $this->contactService = $contactService;
+        $this->decisionService = $decisionService;
+    }
+
+    private function getDecisionService(): ContactDecisionService
+    {
+        if ($this->decisionService === null) {
+            $this->decisionService = Application::getInstance()
+                ->services
+                ->getContactDecisionService();
+        }
+        return $this->decisionService;
     }
 
     /**
@@ -798,6 +818,72 @@ class ContactController
     }
 
     /**
+     * Decline every pending currency on an incoming contact request in one
+     * shot. Mirrors `eiou contact decline <pubkey-hash>` and the new
+     * `POST /api/v1/contacts/:hash/decline` API endpoint, so all three
+     * surfaces share the same effect.
+     */
+    public function handleDeclineContact(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
+        if (empty($pubkeyHash)) {
+            MessageHelper::redirectMessage('Contact is required.', 'error');
+            return;
+        }
+
+        try {
+            $contactCurrencyRepo = Application::getInstance()
+                ->services
+                ->getRepositoryFactory()
+                ->get(ContactCurrencyRepository::class);
+
+            $pending = $contactCurrencyRepo->getPendingCurrencies($pubkeyHash, 'incoming');
+            if (empty($pending)) {
+                MessageHelper::redirectMessage('No pending currencies to decline.', 'info');
+                return;
+            }
+
+            $declined = [];
+            $errors = [];
+            foreach ($pending as $row) {
+                $ccy = strtoupper((string) ($row['currency'] ?? ''));
+                if ($ccy === '') {
+                    continue;
+                }
+                try {
+                    $contactCurrencyRepo->declineIncomingCurrency($pubkeyHash, $ccy);
+                    $declined[] = $ccy;
+                } catch (\Throwable $e) {
+                    $errors[] = "{$ccy}: " . $e->getMessage();
+                }
+            }
+
+            if (!empty($declined) && empty($errors)) {
+                MessageHelper::redirectMessage(
+                    'Contact request declined (' . implode(', ', $declined) . ').',
+                    'success'
+                );
+            } elseif (!empty($declined)) {
+                MessageHelper::redirectMessage(
+                    'Partial decline — ok: ' . implode(', ', $declined)
+                    . '; errors: ' . implode('; ', $errors),
+                    'warning'
+                );
+            } else {
+                MessageHelper::redirectMessage(
+                    'Failed to decline contact request: ' . implode('; ', $errors),
+                    'error'
+                );
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            MessageHelper::redirectMessage('An unexpected error occurred.', 'error');
+        }
+    }
+
+    /**
      * Handle accept all currencies for a contact in a single POST
      */
     public function handleAcceptAllCurrencies(): void
@@ -973,6 +1059,8 @@ class ContactController
         $decisionsJson = $_POST['decisions'] ?? '[]';
         $decisions = json_decode($decisionsJson, true);
         $isNewContact = !empty($_POST['is_new_contact']);
+        $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
+        $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
 
         if (empty($pubkeyHash) || !is_array($decisions) || empty($decisions)) {
             MessageHelper::redirectMessage('No decisions to apply.', 'error');
@@ -980,144 +1068,17 @@ class ContactController
         }
 
         try {
-            $app = Application::getInstance();
-            $serviceContainer = $app->services;
-            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
-            $contactPubkey = $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
-            $contactSyncService = $serviceContainer->getContactSyncService();
+            $result = $this->getDecisionService()->apply(
+                $pubkeyHash,
+                $decisions,
+                $isNewContact,
+                $contactAddress !== '' ? $contactAddress : null,
+                $contactName !== '' ? $contactName : null,
+            );
 
-            $accepted = [];
-            $declined = [];
-            $errors = [];
-
-            // Partition decisions, preserving order.
-            $acceptList = [];
-            $declineList = [];
-            foreach ($decisions as $d) {
-                $action = $d['action'] ?? '';
-                if ($action === 'accept') {
-                    $acceptList[] = $d;
-                } elseif ($action === 'decline') {
-                    $declineList[] = $d;
-                }
-                // Anything else (e.g. "defer") is intentionally a no-op.
-            }
-
-            // Process declines first — they don't depend on contact state, and
-            // running them up front means a "decline EUR + accept USD" flow
-            // doesn't risk EUR getting auto-added by the addContact CLI.
-            foreach ($declineList as $entry) {
-                $currency = strtoupper(Security::sanitizeInput($entry['currency'] ?? ''));
-                if (empty($currency)) { continue; }
-                try {
-                    $contactCurrencyRepo->declineIncomingCurrency($pubkeyHash, $currency);
-                    $declined[] = $currency;
-                } catch (\Throwable $e) {
-                    $errors[] = "{$currency} (decline): " . $e->getMessage();
-                }
-            }
-
-            // For new contacts: the first accept establishes the contact via
-            // the addContact CLI path; subsequent accepts use the standard
-            // currency-acceptance path.
-            $firstCurrencyHandled = false;
-            if ($isNewContact && !empty($contactPubkey) && !empty($acceptList)) {
-                $contact = $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactByPubkey($contactPubkey);
-                if ($contact && $contact['status'] !== Constants::CONTACT_STATUS_ACCEPTED) {
-                    $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
-                    $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
-
-                    if (!empty($contactAddress) && !empty($contactName)) {
-                        $firstEntry = $acceptList[0];
-                        $firstCurrency = strtoupper(Security::sanitizeInput($firstEntry['currency'] ?? ''));
-                        $firstFee = Security::sanitizeInput($firstEntry['fee'] ?? '');
-                        $firstCredit = Security::sanitizeInput($firstEntry['credit'] ?? '');
-
-                        if (!empty($firstCurrency) && $firstFee !== '' && $firstCredit !== '') {
-                            $this->autoAddAllowedCurrency($firstCurrency);
-
-                            $argv = ['eiou', 'add', $contactAddress, $contactName, $firstFee, $firstCredit, $firstCurrency, '--json'];
-                            CliOutputManager::resetInstance();
-                            $outputManager = new CliOutputManager($argv);
-
-                            ob_start();
-                            try {
-                                $this->contactService->addContact($argv, $outputManager);
-                                ob_end_clean();
-                                $accepted[] = $firstCurrency;
-                                $firstCurrencyHandled = true;
-                            } catch (\Throwable $e) {
-                                if (ob_get_level() > 0) { ob_end_clean(); }
-                                $errors[] = "{$firstCurrency}: " . $e->getMessage();
-                            }
-                        }
-                    }
-
-                    if ($firstCurrencyHandled) {
-                        array_shift($acceptList);
-                    }
-                }
-            }
-
-            foreach ($acceptList as $entry) {
-                $currency = strtoupper(Security::sanitizeInput($entry['currency'] ?? ''));
-                $fee = Security::sanitizeInput($entry['fee'] ?? '');
-                $credit = Security::sanitizeInput($entry['credit'] ?? '');
-
-                if (empty($currency) || $fee === '' || $credit === '') {
-                    $errors[] = "{$currency}: missing fields";
-                    continue;
-                }
-
-                $feeValidation = InputValidator::validateFeePercent($fee);
-                if (!$feeValidation['valid']) {
-                    $errors[] = "{$currency}: invalid fee";
-                    continue;
-                }
-
-                $creditValidation = InputValidator::validateAmount($credit, $currency);
-                if (!$creditValidation['valid']) {
-                    $errors[] = "{$currency}: invalid credit";
-                    continue;
-                }
-
-                $this->autoAddAllowedCurrency($currency);
-
-                $creditMinor = \Eiou\Core\SplitAmount::from($creditValidation['value']);
-                $feeMinor = CurrencyUtilityService::exactMajorToMinor($feeValidation['value'], Constants::FEE_CONVERSION_FACTOR);
-
-                $contactCurrencyRepo->updateCurrencyConfig($pubkeyHash, $currency, [
-                    'fee_percent' => $feeMinor,
-                    'credit_limit' => $creditMinor,
-                    'status' => 'accepted'
-                ], 'incoming');
-
-                if ($contactCurrencyRepo->hasCurrency($pubkeyHash, $currency, 'outgoing')) {
-                    $contactCurrencyRepo->updateCurrencyStatus($pubkeyHash, $currency, 'accepted', 'outgoing');
-                }
-
-                $currentPubkey = $contactPubkey ?: $serviceContainer->getRepositoryFactory()->get(ContactRepository::class)->getContactPubkeyFromHash($pubkeyHash);
-                if ($currentPubkey) {
-                    $balanceRepo = $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class);
-                    $balanceRepo->insertInitialContactBalances($currentPubkey, $currency);
-                    try {
-                        $sentBalance = $balanceRepo->getContactSentBalance($currentPubkey, $currency);
-                        $receivedBalance = $balanceRepo->getContactReceivedBalance($currentPubkey, $currency);
-                        $balance = $sentBalance->subtract($receivedBalance);
-                        $creditLimit = $contactCurrencyRepo->getCreditLimit($pubkeyHash, $currency) ?? \Eiou\Core\SplitAmount::zero();
-                        $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->upsertAvailableCredit(
-                            $pubkeyHash,
-                            $balance->add($creditLimit),
-                            $currency
-                        );
-                    } catch (\Exception $e) {
-                        // Non-fatal — credit will be corrected on next ping/pong
-                    }
-                }
-
-                $contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);
-                $accepted[] = $currency;
-            }
+            $accepted = $result['accepted'];
+            $declined = $result['declined'];
+            $errors = $result['errors'];
 
             $parts = [];
             if (!empty($accepted)) { $parts[] = 'Accepted: ' . implode(', ', $accepted); }
@@ -1253,6 +1214,9 @@ class ContactController
 
             case 'declineCurrency':
                 $this->handleDeclineCurrency();
+                break;
+            case 'declineContact':
+                $this->handleDeclineContact();
                 break;
 
             case 'pingContact':

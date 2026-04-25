@@ -562,7 +562,9 @@ class CliService implements CliServiceInterface {
                     if ($contact['created_at']) {
                         echo "  Date: " . $contact['created_at'] . "\n";
                     }
-                    echo "  To accept: eiou add " . $contact['address'] . " [name] [fee] [credit] [currency]\n";
+                    $hashHint = $contact['pubkey_hash'] ?? $contact['address'];
+                    echo "  To accept:    eiou contact accept {$hashHint} --currency CCY --fee F --credit C\n";
+                    echo "  To decline:   eiou contact decline {$hashHint}\n";
                     echo "\n";
                 }
             } else {

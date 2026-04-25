@@ -454,6 +454,34 @@ class CliServiceTest extends TestCase
     }
 
     /**
+     * Pending hint text was rewritten as part of the contact-CLI rework:
+     * the old "eiou add <addr> [name] [fee] [credit] [currency]" guidance
+     * is replaced by the new namespace ("eiou contact accept …" plus a
+     * "decline" hint), preferring pubkey-hash when the row carries one.
+     */
+    public function testDisplayPendingContactsHintsAtNewContactNamespace(): void
+    {
+        $this->outputManager->method('isJsonMode')->willReturn(false);
+        $this->contactRepository->method('getPendingContactRequests')
+            ->willReturn([
+                [
+                    'http' => 'http://incoming.test',
+                    'pubkey_hash' => 'abc123',
+                    'created_at' => '2025-01-01 10:00:00',
+                ],
+            ]);
+        $this->contactRepository->method('getUserPendingContactRequests')->willReturn([]);
+
+        ob_start();
+        $this->service->displayPendingContacts(['eiou', 'pending'], $this->outputManager);
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('eiou contact accept abc123 --currency CCY --fee F --credit C', $output);
+        $this->assertStringContainsString('eiou contact decline abc123', $output);
+        $this->assertStringNotContainsString('eiou add http://incoming.test', $output);
+    }
+
+    /**
      * Test displayPendingContacts in JSON mode
      */
     public function testDisplayPendingContactsInJsonMode(): void

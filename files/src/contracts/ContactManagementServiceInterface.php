@@ -287,6 +287,16 @@ interface ContactManagementServiceInterface
     public function getBlockedContacts(): array;
 
     /**
+     * Get all contacts keyed by status (accepted / pending / blocked / etc).
+     *
+     * Backs the `eiou contact list` CLI surface and any caller that wants a
+     * single shot of every contact bucket without a per-status round-trip.
+     *
+     * @return array<string, array> Map of status key → list of contacts.
+     */
+    public function getContactsGroupedByStatus(): array;
+
+    /**
      * Lookup contact addresses by name.
      *
      * Used for address resolution when sending to a contact by name.
