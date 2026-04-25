@@ -819,6 +819,50 @@
                 </div>
                 <div class="modal-body modal-body-padded">
 
+            <!-- Inline help — collapsed by default; first-timers can
+                 expand it without eating vertical space for returning
+                 users. Lives at the top so the explanation precedes
+                 the action area. -->
+            <details class="section-intro text-muted mb-lg">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>How to handle this request</span>
+                </summary>
+                <div class="section-intro-body">
+                    <strong>Their addresses</strong> — the three pills in the
+                    "About this contact" section below (<em>Tor</em>,
+                    <em>HTTPS</em>, <em>HTTP</em>) are how your wallet reaches
+                    theirs. Click a pill to view the full address. Whichever
+                    of the three you've configured your wallet to prefer
+                    (Settings → Network → <em>Default Transport Mode</em>) is
+                    the one that'll be used for outgoing traffic.
+                    <br><br>
+                    <strong>Contact name</strong> — a local-only nickname for your
+                    wallet. The other side never sees it. Rename them anytime from
+                    the contact detail modal.
+                    <br><br>
+                    <strong>Each currency is a separate line of credit.</strong>
+                    For each one, choose <em>Accept</em>, <em>Decline</em>, or
+                    <em>Defer</em>. <em>Accept</em> opens the line at the fee +
+                    credit you set (your wallet defaults are pre-filled). The
+                    <em>Fee %</em> is what you charge to relay their transactions
+                    in that currency; the <em>Credit Limit</em> is the maximum
+                    you're willing to let them owe you. <em>Decline</em>
+                    silently removes that currency from the pending list — they
+                    can re-request later. <em>Defer</em> leaves it pending so
+                    you can decide later. A currency marked
+                    <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> new</span>
+                    is not in your <em>Allowed Currencies</em> yet — accepting
+                    will add it.
+                    <br><br>
+                    <strong>Apply</strong> commits all your decisions in one go.
+                    <strong>Delete Request</strong> silently drops the entire
+                    request (the other side isn't told).
+                    <strong>Block Contact</strong> prevents future requests
+                    from them.
+                </div>
+            </details>
+
             <!-- Outgoing currency requests (we sent, waiting for their acceptance) -->
             <?php $outgoingCurrencies = $contact['outgoing_currencies'] ?? []; ?>
             <?php if (!empty($outgoingCurrencies)): ?>
@@ -866,128 +910,122 @@
                     </div>
                     <?php endif; ?>
 
-                    <!-- Per-currency accept forms — each in its own
-                         <details> accordion so the modal stays compact
-                         when there are many currencies. Summary row shows
-                         the currency code + optional unknown-currency
-                         flag; expanding reveals fee / credit / message /
-                         Accept. All start collapsed — user picks what to
-                         review. Accept-All is the single-click path for
-                         defaults; individual review expands on demand. -->
-                    <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
-                    <?php
-                        $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
-                        $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
-                        $curUnknownModal = !in_array($pc['currency'], $user->getAllowedCurrencies());
-                    ?>
-                    <details class="pending-currency-accordion"<?php echo $pcIdx === 0 ? ' open' : ''; ?>>
-                        <summary class="pending-currency-summary">
-                            <span class="pending-currency-code"><?php echo htmlspecialchars($pc['currency']); ?></span>
-                            <?php if ($curUnknownModal): ?>
-                                <span class="badge badge-warning" title="Not in your allowed currencies — accepting will add it">
-                                    <i class="fas fa-exclamation-triangle"></i> new
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($pc['description'])): ?>
-                                <span class="pending-currency-summary-msg text-muted">
-                                    — <?php echo htmlspecialchars(mb_strlen($pc['description']) > 50 ? mb_substr($pc['description'], 0, 47) . '…' : $pc['description']); ?>
-                                </span>
-                            <?php endif; ?>
-                        </summary>
-                        <div class="pending-currency-body">
-                            <?php if ($curUnknownModal): ?>
-                            <div class="alert alert-warning mb-sm">
-                                <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($pc['currency']); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
-                            </div>
-                            <?php endif; ?>
-                            <?php
-                                // Decline button is rendered inside the Accept form's
-                                // button row using the HTML5 `form` attribute, which
-                                // wires it to the sibling decline form below. This lets
-                                // the two actions share a single visual row without
-                                // nesting forms.
-                                $declineFormId = 'decline_form_' . $index . '_' . $pcIdx;
-                            ?>
-                            <?php if (!empty($contact['pubkey_hash'])): ?>
-                            <form method="POST" class="currency-decline-form" id="<?php echo $declineFormId; ?>">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                                <input type="hidden" name="action" value="declineCurrency">
-                                <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash']); ?>">
-                                <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                            </form>
-                            <?php endif; ?>
-                            <form method="POST" class="mb-sm currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                                <?php if ($isExisting): ?>
-                                    <input type="hidden" name="action" value="acceptCurrency">
-                                    <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
-                                    <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                                <?php else: ?>
-                                    <input type="hidden" name="action" value="acceptContact">
-                                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                                    <?php if ($hasName): ?>
-                                        <input type="hidden" name="contact_name" value="<?php echo htmlspecialchars($contact['name']); ?>">
-                                    <?php endif; ?>
-                                    <?php if (!$hasName): ?>
-                                        <input type="hidden" name="contact_name" class="shared-name-target" value="">
-                                    <?php endif; ?>
-                                    <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                                <?php endif; ?>
+                    <!-- Batched-decision form. Each currency row is a
+                         segmented control (Accept / Decline / Defer) +
+                         hidden fee/credit fields. A single Apply button
+                         at the bottom serializes every row's decision
+                         into the `decisions` JSON payload and submits
+                         to applyContactDecisions. Defer rows are
+                         intentionally omitted from the payload — they
+                         stay pending. -->
+                    <form method="POST" class="apply-decisions-form"
+                          data-contact-index="<?php echo $index; ?>"
+                          data-default-fee="<?php echo htmlspecialchars($user->getDefaultFee()); ?>"
+                          data-default-credit="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>"
+                          data-shared-name-id="contact_name_shared_<?php echo $index; ?>"
+                          data-is-new-contact="<?php echo $isExisting ? '0' : '1'; ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                        <input type="hidden" name="action" value="applyContactDecisions">
+                        <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
+                        <?php if (!$isExisting): ?>
+                            <input type="hidden" name="is_new_contact" value="1">
+                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
+                            <input type="hidden" name="contact_name" class="apply-decisions-name-target" value="<?php echo htmlspecialchars($contact['name'] ?? ''); ?>">
+                        <?php endif; ?>
+                        <input type="hidden" name="decisions" class="apply-decisions-data" value="">
 
-                                <div class="form-row currency-form-row">
-                                    <div class="form-group">
-                                        <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%):</label>
-                                        <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo $hasRequestedCredit ? 'Requested Credit Limit:' : 'Credit Limit:'; ?></label>
-                                        <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($creditValue); ?>" min="0" required class="<?php echo $hasRequestedCredit ? '' : 'default-value'; ?>">
-                                    </div>
-                                </div>
-                                <div class="currency-accept-row">
-                                    <?php if (!empty($contact['pubkey_hash'])): ?>
-                                    <button type="submit" form="<?php echo $declineFormId; ?>" class="btn btn-secondary currency-decline-btn"
-                                            data-confirm="Decline <?php echo htmlspecialchars($pc['currency']); ?> request from this contact? The request will be removed from your pending list. They can re-request later.">
-                                        <i class="fas fa-times"></i> Decline
-                                    </button>
-                                    <?php endif; ?>
-                                    <button type="submit" class="btn btn-success currency-accept-btn">
-                                        <i class="fas fa-check"></i> Accept
-                                    </button>
-                                </div>
+                        <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
+                        <?php
+                            $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
+                            $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
+                            $curUnknownModal = !in_array($pc['currency'], $user->getAllowedCurrencies());
+                            // Smart default: Accept for known currencies,
+                            // Defer for unknown — protects against silently
+                            // onboarding currencies the user has never used.
+                            $defaultDecision = $curUnknownModal ? 'defer' : 'accept';
+                        ?>
+                        <details class="pending-currency-accordion"
+                                 data-currency="<?php echo htmlspecialchars($pc['currency']); ?>"
+                                 data-decision="<?php echo $defaultDecision; ?>"
+                                 open>
+                            <summary class="pending-currency-summary">
+                                <span class="pending-currency-code"><?php echo htmlspecialchars($pc['currency']); ?></span>
+                                <?php if ($curUnknownModal): ?>
+                                    <span class="badge badge-warning" title="Not in your allowed currencies — accepting will add it">
+                                        <i class="fas fa-exclamation-triangle"></i> new
+                                    </span>
+                                <?php endif; ?>
+                                <span class="pending-currency-state-badge" aria-live="polite"></span>
+                            </summary>
+                            <div class="pending-currency-body">
                                 <?php if (!empty($pc['description'])): ?>
                                 <div class="pending-contact-currency-message">
                                     <label><i class="fas fa-comment"></i> Message:</label>
                                     <div class="pending-message-text"><?php echo htmlspecialchars($pc['description']); ?></div>
                                 </div>
                                 <?php endif; ?>
-                            </form>
-                        </div>
-                    </details>
-                    <?php endforeach; ?>
 
-                    <!-- Accept All button (when multiple currencies) -->
-                    <?php if (count($pendingCurrencies) > 1): ?>
-                    <hr class="currency-separator-double">
-                    <div class="mb-lg">
-                        <form method="POST" class="accept-all-form" data-contact-index="<?php echo $index; ?>"
-                              data-default-fee="<?php echo htmlspecialchars($user->getDefaultFee()); ?>"
-                              data-default-credit="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                            <input type="hidden" name="action" value="acceptAllCurrencies">
-                            <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
-                            <?php if (!$isExisting): ?>
-                                <input type="hidden" name="is_new_contact" value="1">
-                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                                <input type="hidden" name="contact_name" class="accept-all-name-target" value="<?php echo htmlspecialchars($contact['name'] ?? ''); ?>">
-                            <?php endif; ?>
-                            <input type="hidden" name="currencies" class="accept-all-currencies-data" value="">
-                            <button type="submit" class="btn btn-success w-100 accept-all-btn" data-contact-index="<?php echo $index; ?>">
-                                <i class="fas fa-check-double"></i> Accept All <?php echo count($pendingCurrencies); ?> Currencies
+                                <!-- Segmented decision control. role="radiogroup"
+                                     for a11y; each button updates the parent
+                                     accordion's data-decision attribute via JS. -->
+                                <div class="currency-decision-control" role="radiogroup" aria-label="Decision for <?php echo htmlspecialchars($pc['currency']); ?>">
+                                    <button type="button" class="currency-decision-btn currency-decision-accept" data-decision-value="accept" role="radio">
+                                        <i class="fas fa-check"></i> Accept
+                                    </button>
+                                    <button type="button" class="currency-decision-btn currency-decision-decline" data-decision-value="decline" role="radio">
+                                        <i class="fas fa-times"></i> Decline
+                                    </button>
+                                    <button type="button" class="currency-decision-btn currency-decision-defer" data-decision-value="defer" role="radio">
+                                        <i class="fas fa-clock"></i> Defer
+                                    </button>
+                                </div>
+
+                                <!-- Fee/Credit only matters when accepting. JS
+                                     hides this when decision != accept. -->
+                                <div class="currency-accept-fields">
+                                    <div class="form-row currency-form-row">
+                                        <div class="form-group">
+                                            <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">
+                                                Fee (%):
+                                                <i class="fas fa-info-circle info-tooltip-icon"
+                                                   title="The percentage you charge to relay this contact's transactions in <?php echo htmlspecialchars($pc['currency']); ?>. Applied to outgoing P2P routes. Your wallet default is <?php echo htmlspecialchars($user->getDefaultFee()); ?>%."
+                                                   data-action="showInfoModal"
+                                                   role="button"
+                                                   aria-label="About fee"></i>
+                                            </label>
+                                            <input type="number"
+                                                   id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>"
+                                                   class="currency-fee-input default-value"
+                                                   value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>"
+                                                   step="0.01" min="0">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">
+                                                <?php echo $hasRequestedCredit ? 'Requested Credit Limit:' : 'Credit Limit:'; ?>
+                                                <i class="fas fa-info-circle info-tooltip-icon"
+                                                   title="The maximum amount you're willing to let this contact owe you in <?php echo htmlspecialchars($pc['currency']); ?>. Acts as a ceiling on the credit line; once reached, they can't run up more debt with you until they pay some back. Your wallet default is <?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>.<?php echo $hasRequestedCredit ? ' This is the value they requested — you can change it before accepting.' : ''; ?>"
+                                                   data-action="showInfoModal"
+                                                   role="button"
+                                                   aria-label="About credit limit"></i>
+                                            </label>
+                                            <input type="number"
+                                                   id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>"
+                                                   class="currency-credit-input <?php echo $hasRequestedCredit ? '' : 'default-value'; ?>"
+                                                   value="<?php echo htmlspecialchars($creditValue); ?>"
+                                                   min="0">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                        <?php endforeach; ?>
+
+                        <div class="apply-decisions-row">
+                            <button type="submit" class="btn btn-success btn-lg w-100 apply-decisions-btn">
+                                <i class="fas fa-check"></i> <span class="apply-decisions-label">Apply</span>
                             </button>
-                        </form>
-                    </div>
-                    <?php endif; ?>
+                        </div>
+                    </form>
                 <?php else: ?>
                     <!-- Fallback: single form for legacy contacts with no pending_currencies data -->
                     <?php
@@ -1132,49 +1170,9 @@
 
                 <!-- Public key collapsed — users rarely verify it at
                      accept-time; keeping it inline blew out the modal. -->
-                <details class="pending-pubkey-disclosure mb-sm">
+                <details class="pending-pubkey-disclosure">
                     <summary><i class="fas fa-key"></i> Public key</summary>
                     <div class="pubkey-display monospace"><?php echo htmlspecialchars(trim($contact['pubkey'])); ?></div>
-                </details>
-
-                <!-- Inline help — collapsed by default; first-timers can
-                     expand it without eating vertical space for returning
-                     users. -->
-                <details class="section-intro text-muted">
-                    <summary>
-                        <i class="fas fa-info-circle"></i>
-                        <span>How to handle this request</span>
-                    </summary>
-                    <div class="section-intro-body">
-                        <strong>Their addresses</strong> — the three pills above
-                        (<em>Tor</em>, <em>HTTPS</em>, <em>HTTP</em>) are how your
-                        wallet reaches theirs. Click a pill to view the full address.
-                        Whichever of the three you've configured your wallet to prefer
-                        (Settings → Network → <em>Default Transport Mode</em>) is the
-                        one that'll be used for outgoing traffic.
-                        <br><br>
-                        <strong>Contact name</strong> — a local-only nickname for your
-                        wallet. The other side never sees it. Rename them anytime from
-                        the contact detail modal.
-                        <br><br>
-                        <strong>Each currency is a separate line of credit.</strong>
-                        Click the row to set the <em>Fee %</em> (what you charge to
-                        relay their transactions in that currency) and <em>Credit
-                        Limit</em> (the maximum you're willing to let them owe you in
-                        that currency). If you don't touch them, your wallet defaults
-                        apply (Settings → Payments → <em>Default Fee</em> and
-                        <em>Default Credit Limit</em>). A currency marked
-                        <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> new</span>
-                        is not in your <em>Allowed Currencies</em> yet — accepting
-                        will add it.
-                        <br><br>
-                        <strong>Accept All</strong> takes every currency at once with
-                        whatever fee + credit you've set (or the defaults). If any are
-                        still at defaults you'll get a confirmation first.
-                        <strong>Delete Request</strong> silently drops the request —
-                        the other side isn't told. <strong>Block Contact</strong>
-                        prevents future requests from them.
-                    </div>
                 </details>
             </section>
 

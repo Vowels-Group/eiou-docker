@@ -2250,53 +2250,96 @@ function initializeFormLoaders() {
 }
 
 /**
- * Initializes shared name fields and Accept All buttons for pending contact currency forms.
- *
- * Shared name: A single Name input above all currency forms for a contact.
- * On form submit, the name value is copied to a hidden field inside the form.
- *
- * Accept All: Sequentially submits all currency forms for a contact via fetch,
- * then reloads the page to show results.
+ * Initialize the per-currency segmented decision controls + the bottom
+ * Apply button for pending contact-request modals. The user picks
+ * Accept / Decline / Defer per currency (with a smart default), tweaks
+ * fee / credit on Accept rows, and submits everything via a single
+ * applyContactDecisions POST. Defer rows are dropped from the payload.
  */
 function initializeCurrencyAcceptHandlers() {
-    // Before form submit, copy shared name to hidden field
-    var currencyForms = document.querySelectorAll('.currency-accept-form');
-    for (var i = 0; i < currencyForms.length; i++) {
-        (function(form) {
-            form.addEventListener('submit', function(e) {
-                var sharedNameId = form.getAttribute('data-shared-name-id');
-                if (sharedNameId) {
-                    var nameInput = document.getElementById(sharedNameId);
-                    var target = form.querySelector('.shared-name-target');
-                    if (nameInput && target) {
-                        var nameVal = nameInput.value.trim();
-                        if (!nameVal) {
-                            e.preventDefault();
-                            nameInput.focus();
-                            nameInput.style.borderColor = '#dc3545';
-                            if (typeof showToast === 'function') {
-                                showToast('Required', 'Please enter a name for this contact', 'warning');
-                            }
-                            return false;
-                        }
-                        target.value = nameVal;
-                    }
+    var forms = document.querySelectorAll('.apply-decisions-form');
+    for (var i = 0; i < forms.length; i++) {
+        (function (form) {
+            var accordions = form.querySelectorAll('.pending-currency-accordion');
+            var applyBtn = form.querySelector('.apply-decisions-btn');
+            var applyLabel = form.querySelector('.apply-decisions-label');
+
+            function setDecision(accordion, value) {
+                accordion.setAttribute('data-decision', value);
+                var btns = accordion.querySelectorAll('.currency-decision-btn');
+                for (var b = 0; b < btns.length; b++) {
+                    btns[b].classList.toggle('is-active', btns[b].getAttribute('data-decision-value') === value);
+                    btns[b].setAttribute('aria-checked', btns[b].getAttribute('data-decision-value') === value ? 'true' : 'false');
                 }
-            });
-        })(currencyForms[i]);
-    }
+                updateApplyLabel();
+            }
 
-    // Accept All form handler — collects fee/credit from individual currency forms
-    var acceptAllForms = document.querySelectorAll('.accept-all-form');
-    for (var j = 0; j < acceptAllForms.length; j++) {
-        (function(form) {
-            form.addEventListener('submit', function(e) {
-                var card = form.closest('.pending-contact-accept-form');
-                if (!card) { e.preventDefault(); return; }
+            function tally() {
+                var counts = { accept: 0, decline: 0, defer: 0 };
+                for (var k = 0; k < accordions.length; k++) {
+                    var d = accordions[k].getAttribute('data-decision') || 'defer';
+                    if (counts[d] === undefined) { counts[d] = 0; }
+                    counts[d]++;
+                }
+                return counts;
+            }
 
-                // Validate shared name first
-                var nameInput = card.querySelector('.shared-name-input');
-                if (nameInput && !nameInput.value.trim()) {
+            function updateApplyLabel() {
+                var c = tally();
+                var actionable = c.accept + c.decline;
+                if (!applyBtn || !applyLabel) return;
+                if (actionable === 0) {
+                    applyLabel.textContent = 'Apply (nothing to do)';
+                    applyBtn.disabled = true;
+                    return;
+                }
+                applyBtn.disabled = false;
+                if (c.accept > 0 && c.decline === 0 && c.defer === 0) {
+                    applyLabel.textContent = c.accept === 1 ? 'Accept request' : 'Accept all ' + c.accept + ' currencies';
+                } else if (c.decline > 0 && c.accept === 0) {
+                    applyLabel.textContent = c.decline === 1 ? 'Decline 1 currency' : 'Decline ' + c.decline + ' currencies';
+                } else {
+                    var parts = [];
+                    if (c.accept > 0) parts.push(c.accept + ' accept');
+                    if (c.decline > 0) parts.push(c.decline + ' decline');
+                    if (c.defer > 0) parts.push(c.defer + ' defer');
+                    applyLabel.textContent = 'Apply: ' + parts.join(', ');
+                }
+            }
+
+            // Wire each accordion: click on a decision button updates state;
+            // initialize active styling from the data-decision PHP set.
+            for (var k = 0; k < accordions.length; k++) {
+                (function (accordion) {
+                    var initial = accordion.getAttribute('data-decision') || 'accept';
+                    setDecision(accordion, initial);
+
+                    var btns = accordion.querySelectorAll('.currency-decision-btn');
+                    for (var b = 0; b < btns.length; b++) {
+                        btns[b].addEventListener('click', function (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDecision(accordion, this.getAttribute('data-decision-value'));
+                        });
+                    }
+                })(accordions[k]);
+            }
+
+            updateApplyLabel();
+
+            form.addEventListener('submit', function (e) {
+                var counts = tally();
+                if (counts.accept === 0 && counts.decline === 0) {
+                    e.preventDefault();
+                    return;
+                }
+
+                // Name validation: required only when at least one Accept on a
+                // new contact (a name is needed to establish the relationship).
+                var isNewContact = form.getAttribute('data-is-new-contact') === '1';
+                var sharedNameId = form.getAttribute('data-shared-name-id');
+                var nameInput = sharedNameId ? document.getElementById(sharedNameId) : null;
+                if (isNewContact && counts.accept > 0 && nameInput && !nameInput.value.trim()) {
                     e.preventDefault();
                     nameInput.focus();
                     nameInput.style.borderColor = '#dc3545';
@@ -2306,62 +2349,50 @@ function initializeCurrencyAcceptHandlers() {
                     return;
                 }
 
-                // Copy shared name into the Accept All form's hidden field (for new contacts)
-                var nameTarget = form.querySelector('.accept-all-name-target');
-                if (nameTarget && nameInput) {
-                    nameTarget.value = nameInput.value.trim();
-                }
-
-                // Collect currency data from individual forms
-                // Field names differ: existing contacts use "currency"/"fee"/"credit",
-                // new contacts use "contact_currency"/"contact_fee"/"contact_credit"
-                var currencyForms = card.querySelectorAll('.currency-accept-form');
-                var currencies = [];
-                for (var k = 0; k < currencyForms.length; k++) {
-                    var cf = currencyForms[k];
-                    var currency = cf.querySelector('input[name="currency"]') || cf.querySelector('input[name="contact_currency"]');
-                    var fee = cf.querySelector('input[name="fee"]') || cf.querySelector('input[name="contact_fee"]');
-                    var credit = cf.querySelector('input[name="credit"]') || cf.querySelector('input[name="contact_credit"]');
-                    if (currency && fee && credit) {
-                        currencies.push({
-                            currency: currency.value,
-                            fee: fee.value,
-                            credit: credit.value
+                // Build decisions payload. Defer rows omitted; accept rows
+                // include fee/credit; decline rows are bare.
+                var decisions = [];
+                for (var n = 0; n < accordions.length; n++) {
+                    var ac = accordions[n];
+                    var decision = ac.getAttribute('data-decision') || 'defer';
+                    var currency = ac.getAttribute('data-currency') || '';
+                    if (!currency || decision === 'defer') continue;
+                    if (decision === 'accept') {
+                        var feeEl = ac.querySelector('.currency-fee-input');
+                        var creditEl = ac.querySelector('.currency-credit-input');
+                        decisions.push({
+                            currency: currency,
+                            action: 'accept',
+                            fee: feeEl ? feeEl.value : '',
+                            credit: creditEl ? creditEl.value : ''
                         });
+                    } else if (decision === 'decline') {
+                        decisions.push({ currency: currency, action: 'decline' });
                     }
                 }
+                if (decisions.length === 0) { e.preventDefault(); return; }
 
-                if (currencies.length === 0) {
-                    e.preventDefault();
-                    return;
-                }
-
-                // Defaults guard — if any currency is at both the default
-                // fee AND default credit, warn before accepting. User's
-                // defaults come from data attributes on the accept-all form
-                // (emitted by PHP from user settings). Skipped if all
-                // currencies were customized.
+                // Defaults guard for Accept rows — warn once if any are at
+                // both the default fee AND default credit.
                 var defaultFee = form.getAttribute('data-default-fee');
                 var defaultCredit = form.getAttribute('data-default-credit');
-                if (defaultFee !== null && defaultCredit !== null) {
+                if (defaultFee !== null && defaultCredit !== null && !form.dataset.guardConfirmed) {
                     var untouched = [];
-                    for (var m = 0; m < currencies.length; m++) {
-                        // Number comparison — the rendered value may have
-                        // trailing zeros etc. that string-compare would miss.
-                        if (parseFloat(currencies[m].fee) === parseFloat(defaultFee)
-                            && parseFloat(currencies[m].credit) === parseFloat(defaultCredit)) {
-                            untouched.push(currencies[m].currency);
+                    for (var m = 0; m < decisions.length; m++) {
+                        if (decisions[m].action !== 'accept') continue;
+                        if (parseFloat(decisions[m].fee) === parseFloat(defaultFee)
+                            && parseFloat(decisions[m].credit) === parseFloat(defaultCredit)) {
+                            untouched.push(decisions[m].currency);
                         }
                     }
-                    if (untouched.length > 0 && !form.dataset.guardConfirmed) {
+                    if (untouched.length > 0) {
                         e.preventDefault();
-                        var msg = untouched.length === currencies.length
-                            ? 'You\'re accepting all ' + currencies.length + ' currencies with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
-                            : 'The following currencies are at your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
+                        var acceptCount = counts.accept;
+                        var msg = untouched.length === acceptCount
+                            ? 'You\'re accepting ' + acceptCount + ' currenc' + (acceptCount === 1 ? 'y' : 'ies') + ' with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
+                            : 'The following currencies use your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
                         showConfirmModal(msg, { title: 'Accept with defaults?', confirmText: 'Continue' }).then(function (ok) {
                             if (!ok) return;
-                            // One-shot bypass — set a flag, re-submit, skip the
-                            // guard on the second pass.
                             form.dataset.guardConfirmed = '1';
                             form.submit();
                         });
@@ -2369,17 +2400,22 @@ function initializeCurrencyAcceptHandlers() {
                     }
                 }
 
-                // Set the JSON data into the hidden field
-                form.querySelector('.accept-all-currencies-data').value = JSON.stringify(currencies);
+                // Sync shared name into the hidden field (new-contact case).
+                if (isNewContact && nameInput) {
+                    var nameTarget = form.querySelector('.apply-decisions-name-target');
+                    if (nameTarget) { nameTarget.value = nameInput.value.trim(); }
+                }
 
-                // Show loading state
-                var btn = form.querySelector('.accept-all-btn');
-                if (btn) {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
+                form.querySelector('.apply-decisions-data').value = JSON.stringify(decisions);
+
+                if (applyBtn) {
+                    applyBtn.disabled = true;
+                    if (applyLabel) {
+                        applyLabel.textContent = 'Applying…';
+                    }
                 }
             });
-        })(acceptAllForms[j]);
+        })(forms[i]);
     }
 }
 
