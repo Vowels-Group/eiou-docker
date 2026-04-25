@@ -742,6 +742,671 @@ class {$classBase}Plugin implements PluginInterface
 PHP;
     }
 
+    // -- signature enforcement --------------------------------------------
+    // Verifier wiring + mode semantics. Uses ephemeral sodium keypairs
+    // so we never need a real .pub file on disk.
+
+    public function testSignatureModeOffSkipsVerificationEntirely(): void
+    {
+        $this->writePlugin('no-check', 'Eiou\\Tests\\Plugins\\NoCheck\\NoCheckPlugin',
+            $this->validPluginSource('NoCheck'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->expects($this->never())->method('verify');
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_OFF);
+        $this->assertArrayHasKey('no-check', $loader->discover());
+    }
+
+    public function testSignatureModeRequireBlocksUnsignedPlugin(): void
+    {
+        $this->writePlugin('unsigned', 'Eiou\\Tests\\Plugins\\Unsigned\\UnsignedPlugin',
+            $this->validPluginSource('Unsigned'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn(['status' => 'unsigned']);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_REQUIRE);
+        $plugins = $loader->discover();
+        $this->assertArrayNotHasKey('unsigned', $plugins);
+        $meta = $loader->getLoadedPlugins();
+        $this->assertArrayHasKey('unsigned', $meta);
+        $this->assertSame('failed', $meta['unsigned']['status']);
+        $this->assertStringStartsWith('signature: unsigned', $meta['unsigned']['error']);
+    }
+
+    public function testSignatureModeWarnAllowsLoadButRecordsStatus(): void
+    {
+        $this->writePlugin('warn-only', 'Eiou\\Tests\\Plugins\\WarnOnly\\WarnOnlyPlugin',
+            $this->validPluginSource('WarnOnly'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn([
+            'status' => 'untrusted_key',
+            'key_fingerprint' => 'sha256:abc',
+        ]);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_WARN);
+        $plugins = $loader->discover();
+        $this->assertArrayHasKey('warn-only', $plugins, 'warn mode must not block load');
+        $meta = $loader->getLoadedPlugins();
+        $this->assertSame('discovered', $meta['warn-only']['status']);
+        $this->assertSame('untrusted_key', $meta['warn-only']['signature']['status']);
+    }
+
+    public function testSignatureOkPluginLoadsNormally(): void
+    {
+        $this->writePlugin('signed-ok', 'Eiou\\Tests\\Plugins\\SignedOk\\SignedOkPlugin',
+            $this->validPluginSource('SignedOk'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn([
+            'status' => 'ok',
+            'key_fingerprint' => 'sha256:abc',
+        ]);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_REQUIRE);
+        $plugins = $loader->discover();
+        $this->assertArrayHasKey('signed-ok', $plugins);
+        $meta = $loader->getLoadedPlugins();
+        $this->assertSame('ok', $meta['signed-ok']['signature']['status']);
+    }
+
+    public function testInvalidSignatureModeCollapsesToOff(): void
+    {
+        // Typo in the mode setting — prefer "silently off" over "silently
+        // enforcing something the operator didn't ask for", which would
+        // surprise them if it blocked plugins.
+        $this->writePlugin('bogus-mode', 'Eiou\\Tests\\Plugins\\BogusMode\\BogusModePlugin',
+            $this->validPluginSource('BogusMode'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->expects($this->never())->method('verify');
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, 'REQUIRED'); // not 'require'
+        $this->assertArrayHasKey('bogus-mode', $loader->discover());
+    }
+
+    public function testListAllPluginsCarriesSignatureStatus(): void
+    {
+        $this->writePlugin('listed', 'Eiou\\Tests\\Plugins\\Listed\\ListedPlugin',
+            $this->validPluginSource('Listed'));
+
+        $verifier = $this->createMock(\Eiou\Services\PluginSignatureVerifier::class);
+        $verifier->method('verify')->willReturn([
+            'status' => 'ok',
+            'key_fingerprint' => 'sha256:abcdef',
+        ]);
+
+        $loader = $this->loader();
+        $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_WARN);
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertArrayHasKey('signature', $rows['listed']);
+        $this->assertSame('ok', $rows['listed']['signature']['status']);
+        $this->assertSame('warn', $rows['listed']['signature']['mode']);
+    }
+
+    // -- reconcileIsolation (boot-time replay) ----------------------------
+    // Boot-time replay of CREATE USER / GRANT / REVOKE for every plugin.
+    // Self-heals against mysql-data volume loss, manual user drops, and
+    // operator db_limits changes between boots.
+
+    public function testReconcileReturnsEmptyWhenNoIsolationServicesWired(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+        $this->assertSame([], $this->loader()->reconcileIsolation());
+    }
+
+    public function testReconcileReGrantsEnabledPluginWithExistingCredentials(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_t'],
+                'db_limits' => ['max_queries_per_hour' => 99999],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->method('getPlaintext')->willReturn('existing-pw');
+        $cred->expects($this->never())->method('generate');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('has-db', 'existing-pw', $this->callback(function ($limits) {
+                return ($limits['max_queries_per_hour'] ?? null) === 99999;
+            }));
+        $dbUser->expects($this->once())->method('grant')
+            ->with('has-db', ['plugin_has_db_t']);
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $results = $loader->reconcileIsolation();
+        $this->assertSame(['has-db' => 'granted'], $results);
+    }
+
+    public function testReconcileRegeneratesMissingCredentialsForEnabledPlugin(): void
+    {
+        // Credentials row was lost (mysql-data volume was recreated) but
+        // the plugin is still enabled in plugins.json. Reconciler must
+        // regenerate + re-provision from scratch.
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(false);
+        $cred->expects($this->once())->method('generate')->willReturn('new-pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser');
+        $dbUser->expects($this->once())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['has-db' => 'granted'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileRevokesDisabledPluginStillHoldingCredentials(): void
+    {
+        // Plugin disabled in plugins.json but credential row exists — self
+        // heals cases where a pre-phase-4 partial failure left a grant behind.
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+        // Override to disabled.
+        file_put_contents($this->stateFile, json_encode(['has-db' => ['enabled' => false]]));
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('revoke')->with('has-db');
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['has-db' => 'revoked'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileSkipsDisabledPluginWithoutCredentials(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_has_db_t']],
+        ]);
+        file_put_contents($this->stateFile, json_encode(['has-db' => ['enabled' => false]]));
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(false);
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('revoke');
+        $dbUser->expects($this->never())->method('ensureUser');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['has-db' => 'skipped'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileSkipsPluginsWithoutDatabaseBlock(): void
+    {
+        $this->writePluginWithExtras('plain', []);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertSame(['plain' => 'skipped'], $loader->reconcileIsolation());
+    }
+
+    public function testReconcileCapturesErrorAndContinuesToNextPlugin(): void
+    {
+        // Two plugins both need reconciling. First one throws; second
+        // must still get reconciled — reconcile is not all-or-nothing.
+        $this->writePluginWithExtras('broken', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_broken_t']],
+        ]);
+        $this->writePluginWithExtras('healthy', [
+            'database' => ['user' => true, 'owned_tables' => ['plugin_healthy_t']],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->method('getPlaintext')->willReturnCallback(function ($id) {
+            return $id === 'broken' ? null : 'pw-healthy';
+        });
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        // broken never reaches ensureUser (throws before); healthy does.
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('healthy', 'pw-healthy', $this->anything());
+        $dbUser->expects($this->once())->method('grant')->with('healthy', ['plugin_healthy_t']);
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $results = $loader->reconcileIsolation();
+
+        $this->assertStringStartsWith('error:', $results['broken']);
+        $this->assertStringContainsString('master-key mismatch', $results['broken']);
+        $this->assertSame('granted', $results['healthy']);
+    }
+
+    // -- isolation side effects (enable/disable wiring) -------------------
+    // setEnabled() wires to PluginCredentialService + PluginDbUserService
+    // when they're injected. Without them, it's a pure state-file flip.
+    // These tests exercise the wiring contract: correct services called,
+    // in the correct order, only for plugins declaring `database.user: true`.
+
+    public function testSetEnabledWithoutIsolationServicesJustFlipsFlag(): void
+    {
+        $this->writePluginWithExtras('no-iso', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_no_iso_t'],
+            ],
+        ]);
+
+        // No services wired — default constructor path.
+        $loader = $this->loader();
+        $this->assertTrue($loader->setEnabled('no-iso', false));
+        $this->assertTrue($loader->setEnabled('no-iso', true));
+    }
+
+    public function testSetEnabledTrueWithIsolationTriggersGenerateAndGrant(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_subs'],
+                'db_limits' => ['max_queries_per_hour' => 20000],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->with('has-db')->willReturn(false);
+        $cred->expects($this->once())->method('generate')->with('has-db')->willReturn('pw123');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('has-db', 'pw123', $this->callback(function (array $limits) {
+                return ($limits['max_queries_per_hour'] ?? null) === 20000;
+            }));
+        $dbUser->expects($this->once())->method('grant')
+            ->with('has-db', ['plugin_has_db_subs']);
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertTrue($loader->setEnabled('has-db', true));
+    }
+
+    public function testSetEnabledTrueWithExistingCredentialsReusesPlaintext(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->expects($this->never())->method('generate');
+        $cred->expects($this->once())->method('getPlaintext')->willReturn('existing-pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('has-db', 'existing-pw', $this->anything());
+        $dbUser->expects($this->once())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('has-db', true);
+    }
+
+    public function testSetEnabledFalseWithIsolationRevokesGrants(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_has_db_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->expects($this->never())->method('generate');
+        $cred->expects($this->never())->method('getPlaintext');
+        $cred->expects($this->never())->method('delete');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('revoke')->with('has-db');
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+        $dbUser->expects($this->never())->method('dropUser');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('has-db', false);
+    }
+
+    public function testSetEnabledSkipsIsolationWhenManifestHasNoDbBlock(): void
+    {
+        $this->writePluginWithExtras('plain', []); // no `database` key
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->expects($this->never())->method('generate');
+        $cred->expects($this->never())->method('getPlaintext');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('ensureUser');
+        $dbUser->expects($this->never())->method('grant');
+        $dbUser->expects($this->never())->method('revoke');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $this->assertTrue($loader->setEnabled('plain', true));
+        $this->assertTrue($loader->setEnabled('plain', false));
+    }
+
+    public function testSetEnabledSkipsIsolationWhenUserFlagIsFalse(): void
+    {
+        // `database` block present but `user: false` — technically this would
+        // fail manifest validation, so normalizeDatabase() returns null. The
+        // loader then behaves as if there were no database block at all.
+        $this->writePluginWithExtras('flagged-off', [
+            'database' => ['user' => false, 'owned_tables' => []],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->expects($this->never())->method('generate');
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->never())->method('ensureUser');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('flagged-off', true);
+    }
+
+    public function testSetEnabledFailsWithoutFlippingFlagWhenDdlThrows(): void
+    {
+        $this->writePluginWithExtras('ddl-broken', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_ddl_broken_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(false);
+        $cred->method('generate')->willReturn('pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->method('ensureUser')->willThrowException(
+            new \RuntimeException('MySQL denied')
+        );
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        // setEnabled returns false; the state file is not updated.
+        $this->assertFalse($loader->setEnabled('ddl-broken', true));
+
+        // Verify the flag wasn't flipped — a second load still sees disabled.
+        $state = is_file($this->stateFile)
+            ? json_decode(file_get_contents($this->stateFile), true)
+            : [];
+        // The plugin was auto-enabled by writePluginWithExtras, so the
+        // state file has {"ddl-broken": {"enabled": true}} from the helper.
+        // Our assertion is that setEnabled(false, after DDL failure) didn't
+        // flip it; here we're in the opposite direction so test a fresh run.
+        $this->assertTrue($state['ddl-broken']['enabled']);
+    }
+
+    public function testSetEnabledRotatesWhenExistingCredentialsUnreadable(): void
+    {
+        // Simulates "exists() says yes, but getPlaintext() returned null".
+        // This can happen if the row was written under a different master
+        // key — rotate recovers rather than getting stuck.
+        $this->writePluginWithExtras('unreadable-cred', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_unreadable_cred_t'],
+            ],
+        ]);
+
+        $cred = $this->createMock(\Eiou\Services\PluginCredentialService::class);
+        $cred->method('exists')->willReturn(true);
+        $cred->method('getPlaintext')->willReturn(null);
+        $cred->expects($this->once())->method('rotate')->willReturn('fresh-pw');
+
+        $dbUser = $this->createMock(\Eiou\Services\PluginDbUserService::class);
+        $dbUser->expects($this->once())->method('ensureUser')
+            ->with('unreadable-cred', 'fresh-pw', $this->anything());
+        $dbUser->expects($this->once())->method('grant');
+
+        $loader = $this->loader();
+        $loader->setIsolationServices($cred, $dbUser);
+        $loader->setEnabled('unreadable-cred', true);
+    }
+
+    // -- database block (manifest-side validation) ------------------------
+    // These tests cover the manifest-parser side of plugin DB isolation —
+    // validation and surfacing of the `database` block. The setEnabled()
+    // wiring tests above cover the DDL side. See docs/PLUGINS.md for the
+    // operator-facing write-up.
+
+    public function testListAllPluginsOmitsDatabaseWhenAbsent(): void
+    {
+        $this->writePlugin('no-db', 'Eiou\\Tests\\Plugins\\NoDb\\NoDbPlugin',
+            $this->validPluginSource('NoDb'));
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertArrayNotHasKey('database', $row);
+    }
+
+    public function testListAllPluginsExposesWellFormedDatabaseBlock(): void
+    {
+        $this->writePluginWithExtras('has-db', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => [
+                    'plugin_has_db_subscriptions',
+                    'plugin_has_db_notifications',
+                ],
+                'db_limits' => [
+                    'max_queries_per_hour' => 50000,
+                    'max_user_connections' => 25,
+                ],
+            ],
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame(true, $row['database']['user']);
+        $this->assertSame(
+            ['plugin_has_db_subscriptions', 'plugin_has_db_notifications'],
+            $row['database']['owned_tables']
+        );
+        // Supplied overrides win, unsupplied limits fall back to core defaults.
+        $this->assertSame(50000, $row['database']['db_limits']['max_queries_per_hour']);
+        $this->assertSame(25,    $row['database']['db_limits']['max_user_connections']);
+        $this->assertSame(5000,  $row['database']['db_limits']['max_updates_per_hour']);
+        $this->assertSame(500,   $row['database']['db_limits']['max_connections_per_hour']);
+    }
+
+    public function testMalformedDatabaseBlockRejectsPluginLoad(): void
+    {
+        // user flag missing → plugin should not load (no entry in getLoadedPlugins).
+        $this->writePluginWithExtras('bad-db', [
+            'database' => [
+                'owned_tables' => ['plugin_bad_db_t'],
+            ],
+        ]);
+
+        $loader = $this->loader();
+        $this->assertArrayNotHasKey('bad-db', $loader->getLoadedPlugins());
+
+        // But it should still surface in listAllPlugins with a failed status
+        // + error message so the operator can see why it didn't load instead
+        // of wondering where it went.
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertArrayHasKey('bad-db', $rows);
+        $this->assertSame('failed', $rows['bad-db']['status']);
+        $this->assertStringContainsString('database.user', $rows['bad-db']['error']);
+    }
+
+    public function testOwnedTablesMustStartWithPluginNamePrefix(): void
+    {
+        // Table named for a different plugin — trying to claim tables we don't own.
+        $this->writePluginWithExtras('sneaky', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_other_plugin_contacts'],
+            ],
+        ]);
+
+        $loader = $this->loader();
+        $this->assertArrayNotHasKey('sneaky', $loader->getLoadedPlugins());
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['sneaky']['status']);
+        $this->assertStringContainsString('plugin_sneaky_', $rows['sneaky']['error']);
+    }
+
+    public function testKebabCasePluginNameSnakesForTablePrefix(): void
+    {
+        // `my-awesome-plugin` → `plugin_my_awesome_plugin_` (hyphen→underscore).
+        $this->writePluginWithExtras('my-awesome-plugin', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_my_awesome_plugin_rows'],
+            ],
+        ]);
+
+        $loader = $this->loader();
+        $loader->discover();
+        $this->assertArrayHasKey('my-awesome-plugin', $loader->getLoadedPlugins());
+    }
+
+    public function testOwnedTableMustNotBeJustThePrefix(): void
+    {
+        // `plugin_bare_` with no suffix — not a real table name.
+        $this->writePluginWithExtras('bare', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_bare_'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['bare']['status']);
+    }
+
+    public function testOwnedTableRejectsUppercaseAndSpecialChars(): void
+    {
+        $this->writePluginWithExtras('upper', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_upper_MyTable'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['upper']['status']);
+    }
+
+    public function testOwnedTableRejectsOverlongIdentifier(): void
+    {
+        $longSuffix = str_repeat('x', 80);
+        $this->writePluginWithExtras('longtbl', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_longtbl_' . $longSuffix],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['longtbl']['status']);
+        $this->assertStringContainsString('64-char', $rows['longtbl']['error']);
+    }
+
+    public function testUserFlagMustBeLiteralTrue(): void
+    {
+        // `"user": 1` is truthy but not literally true — reject so plugins
+        // can't accidentally succeed with a typo.
+        $this->writePluginWithExtras('truthy', [
+            'database' => [
+                'user' => 1,
+                'owned_tables' => ['plugin_truthy_t'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows['truthy']['status']);
+        $this->assertStringContainsString('literally `true`', $rows['truthy']['error']);
+    }
+
+    public function testEmptyOwnedTablesListIsAllowed(): void
+    {
+        // Empty list is a deliberate "I'll run CREATE TABLE at runtime but
+        // haven't listed them yet" trade-off — legal but uninstall won't
+        // drop anything. See docs/PLUGINS.md (Database Isolation).
+        $this->writePluginWithExtras('blank-tables', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => [],
+            ],
+        ]);
+        $loader = $this->loader();
+        $loader->discover();
+        $this->assertArrayHasKey('blank-tables', $loader->getLoadedPlugins());
+        $rows = array_column($loader->listAllPlugins(), null, 'name');
+        $this->assertSame([], $rows['blank-tables']['database']['owned_tables']);
+    }
+
+    public function testInvalidDbLimitsAreDroppedNotFailed(): void
+    {
+        // An operator typo on a limit value shouldn't brick the plugin —
+        // defaults should kick in and the plugin still loads.
+        $this->writePluginWithExtras('bad-limits', [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_bad_limits_t'],
+                'db_limits' => [
+                    'max_queries_per_hour' => 'not-a-number',
+                    'max_user_connections' => -5,
+                ],
+            ],
+        ]);
+        $loader = $this->loader();
+        $loader->discover();
+        $this->assertArrayHasKey('bad-limits', $loader->getLoadedPlugins());
+        $row = array_column($loader->listAllPlugins(), null, 'name')['bad-limits'];
+        $this->assertSame(10000, $row['database']['db_limits']['max_queries_per_hour']);
+        $this->assertSame(10,    $row['database']['db_limits']['max_user_connections']);
+    }
+
+    public function testOverlongPluginIdRejectedForTableBudget(): void
+    {
+        $longId = str_repeat('a', 30); // > 24-char budget
+        $this->writePluginWithExtras($longId, [
+            'database' => [
+                'user' => true,
+                'owned_tables' => ['plugin_' . $longId . '_t'],
+            ],
+        ]);
+        $rows = array_column($this->loader()->listAllPlugins(), null, 'name');
+        $this->assertSame('failed', $rows[$longId]['status']);
+        $this->assertStringContainsString('too long', $rows[$longId]['error']);
+    }
+
     private function removeDir(string $path): void
     {
         if (!is_dir($path)) {

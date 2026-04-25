@@ -403,6 +403,7 @@ All eIOU containers use named volumes for data persistence:
 |--------|----------------|---------|-----------------|
 | `{node}-mysql-data` | `/var/lib/mysql` | Database: transactions, contacts, balances | **CRITICAL** |
 | `{node}-config` | `/etc/eiou/config` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
+| `{node}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins (e.g. `hello-eiou`) are baked into the image at `/app/plugins/` and seeded into this volume on first boot via `startup.sh` with `cp -rn`, so operator-added plugins survive container rebuilds and removed bundled plugins stay removed across upgrades. | **IMPORTANT** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
 | `{node}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if not using Let's Encrypt | Low |
 
@@ -411,6 +412,7 @@ All eIOU containers use named volumes for data persistence:
 volumes:
   - alice-mysql-data:/var/lib/mysql     # Transaction history, contacts
   - alice-config:/etc/eiou/config       # Wallet keys, configuration
+  - alice-plugins:/etc/eiou/plugins     # Installed plugins
 ```
 
 ### Optional Volumes

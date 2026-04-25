@@ -10,18 +10,20 @@ default until the operator explicitly enables them.
 1. [Overview](#overview)
 2. [Directory Layout](#directory-layout)
 3. [Manifest Schema](#manifest-schema)
-4. [Lifecycle](#lifecycle)
-5. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
-6. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
-7. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
-8. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
-9. [Writing a Plugin](#writing-a-plugin)
-10. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-11. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-12. [Testing a Plugin](#testing-a-plugin)
-13. [Safety Model and Limitations](#safety-model-and-limitations)
-14. [Troubleshooting](#troubleshooting)
-15. [Related Documentation](#related-documentation)
+4. [Database Isolation](#database-isolation)
+5. [Plugin Signatures](#plugin-signatures)
+6. [Lifecycle](#lifecycle)
+7. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
+8. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
+9. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
+10. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
+11. [Writing a Plugin](#writing-a-plugin)
+12. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+13. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+14. [Testing a Plugin](#testing-a-plugin)
+15. [Safety Model and Limitations](#safety-model-and-limitations)
+16. [Troubleshooting](#troubleshooting)
+17. [Related Documentation](#related-documentation)
 
 ---
 
@@ -104,6 +106,19 @@ Plugins shipped inside the Docker image (currently just `hello-eiou`) live at
 boot via `cp -rn` — `-n` means "no clobber", so if an operator has removed or
 modified a bundled plugin, the change persists across container rebuilds.
 
+### Volume persistence
+
+`/etc/eiou/plugins/` is mounted on a named Docker volume (`{node}-plugins`,
+declared in `docker-compose.yml` and in the Dockerfile `VOLUME` directive).
+The volume is what makes the `cp -rn` behaviour above actually hold: on a
+container rebuild (`docker compose down && docker compose up --build`) the
+volume persists, so operator-installed plugins, operator-removed bundled
+plugins, and any plugin-owned on-disk state all survive unchanged. Without
+the volume an image rebuild would re-seed every bundled plugin from scratch
+and silently drop everything the operator added. See
+[DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md) for the full volume list
+and backup-priority guidance.
+
 ---
 
 ## Manifest Schema
@@ -123,7 +138,8 @@ modified a bundled plugin, the change persists across container rebuilds.
 }
 ```
 
-Full manifest with all optional metadata:
+Full manifest with all optional metadata (including the `database` block for
+plugins that want their own MySQL user — see [Database Isolation](#database-isolation)):
 
 ```json
 {
@@ -142,7 +158,18 @@ Full manifest with all optional metadata:
   },
   "homepage": "https://acme.example/plugins/my-plugin",
   "changelog": "https://acme.example/plugins/my-plugin/CHANGELOG.md",
-  "license": "MIT"
+  "license": "MIT",
+  "database": {
+    "user": true,
+    "owned_tables": [
+      "plugin_my_plugin_subscriptions",
+      "plugin_my_plugin_notifications"
+    ],
+    "db_limits": {
+      "max_queries_per_hour": 20000,
+      "max_user_connections": 20
+    }
+  }
 }
 ```
 
@@ -159,6 +186,7 @@ Full manifest with all optional metadata:
 | `homepage`    | no       | absolute http(s) URL  | Rendered as an external link in the detail modal.                                              |
 | `changelog`   | no       | absolute http(s) URL  | Fallback when no bundled `CHANGELOG.md` is present. Bundled file wins when both exist.         |
 | `license`     | no       | string (≤ 64 chars)   | SPDX identifier preferred (`MIT`, `Apache-2.0`, etc.). Shown next to version.                  |
+| `database`    | no       | object                | Enables per-plugin MySQL user isolation. See [Database Isolation](#database-isolation).        |
 
 ### Validation
 
@@ -174,6 +202,14 @@ emitting it to the GUI:
 
 Invalid values are dropped, not rejected — a manifest with one bad field still
 loads the plugin with the rest of its metadata intact.
+
+**The `database` block is the one exception.** A malformed `database` block
+aborts the plugin load and the plugin surfaces in the list as
+`status: failed` with an explanatory error — silently dropping a
+half-broken DB declaration would leave the plugin running with no grants
+and no tables, producing obscure "Unknown table" errors at runtime instead
+of an honest "your manifest is broken" surface. See
+[Database Isolation](#database-isolation).
 
 ### Bundled `CHANGELOG.md`
 
@@ -197,6 +233,412 @@ The file is capped at 256 KB and read by name through
 `PluginLoader::readChangelog()`, which cross-checks the plugin name against
 the on-disk listing before touching the filesystem to prevent
 `../etc/passwd`-style traversal.
+
+---
+
+## Database Isolation
+
+Plugins that need to store data get their own MySQL user and their own table
+namespace. Core tables (`contacts`, `transactions`, `api_keys`, etc.) are
+completely unreachable from a plugin's PDO handle — the isolation is enforced
+at the MySQL privilege level, not at the application layer.
+
+### Opting in
+
+Declare a `database` block in your `plugin.json`:
+
+```json
+"database": {
+  "user": true,
+  "owned_tables": [
+    "plugin_my_plugin_subscriptions",
+    "plugin_my_plugin_notifications"
+  ],
+  "db_limits": {
+    "max_queries_per_hour": 20000,
+    "max_updates_per_hour": 5000,
+    "max_connections_per_hour": 500,
+    "max_user_connections": 10
+  }
+}
+```
+
+- `user: true` is a required explicit acknowledgement — a typo on a truthy
+  value (`1`, `"yes"`) is rejected. If you don't want a DB user, omit the
+  block entirely.
+- `owned_tables` lists every table this plugin will create. Each entry must
+  match `/^plugin_[a-z0-9_]+$/` and start with `plugin_<snake_case(plugin_name)>_`
+  (e.g. plugin `my-plugin` owns tables starting with `plugin_my_plugin_`).
+  Listing them explicitly means the uninstall flow knows exactly what to
+  drop — no prefix-scanning heuristic that could accidentally catch a
+  neighbour's table.
+- `db_limits` is optional; core defaults are `10000 / 5000 / 500 / 10`.
+  Invalid values fall back to defaults silently so a single-limit typo
+  doesn't brick the whole plugin.
+
+Plugin names are kebab-case; table prefixes snake-case the plugin name
+(`my-plugin` → `plugin_my_plugin_`). Plugin names are capped at 24 chars
+for the table-name budget so the full prefix + suffix fits MySQL's 64-char
+identifier limit.
+
+### What a plugin user can do
+
+Each plugin user gets exactly these privileges on its own table namespace:
+
+```
+CREATE, ALTER, DROP, INDEX, SELECT, INSERT, UPDATE, DELETE ON eiou.plugin_<snake_id>_%
+```
+
+Not included:
+
+- **`REFERENCES`** — plugins cannot create foreign keys pointing at core
+  tables. They can FK between their own tables freely.
+- **`GRANT OPTION`** — plugins cannot sub-grant privileges to other users.
+- **Any privilege on core tables** — `contacts`, `transactions`, `api_keys`,
+  `payback_methods`, etc. are invisible and inaccessible.
+- **Any privilege on other plugins' tables** — Plugin A cannot read,
+  modify, or even enumerate Plugin B's tables.
+
+The user is bound to `'plugin_<snake_id>'@'localhost'` — never `'%'`. A
+network-layer compromise cannot reach it via remote MySQL auth.
+
+### Resource limits
+
+The four `db_limits` keys map directly to MySQL's per-user resource caps:
+
+| Manifest key                 | MySQL equivalent          | Default |
+| ---------------------------- | ------------------------- | ------- |
+| `max_queries_per_hour`       | `MAX_QUERIES_PER_HOUR`    | 10000   |
+| `max_updates_per_hour`       | `MAX_UPDATES_PER_HOUR`    | 5000    |
+| `max_connections_per_hour`   | `MAX_CONNECTIONS_PER_HOUR`| 500     |
+| `max_user_connections`       | `MAX_USER_CONNECTIONS`    | 10      |
+
+Defaults cap a runaway loop at roughly 3 queries per second sustained —
+non-restrictive for honest plugins, visible enough to halt a bug.
+
+### Getting a PDO
+
+Use `ServiceContainer::getPluginPdo($pluginId)` from your `boot()` or
+runtime code:
+
+```php
+class MyPlugin implements PluginInterface
+{
+    public function getName(): string    { return 'my-plugin'; }
+    public function getVersion(): string { return '1.0.0'; }
+
+    public function register(ServiceContainer $c): void {}
+
+    public function boot(ServiceContainer $container): void
+    {
+        $pdo = $container->getPluginPdo($this->getName());
+
+        // Create your tables (idempotent — called on every boot).
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS plugin_my_plugin_subscriptions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                topic VARCHAR(64) NOT NULL,
+                created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6)
+            ) ENGINE=InnoDB
+        ");
+    }
+}
+```
+
+The PDO is cached per-plugin for the lifetime of the request; repeated
+`getPluginPdo()` calls from the same request return the same connection.
+
+**Do not call `$container->getPdo()`.** That returns the root/app PDO —
+the credentials plugin users are specifically sandboxed away from.
+
+### Credential storage
+
+Each plugin's MySQL password is 32 bytes of `random_bytes` base64-encoded,
+wrapped via `KeyEncryption` with the plugin id baked into the AAD, and
+stored in the `plugin_credentials` core table. If the operator has set
+`EIOU_VOLUME_KEY` for passphrase protection, plugin credentials inherit
+that protection automatically — the master key is encrypted at rest,
+which transitively protects every wrapped blob.
+
+The password is generated on first enable and persists across restarts.
+It is never shown to the operator or logged; rotation replaces the
+ciphertext in-place and runs `ALTER USER ... IDENTIFIED BY NEW` in the
+same transaction.
+
+### Boot-time reconciliation
+
+On every node boot, after the master key is loaded and before plugins'
+`register()` runs, the loader runs an idempotent reconcile pass:
+
+- For each enabled plugin with `database.user: true`: `CREATE USER IF NOT
+  EXISTS` + `ALTER USER` + `GRANT`. Self-heals after a `mysql-data` volume
+  recreation, a manual `DROP USER`, an operator `db_limits` edit, or a
+  master-key rotation.
+- For each disabled plugin that still has a credential row: `REVOKE ALL
+  PRIVILEGES`. Self-heals cases where `setEnabled(false)` flipped the flag
+  but didn't revoke (shouldn't happen in current code, but the reconciler
+  is defensive).
+
+Per-plugin reconcile errors are logged and surfaced as `error:<msg>` in
+the plugin list's status field. They do **not** block node boot — the
+operator investigates via the GUI/CLI list.
+
+### Uninstall
+
+Uninstall is a separate, destructive action from disable. The plugin must
+be **disabled first** — the service refuses to uninstall an enabled plugin
+regardless of whether the request arrives via CLI, REST, or GUI.
+
+Uninstall runs these steps, in order, on a best-effort basis (a failure in
+any single step does not abort the rest — the response reports per-step
+status so the operator can investigate):
+
+1. **`onUninstall()`** hook — if the plugin implements the optional
+   [`UninstallablePlugin`](#uninstallable-plugins) interface, its
+   `onUninstall()` method runs while the plugin still has MySQL grants
+   so it can clean up its own data. Exceptions are logged but do not
+   block the remaining steps.
+2. **`REVOKE ALL PRIVILEGES`** — locks out the plugin user before the
+   table drops, so a hostile plugin can't race the next steps.
+3. **`DROP TABLE IF EXISTS`** for every table in `owned_tables`. Each
+   name is revalidated against the `/^plugin_[a-z0-9_]+$/` shape so a
+   manifest edited between install and uninstall cannot inject
+   `contacts` or `api_keys` into the drop list.
+4. **`DROP USER IF EXISTS`** for the plugin user.
+5. **Delete** the `plugin_credentials` row and purge the in-memory PDO
+   cache so any lingering connection doesn't outlive the user it was
+   authenticated as.
+6. **`rm -rf /etc/eiou/plugins/<name>/`** — the plugin's files.
+7. **Remove** the plugin's entry from `plugins.json`.
+
+Each step emits `ok`, `skipped`, or `error:<msg>`. Uninstall fires
+`PLUGIN_UNINSTALLING` before step 1 and `PLUGIN_UNINSTALLED` after step 7
+with the full step-status map in the payload.
+
+### Uninstallable plugins
+
+Plugins that need a cleanup hook implement the optional
+`Eiou\Contracts\UninstallablePlugin` interface (an extension of
+`PluginInterface` with one additional method):
+
+```php
+use Eiou\Contracts\UninstallablePlugin;
+use Eiou\Services\ServiceContainer;
+
+class MyPlugin implements UninstallablePlugin
+{
+    // ... normal getName / getVersion / register / boot ...
+
+    public function onUninstall(ServiceContainer $container): void
+    {
+        // Runs BEFORE MySQL revoke — full grants still available.
+        // Plugin's getPluginPdo() still returns a working connection.
+        //
+        // Typical uses: ping an external service to revoke a
+        // subscription, purge a remote cache, write a final audit row.
+        //
+        // Implementations MUST be idempotent — uninstall may retry
+        // after a partial failure.
+    }
+}
+```
+
+Plugins that don't need cleanup simply don't implement the interface and
+step 1 is skipped. Most plugins won't need it — table removal is handled
+automatically from the manifest.
+
+### Threat model notes
+
+This design isolates the **database layer**, not PHP execution. A malicious
+plugin still runs arbitrary PHP in the node process and can do anything
+the filesystem permits. The DB isolation closes the most valuable target
+(wallet data), but doesn't turn plugins into a sandbox. For truly hostile
+plugins, the mitigations are upstream: manifest signatures, operator-
+vetted install sources, code review. See also [What plugins cannot do
+(by design)](#what-plugins-cannot-do-by-design).
+
+Plugins sharing a single MySQL instance with core means a pathological
+query can still starve the instance (the `MAX_*_PER_HOUR` caps reduce but
+don't eliminate this). Separate MySQL instances would be stronger but are
+an operational step-change — revisit if a real starvation incident
+materializes.
+
+---
+
+## Plugin Signatures
+
+Plugins can ship with an **Ed25519 detached signature** that binds every
+byte of the manifest and source tree. Operators trust a set of public keys
+up front; unsigned plugins (or plugins signed by an untrusted key) are
+rejected when signature enforcement is on. This closes the "a plugin I
+installed yesterday was swapped for a backdoored copy today" supply-chain
+window at the file-on-disk level.
+
+Signatures are **complementary** to, not a replacement for,
+[Database Isolation](#database-isolation). DB isolation limits what a
+running plugin can touch; signatures limit what code can run in the first
+place.
+
+### Trust model
+
+Two layers of trusted-key directories, both scanned on every plugin-load
+pass:
+
+| Layer | Path | Source | When to use |
+|-------|------|--------|-------------|
+| Baked-in | `/app/eiou/config/trusted-plugin-keys/` | Image (read-only) | First-party / eIOU-official keys that ship with every node |
+| Operator | `/etc/eiou/config/trusted-plugin-keys/` | Config volume | Third-party publishers you've vetted and decided to trust |
+
+Both directories accept `*.pub` files — plain text, one or more base64
+Ed25519 public keys per file, `#` lines are comments. Multiple keys per
+file are fine; duplicates across files are de-duplicated silently.
+
+Adding a key is a **deliberate operator action** that says "I trust
+whoever holds the corresponding private key to publish plugins on my
+node." The verifier cannot distinguish "this plugin is safe" from "this
+key is trusted" — trust is a human decision, signatures are the
+machine-enforceable bit.
+
+### Enforcement modes
+
+Controlled by `Constants::PLUGIN_SIGNATURE_MODE`:
+
+| Mode | Behaviour |
+|------|-----------|
+| `off` (default) | Don't verify. Load every plugin regardless of signature state. Backwards-compatible default so existing unsigned plugins keep working during rollout. |
+| `warn` | Verify, log failures, but still load the plugin. The plugin list surfaces `signature.status` (`ok` / `unsigned` / `untrusted_key` / `bad_signature` / `malformed_sig` / `malformed_manifest`) so operators can fix signing before flipping to `require`. |
+| `require` | Verify and **refuse to load** any plugin whose signature is missing, malformed, bound to an untrusted key, or fails verification. Failed plugins surface in the plugin list with `status: failed` and an explanatory error. |
+
+Recommended rollout: ship an image with `off` as the default → turn your
+node to `warn` locally to see what would fail → sign everything you want
+to keep → flip to `require`. The verifier cost is roughly one Ed25519
+verification per plugin per boot (~1ms each) so leaving it on `warn` or
+`require` long-term is free.
+
+### Wire format
+
+Every signed plugin has a `plugin.sig` file alongside `plugin.json`:
+
+```json
+{
+  "algorithm": "ed25519",
+  "key_fingerprint": "sha256:<64-hex-chars>",
+  "signature": "<base64 of raw 64-byte Ed25519 signature>"
+}
+```
+
+The signed payload is deterministic:
+
+```
+plugin.json bytes  +  0x00  +  sha256-hex-of-src-tree
+```
+
+Where `sha256-hex-of-src-tree` is:
+
+```
+SHA-256 ( concat, in sorted path order, for every file under src/:
+    relpath + 0x00 + SHA-256(file contents) + 0x00
+)
+```
+
+Any byte change in the manifest or any source file invalidates the
+signature on the next verification pass — the attack window between sign
+time and install time doesn't extend past boot.
+
+### Key format
+
+`*.pub` files — one or more keys per file, plain text:
+
+```
+# eIOU official release signing key
+# fingerprint: sha256:abc123...
+# issued: 2026-04-24
+Ab3+k/...base64 of raw 32-byte Ed25519 public key...==
+```
+
+Private keys use the same format (base64 of the raw 64-byte Ed25519
+secret key, with a leading comment). File mode should be `0600` — the
+signing helper chmods it for you on generation.
+
+### Signing your own plugins
+
+The runtime image bundles `plugin-sign.php` at
+`/app/eiou/scripts/plugin-sign.php`. Three subcommands:
+
+**1. Generate a keypair** (one-time):
+
+```bash
+docker exec -it <node> sh -c 'cd /tmp && php /app/eiou/scripts/plugin-sign.php generate-key'
+# Writes <fingerprint>.pub and <fingerprint>.key into /tmp.
+# Copy them out:
+docker cp <node>:/tmp/<fingerprint>.key ./my-plugins.key
+docker cp <node>:/tmp/<fingerprint>.pub ./my-plugins.pub
+```
+
+Keep `.key` secret — it's the signing authority for anything that says
+"I'm this publisher." Treat it like an SSH private key: chmod 600, keep
+out of backups/CI images, use a password manager or hardware token if
+available. The `.pub` is safe to share.
+
+**2. Install the public key into the operator trust store**:
+
+```bash
+docker cp ./my-plugins.pub <node>:/etc/eiou/config/trusted-plugin-keys/my-plugins.pub
+```
+
+From this moment, any plugin signed with the corresponding private key
+loads on this node.
+
+**3. Sign a plugin**:
+
+```bash
+docker cp ./my-plugins.key <node>:/tmp/my-plugins.key
+docker exec <node> php /app/eiou/scripts/plugin-sign.php sign \
+    --key=/tmp/my-plugins.key \
+    --plugin=/etc/eiou/plugins/my-plugin
+# Writes /etc/eiou/plugins/my-plugin/plugin.sig
+docker exec <node> rm /tmp/my-plugins.key   # remove the private key ASAP
+```
+
+Re-sign whenever you change `plugin.json` or any source file — the
+deterministic hash means even a whitespace edit invalidates the previous
+signature.
+
+**4. Verify** (useful in CI before publishing):
+
+```bash
+docker exec <node> php /app/eiou/scripts/plugin-sign.php verify \
+    --plugin=/etc/eiou/plugins/my-plugin
+# Exit 0 on valid, 1 on any failure.
+```
+
+### What you can and can't do with a stolen private key
+
+- An attacker with your private key **can** publish plugins that load on
+  any node that trusts your public key.
+- An attacker with your private key **cannot** reach into nodes where
+  your public key isn't in the trust directory.
+- If you suspect a key is compromised: remove the `.pub` from every
+  node's `/etc/eiou/config/trusted-plugin-keys/` immediately. On next
+  boot every plugin signed by that key becomes `untrusted_key`. Generate
+  a new keypair, distribute the new public key, re-sign your plugins.
+
+### Threat model honesty
+
+Signatures close the "installed file was tampered with / swapped after
+install" attack surface — that's the most common real-world supply-chain
+vector. They don't close:
+
+- **Compromised publisher** — if the private-key holder is itself
+  malicious (or their key was stolen and is being used to sign a
+  backdoored plugin by the attacker), verification succeeds and the
+  plugin loads. Mitigations there are human: review the code, pin
+  plugin versions, publish reproducible builds.
+- **Malicious plugin that was always malicious** — signatures don't
+  attest to behaviour, only to origin. A well-known attacker with a
+  trusted key can still ship a well-signed malicious plugin.
+- **PHP execution sandbox** — plugins still run in the node process.
+  See [Safety Model and Limitations](#safety-model-and-limitations).
 
 ---
 
@@ -290,6 +732,13 @@ Clicking any row opens a detail modal showing:
 - Description (full, not truncated)
 - Enabled toggle
 - Error block (red alert) if the plugin failed to load
+- **Uninstall** button — shown **only when the plugin is disabled**. Clicking
+  it opens a second red-accented modal that requires typing the plugin's
+  name verbatim to confirm. On submit the modal shows the per-step
+  uninstall result (✓ ok, − skipped, ✕ error) inline. The UI forces the
+  two-step "disable → confirm uninstall" flow; the service refuses to
+  uninstall an enabled plugin regardless of how the request arrives. See
+  [Database Isolation → Uninstall](#uninstall).
 
 ### Restart banner
 
@@ -333,6 +782,27 @@ unknown plugin names (scoped against the on-disk listing) and names that
 don't match the kebab-case regex — no `../` traversal, no arbitrary state
 keys. On success emits a reminder to `eiou restart`.
 
+For plugins that declare `database.user: true`, `enable` triggers
+`CREATE USER` + `GRANT` in MySQL; `disable` triggers `REVOKE`. Credentials
+are generated on first enable and persisted encrypted. See
+[Database Isolation](#database-isolation).
+
+### `eiou plugin uninstall <name>`
+
+Runs the full uninstall flow — `onUninstall()` hook, `REVOKE`, `DROP TABLE`
+for every owned table, `DROP USER`, credential deletion, plugin-directory
+removal, and state-file cleanup. The plugin **must be disabled first**;
+the CLI returns an error otherwise (match the REST `409 Conflict`).
+
+```bash
+eiou plugin uninstall my-plugin
+```
+
+Per-step status is printed in the JSON response (`ok` / `skipped` /
+`error:<msg>`) so operators can see exactly what succeeded. This is a
+**permanent** action — a fresh install issues new credentials, new tables,
+and a new MySQL user.
+
 ```bash
 eiou plugin enable hello-eiou
 eiou plugin disable hello-eiou
@@ -343,7 +813,7 @@ eiou restart                # once you're done toggling
 
 ## Managing Plugins over the REST API
 
-Three endpoints under the `admin` scope. Same semantics as the CLI: toggles
+Endpoints under the `admin` scope. Same semantics as the CLI: toggles
 persist but do not restart. Pair with `POST /api/v1/system/restart` (same
 scope) when you're ready to apply.
 
@@ -352,6 +822,13 @@ scope) when you're ready to apply.
 | GET    | `/api/v1/plugins`                    | List installed plugins          |
 | POST   | `/api/v1/plugins/{name}/enable`      | Set `enabled = true`            |
 | POST   | `/api/v1/plugins/{name}/disable`     | Set `enabled = false`           |
+| DELETE | `/api/v1/plugins/{name}`             | Uninstall (must be disabled)    |
+
+`DELETE /api/v1/plugins/{name}` returns `409 Conflict` if the plugin is
+still enabled, `404 Not Found` if unknown, `200` with `success: true` on a
+fully-clean uninstall, and `200` with `success: false` + the per-step map
+if any step reported an error. See
+[Database Isolation → Uninstall](#uninstall) for the full step sequence.
 
 ### Example
 

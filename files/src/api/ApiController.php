@@ -347,6 +347,7 @@ class ApiController {
         if ($method === 'GET' && !$action)                        { return $this->listPluginsApi(); }
         if ($method === 'POST' && $action && $id === 'enable')    { return $this->togglePluginApi($action, true); }
         if ($method === 'POST' && $action && $id === 'disable')   { return $this->togglePluginApi($action, false); }
+        if ($method === 'DELETE' && $action && !$id)              { return $this->uninstallPluginApi($action); }
 
         // Plugin-owned endpoint fallthrough. Shape: /api/v1/plugins/{plugin}/{action}.
         // The registry inherits admin scope from the gate above — v1 keeps all
@@ -2086,6 +2087,43 @@ class ApiController {
             'restart_required' => true,
             'message' => 'Plugin state persisted. POST /api/v1/system/restart to apply.',
         ]);
+    }
+
+    /**
+     * DELETE /api/v1/plugins/{name}
+     *
+     * Uninstall a plugin completely. Plugin must be disabled first.
+     * Runs the full step sequence (onUninstall hook, revoke, drop tables,
+     * drop user, delete credentials, remove files, clean state).
+     *
+     * Response carries a per-step status so the caller can surface
+     * partial-failure information. 200 with success=false indicates the
+     * plugin is gone on disk but some MySQL-side cleanup reported an
+     * error — the operator should investigate the `steps` field.
+     */
+    private function uninstallPluginApi(string $name): array {
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            return $this->errorResponse('Invalid plugin name', 400, 'invalid_name');
+        }
+
+        try {
+            $service = $this->services->getPluginUninstallService();
+            $result = $service->uninstall($name);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), 404, 'unknown_plugin');
+        } catch (\RuntimeException $e) {
+            // "Cannot uninstall enabled plugin" — 409 Conflict makes sense
+            // since the state conflicts with the requested action.
+            return $this->errorResponse($e->getMessage(), 409, 'plugin_still_enabled');
+        }
+
+        \Eiou\Utils\Logger::getInstance()->info('plugin_uninstalled_via_api', [
+            'plugin' => $name,
+            'success' => $result['success'],
+            'requestor' => $this->authenticatedKey['key_id'] ?? null,
+        ]);
+
+        return $this->successResponse($result);
     }
 
     /**

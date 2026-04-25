@@ -23,10 +23,14 @@ use Eiou\Core\ErrorCodes;
 class CliPluginService
 {
     private PluginLoader $loader;
+    private ?PluginUninstallService $uninstallService;
 
-    public function __construct(PluginLoader $loader)
-    {
+    public function __construct(
+        PluginLoader $loader,
+        ?PluginUninstallService $uninstallService = null
+    ) {
         $this->loader = $loader;
+        $this->uninstallService = $uninstallService;
     }
 
     /**
@@ -124,5 +128,66 @@ class CliPluginService
             "Plugin {$verb}: {$name}. Run 'eiou restart' for the change to take effect.",
             ['plugin' => $name, 'enabled' => $enabled, 'restart_required' => true]
         );
+    }
+
+    /**
+     * eiou plugin uninstall <name>
+     *
+     * Runs the full uninstall flow: onUninstall hook (if plugin implements
+     * UninstallablePlugin), REVOKE, DROP TABLE for every owned table, DROP
+     * USER, DELETE credentials row, rm -rf plugin dir, remove from state.
+     * The plugin must be disabled first — the service refuses to uninstall
+     * an enabled plugin.
+     *
+     * Per-step status is returned so operators can see exactly what happened
+     * (ok / skipped / error:<msg>) — especially helpful when something
+     * partial-fails and the operator needs to know what still needs manual
+     * cleanup.
+     */
+    public function uninstallPlugin(array $argv, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+        $name = $argv[3] ?? '';
+
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $output->error(
+                "Usage: eiou plugin uninstall <name>",
+                ErrorCodes::VALIDATION_ERROR
+            );
+            return;
+        }
+
+        if ($this->uninstallService === null) {
+            $output->error(
+                'Plugin uninstall service is not available in this context',
+                ErrorCodes::GENERAL_ERROR
+            );
+            return;
+        }
+
+        try {
+            $result = $this->uninstallService->uninstall($name);
+        } catch (\InvalidArgumentException $e) {
+            $output->error($e->getMessage(), ErrorCodes::NOT_FOUND);
+            return;
+        } catch (\RuntimeException $e) {
+            // "Cannot uninstall enabled plugin" lands here.
+            $output->error($e->getMessage(), ErrorCodes::VALIDATION_ERROR);
+            return;
+        }
+
+        if ($result['success']) {
+            $output->success(
+                "Plugin uninstalled: {$name}",
+                $result
+            );
+        } else {
+            $output->error(
+                "Plugin uninstall completed with errors — see 'steps' for details",
+                ErrorCodes::GENERAL_ERROR,
+                500,
+                $result
+            );
+        }
     }
 }

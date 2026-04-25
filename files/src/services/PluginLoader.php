@@ -63,6 +63,34 @@ class PluginLoader
     /** @var array<string, array<string, mixed>> name => ['version' => x, 'status' => y, 'enabled' => bool, 'description' => z?, 'error' => err?] */
     private array $metadata = [];
 
+    /**
+     * Optional plugin-isolation services. When both are present, setEnabled()
+     * generates MySQL credentials + grants / revokes privileges as side
+     * effects. In test and bootstrap contexts where the DB isn't up yet,
+     * leave them unset and the loader degrades to "just flip the flag".
+     */
+    private ?PluginCredentialService $credentialService = null;
+    private ?PluginDbUserService $dbUserService = null;
+
+    /**
+     * Optional signature verifier + enforcement mode. Enforcement is a
+     * global policy (one setting controls behaviour for every plugin):
+     *
+     *   - 'off'     — don't verify at all; load every plugin regardless
+     *                 of whether it has a signature. Backwards-compatible
+     *                 default; any future rollout path turns this up
+     *                 through 'warn' first before 'require'.
+     *   - 'warn'    — verify, log failures, but still load the plugin.
+     *                 The `sig_status` field on the plugin's metadata
+     *                 surfaces the result so operators can fix before
+     *                 flipping to 'require'.
+     *   - 'require' — verify and refuse to load any plugin whose
+     *                 signature is missing, malformed, bound to an
+     *                 untrusted key, or fails verification.
+     */
+    private ?PluginSignatureVerifier $sigVerifier = null;
+    private string $sigMode = PluginSignatureVerifier::MODE_OFF;
+
     public function __construct(
         string $pluginDir = '/etc/eiou/plugins',
         ?Logger $logger = null,
@@ -71,6 +99,41 @@ class PluginLoader
         $this->pluginDir = rtrim($pluginDir, '/');
         $this->stateFile = $stateFile ?? self::DEFAULT_STATE_FILE;
         $this->logger = $logger ?? Logger::getInstance();
+    }
+
+    /**
+     * Wire the signature verifier + enforcement mode. Accepted modes:
+     * 'off', 'warn', 'require' — anything else collapses to 'off' to
+     * prevent a typo from silently allowing unsigned plugins through
+     * in an operator that thought they had verification on.
+     */
+    public function setSignatureVerifier(
+        ?PluginSignatureVerifier $verifier,
+        string $mode = PluginSignatureVerifier::MODE_OFF
+    ): void {
+        $this->sigVerifier = $verifier;
+        $validModes = [
+            PluginSignatureVerifier::MODE_OFF,
+            PluginSignatureVerifier::MODE_WARN,
+            PluginSignatureVerifier::MODE_REQUIRE,
+        ];
+        $this->sigMode = in_array($mode, $validModes, true)
+            ? $mode
+            : PluginSignatureVerifier::MODE_OFF;
+    }
+
+    /**
+     * Wire the isolation services after construction. Called by
+     * Application::__construct once the ServiceContainer has them wired.
+     * If either argument is null, isolation is effectively disabled
+     * (setEnabled/setDisabled falls back to just flipping the flag).
+     */
+    public function setIsolationServices(
+        ?PluginCredentialService $credentialService,
+        ?PluginDbUserService $dbUserService
+    ): void {
+        $this->credentialService = $credentialService;
+        $this->dbUserService = $dbUserService;
     }
 
     /**
@@ -272,6 +335,31 @@ class PluginLoader
                 $row['has_changelog'] = true;
             }
 
+            // Surface the normalized database block so the GUI / REST list
+            // can show operators which plugins want their own MySQL user
+            // before they enable. An invalid block here (same validation as
+            // loadPlugin uses) also surfaces an error row so the GUI can
+            // render a disabled-with-warning state rather than silently
+            // skipping — otherwise an operator would wonder why a plugin
+            // they can see on disk isn't in the list at all.
+            $dbResult = $this->normalizeDatabase($manifest['database'] ?? null, $name);
+            if (!$dbResult['valid']) {
+                $row['status'] = 'failed';
+                $row['error'] = 'manifest: ' . $dbResult['error'];
+            } elseif ($dbResult['config'] !== null) {
+                $row['database'] = $dbResult['config'];
+            }
+
+            // Surface signature verification status. Verifier may be null
+            // in tests and early-boot paths; when null, emit `sig_mode:off`
+            // so consumers can distinguish "not checked" from "no signature".
+            if ($this->sigVerifier !== null && $this->sigMode !== PluginSignatureVerifier::MODE_OFF) {
+                $sigResult = $this->sigVerifier->verify($this->pluginDir . '/' . $entry);
+                $row['signature'] = $sigResult + ['mode' => $this->sigMode];
+            } else {
+                $row['signature'] = ['status' => 'disabled', 'mode' => $this->sigMode];
+            }
+
             $result[] = $row;
         }
 
@@ -280,17 +368,233 @@ class PluginLoader
     }
 
     /**
+     * Return the live PluginInterface instance for a plugin, or null if
+     * it isn't currently loaded (disabled, failed, or never discovered).
+     * Used by the uninstall flow to locate an UninstallablePlugin's
+     * onUninstall() hook. Most plugins are disabled at uninstall time
+     * (uninstall requires disabled first) so this usually returns null —
+     * which is fine, the hook is optional.
+     */
+    public function getPluginInstance(string $name): ?PluginInterface
+    {
+        return $this->plugins[$name] ?? null;
+    }
+
+    /**
+     * Remove a plugin's entry from the persisted state file entirely
+     * (as opposed to setEnabled(false) which just flips the flag).
+     * Used by the uninstall flow after the plugin's files and MySQL
+     * artefacts are gone.
+     *
+     * Returns true if an entry was removed, false if the plugin had no
+     * state entry to begin with (idempotent on re-run).
+     */
+    public function removeFromState(string $name): bool
+    {
+        $state = $this->readState();
+        if (!array_key_exists($name, $state)) {
+            return false;
+        }
+        unset($state[$name]);
+        return $this->writeState($state);
+    }
+
+    /**
      * Persist a plugin's enabled flag. Returns true on success.
      *
      * Note: state changes only take effect on the next process boot.
      * Plugins that have already booted in this process keep their event
      * subscriptions and registered services until a restart.
+     *
+     * Isolation side effects (only when isolation services are wired —
+     * see setIsolationServices() — and the plugin's manifest declares
+     * `database.user: true`):
+     *
+     *   enable  → generate credentials on first call, ensureUser(), grant()
+     *   disable → revoke()  (credentials + user row stay in place; a later
+     *                        re-enable re-grants without a password rotation)
+     *
+     * DDL runs BEFORE the state flip so a failure leaves the flag at its
+     * previous value and the operator can retry. Partial-success states
+     * are healed by the boot-time reconciler on the next boot.
      */
     public function setEnabled(string $name, bool $enabled): bool
     {
+        // Run the DDL side-effects first — if they fail, we don't flip
+        // the flag, so the operator can retry without a stale state file.
+        try {
+            $this->applyIsolationSideEffects($name, $enabled);
+        } catch (Throwable $e) {
+            $this->logger->error("Plugin isolation side-effect failed; state flip aborted", [
+                'plugin' => $name,
+                'target_enabled' => $enabled,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+
         $state = $this->readState();
         $state[$name] = ['enabled' => $enabled];
         return $this->writeState($state);
+    }
+
+    /**
+     * Look up the plugin's manifest database block and, when the caller
+     * has wired isolation services, drive the matching DDL:
+     *
+     *   - enable  + database.user = true  → credentials + CREATE/ALTER USER + GRANT
+     *   - disable + database.user = true  → REVOKE
+     *
+     * No-op if isolation services aren't wired, or the plugin doesn't declare
+     * a `database.user` block, or the plugin is unknown. The no-op fallback
+     * means callers (CLI, REST, GUI) stay unchanged — a node running without
+     * the services just flips the flag like it did before.
+     */
+    private function applyIsolationSideEffects(string $name, bool $enabled): void
+    {
+        if ($this->credentialService === null || $this->dbUserService === null) {
+            return;
+        }
+        $dbConfig = $this->getManifestDatabase($name);
+        if ($dbConfig === null || ($dbConfig['user'] ?? false) !== true) {
+            return;
+        }
+
+        if ($enabled) {
+            $plaintext = $this->credentialService->exists($name)
+                ? $this->credentialService->getPlaintext($name)
+                : $this->credentialService->generate($name);
+            if ($plaintext === null) {
+                // getPlaintext() returned null despite exists() saying true —
+                // a race, or a decryption failure surfaced as null upstream.
+                // Regenerate so the plugin can proceed rather than being
+                // stuck in a "exists but unreadable" state.
+                $plaintext = $this->credentialService->rotate($name);
+            }
+            $limits = (array) ($dbConfig['db_limits'] ?? self::DEFAULT_DB_LIMITS);
+            $owned = (array) ($dbConfig['owned_tables'] ?? []);
+
+            $this->dbUserService->ensureUser($name, $plaintext, $limits);
+            $this->dbUserService->grant($name, $owned);
+        } else {
+            // Leave credentials + user + tables in place. Disable is
+            // meant to be cheaply reversible; uninstall is the path that
+            // drops everything, and it goes through a separate method.
+            $this->dbUserService->revoke($name);
+        }
+    }
+
+    /**
+     * Boot-time reconciliation — re-apply the correct MySQL state for every
+     * plugin on every node boot. Idempotent: CREATE USER IF NOT EXISTS,
+     * ALTER USER with current credentials, GRANT (or REVOKE for disabled
+     * plugins). Self-heals after:
+     *
+     *   - mysql-data volume recreation (plugin users and grants are gone;
+     *     we restore them using the still-encrypted password from the
+     *     plugin_credentials table)
+     *   - someone manually DROP USER / REVOKE on a plugin
+     *   - operator changing `db_limits` in plugins.json between boots
+     *   - master-key rotation (credentials were re-wrapped; the new
+     *     plaintext is applied via ALTER USER)
+     *
+     * No-op when isolation services aren't wired. Failures are logged but
+     * do NOT abort node boot — a plugin with a broken MySQL user is simply
+     * non-functional; the operator investigates via the plugin list which
+     * now surfaces the error.
+     *
+     * Call once per boot, after discover() and before bootAll().
+     *
+     * @return array<string, string> Map of plugin_id → 'granted' / 'revoked' / 'skipped' / 'error:<msg>'.
+     *                               Returned for tests and operator logs; production callers can ignore.
+     */
+    public function reconcileIsolation(): array
+    {
+        if ($this->credentialService === null || $this->dbUserService === null) {
+            return [];
+        }
+
+        $results = [];
+        foreach ($this->listAllPlugins() as $row) {
+            $pluginId = $row['name'];
+            $db = $row['database'] ?? null;
+            if (!is_array($db) || ($db['user'] ?? false) !== true) {
+                $results[$pluginId] = 'skipped';
+                continue;
+            }
+            $enabled = (bool) ($row['enabled'] ?? false);
+            try {
+                if ($enabled) {
+                    $plaintext = $this->credentialService->exists($pluginId)
+                        ? $this->credentialService->getPlaintext($pluginId)
+                        : $this->credentialService->generate($pluginId);
+                    if ($plaintext === null) {
+                        // Corrupted credential row (null plaintext despite
+                        // exists()). Reconciler can't recover blindly — a
+                        // silent rotate() would lock out whatever still
+                        // holds the old password. Surface the error so the
+                        // operator decides between manual rotate-and-reset
+                        // or dropping the plugin entirely.
+                        throw new \RuntimeException(
+                            "credential row exists for '{$pluginId}' but plaintext is null — likely master-key mismatch; manual intervention required"
+                        );
+                    }
+                    $limits = (array) ($db['db_limits'] ?? self::DEFAULT_DB_LIMITS);
+                    $owned = (array) ($db['owned_tables'] ?? []);
+                    $this->dbUserService->ensureUser($pluginId, $plaintext, $limits);
+                    $this->dbUserService->grant($pluginId, $owned);
+                    $results[$pluginId] = 'granted';
+                } else {
+                    // For disabled plugins that *have* credentials, make
+                    // sure privileges are revoked — self-heals cases where
+                    // the row says disabled but a grant leaked through a
+                    // partial-failure in setEnabled(false) from before the
+                    // DDL-first ordering was added.
+                    if ($this->credentialService->exists($pluginId)) {
+                        $this->dbUserService->revoke($pluginId);
+                        $results[$pluginId] = 'revoked';
+                    } else {
+                        $results[$pluginId] = 'skipped';
+                    }
+                }
+            } catch (Throwable $e) {
+                $this->logger->error("Plugin isolation reconcile failed", [
+                    'plugin' => $pluginId,
+                    'error' => $e->getMessage(),
+                ]);
+                $results[$pluginId] = 'error:' . $e->getMessage();
+            }
+        }
+        return $results;
+    }
+
+    /**
+     * Fresh-read the manifest for a single plugin and return the normalized
+     * `database` block (or null if absent). Avoids depending on state that
+     * discover() may not have populated yet — setEnabled() can legitimately
+     * be called in an early-boot context where nothing is in $this->metadata.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function getManifestDatabase(string $name): ?array
+    {
+        if (!is_dir($this->pluginDir)) {
+            return null;
+        }
+        $manifestPath = $this->pluginDir . '/' . $name . '/plugin.json';
+        if (!is_file($manifestPath)) {
+            return null;
+        }
+        $raw = @file_get_contents($manifestPath);
+        if ($raw === false) {
+            return null;
+        }
+        $manifest = json_decode($raw, true);
+        if (!is_array($manifest)) {
+            return null;
+        }
+        $result = $this->normalizeDatabase($manifest['database'] ?? null, $name);
+        return $result['valid'] ? ($result['config'] ?? null) : null;
     }
 
     /**
@@ -370,6 +674,175 @@ class PluginLoader
             return null;
         }
         return $trimmed;
+    }
+
+    /**
+     * Default MySQL resource limits applied to plugin users when the manifest
+     * doesn't override them. Chosen to be non-restrictive for honest plugins
+     * but cap a runaway loop at roughly 3 queries/second sustained.
+     *
+     * See docs/PLUGINS.md (Database Isolation)for rationale.
+     */
+    public const DEFAULT_DB_LIMITS = [
+        'max_queries_per_hour'     => 10000,
+        'max_updates_per_hour'     => 5000,
+        'max_connections_per_hour' => 500,
+        'max_user_connections'     => 10,
+    ];
+
+    /**
+     * Maximum length of the plugin id prefix baked into plugin_<id>_<table>
+     * names. Enough to hold any reasonable plugin id without pushing table
+     * names near MySQL's 64-char identifier cap once the table suffix is
+     * appended. `plugin_` (7) + 24 + `_` (1) + 32 = 64 — exact budget.
+     */
+    private const MAX_TABLE_NAME_PLUGIN_ID_LEN = 24;
+
+    /**
+     * Validate and normalize the optional `database` block from a manifest.
+     *
+     * Returns:
+     *   - ['valid' => true, 'config' => null] when the block is absent
+     *     (plugin declared no DB needs — legal and common)
+     *   - ['valid' => true, 'config' => array] when the block is well-formed
+     *   - ['valid' => false, 'error' => string] when the block is present
+     *     but malformed — caller refuses to load the plugin
+     *
+     * Invalid `db_limits` values are dropped silently (logged at debug) and
+     * core defaults fill in — an operator typo on a limit should not brick
+     * the plugin. But `user`, `owned_tables`, and the presence/absence of
+     * the block itself are strict: get those wrong and the plugin is
+     * rejected with a clear error, same as missing required top-level
+     * fields.
+     *
+     * See docs/PLUGINS.md (Database Isolation).
+     *
+     * @param mixed $raw The raw manifest value at the `database` key
+     * @param string $pluginId The plugin's `name` field — used to validate
+     *                         the `plugin_<snake_case(id)>_` owned-table prefix
+     * @return array{valid: bool, config?: ?array, error?: string}
+     */
+    private function normalizeDatabase(mixed $raw, string $pluginId): array
+    {
+        if ($raw === null) {
+            return ['valid' => true, 'config' => null];
+        }
+        if (!is_array($raw)) {
+            return ['valid' => false, 'error' => '`database` must be an object'];
+        }
+
+        // `database.user` is an explicit acknowledgement — an operator reading
+        // the manifest sees "yes I really want a DB user" before enabling.
+        // If the block is present but `user` is missing or falsy, refuse —
+        // silently treating a typo'd key as "no user" would be surprising.
+        if (!array_key_exists('user', $raw)) {
+            return ['valid' => false, 'error' => '`database.user` is required when the database block is present'];
+        }
+        if ($raw['user'] !== true) {
+            return ['valid' => false, 'error' => '`database.user` must be literally `true`'];
+        }
+
+        // Plugin id → table-name prefix: plugin names are kebab-case
+        // (enforced elsewhere at registration time); MySQL identifiers use
+        // underscore. A plugin called `my-plugin` owns tables prefixed
+        // `plugin_my_plugin_`.
+        $snakeId = str_replace('-', '_', $pluginId);
+        if (strlen($snakeId) > self::MAX_TABLE_NAME_PLUGIN_ID_LEN) {
+            return ['valid' => false, 'error' => sprintf(
+                'plugin name is too long (%d) for MySQL identifier budget — max %d chars once snake-cased',
+                strlen($snakeId),
+                self::MAX_TABLE_NAME_PLUGIN_ID_LEN
+            )];
+        }
+        $expectedPrefix = 'plugin_' . $snakeId . '_';
+
+        if (!array_key_exists('owned_tables', $raw)) {
+            return ['valid' => false, 'error' => '`database.owned_tables` is required when `database.user` is true'];
+        }
+        if (!is_array($raw['owned_tables'])) {
+            return ['valid' => false, 'error' => '`database.owned_tables` must be an array'];
+        }
+        $ownedTables = [];
+        foreach ($raw['owned_tables'] as $i => $table) {
+            if (!is_string($table)) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` must be a string',
+                    $i
+                )];
+            }
+            // MySQL identifiers are case-insensitive on most platforms but
+            // filename-sensitive on others; lowercase-only keeps the grant
+            // pattern portable. Limit to safe charset — no backticks, no
+            // quotes, no spaces.
+            if (!preg_match('/^plugin_[a-z0-9_]+$/', $table)) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) must match /^plugin_[a-z0-9_]+$/',
+                    $i,
+                    $table
+                )];
+            }
+            if (strpos($table, $expectedPrefix) !== 0) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) must start with `%s` (derived from plugin name)',
+                    $i,
+                    $table,
+                    $expectedPrefix
+                )];
+            }
+            // Must have content after the prefix — `plugin_myplugin_` alone
+            // is not a valid table name.
+            if (strlen($table) <= strlen($expectedPrefix)) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) has no table-name suffix after `%s`',
+                    $i,
+                    $table,
+                    $expectedPrefix
+                )];
+            }
+            // MySQL identifier length cap (64 chars). Cheaper to reject here
+            // than to catch a MySQL syntax error during grant.
+            if (strlen($table) > 64) {
+                return ['valid' => false, 'error' => sprintf(
+                    '`database.owned_tables[%d]` (%s) exceeds MySQL 64-char identifier limit',
+                    $i,
+                    $table
+                )];
+            }
+            $ownedTables[] = $table;
+        }
+
+        $limits = self::DEFAULT_DB_LIMITS;
+        if (isset($raw['db_limits'])) {
+            if (!is_array($raw['db_limits'])) {
+                return ['valid' => false, 'error' => '`database.db_limits` must be an object'];
+            }
+            foreach (array_keys(self::DEFAULT_DB_LIMITS) as $key) {
+                if (!isset($raw['db_limits'][$key])) {
+                    continue;
+                }
+                $v = $raw['db_limits'][$key];
+                if (!is_int($v) || $v <= 0) {
+                    // Bad values are silently dropped and the default stays;
+                    // a single typo on a limit shouldn't prevent the plugin
+                    // from loading. Logged at debug so operators can notice.
+                    $this->logger->debug(
+                        "PluginLoader: ignoring invalid db_limits.{$key}, using default",
+                        ['plugin' => $pluginId, 'value' => $v, 'default' => $limits[$key]]
+                    );
+                    continue;
+                }
+                $limits[$key] = $v;
+            }
+        }
+
+        return [
+            'valid' => true,
+            'config' => [
+                'user' => true,
+                'owned_tables' => $ownedTables,
+                'db_limits' => $limits,
+            ],
+        ];
     }
 
     /**
@@ -482,6 +955,56 @@ class PluginLoader
             return;
         }
 
+        // Validate the optional database-isolation block. A malformed block
+        // rejects the plugin outright — a half-wired DB manifest would leave
+        // the plugin with no tables / no grants / no way to know it was
+        // broken until its first query. See docs/PLUGINS.md (Database Isolation).
+        $dbResult = $this->normalizeDatabase($manifest['database'] ?? null, $name);
+        if (!$dbResult['valid']) {
+            $this->logger->warning("PluginLoader: invalid database block in manifest", [
+                'name' => $name,
+                'path' => $manifestPath,
+                'error' => $dbResult['error'],
+            ]);
+            return;
+        }
+        $dbConfig = $dbResult['config'];
+
+        // Verify the plugin signature when a verifier is wired. The result
+        // is always captured in metadata (so the plugin list surfaces it);
+        // enforcement is policy-driven: in 'require' mode a failure blocks
+        // load, in 'warn' mode it's logged but the plugin proceeds, in
+        // 'off' mode verification is skipped entirely.
+        $sigResult = ['status' => 'disabled']; // no verifier wired
+        if ($this->sigVerifier !== null && $this->sigMode !== PluginSignatureVerifier::MODE_OFF) {
+            $sigResult = $this->sigVerifier->verify($pluginPath);
+            if ($sigResult['status'] !== 'ok') {
+                $logCtx = [
+                    'name' => $name,
+                    'status' => $sigResult['status'],
+                    'key_fingerprint' => $sigResult['key_fingerprint'] ?? null,
+                    'error' => $sigResult['error'] ?? null,
+                ];
+                if ($this->sigMode === PluginSignatureVerifier::MODE_REQUIRE) {
+                    $this->logger->warning('PluginLoader: signature verification failed; refusing to load', $logCtx);
+                    // Record as failed so the plugin list surfaces it
+                    // — "disappeared entirely" would be confusing.
+                    $this->metadata[$name] = [
+                        'version' => $manifest['version'],
+                        'description' => $manifest['description'] ?? '',
+                        'status' => 'failed',
+                        'enabled' => (bool) ($state[$name]['enabled'] ?? false),
+                        'error' => 'signature: ' . $sigResult['status']
+                            . (isset($sigResult['error']) ? ' (' . $sigResult['error'] . ')' : ''),
+                        'database' => $dbConfig,
+                        'signature' => $sigResult,
+                    ];
+                    return;
+                }
+                $this->logger->info('PluginLoader: signature verification failed (warn mode)', $logCtx);
+            }
+        }
+
         // Default: DISABLED. A newly discovered plugin is inert until the
         // user explicitly enables it via the GUI (or by editing plugins.json
         // and restarting). This is a safety stance — a malicious or merely
@@ -495,6 +1018,8 @@ class PluginLoader
                 'description' => $manifest['description'] ?? '',
                 'status' => 'disabled',
                 'enabled' => false,
+                'database' => $dbConfig,
+                'signature' => $sigResult,
             ];
             return;
         }
@@ -544,6 +1069,8 @@ class PluginLoader
             'description' => $manifest['description'] ?? '',
             'status' => 'discovered',
             'enabled' => true,
+            'database' => $dbConfig,
+            'signature' => $sigResult,
         ];
     }
 

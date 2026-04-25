@@ -354,12 +354,17 @@ elseif($request === "plugin"){
     $output->error('Plugin system not initialized', ErrorCodes::GENERAL_ERROR);
     exit(1);
   }
-  $pluginCliService = new \Eiou\Services\CliPluginService($app->pluginLoader);
+  $pluginCliService = new \Eiou\Services\CliPluginService(
+    $app->pluginLoader,
+    $app->services->getPluginUninstallService()
+  );
   $subcommand = strtolower($cleanArgv[2] ?? 'list');
   if ($subcommand === 'enable') {
     $pluginCliService->enablePlugin($cleanArgv, $output);
   } elseif ($subcommand === 'disable') {
     $pluginCliService->disablePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'uninstall') {
+    $pluginCliService->uninstallPlugin($cleanArgv, $output);
   } else {
     $pluginCliService->listPlugins($cleanArgv, $output);
   }

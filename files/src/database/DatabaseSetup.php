@@ -114,6 +114,9 @@ function freshInstall(){
                 $dbConn->exec(getPaybackMethodsTableSchema());
                 $dbConn->exec(getPaybackMethodsReceivedTableSchema());
 
+                // Plugin isolation — per-plugin MySQL-user credentials (encrypted)
+                $dbConn->exec(getPluginCredentialsTableSchema());
+
                 // System & Security
                 $dbConn->exec(getDebugTableSchema());
                 $dbConn->exec(getRateLimitsTableSchema());
@@ -203,6 +206,7 @@ function runMigrations(PDO $pdo): array {
         'transaction_chain_checkpoints'  => 'Eiou\Database\getTransactionChainCheckpointsTableSchema',
         'payback_methods'                => 'Eiou\Database\getPaybackMethodsTableSchema',
         'payback_methods_received'       => 'Eiou\Database\getPaybackMethodsReceivedTableSchema',
+        'plugin_credentials'             => 'Eiou\Database\getPluginCredentialsTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {

@@ -131,7 +131,29 @@ class Application {
             // Discover plugins and run their register() phase BEFORE wireAllServices
             // so plugins can add services that participate in dependency wiring.
             $this->pluginLoader = new PluginLoader();
+            // Wire isolation services before setEnabled() can be called from
+            // CLI/REST/GUI. These fire the CREATE USER / GRANT / REVOKE DDL
+            // on every enable/disable when the plugin's manifest declares
+            // `database.user: true`. See docs/PLUGINS.md (Database Isolation).
+            $this->pluginLoader->setIsolationServices(
+                $this->services->getPluginCredentialService(),
+                $this->services->getPluginDbUserService()
+            );
+            // Wire the signature verifier with the configured mode. Default
+            // 'off' keeps backwards compat; operators opt in via Constants
+            // (will move to userconfig.json in a follow-up once other
+            // runtime-configurable plugin settings land).
+            $this->pluginLoader->setSignatureVerifier(
+                $this->services->getPluginSignatureVerifier(),
+                \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
+            );
             $this->pluginLoader->discover();
+            // Reconcile MySQL users / grants against the on-disk manifest +
+            // plugin_credentials table. Self-heals after a mysql-data volume
+            // rebuild, a manual DROP USER, or an operator db_limits edit in
+            // plugins.json. Runs before registerAll() so plugins needing DB
+            // access during register() find their user ready.
+            $this->pluginLoader->reconcileIsolation();
             $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services
             $this->services->wireAllServices();

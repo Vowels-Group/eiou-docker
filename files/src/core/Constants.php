@@ -52,7 +52,21 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 10;
+    const SCHEMA_VERSION = 11;
+
+    /**
+     * Plugin signature enforcement mode. One of:
+     *   - 'off'     — don't verify signatures (default; backwards compatible)
+     *   - 'warn'    — verify + log failures, but still load the plugin
+     *   - 'require' — verify + refuse to load any plugin that fails
+     *
+     * Turn this up as a rollout path: enable 'warn' for a release cycle so
+     * operators see which plugins would fail, then flip to 'require' once
+     * every plugin in your trust set is signed. Can be overridden per-node
+     * via a future `userconfig.json` key; core default stays 'off' until
+     * signed plugins are the norm.
+     */
+    const PLUGIN_SIGNATURE_MODE = 'off';
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.

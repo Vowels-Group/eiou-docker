@@ -80,7 +80,18 @@ $dlqController = new DlqController(
 // userconfig.json yet) the loader is null and this controller stays absent;
 // the GUI section gracefully shows the loading state in that case.
 $pluginController = $app->pluginLoader !== null
-    ? new PluginController($secureSession, $app->pluginLoader)
+    ? new PluginController(
+        $secureSession,
+        $app->pluginLoader,
+        null,
+        // Wire the uninstall service when the container is ready so the
+        // GUI's pluginsUninstall action has the service behind it. If the
+        // container isn't yet available (early-boot / no-wallet state)
+        // the null fallback degrades gracefully.
+        $app->services !== null
+            ? $app->services->getPluginUninstallService()
+            : null
+    )
     : null;
 
 // Handle logout request

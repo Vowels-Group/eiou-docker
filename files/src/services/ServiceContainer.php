@@ -851,6 +851,111 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginCredentialService instance.
+     *
+     * Generates and stores the encrypted MySQL password for each plugin's
+     * isolated DB user. See docs/PLUGINS.md (Database Isolation).
+     */
+    public function getPluginCredentialService(): \Eiou\Services\PluginCredentialService {
+        if (!isset($this->services['PluginCredentialService'])) {
+            $this->services['PluginCredentialService'] = new \Eiou\Services\PluginCredentialService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PluginCredentialRepository::class)
+            );
+        }
+        return $this->services['PluginCredentialService'];
+    }
+
+    /**
+     * Get PluginSignatureVerifier instance.
+     *
+     * Verifies Ed25519 signatures on plugins against trusted public keys
+     * at /app/eiou/config/trusted-plugin-keys/ (baked-in, first-party)
+     * and /etc/eiou/config/trusted-plugin-keys/ (operator-added). See
+     * docs/PLUGINS.md (Plugin Signatures) for the trust model.
+     */
+    public function getPluginSignatureVerifier(): \Eiou\Services\PluginSignatureVerifier {
+        if (!isset($this->services['PluginSignatureVerifier'])) {
+            $this->services['PluginSignatureVerifier'] = new \Eiou\Services\PluginSignatureVerifier();
+        }
+        return $this->services['PluginSignatureVerifier'];
+    }
+
+    /**
+     * Get PluginDbUserService instance.
+     *
+     * Manages MySQL user lifecycle (create / grant / revoke / drop) for
+     * plugins that declare `database.user: true` in their manifest. Runs
+     * as the root/app PDO — user-management DDL is a privileged operation
+     * the plugin users themselves will never hold.
+     *
+     * See docs/PLUGINS.md (Database Isolation).
+     */
+    public function getPluginDbUserService(): \Eiou\Services\PluginDbUserService {
+        if (!isset($this->services['PluginDbUserService'])) {
+            $this->services['PluginDbUserService'] = new \Eiou\Services\PluginDbUserService(
+                $this->getPdo()
+            );
+        }
+        return $this->services['PluginDbUserService'];
+    }
+
+    /**
+     * Get the plugin-authenticated PDO factory. Plugins call
+     * `$container->getPluginPdo('my-plugin')` from their boot() or
+     * runtime code to obtain a PDO that authenticates as their own
+     * isolated MySQL user. Root/app credentials are never exposed to
+     * plugin code.
+     *
+     * Not to be confused with `getPdo()` — that returns the root/app
+     * PDO and should never be called from plugin code.
+     *
+     * See docs/PLUGINS.md (Database Isolation).
+     */
+    public function getPluginPdoFactory(): \Eiou\Services\PluginPdoFactory {
+        if (!isset($this->services['PluginPdoFactory'])) {
+            $this->services['PluginPdoFactory'] = new \Eiou\Services\PluginPdoFactory(
+                $this->getPluginCredentialService()
+            );
+        }
+        return $this->services['PluginPdoFactory'];
+    }
+
+    /**
+     * Get PluginUninstallService instance.
+     *
+     * Runs the full uninstall flow (onUninstall hook, revoke, drop tables,
+     * drop user, delete credentials, rm -rf plugin dir, clean state file).
+     * The plugin must be disabled first — the service refuses to uninstall
+     * an enabled plugin.
+     */
+    public function getPluginUninstallService(): \Eiou\Services\PluginUninstallService {
+        if (!isset($this->services['PluginUninstallService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PluginUninstallService'] = new \Eiou\Services\PluginUninstallService(
+                $app->pluginLoader,
+                $this->getPluginCredentialService(),
+                $this->getPluginDbUserService(),
+                $this->getPluginPdoFactory(),
+                $this->getPdo()
+            );
+        }
+        return $this->services['PluginUninstallService'];
+    }
+
+    /**
+     * Convenience wrapper that returns a PDO authenticated as the given
+     * plugin's MySQL user. Identical to calling
+     * `$container->getPluginPdoFactory()->getFor($pluginId)`. Cached
+     * per-plugin for the lifetime of the request.
+     *
+     * @throws \InvalidArgumentException Plugin id fails validation
+     * @throws \RuntimeException Plugin has no stored credentials, or connect failed
+     */
+    public function getPluginPdo(string $pluginId): \PDO {
+        return $this->getPluginPdoFactory()->getFor($pluginId);
+    }
+
+    /**
      * Get ReceivedPaybackMethodService instance
      *
      * Handles the E2E contact-fetch flow for payback methods: outgoing

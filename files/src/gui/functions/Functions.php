@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // AJAX-only plugin actions (returns JSON, exits immediately)
-    if (in_array($action, ['pluginsList', 'pluginsToggle', 'pluginsRequestRestart', 'pluginChangelog'], true)) {
+    if (in_array($action, ['pluginsList', 'pluginsToggle', 'pluginsRequestRestart', 'pluginChangelog', 'pluginsUninstall'], true)) {
         if ($pluginController === null) {
             header('Content-Type: application/json');
             echo json_encode([

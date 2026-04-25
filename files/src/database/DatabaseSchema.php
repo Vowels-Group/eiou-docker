@@ -835,3 +835,25 @@ function getPaybackMethodsReceivedTableSchema() {
         INDEX idx_pmr_expires (expires_at)
     )";
 }
+
+// Plugin credentials table — holds the encrypted MySQL password for each
+// plugin's isolated DB user. The password is wrapped via KeyEncryption with
+// the plugin_id as AAD so ciphertext cannot be swapped between rows. The
+// encrypted_password column carries the full KeyEncryption envelope
+// ({ciphertext, iv, tag, aad, version}) so decryption is self-describing.
+//
+// Bootstrap: this table is accessed after the master key is loaded (same
+// order as every other encrypted-at-rest table in the schema), so no extra
+// sequencing is needed. Operators wanting volume-level passphrase protection
+// get it for free via EIOU_VOLUME_KEY — the master key itself is encrypted
+// at rest, which transitively protects every wrapped blob in this table.
+//
+// See docs/PLUGINS.md (Database Isolation)for rationale.
+function getPluginCredentialsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS plugin_credentials (
+        plugin_id VARCHAR(64) NOT NULL PRIMARY KEY,      /* Matches the plugin's manifest `name` field */
+        encrypted_password JSON NOT NULL,                /* KeyEncryption envelope: {ciphertext, iv, tag, aad, version} */
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        rotated_at TIMESTAMP(6) NULL                     /* Set on rotate(); null on initial create */
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+}
