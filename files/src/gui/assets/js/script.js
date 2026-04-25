@@ -2335,6 +2335,23 @@ function initializeCurrencyAcceptHandlers() {
 
             updateApplyLabel();
 
+            // Write the decisions JSON + the new-contact name into the
+            // form's hidden inputs, set the button to a busy state. Used
+            // both by the in-line happy path (before letting the event
+            // continue to native submission) and by the guard-confirmed
+            // path that calls form.submit() programmatically.
+            function writePayload(decisions, isNewContact, nameInput) {
+                if (isNewContact && nameInput) {
+                    var nameTarget = form.querySelector('.apply-decisions-name-target');
+                    if (nameTarget) { nameTarget.value = nameInput.value.trim(); }
+                }
+                form.querySelector('.apply-decisions-data').value = JSON.stringify(decisions);
+                if (applyBtn) {
+                    applyBtn.disabled = true;
+                    if (applyLabel) { applyLabel.textContent = 'Applying…'; }
+                }
+            }
+
             form.addEventListener('submit', function (e) {
                 var counts = tally();
                 if (counts.accept === 0 && counts.decline === 0) {
@@ -2402,26 +2419,18 @@ function initializeCurrencyAcceptHandlers() {
                         showConfirmModal(msg, { title: 'Accept with defaults?', confirmText: 'Continue' }).then(function (ok) {
                             if (!ok) return;
                             form.dataset.guardConfirmed = '1';
-                            form.submit();
+                            // form.submit() does NOT fire the submit event,
+                            // so we must populate the hidden fields first.
+                            writePayload(decisions, isNewContact, nameInput);
+                            HTMLFormElement.prototype.submit.call(form);
                         });
                         return;
                     }
                 }
 
-                // Sync shared name into the hidden field (new-contact case).
-                if (isNewContact && nameInput) {
-                    var nameTarget = form.querySelector('.apply-decisions-name-target');
-                    if (nameTarget) { nameTarget.value = nameInput.value.trim(); }
-                }
-
-                form.querySelector('.apply-decisions-data').value = JSON.stringify(decisions);
-
-                if (applyBtn) {
-                    applyBtn.disabled = true;
-                    if (applyLabel) {
-                        applyLabel.textContent = 'Applying…';
-                    }
-                }
+                // Happy path: write payload and let the event continue —
+                // the natural submission picks up the just-set hidden field.
+                writePayload(decisions, isNewContact, nameInput);
             });
         })(forms[i]);
     }
