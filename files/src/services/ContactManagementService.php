@@ -724,16 +724,35 @@ class ContactManagementService implements ContactManagementServiceInterface
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
+    /**
+     * Argv-shape entry kept for the GUI controller and any other caller that
+     * still hands us a CLI-style positional array. New code should call
+     * searchContactsByQuery() directly with a typed query.
+     */
     public function searchContacts(array $data, ?CliOutputManager $output = null): void
     {
         $output = $output ?? CliOutputManager::getInstance();
+        $this->searchContactsByQuery($data[2] ?? null, $output);
+    }
 
-        // Lookup contact based on their name
-        if (isset($data[2])) {
-            $nameValidation = $this->inputValidator->validateContactName($data[2]);
+    /**
+     * Search contacts by (partial) name.
+     *
+     * Typed entry point — `eiou contact search [query]` calls this directly.
+     * Pass null/empty for an unfiltered listing.
+     *
+     * @param string|null $query Optional partial name to filter by.
+     */
+    public function searchContactsByQuery(?string $query, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $searchTerm = null;
+        if ($query !== null && $query !== '') {
+            $nameValidation = $this->inputValidator->validateContactName($query);
             if (!$nameValidation['valid']) {
                 $this->secureLogger->warning("Invalid contact name", [
-                    'name' => $data[2] ?? 'empty',
+                    'name' => $query,
                     'error' => $nameValidation['error']
                 ]);
                 throw new ValidationServiceException(
@@ -743,9 +762,8 @@ class ContactManagementService implements ContactManagementServiceInterface
                     400
                 );
             }
-            $name = $nameValidation['value'];
+            $searchTerm = $nameValidation['value'];
         }
-        $searchTerm = $name ?? null;
 
         if ($results = $this->contactRepository->searchContacts($searchTerm)) {
             $addressTypes = $this->getAllAddressTypes();
@@ -853,11 +871,15 @@ class ContactManagementService implements ContactManagementServiceInterface
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
+    /**
+     * Argv-shape entry kept for the GUI controller and any other caller that
+     * still hands us a CLI-style positional array. New code should call
+     * viewContactByIdentifier() directly with a typed identifier.
+     */
     public function viewContact(array $data, ?CliOutputManager $output = null): void
     {
         $output = $output ?? CliOutputManager::getInstance();
 
-        // View contact information
         $amountValidation = $this->inputValidator->validateArgvAmount($data, 3);
         if (!$amountValidation['valid']) {
             $this->secureLogger->warning("Invalid parameter amount", [
@@ -872,11 +894,27 @@ class ContactManagementService implements ContactManagementServiceInterface
             );
         }
 
-        if ($this->transportUtility->isAddress($data[2])) {
-            $addressValidation = $this->inputValidator->validateAddress($data[2] ?? '');
+        $this->viewContactByIdentifier((string) $data[2], $output);
+    }
+
+    /**
+     * View contact information by name or address.
+     *
+     * Typed entry point — the new `eiou contact view <id>` CLI calls this
+     * directly without round-tripping through argv. Behaviour is identical
+     * to viewContact(); only the parameter shape differs.
+     *
+     * @param string $identifier Contact name or address
+     */
+    public function viewContactByIdentifier(string $identifier, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        if ($this->transportUtility->isAddress($identifier)) {
+            $addressValidation = $this->inputValidator->validateAddress($identifier);
             if (!$addressValidation['valid']) {
                 $this->secureLogger->warning("Invalid contact address", [
-                    'address' => $data[2] ?? 'empty',
+                    'address' => $identifier ?: 'empty',
                     'error' => $addressValidation['error']
                 ]);
                 throw new ValidationServiceException(
@@ -890,8 +928,8 @@ class ContactManagementService implements ContactManagementServiceInterface
             $transportIndex = $this->transportUtility->determineTransportType($address);
             $contactResult = $this->contactRepository->getContactByAddress($transportIndex, $address);
         } else {
-            // Check if the name yields an address
-            $contactResult = $this->lookupByName($data[2]);
+            // Check if the name yields a contact
+            $contactResult = $this->lookupByName($identifier);
         }
 
         if ($contactResult) {
@@ -972,7 +1010,7 @@ class ContactManagementService implements ContactManagementServiceInterface
                 if ($theirAvailableCredit !== null) echo "\tTheir Available Credit: " . number_format($theirAvailableCredit, Constants::getDisplayDecimals()) . "\n";
             }
         } else {
-            $output->error("Contact not found", ErrorCodes::CONTACT_NOT_FOUND, 404, ['query' => $data[2] ?? null]);
+            $output->error("Contact not found", ErrorCodes::CONTACT_NOT_FOUND, 404, ['query' => $identifier]);
         }
     }
 
@@ -1316,10 +1354,9 @@ class ContactManagementService implements ContactManagementServiceInterface
     // =========================================================================
 
     /**
-     * Update specific contact fields through CLI interaction
-     *
-     * @param array $argv Command line arguments
-     * @param CliOutputManager|null $output Optional output manager for JSON support
+     * Argv-shape entry kept for the GUI controller and any other caller that
+     * still hands us a CLI-style positional array. New code should call
+     * updateContactField() directly with typed parameters.
      */
     public function updateContact(array $argv, ?CliOutputManager $output = null): void
     {
@@ -1332,15 +1369,41 @@ class ContactManagementService implements ContactManagementServiceInterface
             if (strpos($arg, '--') === 0) { continue; }
             $positional[] = $arg;
         }
-        $address = $positional[2] ?? null;
-        $field = isset($positional[3]) ? strtolower($positional[3]) : null;
-        $value = $positional[4] ?? null;
-        $value2 = $positional[5] ?? null;
-        $value3 = $positional[6] ?? null;
-        $value4 = $positional[7] ?? null;
+        $identifier = $positional[2] ?? '';
+        $field = isset($positional[3]) ? strtolower($positional[3]) : '';
+        $values = array_slice($positional, 4);
 
-        // Validate address or name
-        if (!$address) {
+        $this->updateContactField((string) $identifier, (string) $field, $values, $output);
+    }
+
+    /**
+     * Update one or more contact fields by name or address.
+     *
+     * Typed entry point — the new `eiou contact update <id> <field> <values…>`
+     * CLI calls this directly. `$field` is one of `name|fee|credit|all`;
+     * `$values` carries the remaining positional arguments in the same order
+     * the legacy CLI accepts them:
+     *
+     *   name:   [<new-name>]
+     *   fee:    [<value> <currency>]
+     *   credit: [<value> <currency>]
+     *   all:    [<name> <fee> <credit> [<currency>]]
+     *
+     * @param string $identifier Contact name or address.
+     * @param string $field      One of name|fee|credit|all.
+     * @param array  $values     Field-specific positional values.
+     */
+    public function updateContactField(string $identifier, string $field, array $values, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $address = $identifier;
+        $value = $values[0] ?? null;
+        $value2 = $values[1] ?? null;
+        $value3 = $values[2] ?? null;
+        $value4 = $values[3] ?? null;
+
+        if ($address === '') {
             $output->error("Address or name is required", ErrorCodes::MISSING_ADDRESS, 400);
             return;
         }

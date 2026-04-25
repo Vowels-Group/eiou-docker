@@ -307,12 +307,46 @@ class ContactCliHandler
 
     private function cmdView(array $argv): void
     {
-        $this->managementService->viewContact($argv, $this->output);
+        $identifier = $argv[3] ?? null;
+        if ($identifier === null) {
+            $this->output->error(
+                'Usage: eiou contact view <name|address|pubkey-hash>',
+                ErrorCodes::MISSING_ARGUMENT,
+                400
+            );
+            return;
+        }
+        $this->managementService->viewContactByIdentifier((string) $identifier, $this->output);
     }
 
     private function cmdUpdate(array $argv): void
     {
-        $this->managementService->updateContact($argv, $this->output);
+        $identifier = $argv[3] ?? null;
+        $field = $argv[4] ?? null;
+        if ($identifier === null || $field === null) {
+            $this->output->error(
+                'Usage: eiou contact update <name|address> <name|fee|credit|all> <values…>',
+                ErrorCodes::MISSING_ARGUMENT,
+                400
+            );
+            return;
+        }
+
+        // Strip flags (e.g. --json) from the trailing positional values so the
+        // service sees only field-specific args.
+        $values = [];
+        for ($i = 5; $i < count($argv); $i++) {
+            if (is_string($argv[$i]) && str_starts_with($argv[$i], '--')) {
+                continue;
+            }
+            $values[] = $argv[$i];
+        }
+        $this->managementService->updateContactField(
+            (string) $identifier,
+            strtolower((string) $field),
+            $values,
+            $this->output
+        );
     }
 
     private function cmdDelete(array $argv): void
@@ -367,7 +401,16 @@ class ContactCliHandler
 
     private function cmdSearch(array $argv): void
     {
-        $this->managementService->searchContacts($argv, $this->output);
+        // First non-flag positional after `search` is the optional query.
+        $query = null;
+        for ($i = 3; $i < count($argv); $i++) {
+            if (is_string($argv[$i]) && str_starts_with($argv[$i], '--')) {
+                continue;
+            }
+            $query = (string) $argv[$i];
+            break;
+        }
+        $this->managementService->searchContactsByQuery($query, $this->output);
     }
 
     // =========================================================================

@@ -578,24 +578,50 @@ class ContactCliHandlerTest extends TestCase
     // — pure delegation; assert only that the right service method is called.
     // =========================================================================
 
-    public function testViewDelegates(): void
+    public function testViewDelegatesWithTypedIdentifier(): void
     {
-        // viewContact lives on ContactManagementServiceInterface, not the
-        // ContactService facade — the handler routes accordingly.
+        // The handler calls the typed viewContactByIdentifier(), passing the
+        // identifier directly — no argv shape on the service side.
         $this->managementService->expects($this->once())
-            ->method('viewContact')
-            ->with($this->anything(), $this->output);
+            ->method('viewContactByIdentifier')
+            ->with('Bob', $this->output);
 
         $this->handler->handleCommand(['eiou', 'contact', 'view', 'Bob']);
     }
 
-    public function testUpdateDelegates(): void
+    public function testViewMissingIdentifierEmitsUsage(): void
+    {
+        $this->managementService->expects($this->never())->method('viewContactByIdentifier');
+        $this->handler->handleCommand(['eiou', 'contact', 'view']);
+        $this->assertOutput('error', 'Usage');
+    }
+
+    public function testUpdateDelegatesWithTypedFieldAndValues(): void
+    {
+        // Flags like --json must be stripped from the values array before
+        // they reach the service — the field-specific positional args are
+        // what updateContactField cares about.
+        $this->managementService->expects($this->once())
+            ->method('updateContactField')
+            ->with('Bob', 'name', ['Robert'], $this->output);
+
+        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', 'name', 'Robert', '--json']);
+    }
+
+    public function testUpdateForwardsFeeWithCurrency(): void
     {
         $this->managementService->expects($this->once())
-            ->method('updateContact')
-            ->with($this->anything(), $this->output);
+            ->method('updateContactField')
+            ->with('Bob', 'fee', ['1.5', 'USD'], $this->output);
 
-        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', '--name', 'Robert']);
+        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', 'fee', '1.5', 'USD']);
+    }
+
+    public function testUpdateMissingFieldEmitsUsage(): void
+    {
+        $this->managementService->expects($this->never())->method('updateContactField');
+        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob']);
+        $this->assertOutput('error', 'Usage');
     }
 
     public function testDeleteDelegates(): void
@@ -626,13 +652,32 @@ class ContactCliHandlerTest extends TestCase
         $this->handler->handleCommand(['eiou', 'contact', 'unblock', 'Bob']);
     }
 
-    public function testSearchDelegates(): void
+    public function testSearchDelegatesWithTypedQuery(): void
     {
         $this->managementService->expects($this->once())
-            ->method('searchContacts')
-            ->with($this->anything(), $this->output);
+            ->method('searchContactsByQuery')
+            ->with('alice', $this->output);
 
         $this->handler->handleCommand(['eiou', 'contact', 'search', 'alice']);
+    }
+
+    public function testSearchWithoutQueryPassesNullForListAll(): void
+    {
+        $this->managementService->expects($this->once())
+            ->method('searchContactsByQuery')
+            ->with(null, $this->output);
+
+        $this->handler->handleCommand(['eiou', 'contact', 'search']);
+    }
+
+    public function testSearchSkipsFlagsWhenLocatingQuery(): void
+    {
+        // --json must not be picked up as the search term.
+        $this->managementService->expects($this->once())
+            ->method('searchContactsByQuery')
+            ->with('alice', $this->output);
+
+        $this->handler->handleCommand(['eiou', 'contact', 'search', '--json', 'alice']);
     }
 
     // =========================================================================
