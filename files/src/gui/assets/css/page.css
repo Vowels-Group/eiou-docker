@@ -4765,6 +4765,14 @@ hr.currency-separator-double {
     flex: 1 1 0;
     min-width: 0;
 }
+/* Each Delete/Block button is wrapped in its own <form>; the generic
+   `.modal-content form { padding: 1.5rem }` rule was inflating each
+   form by 24px on every side. Higher specificity to override. */
+.modal-content form.pending-contact-action-col,
+.pending-contact-action-col {
+    padding: 0;
+    margin: 0;
+}
 
 /* On narrow screens, side-by-side Delete + Block tend to wrap their
    labels onto two lines (mismatched heights, ugly). Stack each on its
