@@ -91,6 +91,67 @@ class ContactManagementServiceTest extends TestCase
     }
 
     // =========================================================================
+    // viewContactByIdentifier() — typed surface added with the contact CLI
+    // rework. Resolves name OR address OR pubkey-hash. The pubkey-hash path
+    // matters for `eiou contact view <hash>` from `eiou contact pending --json`.
+    // =========================================================================
+
+    /**
+     * pubkey-hash (64-char hex) → resolved via getContactPubkeyFromHash()
+     * → getContactByPubkey(), bypassing the name/address lookup that would
+     * otherwise misfire on the opaque hex string.
+     */
+    public function testViewByIdentifierResolvesPubkeyHashFirst(): void
+    {
+        $hash = str_repeat('a', 64);
+
+        // 64-char hex shortcuts straight to lookupByPubkeyHash() — the
+        // contacts ⨝ addresses join the other lookup paths use, so the
+        // response includes address columns.
+        $this->contactRepo->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with($hash)
+            ->willReturn([
+                'name' => 'Bob', 'pubkey' => 'pubkey-bob',
+                'pubkey_hash' => $hash, 'status' => 'accepted',
+                'http' => 'http://bob:8080',
+            ]);
+        // Name/address lookups must NOT fire when the hash resolves.
+        $this->contactRepo->expects($this->never())->method('lookupByName');
+
+        $this->addressRepo->method('getAllAddressTypes')->willReturn(['http']);
+
+        $output = $this->createMock(CliOutputManager::class);
+        $output->method('isJsonMode')->willReturn(true);
+        $output->expects($this->once())->method('success')->with('Contact found', $this->anything());
+
+        $this->service->viewContactByIdentifier($hash, $output);
+    }
+
+    /**
+     * Non-hex / wrong-length identifier still falls through to the existing
+     * name + address lookup path — ensures the new pubkey-hash branch
+     * doesn't intercept legitimate name lookups that happen to be all-hex
+     * (rare but possible) or short-string addresses.
+     */
+    public function testViewByIdentifierFallsThroughForNonHashIdentifier(): void
+    {
+        $this->contactRepo->expects($this->never())->method('lookupByPubkeyHash');
+        $this->contactRepo->expects($this->once())->method('lookupByName')
+            ->with('Alice')
+            ->willReturn(['name' => 'Alice', 'pubkey' => 'pk-alice', 'status' => 'accepted']);
+
+        $this->addressRepo->method('getAllAddressTypes')->willReturn(['http']);
+        $this->transportUtility->method('determineTransportType')->willReturn(null);
+
+        $output = $this->createMock(CliOutputManager::class);
+        $output->method('isJsonMode')->willReturn(true);
+        $output->expects($this->once())->method('success');
+
+        $this->service->viewContactByIdentifier('Alice', $output);
+    }
+
+    // =========================================================================
     // lookupContactInfoWithDisambiguation() Tests
     // =========================================================================
 

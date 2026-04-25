@@ -910,26 +910,37 @@ class ContactManagementService implements ContactManagementServiceInterface
     {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if ($this->transportUtility->isAddress($identifier)) {
-            $addressValidation = $this->inputValidator->validateAddress($identifier);
-            if (!$addressValidation['valid']) {
-                $this->secureLogger->warning("Invalid contact address", [
-                    'address' => $identifier ?: 'empty',
-                    'error' => $addressValidation['error']
-                ]);
-                throw new ValidationServiceException(
-                    "Invalid Address: " . $addressValidation['error'],
-                    ErrorCodes::INVALID_ADDRESS,
-                    'address',
-                    400
-                );
+        $contactResult = null;
+
+        // Pubkey-hash (64-char hex) resolves directly via the contacts ⨝
+        // addresses join so the response carries address columns just like
+        // the name + address lookup paths.
+        if (preg_match('/^[a-f0-9]{64}$/i', $identifier)) {
+            $contactResult = $this->contactRepository->lookupByPubkeyHash($identifier);
+        }
+
+        if ($contactResult === null) {
+            if ($this->transportUtility->isAddress($identifier)) {
+                $addressValidation = $this->inputValidator->validateAddress($identifier);
+                if (!$addressValidation['valid']) {
+                    $this->secureLogger->warning("Invalid contact address", [
+                        'address' => $identifier ?: 'empty',
+                        'error' => $addressValidation['error']
+                    ]);
+                    throw new ValidationServiceException(
+                        "Invalid Address: " . $addressValidation['error'],
+                        ErrorCodes::INVALID_ADDRESS,
+                        'address',
+                        400
+                    );
+                }
+                $address = $addressValidation['value'];
+                $transportIndex = $this->transportUtility->determineTransportType($address);
+                $contactResult = $this->contactRepository->getContactByAddress($transportIndex, $address);
+            } else {
+                // Fallback to name lookup
+                $contactResult = $this->lookupByName($identifier);
             }
-            $address = $addressValidation['value'];
-            $transportIndex = $this->transportUtility->determineTransportType($address);
-            $contactResult = $this->contactRepository->getContactByAddress($transportIndex, $address);
-        } else {
-            // Check if the name yields a contact
-            $contactResult = $this->lookupByName($identifier);
         }
 
         if ($contactResult) {
