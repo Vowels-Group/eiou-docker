@@ -790,7 +790,7 @@
             // line-1233 re-add in Functions.php).
             $isExistingHeader = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']);
         ?>
-        <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal>
+        <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal data-pubkey-hash="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
             <div class="modal-content modal-content-md">
                 <div class="modal-header">
                     <div class="modal-header-content">
@@ -1124,8 +1124,18 @@
                     active currency line with them. Accept any of the additional
                     currencies above to open more lines, or ignore them — they'll
                     stay pending on your side until you act. To end the
-                    relationship entirely, open the contact from Your Contacts
-                    and use Delete or Block there.
+                    relationship entirely, open the contact details and use
+                    Delete or Block there.
+                    <?php if (!empty($contact['contact_id'])): ?>
+                        <div class="mt-sm">
+                            <a href="#" class="text-link"
+                               data-action="jumpToContactFromPendingModal"
+                               data-contact-id="<?php echo htmlspecialchars($contact['contact_id']); ?>"
+                               title="Open this contact's detail modal">
+                                <i class="fas fa-external-link-alt"></i> View contact details
+                            </a>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
             <?php else: ?>
