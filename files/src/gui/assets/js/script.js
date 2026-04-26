@@ -1355,6 +1355,15 @@ function openPendingContactModalByPubkeyHash(pubkeyHash) {
     if (!pubkeyHash) return;
     var modal = document.querySelector('[data-pending-contact-modal][data-pubkey-hash="' + pubkeyHash + '"]');
     if (!modal) return;
+    // Pending-contact modals are rendered inside the Contacts tab pane, which
+    // is display:none when the user is on Activity / Settings / etc. — and a
+    // position:fixed child of a display:none ancestor still doesn't render.
+    // Hoist to <body> so the modal overlays whichever tab the user is on. The
+    // move preserves event listeners and form state; idempotent on subsequent
+    // opens (already-hoisted modals stay where they are).
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
     modal.classList.remove('d-none');
     modal.classList.add('modal-stack-top');
 }
