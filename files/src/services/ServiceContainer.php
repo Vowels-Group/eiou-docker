@@ -887,6 +887,7 @@ class ServiceContainer implements ContainerInterface {
             $this->getContactManagementService(),
             $this->getContactDecisionService(),
             $this->getContactStatusService(),
+            $this->getContactSyncService(),
             $this->getCliService(),
             $this->getRepositoryFactory()->get(ContactRepository::class),
             $this->getRepositoryFactory()->get(ContactCurrencyRepository::class),

@@ -8,6 +8,7 @@ namespace Eiou\Cli;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Contracts\ContactManagementServiceInterface;
 use Eiou\Contracts\ContactStatusServiceInterface;
+use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Core\ErrorCodes;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
@@ -53,6 +54,7 @@ class ContactCliHandler
         private readonly ContactManagementServiceInterface $managementService,
         private readonly ContactDecisionService $decisionService,
         private readonly ContactStatusServiceInterface $statusService,
+        private readonly ContactSyncServiceInterface $contactSyncService,
         private readonly CliService $cliService,
         private readonly ContactRepository $contactRepository,
         private readonly ContactCurrencyRepository $contactCurrencyRepository,
@@ -258,7 +260,7 @@ class ContactCliHandler
         foreach ($pending as $row) {
             $ccy = strtoupper((string) $row['currency']);
             try {
-                $this->contactCurrencyRepository->declineIncomingCurrency($pubkeyHash, $ccy);
+                $this->contactSyncService->declineReceivedContactCurrency($pubkeyHash, $ccy);
                 $declined[] = $ccy;
             } catch (\Throwable $e) {
                 $errors[] = "{$ccy}: " . $e->getMessage();
@@ -537,7 +539,7 @@ class ContactCliHandler
         }
 
         $ccy = strtoupper($currency);
-        $this->contactCurrencyRepository->declineIncomingCurrency($pubkeyHash, $ccy);
+        $this->contactSyncService->declineReceivedContactCurrency($pubkeyHash, $ccy);
         $this->output->success(
             "Currency {$ccy} declined",
             ['contact' => $contact, 'currency' => $ccy]

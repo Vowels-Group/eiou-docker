@@ -801,9 +801,9 @@ class ContactController
         try {
             $app = Application::getInstance();
             $serviceContainer = $app->services;
-            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
-            $deleted = $contactCurrencyRepo->declineIncomingCurrency($pubkeyHash, $currency);
+            $deleted = $serviceContainer->getContactSyncService()
+                ->declineReceivedContactCurrency($pubkeyHash, $currency);
             if ($deleted) {
                 MessageHelper::redirectMessage("Currency {$currency} request declined.", 'success');
             } else {
@@ -834,10 +834,10 @@ class ContactController
         }
 
         try {
-            $contactCurrencyRepo = Application::getInstance()
-                ->services
-                ->getRepositoryFactory()
+            $services = Application::getInstance()->services;
+            $contactCurrencyRepo = $services->getRepositoryFactory()
                 ->get(ContactCurrencyRepository::class);
+            $contactSyncService = $services->getContactSyncService();
 
             $pending = $contactCurrencyRepo->getPendingCurrencies($pubkeyHash, 'incoming');
             if (empty($pending)) {
@@ -853,7 +853,7 @@ class ContactController
                     continue;
                 }
                 try {
-                    $contactCurrencyRepo->declineIncomingCurrency($pubkeyHash, $ccy);
+                    $contactSyncService->declineReceivedContactCurrency($pubkeyHash, $ccy);
                     $declined[] = $ccy;
                 } catch (\Throwable $e) {
                     $errors[] = "{$ccy}: " . $e->getMessage();

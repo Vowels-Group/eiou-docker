@@ -11,6 +11,7 @@ use Eiou\Cli\ContactCliHandler;
 use Eiou\Contracts\ContactManagementServiceInterface;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Contracts\ContactStatusServiceInterface;
+use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Services\CliService;
@@ -34,6 +35,8 @@ class ContactCliHandlerTest extends TestCase
     private $decisionService;
     /** @var ContactStatusServiceInterface&\PHPUnit\Framework\MockObject\MockObject */
     private $statusService;
+    /** @var ContactSyncServiceInterface&\PHPUnit\Framework\MockObject\MockObject */
+    private $contactSyncService;
     /** @var CliService&\PHPUnit\Framework\MockObject\MockObject */
     private $cliService;
     /** @var ContactRepository&\PHPUnit\Framework\MockObject\MockObject */
@@ -53,6 +56,7 @@ class ContactCliHandlerTest extends TestCase
         $this->managementService = $this->createMock(ContactManagementServiceInterface::class);
         $this->decisionService = $this->createMock(ContactDecisionService::class);
         $this->statusService = $this->createMock(ContactStatusServiceInterface::class);
+        $this->contactSyncService = $this->createMock(ContactSyncServiceInterface::class);
         $this->cliService = $this->createMock(CliService::class);
         $this->contactRepo = $this->createMock(ContactRepository::class);
         $this->contactCurrencyRepo = $this->createMock(ContactCurrencyRepository::class);
@@ -73,6 +77,7 @@ class ContactCliHandlerTest extends TestCase
             $this->managementService,
             $this->decisionService,
             $this->statusService,
+            $this->contactSyncService,
             $this->cliService,
             $this->contactRepo,
             $this->contactCurrencyRepo,
@@ -394,8 +399,8 @@ class ContactCliHandlerTest extends TestCase
             ]);
 
         $declined = [];
-        $this->contactCurrencyRepo->expects($this->exactly(2))
-            ->method('declineIncomingCurrency')
+        $this->contactSyncService->expects($this->exactly(2))
+            ->method('declineReceivedContactCurrency')
             ->willReturnCallback(function ($_h, $ccy) use (&$declined) {
                 $declined[] = $ccy;
                 return true;
@@ -518,12 +523,12 @@ class ContactCliHandlerTest extends TestCase
         ]);
     }
 
-    public function testCurrencyDeclineForwardsToRepository(): void
+    public function testCurrencyDeclineForwardsToContactSyncService(): void
     {
         $this->contactRepo->method('getContactPubkeyFromHash')->willReturn('pubkey-bob');
 
-        $this->contactCurrencyRepo->expects($this->once())
-            ->method('declineIncomingCurrency')
+        $this->contactSyncService->expects($this->once())
+            ->method('declineReceivedContactCurrency')
             ->with('hash123', 'EUR')
             ->willReturn(true);
 

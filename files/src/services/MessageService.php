@@ -657,15 +657,22 @@ class MessageService implements MessageServiceInterface {
                 ]);
             }
 
-            // Complete the contact transaction (update status from 'sent' to 'completed')
-            $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
+            // Complete the contact transaction (update status from 'sent' to 'completed').
+            // Filter by the acked currency when the message names one — without
+            // it a USD ack would also flip a still-pending EUR row on the same
+            // pair. Fall back to the legacy bulk update when no currency is
+            // attached (older peers / inquiry flow).
+            $acceptedCurrency = $decodedMessage['currency'] ?? null;
+            $this->transactionContactRepository->completeContactTransaction(
+                $senderPublicKey,
+                $acceptedCurrency
+            );
 
             // Update outgoing currency entries to 'accepted' when remote accepts our request
             if ($this->contactCurrencyRepository !== null) {
                 $senderPubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
                 // If the acceptance message includes a specific currency, mark that one as accepted
-                $acceptedCurrency = $decodedMessage['currency'] ?? null;
                 if ($acceptedCurrency) {
                     $this->contactCurrencyRepository->updateCurrencyStatus(
                         $senderPubkeyHash, $acceptedCurrency, 'accepted', 'outgoing'

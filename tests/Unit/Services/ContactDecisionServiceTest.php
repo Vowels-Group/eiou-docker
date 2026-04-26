@@ -113,7 +113,7 @@ class ContactDecisionServiceTest extends TestCase
         $this->contactRepository->method('getContactPubkeyFromHash')->willReturn(null);
 
         $callOrder = [];
-        $this->contactCurrencyRepository->method('declineIncomingCurrency')
+        $this->contactSyncService->method('declineReceivedContactCurrency')
             ->willReturnCallback(function ($_hash, $ccy) use (&$callOrder) {
                 $callOrder[] = "decline:{$ccy}";
                 return true;
@@ -158,7 +158,7 @@ class ContactDecisionServiceTest extends TestCase
     public function applyRecordsErrorWhenDeclineRepositoryThrows(): void
     {
         $this->contactRepository->method('getContactPubkeyFromHash')->willReturn(null);
-        $this->contactCurrencyRepository->method('declineIncomingCurrency')
+        $this->contactSyncService->method('declineReceivedContactCurrency')
             ->willThrowException(new \RuntimeException('boom'));
 
         $result = $this->service->apply('hash123', [
@@ -174,8 +174,8 @@ class ContactDecisionServiceTest extends TestCase
     {
         // GUI form may submit lowercase ccy codes — service must normalise.
         $this->contactRepository->method('getContactPubkeyFromHash')->willReturn(null);
-        $this->contactCurrencyRepository->expects($this->once())
-            ->method('declineIncomingCurrency')
+        $this->contactSyncService->expects($this->once())
+            ->method('declineReceivedContactCurrency')
             ->with('hash123', 'MXN')
             ->willReturn(true);
 
@@ -190,7 +190,8 @@ class ContactDecisionServiceTest extends TestCase
     public function applySkipsDeclineWithEmptyCurrency(): void
     {
         $this->contactRepository->method('getContactPubkeyFromHash')->willReturn(null);
-        $this->contactCurrencyRepository->expects($this->never())->method('declineIncomingCurrency');
+        $this->contactSyncService->expects($this->never())
+            ->method('declineReceivedContactCurrency');
 
         $result = $this->service->apply('hash123', [
             ['currency' => '', 'action' => 'decline'],
@@ -294,9 +295,8 @@ class ContactDecisionServiceTest extends TestCase
         // Per-currency accept on an existing accepted contact must flip the
         // contact-request transaction row from 'accepted' to 'completed' on the
         // receiver — otherwise it stays stuck on the row indicator while the
-        // sender's row goes green. The first-accept-via-add path already does
-        // this through ContactSyncService::acceptContact(); the runAccepts
-        // path didn't, until we wired the call here.
+        // sender's row goes green. Per-currency filter so we don't drag
+        // still-pending currencies along.
         $this->contactRepository->method('getContactPubkeyFromHash')->willReturn('pubkey-abc');
         $this->contactCurrencyRepository->method('updateCurrencyConfig')->willReturn(true);
         $this->contactCurrencyRepository->method('hasCurrency')->willReturn(false);
@@ -307,7 +307,7 @@ class ContactDecisionServiceTest extends TestCase
 
         $this->contactSyncService->expects($this->once())
             ->method('completeReceivedContactTransaction')
-            ->with('pubkey-abc')
+            ->with('pubkey-abc', 'EUR')
             ->willReturn(true);
 
         $result = $this->service->apply('hash123', [
@@ -323,7 +323,7 @@ class ContactDecisionServiceTest extends TestCase
         // Pure decline payload — no completion call should fire because no
         // contact-request tx is being acknowledged here.
         $this->contactRepository->method('getContactPubkeyFromHash')->willReturn('pubkey-abc');
-        $this->contactCurrencyRepository->method('declineIncomingCurrency')->willReturn(true);
+        $this->contactSyncService->method('declineReceivedContactCurrency')->willReturn(true);
 
         $this->contactSyncService->expects($this->never())
             ->method('completeReceivedContactTransaction');
@@ -331,6 +331,28 @@ class ContactDecisionServiceTest extends TestCase
         $this->service->apply('hash123', [
             ['currency' => 'USD', 'action' => 'decline'],
         ]);
+    }
+
+    #[Test]
+    public function applyRoutesDeclinesThroughContactSyncServiceHelper(): void
+    {
+        // runDeclines must call the unified helper on ContactSyncService so
+        // both the contact_currency row and the receiver-side contact-request
+        // tx get updated together. Going straight to the repo would skip the
+        // tx-rejection step.
+        $this->contactRepository->method('getContactPubkeyFromHash')->willReturn('pubkey-abc');
+        $this->contactCurrencyRepository->expects($this->never())
+            ->method('declineIncomingCurrency');
+        $this->contactSyncService->expects($this->once())
+            ->method('declineReceivedContactCurrency')
+            ->with('hash123', 'EUR')
+            ->willReturn(true);
+
+        $result = $this->service->apply('hash123', [
+            ['currency' => 'EUR', 'action' => 'decline'],
+        ]);
+
+        $this->assertSame(['EUR'], $result['declined']);
     }
 
     #[Test]

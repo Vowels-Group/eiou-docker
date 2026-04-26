@@ -1674,9 +1674,8 @@ class ApiController {
         $hash = urldecode($pubkeyHash);
         $currency = strtoupper((string) $data['currency']);
 
-        $repo = $this->services->getRepositoryFactory()
-            ->get(\Eiou\Database\ContactCurrencyRepository::class);
-        $repo->declineIncomingCurrency($hash, $currency);
+        $this->services->getContactSyncService()
+            ->declineReceivedContactCurrency($hash, $currency);
 
         return $this->successResponse([
             'message' => "Currency {$currency} declined",
@@ -1700,6 +1699,7 @@ class ApiController {
         $hash = urldecode($pubkeyHash);
         $repo = $this->services->getRepositoryFactory()
             ->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $contactSyncService = $this->services->getContactSyncService();
 
         $pending = $repo->getPendingCurrencies($hash, 'incoming');
         if (empty($pending)) {
@@ -1717,7 +1717,7 @@ class ApiController {
                 continue;
             }
             try {
-                $repo->declineIncomingCurrency($hash, $ccy);
+                $contactSyncService->declineReceivedContactCurrency($hash, $ccy);
                 $declined[] = $ccy;
             } catch (\Throwable $e) {
                 $errors[] = "{$ccy}: " . $e->getMessage();

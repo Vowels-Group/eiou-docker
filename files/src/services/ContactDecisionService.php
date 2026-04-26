@@ -130,7 +130,7 @@ class ContactDecisionService
                 continue;
             }
             try {
-                $this->contactCurrencyRepository->declineIncomingCurrency($pubkeyHash, $currency);
+                $this->contactSyncService->declineReceivedContactCurrency($pubkeyHash, $currency);
                 $declined[] = $currency;
             } catch (\Throwable $e) {
                 $errors[] = "{$currency} (decline): " . $e->getMessage();
@@ -197,7 +197,7 @@ class ContactDecisionService
         array &$accepted,
         array &$errors,
     ): void {
-        $acceptedAny = false;
+        $completedCurrencies = [];
         foreach ($acceptList as $entry) {
             $currency = strtoupper(Security::sanitizeInput($entry['currency'] ?? ''));
             $fee = Security::sanitizeInput($entry['fee'] ?? '');
@@ -269,18 +269,20 @@ class ContactDecisionService
 
             $this->contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);
             $accepted[] = $currency;
-            $acceptedAny = true;
+            $completedCurrencies[] = $currency;
         }
 
-        // Flip any 'accepted'-status contact-request transactions for this
-        // sender to 'completed'. The first-accept-via-add path does this via
-        // ContactSyncService::acceptContact(), but per-currency accepts on an
-        // already-established contact otherwise leave the contact-request tx
-        // row stuck on 'accepted' on the receiver side.
-        if ($acceptedAny) {
+        // Flip the per-currency 'accepted'-status contact-request rows for
+        // this sender to 'completed'. The first-accept-via-add path does this
+        // via ContactSyncService::acceptContact(); the per-currency accept
+        // path didn't, until we wired this call. Per-currency filter so we
+        // don't drag still-pending currencies along.
+        if (!empty($completedCurrencies)) {
             $pubkey = $contactPubkey ?: $this->contactRepository->getContactPubkeyFromHash($pubkeyHash);
             if ($pubkey) {
-                $this->contactSyncService->completeReceivedContactTransaction($pubkey);
+                foreach ($completedCurrencies as $ccy) {
+                    $this->contactSyncService->completeReceivedContactTransaction($pubkey, $ccy);
+                }
             }
         }
     }
