@@ -689,39 +689,39 @@ Bob adds Alice     -->  Both sides become ACCEPTED
 
 **Syntax:**
 ```bash
-eiou add <address> <name> <fee> <credit> <currency> [message]
+eiou contact add <address> <name> --fee <fee> --credit <credit> --currency <currency> [message]
 ```
 
 #### Creating the A<->B<->C<->D Chain
 
 ```bash
 # Create A<->B link
-docker exec alice eiou add http://bob Bob 0.1 1000 USD
-docker exec bob eiou add http://alice Alice 0.1 1000 USD
+docker exec alice eiou contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD
+docker exec bob eiou contact add http://alice Alice --fee 0.1 --credit 1000 --currency USD
 
 # Create B<->C link
-docker exec bob eiou add http://carol Carol 0.1 1000 USD
-docker exec carol eiou add http://bob Bob 0.1 1000 USD
+docker exec bob eiou contact add http://carol Carol --fee 0.1 --credit 1000 --currency USD
+docker exec carol eiou contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD
 
 # Create C<->D link
-docker exec carol eiou add http://daniel Daniel 0.1 1000 USD
-docker exec daniel eiou add http://carol Carol 0.1 1000 USD
+docker exec carol eiou contact add http://daniel Daniel --fee 0.1 --credit 1000 --currency USD
+docker exec daniel eiou contact add http://carol Carol --fee 0.1 --credit 1000 --currency USD
 ```
 
 #### Verifying the Chain
 
 ```bash
 # Alice should see Bob as accepted
-docker exec alice eiou search
+docker exec alice eiou contact search
 
 # Bob should see both Alice and Carol
-docker exec bob eiou search
+docker exec bob eiou contact search
 
 # Carol should see both Bob and Daniel
-docker exec carol eiou search
+docker exec carol eiou contact search
 
 # Daniel should see Carol
-docker exec daniel eiou search
+docker exec daniel eiou contact search
 ```
 
 #### Cross-Currency Contact Requests
@@ -730,10 +730,10 @@ When two nodes request different currencies, each request is tracked independent
 
 ```bash
 # Alice requests USD from Bob
-docker exec alice eiou add http://bob Bob 0.1 1000 USD
+docker exec alice eiou contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD
 
 # Bob requests GBY from Alice
-docker exec bob eiou add http://alice Alice 0.2 4000 GBY
+docker exec bob eiou contact add http://alice Alice --fee 0.2 --credit 4000 --currency GBY
 ```
 
 Each side now sees:
@@ -743,10 +743,10 @@ Each side now sees:
 Accept specific currency requests independently:
 ```bash
 # Bob accepts Alice's USD request
-docker exec bob eiou add http://alice Alice 0.2 4000 USD
+docker exec bob eiou contact add http://alice Alice --fee 0.2 --credit 4000 --currency USD
 
 # Alice accepts Bob's GBY request
-docker exec alice eiou add http://bob Bob 0.1 1000 GBY
+docker exec alice eiou contact add http://bob Bob --fee 0.1 --credit 1000 --currency GBY
 ```
 
 ---
@@ -754,7 +754,7 @@ docker exec alice eiou add http://bob Bob 0.1 1000 GBY
 ### 5.2 pending - Viewing Pending Requests
 
 ```bash
-docker exec alice eiou pending
+docker exec alice eiou contact pending
 ```
 
 Shows incoming and outgoing requests awaiting acceptance.
@@ -765,10 +765,10 @@ Shows incoming and outgoing requests awaiting acceptance.
 
 ```bash
 # List all contacts
-docker exec alice eiou search
+docker exec alice eiou contact search
 
 # Search by name
-docker exec bob eiou search Alice
+docker exec bob eiou contact search Alice
 ```
 
 ---
@@ -777,10 +777,10 @@ docker exec bob eiou search Alice
 
 ```bash
 # View by name
-docker exec alice eiou viewcontact Bob
+docker exec alice eiou contact view Bob
 
 # View by address
-docker exec bob eiou viewcontact http://alice
+docker exec bob eiou contact view http://alice
 ```
 
 Shows contact details including balance, fee, credit limit, and bidirectional available credit:
@@ -793,16 +793,16 @@ Shows contact details including balance, fee, credit limit, and bidirectional av
 
 ```bash
 # Update contact name
-docker exec alice eiou update Bob name Robert
+docker exec alice eiou contact update Bob name Robert
 
 # Update fee for USD
-docker exec alice eiou update Bob fee 0.5 USD
+docker exec alice eiou contact update Bob fee 0.5 USD
 
 # Update credit limit for EUR
-docker exec alice eiou update Bob credit 2000 EUR
+docker exec alice eiou contact update Bob credit 2000 EUR
 
 # Update all at once for USD
-docker exec alice eiou update Bob all NewName 0.2 1500 USD
+docker exec alice eiou contact update Bob all NewName 0.2 1500 USD
 ```
 
 ---
@@ -810,7 +810,7 @@ docker exec alice eiou update Bob all NewName 0.2 1500 USD
 ### 5.6 ping - Checking Online Status
 
 ```bash
-docker exec alice eiou ping Bob
+docker exec alice eiou contact ping Bob
 ```
 
 **Expected output:**
@@ -830,13 +830,13 @@ Ping also exchanges per-currency available credit and chain validity with the co
 
 ```bash
 # Block a contact
-docker exec alice eiou block Bob
+docker exec alice eiou contact block Bob
 
 # Verify blocked status
-docker exec alice eiou viewcontact Bob
+docker exec alice eiou contact view Bob
 
 # Unblock the contact
-docker exec alice eiou unblock Bob
+docker exec alice eiou contact unblock Bob
 ```
 
 **Effects of blocking:**
@@ -849,7 +849,7 @@ docker exec alice eiou unblock Bob
 ### 5.8 delete - Removing Contacts
 
 ```bash
-docker exec alice eiou delete OldContact
+docker exec alice eiou contact delete OldContact
 ```
 
 **Warning:** Deletion is permanent. Outstanding balances should be settled before deletion.
@@ -950,7 +950,7 @@ Alice and Daniel cannot transact directly. When Alice sends to Daniel:
 
 **Step 1: Verify Alice cannot directly reach Daniel**
 ```bash
-docker exec alice eiou search Daniel
+docker exec alice eiou contact search Daniel
 # Expected: No contacts found matching "Daniel"
 ```
 
@@ -1208,15 +1208,15 @@ docker volume rm demo-mysql-data demo-config demo-eiou demo-backups
 |----------|---------|-------------|
 | **Wallet** | `eiou info` | Wallet information |
 | | `eiou overview` | Dashboard summary |
-| **Contacts** | `eiou add <addr> <name> <fee> <credit> <currency> [message]` | Add contact |
-| | `eiou search [name]` | Search contacts |
-| | `eiou viewcontact <name>` | View contact details |
-| | `eiou pending` | Show pending requests |
-| | `eiou ping <name>` | Check online status |
-| | `eiou update <name> <field> <value> [currency]` | Update contact |
-| | `eiou block <name>` | Block contact |
-| | `eiou unblock <name>` | Unblock contact |
-| | `eiou delete <name>` | Delete contact |
+| **Contacts** | `eiou contact add <addr> <name> --fee <fee> --credit <credit> --currency <currency> [message]` | Add contact |
+| | `eiou contact search [name]` | Search contacts |
+| | `eiou contact view <name>` | View contact details |
+| | `eiou contact pending` | Show pending requests |
+| | `eiou contact ping <name>` | Check online status |
+| | `eiou contact update <name> <field> <value> [currency]` | Update contact |
+| | `eiou contact block <name>` | Block contact |
+| | `eiou contact unblock <name>` | Unblock contact |
+| | `eiou contact delete <name>` | Delete contact |
 | **Transactions** | `eiou send <name> <amount> <currency>` | Send transaction |
 | | `eiou viewbalances [name]` | View balances |
 | | `eiou history [name]` | Transaction history |
@@ -1264,7 +1264,7 @@ docker compose -f tests/old/compose-files/docker-compose-4line.yml up -d --build
 **Solutions:**
 ```bash
 # Check if both nodes are online
-docker exec alice eiou ping Bob
+docker exec alice eiou contact ping Bob
 
 # Trigger sync on both nodes
 docker exec alice eiou sync
@@ -1276,10 +1276,10 @@ docker exec bob eiou sync
 **Solutions:**
 ```bash
 # Verify contact is accepted
-docker exec alice eiou viewcontact Bob
+docker exec alice eiou contact view Bob
 
 # Check contact is online
-docker exec alice eiou ping Bob
+docker exec alice eiou contact ping Bob
 
 # Sync both nodes
 docker exec alice eiou sync

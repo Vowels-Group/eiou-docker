@@ -72,8 +72,8 @@ echo -e "\t   Sender: ${sender} (${senderAddress})"
 echo -e "\t   Receiver: ${receiver} (${receiverAddress})"
 
 # Ensure contacts exist
-docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 USD 2>&1 > /dev/null || true
+docker exec ${sender} eiou contact add ${receiverAddress} ${receiver} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
+docker exec ${receiver} eiou contact add ${senderAddress} ${sender} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
 

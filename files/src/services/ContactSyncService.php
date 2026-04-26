@@ -308,7 +308,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             }
 
                             $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
-                            $this->completeReceivedContactTransaction($senderPublicKey);
+                            $this->completeReceivedContactTransaction($senderPublicKey, $currency);
 
                             Logger::getInstance()->info("Contact accepted (mutual) after retry delivery", [
                                 'pubkey_hash' => $senderPublicKeyHash,
@@ -615,7 +615,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'txid' => $txid,
             'time' => $time,
             'memo' => 'contact',
-            'description' => $description ?? 'Contact request'
+            'description' => $description ?? "Contact request ({$currency})"
             // NOTE: endRecipientAddress and initialSenderAddress are NOT included here
             // They are added via updateTrackingFields() after insert
         ];
@@ -683,7 +683,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
             'txid' => $txid,
             'time' => $time,
             'memo' => 'contact',
-            'description' => $description ?? 'Contact request',
+            'description' => $description ?? "Contact request ({$currency})",
             // Sender's signature data for future sync verification
             'signature' => $signature,
             'nonce' => $nonce
@@ -718,8 +718,35 @@ class ContactSyncService implements ContactSyncServiceInterface {
      * @param string $senderPublicKey The public key of the contact who sent the request
      * @return bool True if transaction was updated successfully
      */
-    public function completeReceivedContactTransaction(string $senderPublicKey): bool {
-        return $this->transactionContactRepository->completeReceivedContactTransaction($senderPublicKey);
+    public function completeReceivedContactTransaction(string $senderPublicKey, ?string $currency = null): bool {
+        return $this->transactionContactRepository->completeReceivedContactTransaction($senderPublicKey, $currency);
+    }
+
+    /**
+     * Decline an incoming pending contact-currency request and reject the
+     * corresponding tx ledger row. Single helper that every decline
+     * surface (CLI, GUI, API, batched-apply) calls so the tx record is
+     * always kept in sync with the contact_currency table.
+     *
+     * @param string $pubkeyHash The contact's pubkey hash
+     * @param string $currency Currency being declined
+     * @return bool True if the contact_currency row was deleted
+     */
+    public function declineReceivedContactCurrency(string $pubkeyHash, string $currency): bool {
+        $deleted = $this->contactCurrencyRepository !== null
+            ? $this->contactCurrencyRepository->declineIncomingCurrency($pubkeyHash, $currency)
+            : false;
+
+        $pubkey = $this->contactRepository->getContactPubkeyFromHash($pubkeyHash);
+        if ($pubkey !== null) {
+            $this->transactionContactRepository->rejectReceivedContactTransaction($pubkey, $currency);
+        }
+
+        return $deleted;
+    }
+
+    public function rejectSentContactTransaction(string $contactPublicKey, string $currency): bool {
+        return $this->transactionContactRepository->rejectSentContactTransaction($contactPublicKey, $currency);
     }
 
     // =========================================================================
@@ -959,7 +986,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                     }
 
                     // Complete the received contact transaction (update status from 'accepted' to 'completed')
-                    $this->completeReceivedContactTransaction($contact['pubkey']);
+                    $this->completeReceivedContactTransaction($contact['pubkey'], $currency);
 
                     $output->success("Contact " . $address . " unblocked and added", $contactData, "Contact unblocked and added successfully");
                 } else{
@@ -1008,7 +1035,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $txid = $responseData['txid'] ?? null;
                             $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
                         }
-                        $this->completeReceivedContactTransaction($senderPublicKey);
+                        $this->completeReceivedContactTransaction($senderPublicKey, $currency);
 
                         // Store recipient signature from remote's response on our sent contact TX
                         $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
@@ -1116,7 +1143,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         }
 
                         // Complete the received contact transaction (update status from 'accepted' to 'completed')
-                        $this->completeReceivedContactTransaction($contact['pubkey']);
+                        $this->completeReceivedContactTransaction($contact['pubkey'], $currency);
 
                         $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                         $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
@@ -1164,7 +1191,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $txid = $responseData['txid'] ?? null;
                             $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
                         }
-                        $this->completeReceivedContactTransaction($senderPublicKey);
+                        $this->completeReceivedContactTransaction($senderPublicKey, $currency);
 
                         // Store recipient signature from remote's response on our sent contact TX
                         $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
@@ -1329,7 +1356,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             }
 
                             // Complete the received contact transaction
-                            $this->completeReceivedContactTransaction($senderPublicKey);
+                            $this->completeReceivedContactTransaction($senderPublicKey, $currency);
 
                             $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                             $contactData['pubkey'] = $senderPublicKey;
@@ -1677,6 +1704,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
             }
             // Our contact request could not be processed on their end
             elseif($responseData['status'] === Constants::STATUS_REJECTED){
+                // Defensive: a 'sent' contact tx for this currency may already
+                // exist if an earlier delivery attempt (retry / DLQ-resolution)
+                // inserted one before the rejection landed. Flip it to
+                // 'rejected' so the row doesn't sit on the single-check
+                // indicator forever. No-op when no matching row is present.
+                $rejectedPubkey = $responseData['senderPublicKey'] ?? null;
+                if ($rejectedPubkey !== null) {
+                    $this->rejectSentContactTransaction($rejectedPubkey, $currency);
+                }
+
                 $output->error("Contact request rejected by " . $address . " : " . ($responseData['message'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
                     'contact' => $contactData,
                     'response' => $responseData
@@ -1840,7 +1877,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         // Generate recipient signature after TX exists (needs signature_nonce from TX)
                         $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
-                        $this->completeReceivedContactTransaction($senderPublicKey);
+                        $this->completeReceivedContactTransaction($senderPublicKey, $currency);
 
                         // Include available credit in mutual acceptance response
                         $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
@@ -1990,7 +2027,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         // Generate recipient signature after TX exists (needs signature_nonce from TX)
                         $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
 
-                        $this->completeReceivedContactTransaction($senderPublicKey);
+                        $this->completeReceivedContactTransaction($senderPublicKey, $currency);
 
                         // Include available credit in mutual acceptance response
                         $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
@@ -2137,8 +2174,10 @@ class ContactSyncService implements ContactSyncServiceInterface {
         if ($contact['status'] === Constants::CONTACT_STATUS_PENDING) {
             $this->contactRepository->updateStatus($contact['pubkey'], Constants::STATUS_ACCEPTED);
 
-            // Complete the received contact transaction if it exists
-            $this->completeReceivedContactTransaction($contact['pubkey']);
+            // Complete the received contact transaction for the currency we
+            // just accepted — keeps other still-pending currencies on
+            // 'accepted' instead of bulk-flipping them to 'completed'.
+            $this->completeReceivedContactTransaction($contact['pubkey'], $currency);
         }
 
         return $sendResult['success'];

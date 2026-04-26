@@ -21,12 +21,12 @@ docker run -d --restart unless-stopped  --network=demo-net --name http3 -v "http
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
-docker exec http0 eiou add http://http1 http1 0.1 1000 USD
-docker exec http1 eiou add http://http0 http0 0.1 1000 USD
-docker exec http1 eiou add http://http2 http2 0.1 1000 USD
-docker exec http2 eiou add http://http1 http1 0.1 1000 USD
-docker exec http2 eiou add http://http3 http3 0.1 1000 USD
-docker exec http3 eiou add http://http2 http2 0.1 1000 USD
+docker exec http0 eiou contact add http://http1 http1 --fee 0.1 --credit 1000 --currency USD
+docker exec http1 eiou contact add http://http0 http0 --fee 0.1 --credit 1000 --currency USD
+docker exec http1 eiou contact add http://http2 http2 --fee 0.1 --credit 1000 --currency USD
+docker exec http2 eiou contact add http://http1 http1 --fee 0.1 --credit 1000 --currency USD
+docker exec http2 eiou contact add http://http3 http3 --fee 0.1 --credit 1000 --currency USD
+docker exec http3 eiou contact add http://http2 http2 --fee 0.1 --credit 1000 --currency USD
 
 # direct transaction
 docker exec http0 eiou send http://http1 15 USD

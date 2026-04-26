@@ -22,9 +22,9 @@ sleep 160 # Safety wait for all Tor connections to be properly ready
 
 
 # add contacts
-docker exec Alice eiou add https://Bob Bob 0.1 1000 USD
-docker exec Bob eiou add https://Alice Alice 0.1 1000 USD
-docker exec Bob eiou add https://Carol Carol 0.1 1000 USD
-docker exec Carol eiou add https://Bob Bob 0.1 1000 USD
-docker exec Carol eiou add https://Daniel Daniel 0.1 1000 USD
-docker exec Daniel eiou add https://Carol Carol 0.1 1000 USD
+docker exec Alice eiou contact add https://Bob Bob --fee 0.1 --credit 1000 --currency USD
+docker exec Bob eiou contact add https://Alice Alice --fee 0.1 --credit 1000 --currency USD
+docker exec Bob eiou contact add https://Carol Carol --fee 0.1 --credit 1000 --currency USD
+docker exec Carol eiou contact add https://Bob Bob --fee 0.1 --credit 1000 --currency USD
+docker exec Carol eiou contact add https://Daniel Daniel --fee 0.1 --credit 1000 --currency USD
+docker exec Daniel eiou contact add https://Carol Carol --fee 0.1 --credit 1000 --currency USD

@@ -549,11 +549,17 @@
                         multi-hop transactions through your node. Keep it small or zero for trusted
                         contacts; raise it if you're a busy relay node.
                         <br><br>
-                        <strong>Block</strong> stops all new transactions with this contact and hides
-                        them from your contact list. Existing transactions are not touched.
-                        <strong>Delete</strong> removes the contact entirely &mdash; existing
-                        transactions stay on both chains, but you can't make new ones without
-                        re-adding them as a contact first.
+                        <strong>Block</strong> stops all new transactions with this contact, hides
+                        them from your contact list, and rejects any future contact requests
+                        from them. Existing transactions are not touched.
+                        <br><br>
+                        <strong>Delete</strong> removes the contact's local row. If you've ever
+                        transacted with them, the other side's contact-status ping will detect
+                        the mismatch and re-add them as a pending contact request the next
+                        cycle &mdash; so for an established contact, delete on its own doesn't
+                        really keep them out. If your goal is to actually keep them away, use
+                        <strong>Block</strong> instead. Existing transactions on both chains
+                        stay either way.
                     </div>
                 </details>
                 <form method="POST" id="editContactForm">
@@ -784,7 +790,7 @@
             // line-1233 re-add in Functions.php).
             $isExistingHeader = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']);
         ?>
-        <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal>
+        <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal data-pubkey-hash="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
             <div class="modal-content modal-content-md">
                 <div class="modal-header">
                     <div class="modal-header-content">
@@ -856,10 +862,14 @@
                     will add it.
                     <br><br>
                     <strong>Apply</strong> commits all your decisions in one go.
-                    <strong>Delete Request</strong> silently drops the entire
-                    request (the other side isn't told).
-                    <strong>Block Contact</strong> prevents future requests
-                    from them.
+                    <strong>Delete Request</strong> silently drops the local
+                    record (the other side isn't told). For a brand-new request
+                    with no prior tx history this is enough; for an established
+                    contact you've previously transacted with, their contact-
+                    status ping will detect the mismatch and re-add the row as
+                    a pending request next cycle. <strong>Block Contact</strong>
+                    is the durable choice: it rejects future requests from them
+                    and prevents the ping from re-creating the row.
                 </div>
             </details>
 
@@ -1114,8 +1124,18 @@
                     active currency line with them. Accept any of the additional
                     currencies above to open more lines, or ignore them — they'll
                     stay pending on your side until you act. To end the
-                    relationship entirely, open the contact from Your Contacts
-                    and use Delete or Block there.
+                    relationship entirely, open the contact details and use
+                    Delete or Block there.
+                    <?php if (!empty($contact['contact_id'])): ?>
+                        <div class="mt-sm">
+                            <a href="#" class="text-link"
+                               data-action="jumpToContactFromPendingModal"
+                               data-contact-id="<?php echo htmlspecialchars($contact['contact_id']); ?>"
+                               title="Open this contact's detail modal">
+                                <i class="fas fa-external-link-alt"></i> View contact details
+                            </a>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
             <?php else: ?>

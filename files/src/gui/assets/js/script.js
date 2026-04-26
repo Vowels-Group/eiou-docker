@@ -178,14 +178,20 @@ function escapeHtml(text) {
 }
 
 /**
- * Display-time normalisation for transaction descriptions. Old contact-
- * request txs stored their description as the long phrase "Contact request
- * transaction"; the current default is the shorter "Contact request".
- * Render the short form regardless of what's in the DB so the history looks
- * consistent across old + new rows. Returns the input unchanged for any
- * other description.
+ * Display-time normalisation for transaction descriptions. Contact-request
+ * descriptions evolved through three formats: "Contact request transaction"
+ * (oldest), "Contact request" (interim), and "Contact request (CCY)" (current
+ * default — self-disambiguating in multi-currency rows). When a currency is
+ * supplied, promote any of the older placeholders to the currency-bearing
+ * form so old + new rows render consistently. Returns the input unchanged
+ * for user-typed descriptions and any other text.
  */
-function displayTxDescription(desc) {
+function displayTxDescription(desc, currency) {
+    var ccy = (typeof currency === 'string' && currency) ? currency.toUpperCase() : '';
+    var isPlaceholder = desc === '' || desc === 'Contact request' || desc === 'Contact request transaction';
+    if (isPlaceholder && ccy) {
+        return 'Contact request (' + ccy + ')';
+    }
     if (desc === 'Contact request transaction') {
         return 'Contact request';
     }
@@ -1151,6 +1157,27 @@ function renderTransactionModal(tx) {
         html += '</div>';
     }
 
+    // Pending-contact notice: a contact-request tx in 'accepted' state on the
+    // receiver side corresponds to a Pending Contact Request awaiting user
+    // action. Surface a clickable link here — same pattern as the DLQ notice
+    // — so the user can jump straight to the right pending modal instead of
+    // hunting for it in the Pending Contact Requests section. Only render
+    // when a matching pending modal actually exists in the DOM (the request
+    // could already have been resolved without a page refresh).
+    if (isContactReq && tx.status === 'accepted' && tx.type === 'received') {
+        var senderHash = tx.sender_public_key_hash || '';
+        var hasPending = senderHash && !!document.querySelector('[data-pending-contact-modal][data-pubkey-hash="' + senderHash + '"]');
+        if (hasPending) {
+            html += '<div class="tx-modal-pending-contact-notice">';
+            html += '<i class="fas fa-info-circle"></i> ';
+            html += 'This contact request is awaiting your decision — '
+                 +  '<a href="#" data-action="jumpToPendingContactByPubkeyHash"'
+                 +  ' data-pubkey-hash="' + escapeHtml(senderHash) + '">'
+                 +  'open the Pending Contact Request</a> to accept, decline, or defer.';
+            html += '</div>';
+        }
+    }
+
     // Details section
     html += '<div class="tx-detail-section">';
 
@@ -1178,7 +1205,7 @@ function renderTransactionModal(tx) {
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description)) + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description, tx.currency)) + '</div>';
         html += '</div>';
     }
 
@@ -1310,6 +1337,37 @@ function closeTransactionModal() {
  *
  * @param {string} txid - The transaction ID to look up and display
  */
+/**
+ * Open the pending-contact-request modal for a given contact pubkey hash,
+ * stacked on top of whichever modal called us. Used by the contact-detail
+ * "Their requests" section, the Transaction Details "this is awaiting your
+ * decision" notice on contact-type rows, and any other surface that wants
+ * to drop the user into the right pending modal for a specific contact.
+ *
+ * Returns silently when no matching pending modal exists (e.g. the row was
+ * already acted on but the page hasn't refreshed).
+ *
+ * @param {string} pubkeyHash - Contact's pubkey hash (matches the
+ *                              data-pubkey-hash attribute on the rendered
+ *                              pending-contact-modal-N element)
+ */
+function openPendingContactModalByPubkeyHash(pubkeyHash) {
+    if (!pubkeyHash) return;
+    var modal = document.querySelector('[data-pending-contact-modal][data-pubkey-hash="' + pubkeyHash + '"]');
+    if (!modal) return;
+    // Pending-contact modals are rendered inside the Contacts tab pane, which
+    // is display:none when the user is on Activity / Settings / etc. — and a
+    // position:fixed child of a display:none ancestor still doesn't render.
+    // Hoist to <body> so the modal overlays whichever tab the user is on. The
+    // move preserves event listeners and form state; idempotent on subsequent
+    // opens (already-hoisted modals stay where they are).
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+    modal.classList.remove('d-none');
+    modal.classList.add('modal-stack-top');
+}
+
 function openTransactionModalByTxid(txid) {
     if (!txid) { return; }
 
@@ -1425,6 +1483,12 @@ document.addEventListener('keydown', function(event) {
     // modal opened from DLQ modal via its Transaction ID link), Escape
     // should dismiss only the top modal so the user returns to the
     // underlying modal they were reading.
+    var stackedPending = document.querySelector('[data-pending-contact-modal].modal-stack-top:not(.d-none)');
+    if (stackedPending) {
+        stackedPending.classList.add('d-none');
+        stackedPending.classList.remove('modal-stack-top');
+        return;
+    }
     var contactModalEl = document.getElementById('contactModal');
     if (contactModalEl
         && contactModalEl.classList.contains('modal-stack-top')
@@ -2348,6 +2412,8 @@ function initializeCurrencyAcceptHandlers() {
                 form.querySelector('.apply-decisions-data').value = JSON.stringify(decisions);
                 if (applyBtn) {
                     applyBtn.disabled = true;
+                    var applyIcon = applyBtn.querySelector('i');
+                    if (applyIcon) { applyIcon.className = 'fas fa-spinner fa-spin'; }
                     if (applyLabel) { applyLabel.textContent = 'Applying…'; }
                 }
             }
@@ -3769,14 +3835,31 @@ function openContactModal(contact, openTab) {
                 }
             }
 
-            // Show incoming requests (read-only — accept via Pending Contact Requests section)
+            // Show incoming requests with a clickable affordance that opens the
+            // matching pending-contact-request modal stacked on top of this
+            // contact-detail modal — the user can act on the request without
+            // closing this modal first. Falls back to plain text if no pending
+            // modal element exists for this contact's pubkey hash (e.g. the
+            // request was already resolved server-side and the page hasn't
+            // been re-rendered yet).
             if (pendingCurrencies.length > 0) {
                 phtml += '<div class="mb-md"><strong><i class="fas fa-inbox"></i> Their requests:</strong></div>';
+                var pkh = contact.pubkey_hash || '';
+                var hasPendingModal = pkh && !!document.querySelector('[data-pending-contact-modal][data-pubkey-hash="' + pkh + '"]');
                 for (var pi = 0; pi < pendingCurrencies.length; pi++) {
                     var pc = pendingCurrencies[pi];
                     phtml += '<div class="d-flex gap-sm align-items-center mb-sm">';
                     phtml += '<span class="badge badge-info">' + escapeHtml(pc.currency) + '</span>';
-                    phtml += '<span class="text-muted">Accept via Pending Contact Requests section</span>';
+                    if (hasPendingModal) {
+                        phtml += '<a href="#" class="text-link"'
+                              +  ' data-action="jumpToPendingContactByPubkeyHash"'
+                              +  ' data-pubkey-hash="' + escapeHtml(pkh) + '"'
+                              +  ' title="Open the Pending Contact Request modal for this contact">'
+                              +  '<i class="fas fa-external-link-alt"></i> Review &amp; respond'
+                              +  '</a>';
+                    } else {
+                        phtml += '<span class="text-muted">Accept via Pending Contact Requests section</span>';
+                    }
                     phtml += '</div>';
                 }
             }
@@ -4047,7 +4130,7 @@ function openContactModal(contact, openTab) {
             html += '<i class="fas ' + statusIcon + '"></i>';
             html += '</span>';
             html += '</td>';
-            var displayDesc = displayTxDescription(description);
+            var displayDesc = displayTxDescription(description, tx.currency);
             html += '<td class="col-tx-desc" title="' + escapeHtml(displayDesc || 'No description') + '">';
             html += escapeHtml(displayDesc || '—');
             html += '</td>';
@@ -7879,7 +7962,29 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var modalId = el.getAttribute('data-modal-id');
             if (!modalId) return;
             var modal = document.getElementById(modalId);
-            if (modal) modal.classList.add('d-none');
+            if (modal) {
+                modal.classList.add('d-none');
+                modal.classList.remove('modal-stack-top');
+            }
+        },
+        // Cross-modal jump used by the contact-detail modal "Their requests"
+        // section, the tx-details modal pending-contact notice, and any
+        // other surface that wants to drop the user into the pending-contact
+        // request modal for a specific pubkey hash. Stacks on top of the
+        // origin modal so Escape returns to it.
+        'jumpToPendingContactByPubkeyHash': function(el) {
+            var hash = el.getAttribute('data-pubkey-hash');
+            openPendingContactModalByPubkeyHash(hash);
+        },
+        // Reverse direction: from inside a pending-contact request modal,
+        // jump to the contact's detail modal (only meaningful when the
+        // contact is already accepted — additional currency requests).
+        'jumpToContactFromPendingModal': function(el) {
+            var cid = el.getAttribute('data-contact-id');
+            if (!cid) return;
+            var contactModalEl = document.getElementById('contactModal');
+            if (contactModalEl) contactModalEl.classList.add('modal-stack-top');
+            openContactByContactId(cid);
         },
         'openResetToDefaultsModal': function() {
             var modal = document.getElementById('settingsResetToDefaultsModal');

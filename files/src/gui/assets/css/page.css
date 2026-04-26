@@ -5299,6 +5299,22 @@ details.section-intro > .section-intro-body {
 }
 .tx-modal-dlq-warning a { color: inherit; font-weight: 600; text-decoration: underline; }
 
+/* Mirrors `.tx-modal-dlq-warning` for the contact-request "awaiting your
+   decision" notice — info-toned because it's an actionable hint, not a
+   failure. Click target jumps to the corresponding Pending Contact
+   Request modal. */
+.tx-modal-pending-contact-notice {
+    background: var(--info-soft-bg, #cff4fc);
+    color: var(--info-soft-fg, #055160);
+    border: 1px solid var(--info-bg, #0dcaf0);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+.tx-modal-pending-contact-notice a { color: inherit; font-weight: 600; text-decoration: underline; }
+.tx-modal-pending-contact-notice a:hover { cursor: pointer; }
+
 .tx-modal-badges {
     display: -webkit-box; display: -ms-flexbox; display: flex;
     gap: 0.5rem;

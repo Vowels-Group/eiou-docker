@@ -39,27 +39,27 @@ docker run -d --restart unless-stopped --network=demo-net --name A42 -v "A42-mys
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Add friends (NOTE that names are NOT arbitrary)
-docker exec A0 eiou add https://A1 A1 0.1 1000 USD
-docker exec A1 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A2 A2 0.1 1000 USD
-docker exec A2 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A3 A3 0.1 1000 USD
-docker exec A3 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A4 A4 0.1 1000 USD
-docker exec A4 eiou add https://A0 A0 0.1 1000 USD
-docker exec A1 eiou add https://A11 A11 0.1 1000 USD
-docker exec A11 eiou add https://A1 A1 0.1 1000 USD
-docker exec A1 eiou add https://A12 A12 0.1 1000 USD
-docker exec A12 eiou add https://A1 A1 0.1 1000 USD
-docker exec A2 eiou add https://A21 A21 0.1 1000 USD
-docker exec A21 eiou add https://A2 A2 0.1 1000 USD
-docker exec A2 eiou add https://A22 A22 0.1 1000 USD
-docker exec A22 eiou add https://A2 A2 0.1 1000 USD
-docker exec A3 eiou add https://A31 A31 0.1 1000 USD
-docker exec A31 eiou add https://A3 A3 0.1 1000 USD
-docker exec A3 eiou add https://A32 A32 0.1 1000 USD
-docker exec A32 eiou add https://A3 A3 0.1 1000 USD
-docker exec A4 eiou add https://A41 A41 0.1 1000 USD
-docker exec A41 eiou add https://A4 A4 0.1 1000 USD
-docker exec A4 eiou add https://A42 A42 0.1 1000 USD
-docker exec A42 eiou add https://A4 A4 0.1 1000 USD
+docker exec A0 eiou contact add https://A1 A1 --fee 0.1 --credit 1000 --currency USD
+docker exec A1 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A2 A2 --fee 0.1 --credit 1000 --currency USD
+docker exec A2 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A3 A3 --fee 0.1 --credit 1000 --currency USD
+docker exec A3 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A4 A4 --fee 0.1 --credit 1000 --currency USD
+docker exec A4 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A1 eiou contact add https://A11 A11 --fee 0.1 --credit 1000 --currency USD
+docker exec A11 eiou contact add https://A1 A1 --fee 0.1 --credit 1000 --currency USD
+docker exec A1 eiou contact add https://A12 A12 --fee 0.1 --credit 1000 --currency USD
+docker exec A12 eiou contact add https://A1 A1 --fee 0.1 --credit 1000 --currency USD
+docker exec A2 eiou contact add https://A21 A21 --fee 0.1 --credit 1000 --currency USD
+docker exec A21 eiou contact add https://A2 A2 --fee 0.1 --credit 1000 --currency USD
+docker exec A2 eiou contact add https://A22 A22 --fee 0.1 --credit 1000 --currency USD
+docker exec A22 eiou contact add https://A2 A2 --fee 0.1 --credit 1000 --currency USD
+docker exec A3 eiou contact add https://A31 A31 --fee 0.1 --credit 1000 --currency USD
+docker exec A31 eiou contact add https://A3 A3 --fee 0.1 --credit 1000 --currency USD
+docker exec A3 eiou contact add https://A32 A32 --fee 0.1 --credit 1000 --currency USD
+docker exec A32 eiou contact add https://A3 A3 --fee 0.1 --credit 1000 --currency USD
+docker exec A4 eiou contact add https://A41 A41 --fee 0.1 --credit 1000 --currency USD
+docker exec A41 eiou contact add https://A4 A4 --fee 0.1 --credit 1000 --currency USD
+docker exec A4 eiou contact add https://A42 A42 --fee 0.1 --credit 1000 --currency USD
+docker exec A42 eiou contact add https://A4 A4 --fee 0.1 --credit 1000 --currency USD

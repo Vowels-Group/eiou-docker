@@ -142,12 +142,12 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[1.3 Setup contacts between A, B, and C]"
 
 # Ensure bidirectional contacts exist
-docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerA} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerB} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerB} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerC} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
+docker exec ${containerA} eiou contact add ${addressB} ${containerB} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
+docker exec ${containerA} eiou contact add ${addressC} ${containerC} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
+docker exec ${containerB} eiou contact add ${addressA} ${containerA} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
+docker exec ${containerB} eiou contact add ${addressC} ${containerC} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
+docker exec ${containerC} eiou contact add ${addressA} ${containerA} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
+docker exec ${containerC} eiou contact add ${addressB} ${containerB} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
 
 # Process queues to initiate contact exchange
 wait_for_queue_processed ${containerA}
@@ -831,7 +831,7 @@ echo -e "\n[4.1 Test manual ping command: eiou ping]"
 # Use EIOU_TEST_MODE=true to bypass rate limiting during tests
 # Note: Require Functions.php to get output() wrapper function
 pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
-    // Test the eiou ping command logic directly
+    // Test the eiou contact ping command logic directly
     try {
         require_once('/app/eiou/Functions.php');
         \$app = \Eiou\Core\Application::getInstance();
@@ -994,7 +994,7 @@ contactTxCheckA=$(docker exec ${containerA} php -r "
 if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT" ]]; then
     echo -e "\t   A→B contact TX missing, re-establishing contact..."
 
-    # Delete A's contact with B so eiou add can recreate it with a fresh contact TX
+    # Delete A's contact with B so eiou contact add can recreate --fee it --credit with --currency a fresh contact TX
     docker exec ${containerA} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
@@ -1009,7 +1009,7 @@ if [[ "$contactTxCheckA" == "MISSING" ]] || [[ "$contactTxCheckA" == "NO_CONTACT
     " 2>/dev/null
 
     # Re-add B from A (creates fresh contact TX with dual signature on acceptance)
-    docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
+    docker exec ${containerA} eiou contact add ${addressB} ${containerB} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
     wait_for_queue_processed ${containerA}
     wait_for_queue_processed ${containerB}
 
@@ -1366,7 +1366,7 @@ for link in "${!containersLinks[@]}"; do
     else
         toAddr=$(get_tor_address "${to}")
     fi
-    docker exec ${from} eiou add ${toAddr} ${to} ${fee} ${credit} ${currency} 2>&1 > /dev/null || true
+    docker exec ${from} eiou contact add ${toAddr} ${to} --fee ${fee} --credit ${credit} --currency ${currency} 2>&1 > /dev/null || true
 done
 
 # Process queues to establish contacts

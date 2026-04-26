@@ -33,24 +33,24 @@ docker run -d --restart unless-stopped  --network=demo-net --name httpJ -v "http
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
-docker exec httpA eiou add http://httpB httpB 0.1 1000 USD
-docker exec httpB eiou add http://httpA httpA 0.1 1000 USD
-docker exec httpB eiou add http://httpC httpC 0.1 1000 USD
-docker exec httpC eiou add http://httpB httpB 0.1 1000 USD
-docker exec httpC eiou add http://httpD httpD 0.1 1000 USD
-docker exec httpD eiou add http://httpC httpC 0.1 1000 USD
-docker exec httpD eiou add http://httpE httpE 0.1 1000 USD
-docker exec httpE eiou add http://httpD httpD 0.1 1000 USD
-docker exec httpE eiou add http://httpF httpF 0.1 1000 USD
-docker exec httpF eiou add http://httpE httpE 0.1 1000 USD
-docker exec httpF eiou add http://httpG httpG 0.1 1000 USD
-docker exec httpG eiou add http://httpF httpF 0.1 1000 USD
-docker exec httpG eiou add http://httpH httpH 0.1 1000 USD
-docker exec httpH eiou add http://httpG httpG 0.1 1000 USD
-docker exec httpH eiou add http://httpI httpI 0.1 1000 USD
-docker exec httpI eiou add http://httpH httpH 0.1 1000 USD
-docker exec httpI eiou add http://httpJ httpJ 0.1 1000 USD
-docker exec httpJ eiou add http://httpI httpI 0.1 1000 USD
+docker exec httpA eiou contact add http://httpB httpB --fee 0.1 --credit 1000 --currency USD
+docker exec httpB eiou contact add http://httpA httpA --fee 0.1 --credit 1000 --currency USD
+docker exec httpB eiou contact add http://httpC httpC --fee 0.1 --credit 1000 --currency USD
+docker exec httpC eiou contact add http://httpB httpB --fee 0.1 --credit 1000 --currency USD
+docker exec httpC eiou contact add http://httpD httpD --fee 0.1 --credit 1000 --currency USD
+docker exec httpD eiou contact add http://httpC httpC --fee 0.1 --credit 1000 --currency USD
+docker exec httpD eiou contact add http://httpE httpE --fee 0.1 --credit 1000 --currency USD
+docker exec httpE eiou contact add http://httpD httpD --fee 0.1 --credit 1000 --currency USD
+docker exec httpE eiou contact add http://httpF httpF --fee 0.1 --credit 1000 --currency USD
+docker exec httpF eiou contact add http://httpE httpE --fee 0.1 --credit 1000 --currency USD
+docker exec httpF eiou contact add http://httpG httpG --fee 0.1 --credit 1000 --currency USD
+docker exec httpG eiou contact add http://httpF httpF --fee 0.1 --credit 1000 --currency USD
+docker exec httpG eiou contact add http://httpH httpH --fee 0.1 --credit 1000 --currency USD
+docker exec httpH eiou contact add http://httpG httpG --fee 0.1 --credit 1000 --currency USD
+docker exec httpH eiou contact add http://httpI httpI --fee 0.1 --credit 1000 --currency USD
+docker exec httpI eiou contact add http://httpH httpH --fee 0.1 --credit 1000 --currency USD
+docker exec httpI eiou contact add http://httpJ httpJ --fee 0.1 --credit 1000 --currency USD
+docker exec httpJ eiou contact add http://httpI httpI --fee 0.1 --credit 1000 --currency USD
 
 # direct transaction
 docker exec httpA eiou send http://httpB 100 USD

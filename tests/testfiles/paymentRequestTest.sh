@@ -55,8 +55,8 @@ statusAB=$(docker exec ${containerA} php -r "
 
 if [ "$statusAB" != "accepted" ]; then
     printf "\t-> Contact A→B not accepted (status: ${statusAB}), re-adding...\n"
-    docker exec ${containerA} eiou add ${addressB} ${containerB} 0.00 0.00 USD 2>/dev/null
-    docker exec ${containerB} eiou add ${addressA} ${containerA} 0.00 0.00 USD 2>/dev/null
+    docker exec ${containerA} eiou contact add ${addressB} ${containerB} --fee 0.00 --credit 0.00 --currency USD 2>/dev/null
+    docker exec ${containerB} eiou contact add ${addressA} ${containerA} --fee 0.00 --credit 0.00 --currency USD 2>/dev/null
 
     # Wait for contacts to be accepted (up to 15s)
     wait_elapsed=0

@@ -320,7 +320,10 @@
                 $type = $tx['type'] ?? ($tx['tx_type'] ?? '');
                 if ($type !== 'contact') continue;
                 $desc = trim((string) ($tx['description'] ?? ''));
-                $isPlaceholder = ($desc === '' || $desc === 'Contact request' || $desc === 'Contact request transaction');
+                $isPlaceholder = ($desc === ''
+                    || $desc === 'Contact request'
+                    || $desc === 'Contact request transaction'
+                    || preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) === 1);
                 if ($isPlaceholder) continue;
                 // Group key: (counterparty address, integer-second timestamp).
                 $counter = $tx['counterparty_address'] ?? ($tx['sender_address'] ?? ($tx['receiver_address'] ?? ''));
@@ -334,7 +337,10 @@
                 $type = $tx['type'] ?? ($tx['tx_type'] ?? '');
                 if ($type !== 'contact') continue;
                 $desc = trim((string) ($tx['description'] ?? ''));
-                $isPlaceholder = ($desc === '' || $desc === 'Contact request' || $desc === 'Contact request transaction');
+                $isPlaceholder = ($desc === ''
+                    || $desc === 'Contact request'
+                    || $desc === 'Contact request transaction'
+                    || preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) === 1);
                 if (!$isPlaceholder) continue;
                 $counter = $tx['counterparty_address'] ?? ($tx['sender_address'] ?? ($tx['receiver_address'] ?? ''));
                 $tsKey = is_string($tx['timestamp'] ?? null) ? substr($tx['timestamp'], 0, 19) : (string) ($tx['timestamp'] ?? '');
@@ -414,6 +420,8 @@
             'counterparty_contact_id' => $cpContact['contact_id'] ?? null,
             'sender_address' => $tx['sender_address'] ?? '',
             'receiver_address' => $tx['receiver_address'] ?? '',
+            'sender_public_key_hash' => $tx['sender_public_key_hash'] ?? '',
+            'receiver_public_key_hash' => $tx['receiver_public_key_hash'] ?? '',
             'memo' => $tx['memo'] ?? '',
             'description' => $tx['description'] ?? '',
             'previous_txid' => $tx['previous_txid'] ?? '',

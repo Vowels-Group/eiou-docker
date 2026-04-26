@@ -350,8 +350,8 @@ ensure_contacts() {
     local s_addr="$3"
     local r_addr="$4"
 
-    docker exec ${s} eiou add ${r_addr} ${r} 0 0 USD 2>&1 > /dev/null || true
-    docker exec ${r} eiou add ${s_addr} ${s} 0 0 USD 2>&1 > /dev/null || true
+    docker exec ${s} eiou contact add ${r_addr} ${r} --fee 0 --credit 0 --currency USD 2>&1 > /dev/null || true
+    docker exec ${r} eiou contact add ${s_addr} ${s} --fee 0 --credit 0 --currency USD 2>&1 > /dev/null || true
     # Process message queues to complete contact exchange
     wait_for_queue_processed "$s" 2
     wait_for_queue_processed "$r" 2

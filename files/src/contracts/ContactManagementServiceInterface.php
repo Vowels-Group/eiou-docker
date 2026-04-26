@@ -99,6 +99,13 @@ interface ContactManagementServiceInterface
     public function searchContacts(array $data, ?CliOutputManager $output = null): void;
 
     /**
+     * Search contacts by partial name. Typed entry point.
+     *
+     * @param string|null $query Optional partial name. Null/empty = list all.
+     */
+    public function searchContactsByQuery(?string $query, ?CliOutputManager $output = null): void;
+
+    /**
      * View detailed information about a contact.
      *
      * @param array $data Contact identifier data
@@ -106,6 +113,14 @@ interface ContactManagementServiceInterface
      * @return void
      */
     public function viewContact(array $data, ?CliOutputManager $output = null): void;
+
+    /**
+     * View detailed information about a contact by name or address.
+     * Typed entry point — same behaviour as viewContact() without argv shape.
+     *
+     * @param string $identifier Contact name or address.
+     */
+    public function viewContactByIdentifier(string $identifier, ?CliOutputManager $output = null): void;
 
     // =========================================================================
     // EXISTENCE CHECKS
@@ -190,6 +205,16 @@ interface ContactManagementServiceInterface
      * @return void
      */
     public function updateContact(array $argv, ?CliOutputManager $output = null): void;
+
+    /**
+     * Update one or more fields of a contact by name or address.
+     * Typed entry point.
+     *
+     * @param string $identifier Contact name or address.
+     * @param string $field      One of name|fee|credit|all.
+     * @param array  $values     Field-specific positional values.
+     */
+    public function updateContactField(string $identifier, string $field, array $values, ?CliOutputManager $output = null): void;
 
     /**
      * Update the status of a contact.
@@ -285,6 +310,16 @@ interface ContactManagementServiceInterface
      * @return array List of blocked contacts
      */
     public function getBlockedContacts(): array;
+
+    /**
+     * Get all contacts keyed by status (accepted / pending / blocked / etc).
+     *
+     * Backs the `eiou contact list` CLI surface and any caller that wants a
+     * single shot of every contact bucket without a per-status round-trip.
+     *
+     * @return array<string, array> Map of status key → list of contacts.
+     */
+    public function getContactsGroupedByStatus(): array;
 
     /**
      * Lookup contact addresses by name.

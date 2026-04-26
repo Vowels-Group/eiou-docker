@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
     // Contact actions
-    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'applyContactDecisions', 'declineCurrency', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
+    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'applyContactDecisions', 'declineCurrency', 'declineContact', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
         $contactController->routeAction();
     }
 
@@ -1174,7 +1174,10 @@ if (!empty($pendingContacts) && $user->has('public')) {
         // Get the contact transaction description (message sent with the request)
         $contactTx = $txContactRepo->getContactTransactionByParties($pc['pubkey'], $myPubkey);
         $desc = $contactTx['description'] ?? null;
-        if ($desc !== null && $desc !== 'Contact request' && $desc !== 'Contact request transaction') {
+        if ($desc !== null
+            && $desc !== 'Contact request'
+            && $desc !== 'Contact request transaction'
+            && preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) !== 1) {
             $pc['contact_description'] = $desc;
         }
     }

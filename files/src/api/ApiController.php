@@ -232,16 +232,28 @@ class ApiController {
      * Handle contacts endpoints
      *
      * Routes:
-     * - GET    /api/v1/contacts                  - List all contacts
-     * - POST   /api/v1/contacts                  - Add new contact
-     * - GET    /api/v1/contacts/pending          - Get pending contact requests
-     * - GET    /api/v1/contacts/search           - Search contacts by name
-     * - POST   /api/v1/contacts/ping/:address    - Ping a contact
-     * - GET    /api/v1/contacts/:address         - Get contact details
-     * - DELETE /api/v1/contacts/:address         - Delete contact
-     * - PUT    /api/v1/contacts/:address         - Update contact
-     * - POST   /api/v1/contacts/block/:address   - Block contact
-     * - POST   /api/v1/contacts/unblock/:address - Unblock contact
+     * - GET    /api/v1/contacts                              - List all contacts
+     * - POST   /api/v1/contacts                              - Add new contact
+     * - GET    /api/v1/contacts/pending                      - Get pending contact requests
+     * - GET    /api/v1/contacts/search                       - Search contacts by name
+     * - POST   /api/v1/contacts/ping/:address                - Ping a contact
+     * - POST   /api/v1/contacts/:hash/decisions              - Apply batched contact-currency decisions
+     * - POST   /api/v1/contacts/:hash/decline                - Decline every pending currency on a contact request
+     * - GET    /api/v1/contacts/:hash/currencies             - List every currency configured for a contact
+     * - POST   /api/v1/contacts/:hash/currencies             - Add a new currency to an accepted contact
+     * - POST   /api/v1/contacts/:hash/currency-accept        - Accept a single pending currency
+     * - POST   /api/v1/contacts/:hash/currency-decline       - Decline a single pending currency
+     * - POST   /api/v1/contacts/:hash/currency-remove        - Locally remove a currency from a contact (no peer notification)
+     * - GET    /api/v1/contacts/:address                     - Get contact details
+     * - DELETE /api/v1/contacts/:address                     - Delete contact
+     * - PUT    /api/v1/contacts/:address                     - Update contact
+     * - POST   /api/v1/contacts/block/:address               - Block contact
+     * - POST   /api/v1/contacts/unblock/:address             - Unblock contact
+     *
+     * Decisions / per-currency endpoints back the GUI batched-apply modal and
+     * the `eiou contact apply / accept / currency …` CLI surface; all three
+     * paths share ContactDecisionService so the partition + declines-first
+     * + first-accept-via-add semantics are guaranteed identical.
      */
     private function handleContacts(string $method, ?string $action, ?string $id, array $params, string $body): array {
         return match (true) {
@@ -252,6 +264,13 @@ class ApiController {
             $method === 'POST' && $action === 'ping' && $id => $this->pingContact($id),
             $method === 'POST' && $action === 'block' && $id => $this->blockContact($id),
             $method === 'POST' && $action === 'unblock' && $id => $this->unblockContact($id),
+            $method === 'POST' && $action && $id === 'decisions' => $this->applyContactDecisionsApi($action, $body),
+            $method === 'POST' && $action && $id === 'decline' => $this->declineContactRequestApi($action),
+            $method === 'GET'  && $action && $id === 'currencies' => $this->listContactCurrenciesApi($action),
+            $method === 'POST' && $action && $id === 'currencies' => $this->addContactCurrencyApi($action, $body),
+            $method === 'POST' && $action && $id === 'currency-accept' => $this->acceptContactCurrencyApi($action, $body),
+            $method === 'POST' && $action && $id === 'currency-decline' => $this->declineContactCurrencyApi($action, $body),
+            $method === 'POST' && $action && $id === 'currency-remove' => $this->removeContactCurrencyApi($action, $body),
             $method === 'GET' && $action => $this->getContact($action),
             $method === 'DELETE' && $action => $this->deleteContact($action),
             $method === 'PUT' && $action => $this->updateContact($action, $body),
@@ -1476,6 +1495,301 @@ class ApiController {
         } catch (Exception $e) {
             return $this->errorResponse('Failed to unblock contact: ' . $e->getMessage(), 500, 'unblock_error');
         }
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/decisions
+     *
+     * Body: {
+     *   "decisions": [{currency, action: accept|decline|defer, fee, credit}, ...],
+     *   "is_new_contact"?: bool,
+     *   "contact_address"?: string,
+     *   "contact_name"?: string
+     * }
+     *
+     * Returns: { accepted: [...], declined: [...], errors: [...] }
+     */
+    private function applyContactDecisionsApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+
+        $decisions = $data['decisions'] ?? null;
+        if (!is_array($decisions) || empty($decisions)) {
+            return $this->errorResponse('decisions must be a non-empty array', 400, 'missing_decisions');
+        }
+
+        $result = $this->services->getContactDecisionService()->apply(
+            urldecode($pubkeyHash),
+            $decisions,
+            (bool) ($data['is_new_contact'] ?? false),
+            isset($data['contact_address']) ? (string) $data['contact_address'] : null,
+            isset($data['contact_name']) ? (string) $data['contact_name'] : null,
+        );
+
+        return $this->successResponse($result);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currencies
+     *
+     * Add a new currency to an already-accepted contact (the
+     * `addCurrencyToExisting` branch of ContactManagementService::addContact).
+     *
+     * Body: { currency, fee, credit }
+     */
+    private function addContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        foreach (['currency', 'fee', 'credit'] as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                return $this->errorResponse("Missing required field: {$field}", 400, 'missing_field');
+            }
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $contactPubkey = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactPubkeyFromHash($hash);
+        if ($contactPubkey === null) {
+            return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+        }
+        $contact = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactByPubkey($contactPubkey);
+        if ($contact === null) {
+            return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+        }
+        $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
+        if ($address === null) {
+            return $this->errorResponse('Contact has no address', 422, 'invalid_state');
+        }
+
+        // Reuse the addContact pipeline so validation runs through one place.
+        $argv = [
+            'eiou', 'add', $address, $contact['name'] ?? '',
+            (string) $data['fee'], (string) $data['credit'], strtoupper((string) $data['currency']),
+            '--json',
+        ];
+        CliOutputManager::resetInstance();
+        $outputManager = new CliOutputManager($argv);
+
+        ob_start();
+        $this->services->getContactService()->addContact($argv, $outputManager);
+        $cliOut = ob_get_clean();
+        $cliResponse = $this->parseCliJsonResponse($cliOut);
+
+        if ($cliResponse && ($cliResponse['success'] ?? false)) {
+            return $this->successResponse([
+                'message' => 'Currency added',
+                'currency' => strtoupper((string) $data['currency']),
+            ]);
+        }
+        return $this->errorResponse(
+            $cliResponse['error']['message'] ?? 'Failed to add currency',
+            400,
+            strtolower((string) ($cliResponse['error']['code'] ?? 'currency_add_failed'))
+        );
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currency-accept
+     *
+     * Accept a single pending currency. Body: { currency, fee, credit }.
+     * Routes through the shared ContactDecisionService so the new-contact
+     * first-accept-via-add semantics match the GUI batched-apply path.
+     */
+    private function acceptContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        foreach (['currency', 'fee', 'credit'] as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                return $this->errorResponse("Missing required field: {$field}", 400, 'missing_field');
+            }
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $contactPubkey = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactPubkeyFromHash($hash);
+        if ($contactPubkey === null) {
+            return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+        }
+        $contact = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactByPubkey($contactPubkey);
+        $isNewContact = $contact !== null
+            && ($contact['status'] ?? null) !== Constants::CONTACT_STATUS_ACCEPTED;
+        $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
+        $name = $contact['name'] ?? null;
+
+        $result = $this->services->getContactDecisionService()->apply(
+            $hash,
+            [[
+                'currency' => strtoupper((string) $data['currency']),
+                'action' => 'accept',
+                'fee' => (string) $data['fee'],
+                'credit' => (string) $data['credit'],
+            ]],
+            $isNewContact,
+            $address,
+            $name,
+        );
+
+        return $this->successResponse($result);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currency-decline
+     *
+     * Decline a single pending currency. Body: { currency }.
+     */
+    private function declineContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data) || empty($data['currency'])) {
+            return $this->errorResponse('Missing required field: currency', 400, 'missing_field');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $currency = strtoupper((string) $data['currency']);
+
+        $this->services->getContactSyncService()
+            ->declineReceivedContactCurrency($hash, $currency);
+
+        return $this->successResponse([
+            'message' => "Currency {$currency} declined",
+            'pubkey_hash' => $hash,
+            'currency' => $currency,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/decline
+     *
+     * Decline every pending currency on an incoming contact request in one
+     * shot. Mirrors `eiou contact decline <pubkey-hash>` — useful when an
+     * operator wants to reject a request without enumerating its currencies.
+     */
+    private function declineContactRequestApi(string $pubkeyHash): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $repo = $this->services->getRepositoryFactory()
+            ->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $contactSyncService = $this->services->getContactSyncService();
+
+        $pending = $repo->getPendingCurrencies($hash, 'incoming');
+        if (empty($pending)) {
+            return $this->successResponse([
+                'message' => 'No pending currencies to decline',
+                'declined' => [],
+            ]);
+        }
+
+        $declined = [];
+        $errors = [];
+        foreach ($pending as $row) {
+            $ccy = strtoupper((string) ($row['currency'] ?? ''));
+            if ($ccy === '') {
+                continue;
+            }
+            try {
+                $contactSyncService->declineReceivedContactCurrency($hash, $ccy);
+                $declined[] = $ccy;
+            } catch (\Throwable $e) {
+                $errors[] = "{$ccy}: " . $e->getMessage();
+            }
+        }
+
+        if (!empty($errors)) {
+            return $this->errorResponse(
+                'Some declines failed',
+                500,
+                'partial_decline_failure',
+                ['declined' => $declined, 'errors' => $errors]
+            );
+        }
+
+        return $this->successResponse([
+            'message' => 'Contact request declined',
+            'declined' => $declined,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/contacts/:hash/currencies
+     *
+     * List every currency configured for the contact (incoming + outgoing,
+     * pending + accepted + declined). Mirrors `eiou contact currency list`.
+     */
+    private function listContactCurrenciesApi(string $pubkeyHash): array {
+        if (!$this->hasPermission('contacts:read')) {
+            return $this->permissionDenied('contacts:read');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $repo = $this->services->getRepositoryFactory()
+            ->get(\Eiou\Database\ContactCurrencyRepository::class);
+
+        $rows = $repo->getContactCurrencies($hash);
+        return $this->successResponse([
+            'pubkey_hash' => $hash,
+            'currencies' => $rows,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currency-remove
+     *
+     * Locally remove a currency configuration. Local-only — the peer is not
+     * notified. Use currency-decline to reject an incoming pending request,
+     * not this. Mirrors `eiou contact currency remove`. Body: { currency }.
+     */
+    private function removeContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data) || empty($data['currency'])) {
+            return $this->errorResponse('Missing required field: currency', 400, 'missing_field');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $currency = strtoupper((string) $data['currency']);
+
+        $repo = $this->services->getRepositoryFactory()
+            ->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $repo->deleteCurrencyConfig($hash, $currency);
+
+        return $this->successResponse([
+            'message' => "Currency {$currency} removed locally",
+            'pubkey_hash' => $hash,
+            'currency' => $currency,
+        ]);
     }
 
     // ==================== System Endpoints ====================
