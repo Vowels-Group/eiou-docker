@@ -2348,6 +2348,8 @@ function initializeCurrencyAcceptHandlers() {
                 form.querySelector('.apply-decisions-data').value = JSON.stringify(decisions);
                 if (applyBtn) {
                     applyBtn.disabled = true;
+                    var applyIcon = applyBtn.querySelector('i');
+                    if (applyIcon) { applyIcon.className = 'fas fa-spinner fa-spin'; }
                     if (applyLabel) { applyLabel.textContent = 'Applying…'; }
                 }
             }

@@ -288,6 +288,52 @@ class ContactDecisionServiceTest extends TestCase
     }
 
     #[Test]
+    public function applyCompletesReceivedContactTransactionAfterPerCurrencyAccept(): void
+    {
+        $this->requireBcmath();
+        // Per-currency accept on an existing accepted contact must flip the
+        // contact-request transaction row from 'accepted' to 'completed' on the
+        // receiver — otherwise it stays stuck on the row indicator while the
+        // sender's row goes green. The first-accept-via-add path already does
+        // this through ContactSyncService::acceptContact(); the runAccepts
+        // path didn't, until we wired the call here.
+        $this->contactRepository->method('getContactPubkeyFromHash')->willReturn('pubkey-abc');
+        $this->contactCurrencyRepository->method('updateCurrencyConfig')->willReturn(true);
+        $this->contactCurrencyRepository->method('hasCurrency')->willReturn(false);
+        $this->contactCurrencyRepository->method('getCreditLimit')->willReturn(SplitAmount::zero());
+        $this->balanceRepository->method('getContactSentBalance')->willReturn(SplitAmount::zero());
+        $this->balanceRepository->method('getContactReceivedBalance')->willReturn(SplitAmount::zero());
+        $this->contactSyncService->method('sendCurrencyAcceptanceNotification')->willReturn(true);
+
+        $this->contactSyncService->expects($this->once())
+            ->method('completeReceivedContactTransaction')
+            ->with('pubkey-abc')
+            ->willReturn(true);
+
+        $result = $this->service->apply('hash123', [
+            ['currency' => 'EUR', 'action' => 'accept', 'fee' => '0.01', 'credit' => '500'],
+        ]);
+
+        $this->assertSame(['EUR'], $result['accepted']);
+    }
+
+    #[Test]
+    public function applySkipsCompleteContactTransactionWhenNoAcceptsLand(): void
+    {
+        // Pure decline payload — no completion call should fire because no
+        // contact-request tx is being acknowledged here.
+        $this->contactRepository->method('getContactPubkeyFromHash')->willReturn('pubkey-abc');
+        $this->contactCurrencyRepository->method('declineIncomingCurrency')->willReturn(true);
+
+        $this->contactSyncService->expects($this->never())
+            ->method('completeReceivedContactTransaction');
+
+        $this->service->apply('hash123', [
+            ['currency' => 'USD', 'action' => 'decline'],
+        ]);
+    }
+
+    #[Test]
     public function applyMirrorsOutgoingStatusWhenOutgoingExists(): void
     {
         $this->requireBcmath();

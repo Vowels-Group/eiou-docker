@@ -197,6 +197,7 @@ class ContactDecisionService
         array &$accepted,
         array &$errors,
     ): void {
+        $acceptedAny = false;
         foreach ($acceptList as $entry) {
             $currency = strtoupper(Security::sanitizeInput($entry['currency'] ?? ''));
             $fee = Security::sanitizeInput($entry['fee'] ?? '');
@@ -268,6 +269,19 @@ class ContactDecisionService
 
             $this->contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);
             $accepted[] = $currency;
+            $acceptedAny = true;
+        }
+
+        // Flip any 'accepted'-status contact-request transactions for this
+        // sender to 'completed'. The first-accept-via-add path does this via
+        // ContactSyncService::acceptContact(), but per-currency accepts on an
+        // already-established contact otherwise leave the contact-request tx
+        // row stuck on 'accepted' on the receiver side.
+        if ($acceptedAny) {
+            $pubkey = $contactPubkey ?: $this->contactRepository->getContactPubkeyFromHash($pubkeyHash);
+            if ($pubkey) {
+                $this->contactSyncService->completeReceivedContactTransaction($pubkey);
+            }
         }
     }
 
