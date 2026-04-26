@@ -87,115 +87,115 @@ docker run -d --restart unless-stopped --network=demo-net --name A423 -v "A423-m
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # Add friends (NOTE that names are NOT arbitrary)
-docker exec A0 eiou add https://A1 A1 0.1 1000 USD
-docker exec A1 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A2 A2 0.1 1000 USD
-docker exec A2 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A3 A3 0.1 1000 USD
-docker exec A3 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A4 A4 0.1 1000 USD
-docker exec A4 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A321 A321 0.1 1000 USD
-docker exec A321 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A322 A322 0.1 1000 USD
-docker exec A322 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A323 A323 0.1 1000 USD
-docker exec A323 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A411 A411 0.1 1000 USD
-docker exec A411 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A412 A412 0.1 1000 USD
-docker exec A412 eiou add https://A0 A0 0.1 1000 USD
-docker exec A0 eiou add https://A413 A413 0.1 1000 USD
-docker exec A413 eiou add https://A0 A0 0.1 1000 USD
-docker exec A1 eiou add https://A11 A11 0.1 1000 USD
-docker exec A11 eiou add https://A1 A1 0.1 1000 USD
-docker exec A1 eiou add https://A12 A12 0.1 1000 USD
-docker exec A12 eiou add https://A1 A1 0.1 1000 USD
-docker exec A11 eiou add https://A111 A111 0.1 1000 USD
-docker exec A111 eiou add https://A11 A11 0.1 1000 USD
-docker exec A11 eiou add https://A112 A112 0.1 1000 USD
-docker exec A112 eiou add https://A11 A11 0.1 1000 USD
-docker exec A11 eiou add https://A113 A113 0.1 1000 USD
-docker exec A113 eiou add https://A11 A11 0.1 1000 USD
-docker exec A111 eiou add https://A421 A421 0.1 1000 USD
-docker exec A421 eiou add https://A111 A111 0.1 1000 USD
-docker exec A111 eiou add https://A422 A422 0.1 1000 USD
-docker exec A422 eiou add https://A111 A111 0.1 1000 USD
-docker exec A111 eiou add https://A112 A112 0.1 1000 USD
-docker exec A112 eiou add https://A111 A111 0.1 1000 USD
-docker exec A112 eiou add https://A113 A113 0.1 1000 USD
-docker exec A113 eiou add https://A112 A112 0.1 1000 USD
-docker exec A112 eiou add https://A421 A421 0.1 1000 USD
-docker exec A421 eiou add https://A112 A112 0.1 1000 USD
-docker exec A112 eiou add https://A422 A422 0.1 1000 USD
-docker exec A422 eiou add https://A112 A112 0.1 1000 USD
-docker exec A112 eiou add https://A423 A423 0.1 1000 USD
-docker exec A423 eiou add https://A112 A112 0.1 1000 USD
-docker exec A113 eiou add https://A421 A421 0.1 1000 USD
-docker exec A421 eiou add https://A113 A113 0.1 1000 USD
-docker exec A113 eiou add https://A422 A422 0.1 1000 USD
-docker exec A422 eiou add https://A113 A113 0.1 1000 USD
-docker exec A113 eiou add https://A423 A423 0.1 1000 USD
-docker exec A423 eiou add https://A113 A113 0.1 1000 USD
-docker exec A12 eiou add https://A121 A121 0.1 1000 USD
-docker exec A121 eiou add https://A12 A12 0.1 1000 USD
-docker exec A12 eiou add https://A122 A122 0.1 1000 USD
-docker exec A122 eiou add https://A12 A12 0.1 1000 USD
-docker exec A12 eiou add https://A123 A123 0.1 1000 USD
-docker exec A123 eiou add https://A12 A12 0.1 1000 USD
-docker exec A12 eiou add https://A21 A21 0.1 1000 USD
-docker exec A21 eiou add https://A12 A12 0.1 1000 USD
-docker exec A2 eiou add https://A21 A21 0.1 1000 USD
-docker exec A21 eiou add https://A2 A2 0.1 1000 USD
-docker exec A2 eiou add https://A22 A22 0.1 1000 USD
-docker exec A22 eiou add https://A2 A2 0.1 1000 USD
-docker exec A21 eiou add https://A211 A211 0.1 1000 USD
-docker exec A211 eiou add https://A21 A21 0.1 1000 USD
-docker exec A21 eiou add https://A212 A212 0.1 1000 USD
-docker exec A212 eiou add https://A21 A21 0.1 1000 USD
-docker exec A21 eiou add https://A213 A213 0.1 1000 USD
-docker exec A213 eiou add https://A21 A21 0.1 1000 USD
-docker exec A22 eiou add https://A221 A221 0.1 1000 USD
-docker exec A221 eiou add https://A22 A22 0.1 1000 USD
-docker exec A22 eiou add https://A222 A222 0.1 1000 USD
-docker exec A222 eiou add https://A22 A22 0.1 1000 USD
-docker exec A22 eiou add https://A223 A223 0.1 1000 USD
-docker exec A223 eiou add https://A22 A22 0.1 1000 USD
-docker exec A221 eiou add https://A313 A313 0.1 1000 USD
-docker exec A313 eiou add https://A221 A221 0.1 1000 USD
-docker exec A222 eiou add https://A312 A312 0.1 1000 USD
-docker exec A312 eiou add https://A222 A222 0.1 1000 USD
-docker exec A223 eiou add https://A311 A311 0.1 1000 USD
-docker exec A311 eiou add https://A223 A223 0.1 1000 USD
-docker exec A3 eiou add https://A31 A31 0.1 1000 USD
-docker exec A31 eiou add https://A3 A3 0.1 1000 USD
-docker exec A3 eiou add https://A32 A32 0.1 1000 USD
-docker exec A32 eiou add https://A3 A3 0.1 1000 USD
-docker exec A31 eiou add https://A311 A311 0.1 1000 USD
-docker exec A311 eiou add https://A31 A31 0.1 1000 USD
-docker exec A31 eiou add https://A312 A312 0.1 1000 USD
-docker exec A312 eiou add https://A31 A31 0.1 1000 USD
-docker exec A31 eiou add https://A313 A313 0.1 1000 USD
-docker exec A313 eiou add https://A31 A31 0.1 1000 USD
-docker exec A32 eiou add https://A321 A321 0.1 1000 USD
-docker exec A321 eiou add https://A32 A32 0.1 1000 USD
-docker exec A32 eiou add https://A322 A322 0.1 1000 USD
-docker exec A322 eiou add https://A32 A32 0.1 1000 USD
-docker exec A32 eiou add https://A323 A323 0.1 1000 USD
-docker exec A323 eiou add https://A32 A32 0.1 1000 USD
-docker exec A4 eiou add https://A41 A41 0.1 1000 USD
-docker exec A41 eiou add https://A4 A4 0.1 1000 USD
-docker exec A4 eiou add https://A42 A42 0.1 1000 USD
-docker exec A42 eiou add https://A4 A4 0.1 1000 USD
-docker exec A41 eiou add https://A411 A411 0.1 1000 USD
-docker exec A411 eiou add https://A41 A41 0.1 1000 USD
-docker exec A41 eiou add https://A412 A412 0.1 1000 USD
-docker exec A412 eiou add https://A41 A41 0.1 1000 USD
-docker exec A41 eiou add https://A413 A413 0.1 1000 USD
-docker exec A413 eiou add https://A41 A41 0.1 1000 USD
-docker exec A42 eiou add https://A421 A421 0.1 1000 USD
-docker exec A421 eiou add https://A42 A42 0.1 1000 USD
-docker exec A42 eiou add https://A422 A422 0.1 1000 USD
-docker exec A422 eiou add https://A42 A42 0.1 1000 USD
-docker exec A42 eiou add https://A423 A423 0.1 1000 USD
-docker exec A423 eiou add https://A42 A42 0.1 1000 USD
+docker exec A0 eiou contact add https://A1 A1 --fee 0.1 --credit 1000 --currency USD
+docker exec A1 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A2 A2 --fee 0.1 --credit 1000 --currency USD
+docker exec A2 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A3 A3 --fee 0.1 --credit 1000 --currency USD
+docker exec A3 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A4 A4 --fee 0.1 --credit 1000 --currency USD
+docker exec A4 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A321 A321 --fee 0.1 --credit 1000 --currency USD
+docker exec A321 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A322 A322 --fee 0.1 --credit 1000 --currency USD
+docker exec A322 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A323 A323 --fee 0.1 --credit 1000 --currency USD
+docker exec A323 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A411 A411 --fee 0.1 --credit 1000 --currency USD
+docker exec A411 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A412 A412 --fee 0.1 --credit 1000 --currency USD
+docker exec A412 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A0 eiou contact add https://A413 A413 --fee 0.1 --credit 1000 --currency USD
+docker exec A413 eiou contact add https://A0 A0 --fee 0.1 --credit 1000 --currency USD
+docker exec A1 eiou contact add https://A11 A11 --fee 0.1 --credit 1000 --currency USD
+docker exec A11 eiou contact add https://A1 A1 --fee 0.1 --credit 1000 --currency USD
+docker exec A1 eiou contact add https://A12 A12 --fee 0.1 --credit 1000 --currency USD
+docker exec A12 eiou contact add https://A1 A1 --fee 0.1 --credit 1000 --currency USD
+docker exec A11 eiou contact add https://A111 A111 --fee 0.1 --credit 1000 --currency USD
+docker exec A111 eiou contact add https://A11 A11 --fee 0.1 --credit 1000 --currency USD
+docker exec A11 eiou contact add https://A112 A112 --fee 0.1 --credit 1000 --currency USD
+docker exec A112 eiou contact add https://A11 A11 --fee 0.1 --credit 1000 --currency USD
+docker exec A11 eiou contact add https://A113 A113 --fee 0.1 --credit 1000 --currency USD
+docker exec A113 eiou contact add https://A11 A11 --fee 0.1 --credit 1000 --currency USD
+docker exec A111 eiou contact add https://A421 A421 --fee 0.1 --credit 1000 --currency USD
+docker exec A421 eiou contact add https://A111 A111 --fee 0.1 --credit 1000 --currency USD
+docker exec A111 eiou contact add https://A422 A422 --fee 0.1 --credit 1000 --currency USD
+docker exec A422 eiou contact add https://A111 A111 --fee 0.1 --credit 1000 --currency USD
+docker exec A111 eiou contact add https://A112 A112 --fee 0.1 --credit 1000 --currency USD
+docker exec A112 eiou contact add https://A111 A111 --fee 0.1 --credit 1000 --currency USD
+docker exec A112 eiou contact add https://A113 A113 --fee 0.1 --credit 1000 --currency USD
+docker exec A113 eiou contact add https://A112 A112 --fee 0.1 --credit 1000 --currency USD
+docker exec A112 eiou contact add https://A421 A421 --fee 0.1 --credit 1000 --currency USD
+docker exec A421 eiou contact add https://A112 A112 --fee 0.1 --credit 1000 --currency USD
+docker exec A112 eiou contact add https://A422 A422 --fee 0.1 --credit 1000 --currency USD
+docker exec A422 eiou contact add https://A112 A112 --fee 0.1 --credit 1000 --currency USD
+docker exec A112 eiou contact add https://A423 A423 --fee 0.1 --credit 1000 --currency USD
+docker exec A423 eiou contact add https://A112 A112 --fee 0.1 --credit 1000 --currency USD
+docker exec A113 eiou contact add https://A421 A421 --fee 0.1 --credit 1000 --currency USD
+docker exec A421 eiou contact add https://A113 A113 --fee 0.1 --credit 1000 --currency USD
+docker exec A113 eiou contact add https://A422 A422 --fee 0.1 --credit 1000 --currency USD
+docker exec A422 eiou contact add https://A113 A113 --fee 0.1 --credit 1000 --currency USD
+docker exec A113 eiou contact add https://A423 A423 --fee 0.1 --credit 1000 --currency USD
+docker exec A423 eiou contact add https://A113 A113 --fee 0.1 --credit 1000 --currency USD
+docker exec A12 eiou contact add https://A121 A121 --fee 0.1 --credit 1000 --currency USD
+docker exec A121 eiou contact add https://A12 A12 --fee 0.1 --credit 1000 --currency USD
+docker exec A12 eiou contact add https://A122 A122 --fee 0.1 --credit 1000 --currency USD
+docker exec A122 eiou contact add https://A12 A12 --fee 0.1 --credit 1000 --currency USD
+docker exec A12 eiou contact add https://A123 A123 --fee 0.1 --credit 1000 --currency USD
+docker exec A123 eiou contact add https://A12 A12 --fee 0.1 --credit 1000 --currency USD
+docker exec A12 eiou contact add https://A21 A21 --fee 0.1 --credit 1000 --currency USD
+docker exec A21 eiou contact add https://A12 A12 --fee 0.1 --credit 1000 --currency USD
+docker exec A2 eiou contact add https://A21 A21 --fee 0.1 --credit 1000 --currency USD
+docker exec A21 eiou contact add https://A2 A2 --fee 0.1 --credit 1000 --currency USD
+docker exec A2 eiou contact add https://A22 A22 --fee 0.1 --credit 1000 --currency USD
+docker exec A22 eiou contact add https://A2 A2 --fee 0.1 --credit 1000 --currency USD
+docker exec A21 eiou contact add https://A211 A211 --fee 0.1 --credit 1000 --currency USD
+docker exec A211 eiou contact add https://A21 A21 --fee 0.1 --credit 1000 --currency USD
+docker exec A21 eiou contact add https://A212 A212 --fee 0.1 --credit 1000 --currency USD
+docker exec A212 eiou contact add https://A21 A21 --fee 0.1 --credit 1000 --currency USD
+docker exec A21 eiou contact add https://A213 A213 --fee 0.1 --credit 1000 --currency USD
+docker exec A213 eiou contact add https://A21 A21 --fee 0.1 --credit 1000 --currency USD
+docker exec A22 eiou contact add https://A221 A221 --fee 0.1 --credit 1000 --currency USD
+docker exec A221 eiou contact add https://A22 A22 --fee 0.1 --credit 1000 --currency USD
+docker exec A22 eiou contact add https://A222 A222 --fee 0.1 --credit 1000 --currency USD
+docker exec A222 eiou contact add https://A22 A22 --fee 0.1 --credit 1000 --currency USD
+docker exec A22 eiou contact add https://A223 A223 --fee 0.1 --credit 1000 --currency USD
+docker exec A223 eiou contact add https://A22 A22 --fee 0.1 --credit 1000 --currency USD
+docker exec A221 eiou contact add https://A313 A313 --fee 0.1 --credit 1000 --currency USD
+docker exec A313 eiou contact add https://A221 A221 --fee 0.1 --credit 1000 --currency USD
+docker exec A222 eiou contact add https://A312 A312 --fee 0.1 --credit 1000 --currency USD
+docker exec A312 eiou contact add https://A222 A222 --fee 0.1 --credit 1000 --currency USD
+docker exec A223 eiou contact add https://A311 A311 --fee 0.1 --credit 1000 --currency USD
+docker exec A311 eiou contact add https://A223 A223 --fee 0.1 --credit 1000 --currency USD
+docker exec A3 eiou contact add https://A31 A31 --fee 0.1 --credit 1000 --currency USD
+docker exec A31 eiou contact add https://A3 A3 --fee 0.1 --credit 1000 --currency USD
+docker exec A3 eiou contact add https://A32 A32 --fee 0.1 --credit 1000 --currency USD
+docker exec A32 eiou contact add https://A3 A3 --fee 0.1 --credit 1000 --currency USD
+docker exec A31 eiou contact add https://A311 A311 --fee 0.1 --credit 1000 --currency USD
+docker exec A311 eiou contact add https://A31 A31 --fee 0.1 --credit 1000 --currency USD
+docker exec A31 eiou contact add https://A312 A312 --fee 0.1 --credit 1000 --currency USD
+docker exec A312 eiou contact add https://A31 A31 --fee 0.1 --credit 1000 --currency USD
+docker exec A31 eiou contact add https://A313 A313 --fee 0.1 --credit 1000 --currency USD
+docker exec A313 eiou contact add https://A31 A31 --fee 0.1 --credit 1000 --currency USD
+docker exec A32 eiou contact add https://A321 A321 --fee 0.1 --credit 1000 --currency USD
+docker exec A321 eiou contact add https://A32 A32 --fee 0.1 --credit 1000 --currency USD
+docker exec A32 eiou contact add https://A322 A322 --fee 0.1 --credit 1000 --currency USD
+docker exec A322 eiou contact add https://A32 A32 --fee 0.1 --credit 1000 --currency USD
+docker exec A32 eiou contact add https://A323 A323 --fee 0.1 --credit 1000 --currency USD
+docker exec A323 eiou contact add https://A32 A32 --fee 0.1 --credit 1000 --currency USD
+docker exec A4 eiou contact add https://A41 A41 --fee 0.1 --credit 1000 --currency USD
+docker exec A41 eiou contact add https://A4 A4 --fee 0.1 --credit 1000 --currency USD
+docker exec A4 eiou contact add https://A42 A42 --fee 0.1 --credit 1000 --currency USD
+docker exec A42 eiou contact add https://A4 A4 --fee 0.1 --credit 1000 --currency USD
+docker exec A41 eiou contact add https://A411 A411 --fee 0.1 --credit 1000 --currency USD
+docker exec A411 eiou contact add https://A41 A41 --fee 0.1 --credit 1000 --currency USD
+docker exec A41 eiou contact add https://A412 A412 --fee 0.1 --credit 1000 --currency USD
+docker exec A412 eiou contact add https://A41 A41 --fee 0.1 --credit 1000 --currency USD
+docker exec A41 eiou contact add https://A413 A413 --fee 0.1 --credit 1000 --currency USD
+docker exec A413 eiou contact add https://A41 A41 --fee 0.1 --credit 1000 --currency USD
+docker exec A42 eiou contact add https://A421 A421 --fee 0.1 --credit 1000 --currency USD
+docker exec A421 eiou contact add https://A42 A42 --fee 0.1 --credit 1000 --currency USD
+docker exec A42 eiou contact add https://A422 A422 --fee 0.1 --credit 1000 --currency USD
+docker exec A422 eiou contact add https://A42 A42 --fee 0.1 --credit 1000 --currency USD
+docker exec A42 eiou contact add https://A423 A423 --fee 0.1 --credit 1000 --currency USD
+docker exec A423 eiou contact add https://A42 A42 --fee 0.1 --credit 1000 --currency USD

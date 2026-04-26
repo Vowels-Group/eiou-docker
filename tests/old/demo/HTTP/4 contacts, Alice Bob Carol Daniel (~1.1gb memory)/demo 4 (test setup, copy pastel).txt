@@ -21,12 +21,12 @@ docker run -d --restart unless-stopped  --network=demo-net --name Daniel -v "Dan
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
-docker exec Alice eiou add http://Bob Bob 0.1 1000 USD
-docker exec Bob eiou add http://Alice Alice 0.1 1000 USD
-docker exec Bob eiou add http://Carol Carol 0.1 1000 USD
-docker exec Carol eiou add http://Bob Bob 0.1 1000 USD
-docker exec Carol eiou add http://Daniel Daniel 0.1 1000 USD
-docker exec Daniel eiou add http://Carol Carol 0.1 1000 USD
+docker exec Alice eiou contact add http://Bob Bob --fee 0.1 --credit 1000 --currency USD
+docker exec Bob eiou contact add http://Alice Alice --fee 0.1 --credit 1000 --currency USD
+docker exec Bob eiou contact add http://Carol Carol --fee 0.1 --credit 1000 --currency USD
+docker exec Carol eiou contact add http://Bob Bob --fee 0.1 --credit 1000 --currency USD
+docker exec Carol eiou contact add http://Daniel Daniel --fee 0.1 --credit 1000 --currency USD
+docker exec Daniel eiou contact add http://Carol Carol --fee 0.1 --credit 1000 --currency USD
 
 # direct transaction
 docker exec Alice eiou send http://Bob 100 USD

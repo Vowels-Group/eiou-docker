@@ -33,24 +33,24 @@ docker run -d --restart unless-stopped  --network=demo-net --name httpsJ -v "htt
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
-docker exec httpsA eiou add https://httpsB httpsB 0.1 1000 USD
-docker exec httpsB eiou add https://httpsA httpsA 0.1 1000 USD
-docker exec httpsB eiou add https://httpsC httpsC 0.1 1000 USD
-docker exec httpsC eiou add https://httpsB httpsB 0.1 1000 USD
-docker exec httpsC eiou add https://httpsD httpsD 0.1 1000 USD
-docker exec httpsD eiou add https://httpsC httpsC 0.1 1000 USD
-docker exec httpsD eiou add https://httpsE httpsE 0.1 1000 USD
-docker exec httpsE eiou add https://httpsD httpsD 0.1 1000 USD
-docker exec httpsE eiou add https://httpsF httpsF 0.1 1000 USD
-docker exec httpsF eiou add https://httpsE httpsE 0.1 1000 USD
-docker exec httpsF eiou add https://httpsG httpsG 0.1 1000 USD
-docker exec httpsG eiou add https://httpsF httpsF 0.1 1000 USD
-docker exec httpsG eiou add https://httpsH httpsH 0.1 1000 USD
-docker exec httpsH eiou add https://httpsG httpsG 0.1 1000 USD
-docker exec httpsH eiou add https://httpsI httpsI 0.1 1000 USD
-docker exec httpsI eiou add https://httpsH httpsH 0.1 1000 USD
-docker exec httpsI eiou add https://httpsJ httpsJ 0.1 1000 USD
-docker exec httpsJ eiou add https://httpsI httpsI 0.1 1000 USD
+docker exec httpsA eiou contact add https://httpsB httpsB --fee 0.1 --credit 1000 --currency USD
+docker exec httpsB eiou contact add https://httpsA httpsA --fee 0.1 --credit 1000 --currency USD
+docker exec httpsB eiou contact add https://httpsC httpsC --fee 0.1 --credit 1000 --currency USD
+docker exec httpsC eiou contact add https://httpsB httpsB --fee 0.1 --credit 1000 --currency USD
+docker exec httpsC eiou contact add https://httpsD httpsD --fee 0.1 --credit 1000 --currency USD
+docker exec httpsD eiou contact add https://httpsC httpsC --fee 0.1 --credit 1000 --currency USD
+docker exec httpsD eiou contact add https://httpsE httpsE --fee 0.1 --credit 1000 --currency USD
+docker exec httpsE eiou contact add https://httpsD httpsD --fee 0.1 --credit 1000 --currency USD
+docker exec httpsE eiou contact add https://httpsF httpsF --fee 0.1 --credit 1000 --currency USD
+docker exec httpsF eiou contact add https://httpsE httpsE --fee 0.1 --credit 1000 --currency USD
+docker exec httpsF eiou contact add https://httpsG httpsG --fee 0.1 --credit 1000 --currency USD
+docker exec httpsG eiou contact add https://httpsF httpsF --fee 0.1 --credit 1000 --currency USD
+docker exec httpsG eiou contact add https://httpsH httpsH --fee 0.1 --credit 1000 --currency USD
+docker exec httpsH eiou contact add https://httpsG httpsG --fee 0.1 --credit 1000 --currency USD
+docker exec httpsH eiou contact add https://httpsI httpsI --fee 0.1 --credit 1000 --currency USD
+docker exec httpsI eiou contact add https://httpsH httpsH --fee 0.1 --credit 1000 --currency USD
+docker exec httpsI eiou contact add https://httpsJ httpsJ --fee 0.1 --credit 1000 --currency USD
+docker exec httpsJ eiou contact add https://httpsI httpsI --fee 0.1 --credit 1000 --currency USD
 
 # direct transaction
 docker exec httpsA eiou send https://httpsB 100 USD

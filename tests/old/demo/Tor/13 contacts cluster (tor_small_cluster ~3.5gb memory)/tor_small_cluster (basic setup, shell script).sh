@@ -122,7 +122,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
     containerKeys=(${containersLinkKey//,/ })    
     echo -e "\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
-    docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
+    docker exec ${containerKeys[0]} eiou contact add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} --fee ${values[0]} --credit ${values[1]} --currency ${values[2]}
 done
 
 echo -e "\nBasic setup completed successfully."

@@ -92,7 +92,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
     containerKeys=(${containersLinkKey//,/ })    
     echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
-    docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
+    docker exec ${containerKeys[0]} eiou contact add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} --fee ${values[0]} --credit ${values[1]} --currency ${values[2]}
 done
 
 # Send money
@@ -108,12 +108,12 @@ echo -e "\nTesting other functions..."
 
 # View contacts
 echo -e "\nViewing contacts..."
-docker exec httpsA eiou viewcontact ${containerAddresses[httpsB]}
-docker exec httpsB eiou viewcontact ${containerAddresses[httpsA]}
-docker exec httpsB eiou viewcontact ${containerAddresses[httpsC]}
-docker exec httpsC eiou viewcontact ${containerAddresses[httpsB]}
-docker exec httpsC eiou viewcontact ${containerAddresses[httpsD]}
-docker exec httpsD eiou viewcontact ${containerAddresses[httpsC]}
+docker exec httpsA eiou contact view ${containerAddresses[httpsB]}
+docker exec httpsB eiou contact view ${containerAddresses[httpsA]}
+docker exec httpsB eiou contact view ${containerAddresses[httpsC]}
+docker exec httpsC eiou contact view ${containerAddresses[httpsB]}
+docker exec httpsC eiou contact view ${containerAddresses[httpsD]}
+docker exec httpsD eiou contact view ${containerAddresses[httpsC]}
 
 # View balances
 echo -e "\nViewing balances..."

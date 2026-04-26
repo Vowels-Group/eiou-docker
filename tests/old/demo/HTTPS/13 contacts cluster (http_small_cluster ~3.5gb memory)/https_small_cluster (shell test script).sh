@@ -119,7 +119,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
     containerKeys=(${containersLinkKey//,/ })    
     echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
-    docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
+    docker exec ${containerKeys[0]} eiou contact add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} --fee ${values[0]} --credit ${values[1]} --currency ${values[2]}
 done
 
 
@@ -136,7 +136,7 @@ echo -e "\nTesting other functions..."
 
 # View contacts
 echo -e "\nViewing contacts..."
-docker exec A0 eiou viewcontact ${containerAddresses[A4]}
+docker exec A0 eiou contact view ${containerAddresses[A4]}
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances/transaction history)
 echo -e "\nSleeping for 5 seconds..."
