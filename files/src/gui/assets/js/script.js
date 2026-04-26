@@ -178,14 +178,20 @@ function escapeHtml(text) {
 }
 
 /**
- * Display-time normalisation for transaction descriptions. Old contact-
- * request txs stored their description as the long phrase "Contact request
- * transaction"; the current default is the shorter "Contact request".
- * Render the short form regardless of what's in the DB so the history looks
- * consistent across old + new rows. Returns the input unchanged for any
- * other description.
+ * Display-time normalisation for transaction descriptions. Contact-request
+ * descriptions evolved through three formats: "Contact request transaction"
+ * (oldest), "Contact request" (interim), and "Contact request (CCY)" (current
+ * default — self-disambiguating in multi-currency rows). When a currency is
+ * supplied, promote any of the older placeholders to the currency-bearing
+ * form so old + new rows render consistently. Returns the input unchanged
+ * for user-typed descriptions and any other text.
  */
-function displayTxDescription(desc) {
+function displayTxDescription(desc, currency) {
+    var ccy = (typeof currency === 'string' && currency) ? currency.toUpperCase() : '';
+    var isPlaceholder = desc === '' || desc === 'Contact request' || desc === 'Contact request transaction';
+    if (isPlaceholder && ccy) {
+        return 'Contact request (' + ccy + ')';
+    }
     if (desc === 'Contact request transaction') {
         return 'Contact request';
     }
@@ -1178,7 +1184,7 @@ function renderTransactionModal(tx) {
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description)) + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description, tx.currency)) + '</div>';
         html += '</div>';
     }
 
@@ -4049,7 +4055,7 @@ function openContactModal(contact, openTab) {
             html += '<i class="fas ' + statusIcon + '"></i>';
             html += '</span>';
             html += '</td>';
-            var displayDesc = displayTxDescription(description);
+            var displayDesc = displayTxDescription(description, tx.currency);
             html += '<td class="col-tx-desc" title="' + escapeHtml(displayDesc || 'No description') + '">';
             html += escapeHtml(displayDesc || '—');
             html += '</td>';

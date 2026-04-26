@@ -549,11 +549,17 @@
                         multi-hop transactions through your node. Keep it small or zero for trusted
                         contacts; raise it if you're a busy relay node.
                         <br><br>
-                        <strong>Block</strong> stops all new transactions with this contact and hides
-                        them from your contact list. Existing transactions are not touched.
-                        <strong>Delete</strong> removes the contact entirely &mdash; existing
-                        transactions stay on both chains, but you can't make new ones without
-                        re-adding them as a contact first.
+                        <strong>Block</strong> stops all new transactions with this contact, hides
+                        them from your contact list, and rejects any future contact requests
+                        from them. Existing transactions are not touched.
+                        <br><br>
+                        <strong>Delete</strong> removes the contact's local row. If you've ever
+                        transacted with them, the other side's contact-status ping will detect
+                        the mismatch and re-add them as a pending contact request the next
+                        cycle &mdash; so for an established contact, delete on its own doesn't
+                        really keep them out. If your goal is to actually keep them away, use
+                        <strong>Block</strong> instead. Existing transactions on both chains
+                        stay either way.
                     </div>
                 </details>
                 <form method="POST" id="editContactForm">
@@ -856,10 +862,14 @@
                     will add it.
                     <br><br>
                     <strong>Apply</strong> commits all your decisions in one go.
-                    <strong>Delete Request</strong> silently drops the entire
-                    request (the other side isn't told).
-                    <strong>Block Contact</strong> prevents future requests
-                    from them.
+                    <strong>Delete Request</strong> silently drops the local
+                    record (the other side isn't told). For a brand-new request
+                    with no prior tx history this is enough; for an established
+                    contact you've previously transacted with, their contact-
+                    status ping will detect the mismatch and re-add the row as
+                    a pending request next cycle. <strong>Block Contact</strong>
+                    is the durable choice: it rejects future requests from them
+                    and prevents the ping from re-creating the row.
                 </div>
             </details>
 

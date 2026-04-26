@@ -494,7 +494,10 @@ class CliService implements CliServiceInterface {
             if ($txContactRepo !== null) {
                 $contactTx = $txContactRepo->getContactTransactionByParties($contact['pubkey'], $myPubkey);
                 $desc = $contactTx['description'] ?? null;
-                if ($desc !== null && $desc !== 'Contact request' && $desc !== 'Contact request transaction') {
+                if ($desc !== null
+                    && $desc !== 'Contact request'
+                    && $desc !== 'Contact request transaction'
+                    && preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) !== 1) {
                     $entry['description'] = $desc;
                 }
             }

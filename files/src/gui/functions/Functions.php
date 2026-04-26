@@ -1174,7 +1174,10 @@ if (!empty($pendingContacts) && $user->has('public')) {
         // Get the contact transaction description (message sent with the request)
         $contactTx = $txContactRepo->getContactTransactionByParties($pc['pubkey'], $myPubkey);
         $desc = $contactTx['description'] ?? null;
-        if ($desc !== null && $desc !== 'Contact request' && $desc !== 'Contact request transaction') {
+        if ($desc !== null
+            && $desc !== 'Contact request'
+            && $desc !== 'Contact request transaction'
+            && preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) !== 1) {
             $pc['contact_description'] = $desc;
         }
     }
