@@ -2268,42 +2268,45 @@ function initializeFormLoaders() {
     // first so an invalid address is caught here — without this, the
     // form would post, the controller would redirect with an "Invalid
     // address" toast, and the user would lose every typed value
-    // including the address they fat-fingered.
+    // including the address they fat-fingered. Uses the HTML5
+    // setCustomValidity / reportValidity pair so the error appears in
+    // the same browser-native bubble style as the "Please fill out
+    // this field" tooltip on empty required fields — consistent UX.
     var addContactForm = document.getElementById('add-contact-form');
     if (addContactForm) {
+        var addrInput = document.getElementById('address');
+        // Clear the custom validity message as soon as the user
+        // starts editing the address — matches how the native
+        // empty-required-field tooltip dismisses on input.
+        if (addrInput) {
+            addrInput.addEventListener('input', function() {
+                addrInput.setCustomValidity('');
+            });
+        }
         addContactForm.addEventListener('submit', function(ev) {
-            var errEl = document.getElementById('addContactAddressError');
-            var clearErr = function() {
-                if (errEl) { errEl.textContent = ''; errEl.classList.add('d-none'); }
-            };
-            var showErr = function(msg) {
-                if (errEl) {
-                    errEl.textContent = msg;
-                    errEl.classList.remove('d-none');
+            if (!addrInput) return;
+            // Reset before re-validating so a stale message doesn't
+            // suppress the empty-field default browser bubble.
+            addrInput.setCustomValidity('');
+            var raw = (addrInput.value || '').trim();
+            // Empty case is already handled by the `required` attribute —
+            // browser shows "Please fill out this field" natively. Skip
+            // our format check when the value is empty so we don't
+            // double-block on the same condition.
+            if (raw !== '') {
+                var validation = validateContactAddressClient(raw);
+                if (!validation.valid) {
+                    ev.preventDefault();
+                    addrInput.setCustomValidity('Invalid address: ' + validation.error);
+                    addrInput.reportValidity();
+                    return;
                 }
-                var addrInput = document.getElementById('address');
-                if (addrInput) addrInput.focus();
-            };
-            clearErr();
-
-            var addrInput = document.getElementById('address');
-            var raw = addrInput ? (addrInput.value || '').trim() : '';
-            if (raw === '') {
-                ev.preventDefault();
-                showErr('Address cannot be empty.');
-                return;
-            }
-            var validation = validateContactAddressClient(raw);
-            if (!validation.valid) {
-                ev.preventDefault();
-                showErr('Invalid address: ' + validation.error);
-                return;
-            }
-            // Mirror the server's normalization (strip http(s):// off
-            // .onion paste-mistakes, drop trailing slash) so the value
-            // posted matches what the server would have stored anyway.
-            if (addrInput && validation.value && validation.value !== raw) {
-                addrInput.value = validation.value;
+                // Mirror the server's normalization (strip http(s):// off
+                // .onion paste-mistakes, drop trailing slash) so the value
+                // posted matches what the server would have stored anyway.
+                if (validation.value && validation.value !== raw) {
+                    addrInput.value = validation.value;
+                }
             }
 
             showLoader('Adding contact...', retryInfoText);
