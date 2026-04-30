@@ -3757,7 +3757,13 @@ function showInfoModal(el) {
     if (!text) return;
 
     var overlay = document.createElement('div');
-    overlay.className = 'modal';
+    // Always render info modals on the elevated z-index tier so they
+    // sit above whichever modal opened the ℹ icon (contact-detail,
+    // tx-detail, the Add Contact form, etc.). Without modal-stack-top
+    // the info popup at z=10000 falls behind a parent modal that has
+    // been promoted to z=10010 — same bug class as the contact → tx →
+    // contact chain we already fixed for the main modals.
+    overlay.className = 'modal modal-stack-top';
     overlay.id = 'info-modal';
     overlay.innerHTML =
         '<div class="modal-content" style="max-width:440px">' +
@@ -3790,6 +3796,10 @@ function showInfoModal(el) {
     overlay.onclick = function(e) { if (e.target === overlay) { closeInfoModal(); } };
     document.addEventListener('keydown', escHandler);
     document.body.appendChild(overlay);
+    // Re-append after attach so DOM order matches click order — when
+    // chained through contact → tx → contact the info modal needs to
+    // sit later in body than every other stacked modal.
+    if (typeof bringModalToTop === 'function') bringModalToTop(overlay);
 }
 
 /**
@@ -8525,6 +8535,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
+        else if (action === 'switchWalletCurrencyFromSelect') { switchWalletCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
         else if (action === 'filterTransactions') { filterTransactions(); }
         else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }

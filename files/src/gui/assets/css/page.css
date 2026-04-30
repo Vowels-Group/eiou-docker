@@ -295,6 +295,27 @@ body {
         color: white;
         border-color: #0d6efd;
     }
+    /* Dropdown variant — rendered when there are >4 currencies so a
+       wrapping pill row doesn't crowd out the wallet stats. */
+    .wallet-currency-tabs-dropdown {
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .wallet-currency-label {
+        font-size: 0.85rem;
+        color: #495057;
+        font-weight: 600;
+    }
+    .wallet-currency-select {
+        flex: 1 1 auto;
+        padding: 0.4rem 0.7rem;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        background: white;
+        color: #495057;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
     .wallet-stats-container {
         max-height: none;
         overflow-y: visible;

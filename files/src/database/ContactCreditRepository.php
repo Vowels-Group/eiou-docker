@@ -48,11 +48,28 @@ class ContactCreditRepository extends AbstractRepository {
      * @return array|null Credit data with available_credit and currency, or null if not found
      */
     public function getAvailableCredit(string $pubkeyHash, ?string $currency = null): ?array {
+        // Joined to contact_currencies + filtered to status='accepted'
+        // for the same reason as getTotalAvailableCreditByCurrency:
+        // an unaccepted (or declined) currency that still has a stale
+        // contact_credit row shouldn't surface as "you have credit"
+        // anywhere — neither the dashboard total nor per-contact UI.
         if ($currency !== null) {
-            $query = "SELECT available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+            $query = "SELECT cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                      FROM {$this->tableName} cc
+                      INNER JOIN contact_currencies cur
+                        ON cur.pubkey_hash = cc.pubkey_hash
+                       AND cur.currency    = cc.currency
+                       AND cur.status      = 'accepted'
+                      WHERE cc.pubkey_hash = :pubkey_hash AND cc.currency = :currency";
             $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
         } else {
-            $query = "SELECT available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
+            $query = "SELECT cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                      FROM {$this->tableName} cc
+                      INNER JOIN contact_currencies cur
+                        ON cur.pubkey_hash = cc.pubkey_hash
+                       AND cur.currency    = cc.currency
+                       AND cur.status      = 'accepted'
+                      WHERE cc.pubkey_hash = :pubkey_hash";
             $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
         }
 
@@ -77,7 +94,13 @@ class ContactCreditRepository extends AbstractRepository {
      * @return array Array of ['available_credit' => int, 'currency' => string] rows
      */
     public function getAvailableCreditAllCurrencies(string $pubkeyHash): array {
-        $query = "SELECT available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
+        $query = "SELECT cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                  FROM {$this->tableName} cc
+                  INNER JOIN contact_currencies cur
+                    ON cur.pubkey_hash = cc.pubkey_hash
+                   AND cur.currency    = cc.currency
+                   AND cur.status      = 'accepted'
+                  WHERE cc.pubkey_hash = :pubkey_hash";
         $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
 
         if (!$stmt) {
@@ -203,7 +226,24 @@ class ContactCreditRepository extends AbstractRepository {
      * @return array Array of ['currency' => string, 'total_available_credit' => int] rows
      */
     public function getTotalAvailableCreditByCurrency(): array {
-        $query = "SELECT currency, SUM(available_credit_whole) AS sum_whole, SUM(available_credit_frac) AS sum_frac FROM {$this->tableName} GROUP BY currency";
+        // INNER JOIN with contact_currencies on (pubkey_hash, currency)
+        // and filter to status='accepted' so currencies the peer hasn't
+        // accepted yet — or has declined — don't count toward the
+        // dashboard's "Total Available Credit." The contact_credit row
+        // gets pre-emptively created when WE propose an outgoing
+        // currency (ContactManagementService::addCurrencyToContact),
+        // and it stays around until decline-cleanup or ping-reconcile
+        // catches it; this filter makes the aggregation correct
+        // regardless of those cleanup paths' state.
+        $query = "SELECT cc.currency,
+                         SUM(cc.available_credit_whole) AS sum_whole,
+                         SUM(cc.available_credit_frac)  AS sum_frac
+                  FROM {$this->tableName} cc
+                  INNER JOIN contact_currencies cur
+                    ON cur.pubkey_hash = cc.pubkey_hash
+                   AND cur.currency    = cc.currency
+                   AND cur.status      = 'accepted'
+                  GROUP BY cc.currency";
         $stmt = $this->execute($query);
 
         if (!$stmt) {
@@ -240,7 +280,13 @@ class ContactCreditRepository extends AbstractRepository {
             $placeholders[] = $key;
             $params[$key] = $hash;
         }
-        $query = "SELECT pubkey_hash, available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash IN (" . implode(',', $placeholders) . ")";
+        $query = "SELECT cc.pubkey_hash, cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                  FROM {$this->tableName} cc
+                  INNER JOIN contact_currencies cur
+                    ON cur.pubkey_hash = cc.pubkey_hash
+                   AND cur.currency    = cc.currency
+                   AND cur.status      = 'accepted'
+                  WHERE cc.pubkey_hash IN (" . implode(',', $placeholders) . ")";
         $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
@@ -266,6 +312,28 @@ class ContactCreditRepository extends AbstractRepository {
     public function deleteByPubkeyHash(string $pubkeyHash): bool {
         $deletedRows = $this->delete($this->primaryKey, $pubkeyHash);
         return $deletedRows > 0;
+    }
+
+    /**
+     * Delete the credit row for one specific (contact, currency) pair.
+     * Called from the decline-cleanup paths so orphan rows don't
+     * accumulate even though the aggregation queries already filter
+     * them out — keeps the table tight and avoids confusing snapshots.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency   Currency code
+     * @return bool True if a row was deleted
+     */
+    public function deleteForContactCurrency(string $pubkeyHash, string $currency): bool {
+        $stmt = $this->execute(
+            "DELETE FROM {$this->tableName}
+             WHERE pubkey_hash = :pubkey_hash AND currency = :currency",
+            [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]
+        );
+        if (!$stmt) {
+            return false;
+        }
+        return $stmt->rowCount() > 0;
     }
 
     /**
