@@ -53,6 +53,53 @@ require_once __DIR__ . '/WalletTemplateHelpers.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
+    // Plugin / registry-dispatched POST actions. The action registry is
+    // populated by plugins' boot() (in Application::bootAll, which runs
+    // long before this file is included). Checked first so a plugin can
+    // also override a core action by registering one with the matching
+    // name — last-write-wins is the documented contract.
+    //
+    // The registry enforces tier gates here (CSRF + sensitive-access),
+    // then hands the request to the plugin handler. Handlers emit their
+    // own response (JSON or redirect) and exit; the trailing exit below
+    // is defensive in case a handler forgets.
+    //
+    // Failures emit a JSON envelope and exit so an XHR submit gets a
+    // structured error instead of an HTML page. See
+    // docs/PLUGIN_GUI_HOOKS.md.
+    $actionRegistry = $serviceContainer->getActionRegistry();
+    if ($actionRegistry->has($action)) {
+        if ($actionRegistry->requiresCsrf($action)) {
+            if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
+                header('Content-Type: application/json');
+                http_response_code(403);
+                echo json_encode(['success' => false, 'error' => 'csrf_error', 'message' => 'Invalid CSRF token']);
+                exit;
+            }
+        }
+        if ($actionRegistry->requiresSensitiveAccess($action) && !$secureSession->hasSensitiveAccess()) {
+            header('Content-Type: application/json');
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'sensitive_access_required', 'message' => 'Sensitive access required']);
+            exit;
+        }
+        try {
+            ($actionRegistry->getHandler($action))($_POST);
+        } catch (\Throwable $e) {
+            \Eiou\Utils\Logger::getInstance()->logException($e, [
+                'context' => 'gui_action_registry_dispatch',
+                'action' => $action,
+                'plugin' => $actionRegistry->getPluginId($action),
+            ]);
+            if (!headers_sent()) {
+                header('Content-Type: application/json');
+                http_response_code(500);
+            }
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     // Contact actions
     if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'applyContactDecisions', 'declineCurrency', 'declineContact', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
         $contactController->routeAction();
@@ -1599,6 +1646,31 @@ foreach ($acceptedContacts as $c) {
     }
 }
 
+// GUI hook registry — exposed to every template partial below so
+// plugins can inject HTML at named fire sites. doRender('foo', $ctx)
+// returns '' when no plugin has subscribed, so all hook fires are
+// safe to scatter through the templates without per-call guards.
+// See docs/PLUGIN_GUI_HOOKS.md.
+$hooks = $serviceContainer->getHooks();
+
+// Drain the plugin asset registry into the three asset hook slots.
+// This is the host's contribution to gui.head.styles /
+// gui.head.scripts / gui.footer.scripts — plugins enqueue files; the
+// host renders them inline with the page's CSP nonce. Listeners
+// register at priority 5 so they emit before any plugin's own
+// render listener at the default priority 10. Functions.php is
+// require_once'd so this registers exactly once per request.
+$assetRegistry = $serviceContainer->getAssetRegistry();
+$hooks->onRender('gui.head.styles', function () use ($assetRegistry) {
+    return $assetRegistry->renderStyles(cspNonce());
+}, 5);
+$hooks->onRender('gui.head.scripts', function () use ($assetRegistry) {
+    return $assetRegistry->renderScripts(cspNonce(), true);
+}, 5);
+$hooks->onRender('gui.footer.scripts', function () use ($assetRegistry) {
+    return $assetRegistry->renderScripts(cspNonce(), false);
+}, 5);
+
 // Load payment requests for display in the Send tab
 $paymentRequests = ['incoming' => [], 'outgoing' => []];
 $pendingPaymentRequestCount = 0;
@@ -1612,3 +1684,57 @@ try {
 
 // Initialize ContactDataBuilder helper
 $contactDataBuilder = new ContactDataBuilder($addressTypes);
+
+// =========================================================================
+// Register the 5 core tabs in the TabRegistry. wallet.html iterates the
+// registry to build the desktop nav + mobile nav + tab panels, instead
+// of hardcoding the 5 tabs in three places. Plugins register their own
+// tabs in their boot(); they appear automatically alongside the core
+// tabs sorted by `order`. See docs/PLUGIN_GUI_HOOKS.md.
+//
+// `include` paths are resolved by wallet.html with require_once at
+// render time, so each partial sees Functions.php's scope ($user,
+// $paymentRequests, etc.). `badge` is captured by-value here — counts
+// are computed earlier in Functions.php and stay live for the request.
+// =========================================================================
+$tabRegistry = $serviceContainer->getTabRegistry();
+$tabRegistry->register([
+    'id'       => 'dashboard',
+    'label'    => 'Dashboard',
+    'mobileLabel' => 'Home',
+    'icon'     => 'fas fa-home',
+    'order'    => 10,
+    'include'  => '/app/eiou/src/gui/layout/walletSubParts/dashboardTab.html',
+]);
+$tabRegistry->register([
+    'id'         => 'send',
+    'label'      => 'Payment',
+    'icon'       => 'fas fa-paper-plane',
+    'order'      => 20,
+    'include'    => '/app/eiou/src/gui/layout/walletSubParts/sendTab.html',
+    'badge'      => $pendingPaymentRequestCount ?? 0,
+]);
+$tabRegistry->register([
+    'id'         => 'contacts',
+    'label'      => 'Contacts',
+    'icon'       => 'fas fa-address-book',
+    'order'      => 30,
+    'include'    => '/app/eiou/src/gui/layout/walletSubParts/contactsTab.html',
+    'badge'      => $contactsNeedingChainActionCount ?? 0,
+    'badgeTitle' => 'Contacts with chain gaps requiring action',
+]);
+$tabRegistry->register([
+    'id'         => 'activity',
+    'label'      => 'Activity',
+    'icon'       => 'fas fa-history',
+    'order'      => 40,
+    'include'    => '/app/eiou/src/gui/layout/walletSubParts/activityTab.html',
+    'badge'      => $dlqPendingCount ?? 0,
+]);
+$tabRegistry->register([
+    'id'      => 'settings',
+    'label'   => 'Settings',
+    'icon'    => 'fas fa-cog',
+    'order'   => 50,
+    'include' => '/app/eiou/src/gui/layout/walletSubParts/settingsTab.html',
+]);
