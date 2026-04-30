@@ -2563,6 +2563,13 @@ function initializeCurrencyAcceptHandlers() {
             // both by the in-line happy path (before letting the event
             // continue to native submission) and by the guard-confirmed
             // path that calls form.submit() programmatically.
+            //
+            // Loader pattern mirrors the payment-request approve handler:
+            // showLoader covers the page, startOperationTimeout schedules
+            // a 15s auto-reload + post-reload toast so the user is never
+            // stuck staring at a spinner if the contact's transport is
+            // degraded — local state is saved synchronously, the outbound
+            // notification is owned by the DLQ retry processor.
             function writePayload(decisions, isNewContact, nameInput) {
                 if (isNewContact && nameInput) {
                     var nameTarget = form.querySelector('.apply-decisions-name-target');
@@ -2574,6 +2581,14 @@ function initializeCurrencyAcceptHandlers() {
                     var applyIcon = applyBtn.querySelector('i');
                     if (applyIcon) { applyIcon.className = 'fas fa-spinner fa-spin'; }
                     if (applyLabel) { applyLabel.textContent = 'Applying…'; }
+                }
+                if (typeof showLoader === 'function') {
+                    showLoader('Applying contact decisions…',
+                               'Saving your decisions locally. The notification to the contact is queued and will keep retrying in the background if the transport is slow.');
+                }
+                if (typeof startOperationTimeout === 'function') {
+                    startOperationTimeout('applyContactDecisions',
+                                          'Still processing. Your decisions are saved locally and the notification to the contact will keep retrying in the background — check the Failed Messages panel under Activity.');
                 }
             }
 

@@ -657,6 +657,120 @@ class ContactStatusServiceTest extends TestCase
     }
 
     /**
+     * Reason-specific labels for ping rejections other than
+     * `unknown_contact`. Locks in the wording so a future `describePingRejection`
+     * change has to update this test alongside it.
+     *
+     * @dataProvider pingRejectionReasonProvider
+     */
+    public function testPingContactDescribesReasonSpecificMessages(string $reason, string $needle): void
+    {
+        $this->service->setRateLimiterService($this->mockRateLimiter);
+
+        $this->mockRateLimiter->expects($this->once())
+            ->method('checkLimit')
+            ->willReturn(['allowed' => true, 'remaining' => 2]);
+
+        $contact = [
+            'name' => 'test-contact',
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'status' => 'accepted',
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByNameOrAddress')
+            ->willReturn($contact);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
+
+        $rejectedResponse = json_encode([
+            'status' => 'rejected',
+            'reason' => $reason
+        ]);
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn($rejectedResponse);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('updateContactFields')
+            ->willReturn(true);
+
+        $result = $this->service->pingContact('test-contact');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('online', $result['online_status']);
+        $this->assertStringContainsString($needle, $result['message']);
+    }
+
+    public static function pingRejectionReasonProvider(): array
+    {
+        return [
+            'blocked'         => ['blocked', 'has blocked you'],
+            'disabled'        => ['disabled', 'disabled the contact-status feature'],
+            'unrecognised'    => ['some_new_reason_added_later', 'ping rejected: some_new_reason_added_later'],
+        ];
+    }
+
+    /**
+     * `unknown_contact` rejection means the remote responded but doesn't
+     * recognize this user yet — almost always because the local-side
+     * acceptance message hasn't reached them (DLQ-pending). The Status
+     * panel must surface a message that points the user at the Failed
+     * Messages panel rather than the raw token "ping rejected:
+     * unknown_contact" which everyone misreads as "we lost the contact".
+     */
+    public function testPingContactExplainsUnknownContactRejection(): void
+    {
+        $this->service->setRateLimiterService($this->mockRateLimiter);
+
+        $this->mockRateLimiter->expects($this->once())
+            ->method('checkLimit')
+            ->willReturn(['allowed' => true, 'remaining' => 2]);
+
+        $contact = [
+            'name' => 'test-contact',
+            'pubkey' => self::TEST_CONTACT_PUBKEY,
+            'status' => 'accepted',
+            'http' => self::TEST_CONTACT_ADDRESS
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByNameOrAddress')
+            ->willReturn($contact);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxidsByCurrency')
+            ->willReturn(['USD' => self::TEST_PREV_TXID]);
+
+        $rejectedResponse = json_encode([
+            'status' => 'rejected',
+            'reason' => 'unknown_contact'
+        ]);
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn($rejectedResponse);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('updateContactFields')
+            ->willReturn(true);
+
+        $result = $this->service->pingContact('test-contact');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('online', $result['online_status']);
+        // Must NOT leak the raw token to the GUI.
+        $this->assertStringNotContainsString('unknown_contact', $result['message']);
+        // Must point the user at where the answer is.
+        $this->assertStringContainsString("doesn't recognize you yet", $result['message']);
+        $this->assertStringContainsString('Failed Messages', $result['message']);
+    }
+
+    /**
      * Test pingContact returns offline when no valid response
      */
     public function testPingContactReturnsOfflineWhenNoValidResponse(): void

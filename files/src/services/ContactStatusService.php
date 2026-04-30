@@ -771,12 +771,13 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 } elseif ($response['status'] === Constants::DELIVERY_REJECTED) {
                     // Contact rejected ping but responded - still online
                     $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
+                    $reason = $response['reason'] ?? 'unknown';
                     return [
                         'success' => true,
                         'contact_name' => $contact['name'],
                         'online_status' => 'online',
                         'chain_valid' => null,
-                        'message' => 'Contact is online (ping rejected: ' . ($response['reason'] ?? 'unknown') . ')'
+                        'message' => $this->describePingRejection($reason),
                     ];
                 }
             }
@@ -811,6 +812,38 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 'chain_valid' => null,
                 'message' => 'Contact is offline (connection failed)'
             ];
+        }
+    }
+
+    /**
+     * Translate a ping-rejection reason code into a human-friendly status
+     * line for the GUI Status panel. Covers the case the user is most
+     * likely to see and most likely to misread:
+     *
+     *   `unknown_contact` — the remote node responded but doesn't know us.
+     *   That happens when our acceptance message hasn't reached them yet
+     *   (typical: delivery is still pending in the local DLQ after a
+     *   degraded Tor / TLS hop). We point the user at the Failed Messages
+     *   panel rather than letting them stare at the cryptic raw token.
+     *
+     * Other reasons (`blocked`, `disabled`, anything new) keep the
+     * existing brief form so the message stays accurate when the underlying
+     * payload-builder map (ContactStatusPayload::buildRejection) grows.
+     */
+    private function describePingRejection(string $reason): string
+    {
+        switch ($reason) {
+            case 'unknown_contact':
+                return "Contact is online but doesn't recognize you yet — "
+                     . "your acceptance hasn't been delivered to them. "
+                     . "Check the Failed Messages panel under Activity; "
+                     . "delivery will keep retrying in the background.";
+            case 'blocked':
+                return 'Contact is online but has blocked you (ping rejected: blocked).';
+            case 'disabled':
+                return 'Contact is online but has disabled the contact-status feature (ping rejected: disabled).';
+            default:
+                return 'Contact is online (ping rejected: ' . $reason . ').';
         }
     }
 
