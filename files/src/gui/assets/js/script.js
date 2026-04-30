@@ -2277,16 +2277,15 @@ function initializeFormLoaders() {
     }
 
     // Payment request — Approve & Pay (triggers a full sendEiou, can be slow over Tor)
-    var approveForms = document.querySelectorAll('form input[name="action"][value="approvePaymentRequest"]');
-    for (var i = 0; i < approveForms.length; i++) {
-        var form = approveForms[i].closest('form');
-        if (form) {
-            form.addEventListener('submit', function() {
-                showLoader('Approving & sending payment...', 'Processing your transaction. This may take a moment over Tor.');
-                startOperationTimeout('approvePayment', 'Still processing. Check your transaction history — the payment may have completed in the background.');
-            });
-        }
-    }
+    //
+    // The Pay button now goes through a confirmation modal so the payer can
+    // optionally append a note to the on-chain transaction description. The
+    // requester's original description is shown read-only so it's clear the
+    // payer is *adding to it* rather than editing it; the counter under the
+    // textarea decrements live as they type and is hard-capped at whatever
+    // space the requester's description leaves under the 255-char ceiling
+    // (matching PaymentRequestService::maxPayerNoteLength on the backend).
+    initializePaymentRequestApprovalHandler();
 
     // Payment request — Decline (sends a Tor response message, can be slow)
     var declineForms = document.querySelectorAll('form input[name="action"][value="declinePaymentRequest"]');
@@ -2310,6 +2309,166 @@ function initializeFormLoaders() {
                 startOperationTimeout('cancelPaymentRequest', 'Still waiting. The request has been cancelled locally. You can continue using the app and check back later.');
             });
         }
+    }
+}
+
+/**
+ * Wire up the Pay → confirmation modal flow on incoming payment-request
+ * rows. Each Pay form (rendered by paymentRequestsSection.html) carries
+ * data-pr-description, data-pr-amount, and data-pr-counterparty so the
+ * modal can pre-populate without a round-trip. Submit is intercepted,
+ * the modal is opened, and on confirm the typed note is written into
+ * the form's hidden payer_note input before the form is actually
+ * submitted (which then hits the existing showLoader path).
+ *
+ * Mirror of the backend cap: PaymentRequestService::maxPayerNoteLength()
+ * computes available = 255 - len(requester_description) - len(' | ').
+ * If available is 0 we still let the user pay — they just can't add a
+ * note (textarea is disabled with an explanatory hint).
+ */
+var PR_APPROVE_DESC_MAX = 255;
+var PR_APPROVE_SEPARATOR = ' | ';
+var pendingApproveForm = null;
+
+function initializePaymentRequestApprovalHandler() {
+    // Event-delegated submit handler so the row-click "Payment Request
+    // Details" drill-down modal — which builds its Pay form
+    // dynamically in openPrPendingModal — gets caught too. A
+    // per-element listener attached at DOMContentLoaded would only
+    // see the inline pending-row forms, not the dynamically inserted
+    // ones, so users would land on the legacy direct-submit path
+    // and skip the note modal entirely.
+    document.addEventListener('submit', function (ev) {
+        var form = ev.target;
+        if (!form || !form.classList || !form.classList.contains('pr-approve-form')) return;
+        // Only intercept user-initiated submits — the modal-confirm
+        // path re-submits programmatically with a flag set so the
+        // showLoader handler still fires the second time.
+        if (form.getAttribute('data-pr-confirmed') === '1') {
+            showLoader('Approving & sending payment...', 'Processing your transaction. This may take a moment over Tor.');
+            startOperationTimeout('approvePayment', 'Still processing. Check your transaction history — the payment may have completed in the background.');
+            return;
+        }
+        ev.preventDefault();
+        openPrApproveModal(form);
+    }, true);
+
+    var confirmBtn = document.getElementById('pr-approve-confirm');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', confirmPrApproveModal);
+    }
+
+    var noteEl = document.getElementById('pr-approve-note');
+    if (noteEl) {
+        noteEl.addEventListener('input', updatePrApproveCounter);
+    }
+}
+
+function openPrApproveModal(form) {
+    pendingApproveForm = form;
+    // If the user reached Pay via the row-click drill-down modal
+    // (openPrPendingModal), close that modal first so we don't render
+    // two stacked dialogs. The drill-down modal is a dynamically
+    // inserted #pr-pending-modal element appended to <body>.
+    var pendingModal = document.getElementById('pr-pending-modal');
+    if (pendingModal && document.body.contains(pendingModal)) {
+        document.body.removeChild(pendingModal);
+    }
+    var desc = form.getAttribute('data-pr-description') || '';
+    var amount = form.getAttribute('data-pr-amount') || '';
+    var cp = form.getAttribute('data-pr-counterparty') || '';
+
+    var descEl = document.getElementById('pr-approve-orig-desc');
+    if (descEl) descEl.textContent = desc || '— (no description)';
+    var amountEl = document.getElementById('pr-approve-amount');
+    if (amountEl) amountEl.textContent = amount;
+    var cpEl = document.getElementById('pr-approve-counterparty');
+    if (cpEl) cpEl.textContent = cp;
+
+    var noteEl = document.getElementById('pr-approve-note');
+    if (noteEl) {
+        noteEl.value = '';
+        noteEl.disabled = false;
+        noteEl.placeholder = 'e.g. "paid via coinbase txid abc123"';
+    }
+    var errEl = document.getElementById('pr-approve-error');
+    if (errEl) { errEl.textContent = ''; errEl.classList.add('d-none'); }
+
+    updatePrApproveCounter();
+
+    // If the requester's description already eats the whole budget,
+    // there's no room for a note — disable the textarea but still let
+    // the payer hit Pay (with no note) so the flow isn't blocked.
+    var max = prApproveMaxNote();
+    if (max <= 0 && noteEl) {
+        noteEl.disabled = true;
+        noteEl.placeholder = 'No room — requester description fills the 255-char budget';
+    }
+
+    var modal = document.getElementById('pr-approve-modal');
+    if (modal) modal.classList.remove('d-none');
+    if (noteEl && !noteEl.disabled) setTimeout(function () { noteEl.focus(); }, 50);
+}
+
+function closePrApproveModal() {
+    var modal = document.getElementById('pr-approve-modal');
+    if (modal) modal.classList.add('d-none');
+    pendingApproveForm = null;
+}
+
+function prApproveMaxNote() {
+    if (!pendingApproveForm) return 0;
+    var desc = pendingApproveForm.getAttribute('data-pr-description') || '';
+    var available = PR_APPROVE_DESC_MAX - desc.length - PR_APPROVE_SEPARATOR.length;
+    return available > 0 ? available : 0;
+}
+
+function updatePrApproveCounter() {
+    var noteEl = document.getElementById('pr-approve-note');
+    var counterEl = document.getElementById('pr-approve-counter');
+    if (!noteEl || !counterEl) return;
+    var max = prApproveMaxNote();
+    var len = (noteEl.value || '').length;
+    var left = max - len;
+    if (left < 0) left = 0;
+    counterEl.textContent = len + ' / ' + max + '  (' + left + ' chars left)';
+    if (max > 0 && len > max) {
+        counterEl.style.color = '#f87171';
+    } else if (max > 0 && left <= 10) {
+        counterEl.style.color = '#fbbf24';
+    } else {
+        counterEl.style.color = '';
+    }
+}
+
+function confirmPrApproveModal() {
+    if (!pendingApproveForm) return;
+    var noteEl = document.getElementById('pr-approve-note');
+    var errEl = document.getElementById('pr-approve-error');
+    var note = (noteEl && !noteEl.disabled) ? (noteEl.value || '').trim() : '';
+    var max = prApproveMaxNote();
+
+    if (note.length > max) {
+        if (errEl) {
+            errEl.textContent = 'Note too long — max ' + max + ' chars for this request';
+            errEl.classList.remove('d-none');
+        }
+        return;
+    }
+
+    var hidden = pendingApproveForm.querySelector('input[name="payer_note"]');
+    if (hidden) hidden.value = note;
+
+    var form = pendingApproveForm;
+    closePrApproveModal();
+
+    // Mark + re-submit so the existing submit handler hits the
+    // showLoader path on this pass instead of re-opening the modal.
+    form.setAttribute('data-pr-confirmed', '1');
+    if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+    } else {
+        form.submit();
     }
 }
 
@@ -6271,7 +6430,18 @@ function openPrPendingModal(el) {
     // Action buttons as real forms so they submit properly
     html += '<div class="d-flex gap-sm" style="margin-top:1rem">';
     if (direction === 'incoming') {
-        html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="approvePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Pay</button></form>';
+        // Pay form carries class + data attrs the approval modal handler
+        // (initializePaymentRequestApprovalHandler in script.js) reads to
+        // pre-populate the requester's description and dynamic char cap.
+        html += '<form method="POST" class="pr-approve-form d-inline" '
+              + 'data-pr-description="' + escapeHtml(desc) + '" '
+              + 'data-pr-amount="' + escapeHtml(amount) + '" '
+              + 'data-pr-counterparty="' + escapeHtml(name) + '">'
+              + '<input type="hidden" name="action" value="approvePaymentRequest">'
+              + '<input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '">'
+              + '<input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '">'
+              + '<input type="hidden" name="payer_note" value="">'
+              + '<button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Pay</button></form>';
         html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="declinePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-times"></i> Decline</button></form>';
     } else {
         html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="cancelPaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-ban"></i> Cancel</button></form>';
@@ -8063,6 +8233,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             startOperationTimeout('createPaymentRequest', 'Still waiting. The request is being retried in the background. You can continue using the app and check back later.');
             form.submit();
         },
+
+        // Payment request approve (Pay) modal
+        'closePrApproveModal': function() { closePrApproveModal(); },
 
         // API Keys
         'openApiKeyCreateModal': function() { window.apiKeys.openCreateModal(); },

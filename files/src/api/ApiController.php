@@ -3487,11 +3487,40 @@ class ApiController {
         $data      = json_decode($body, true) ?? [];
         $requestId = trim($data['request_id'] ?? '');
 
+        // Optional payer-side annotation appended to the on-chain
+        // transaction description with " | ". Length is capped against
+        // the requester's existing description so the combined string
+        // fits the 255-char on-chain ceiling. Over-long notes are
+        // rejected here rather than silently truncated server-side.
+        $payerNote = isset($data['payer_note']) ? trim((string)$data['payer_note']) : '';
+
         if (empty($requestId)) {
             return $this->errorResponse('request_id is required', 400, 'missing_fields');
         }
 
-        $result = $prService->approve($requestId);
+        if ($payerNote !== '') {
+            $existing = $prService->getByRequestId($requestId);
+            if ($existing === null) {
+                return $this->errorResponse('Payment request not found', 404, 'not_found');
+            }
+            $maxNote = \Eiou\Services\PaymentRequestService::maxPayerNoteLength($existing['description'] ?? null);
+            if ($maxNote === 0) {
+                return $this->errorResponse(
+                    'Requester description leaves no room for a note',
+                    400,
+                    'payer_note_too_long'
+                );
+            }
+            if (strlen($payerNote) > $maxNote) {
+                return $this->errorResponse(
+                    "Note too long (max {$maxNote} chars for this request)",
+                    400,
+                    'payer_note_too_long'
+                );
+            }
+        }
+
+        $result = $prService->approve($requestId, $payerNote !== '' ? $payerNote : null);
         if (!$result['success']) {
             return $this->errorResponse($result['error'], 400, 'approve_failed');
         }

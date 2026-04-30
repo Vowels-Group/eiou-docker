@@ -33,6 +33,20 @@ use Eiou\Gui\Helpers\MessageHelper;
  */
 class PaymentRequestService
 {
+    /**
+     * Hard ceiling for the on-chain transaction description that
+     * sendEiou() ultimately writes. Mirrors the database column width
+     * for transactions.description and the existing 255-char fallback
+     * rule used when prefixing "payment: " here.
+     */
+    private const DESCRIPTION_MAX_LENGTH = 255;
+
+    /** Prefix added to the requester's original description. */
+    private const DESCRIPTION_PREFIX = 'payment: ';
+
+    /** Separator joining the requester's description and the payer note. */
+    private const DESCRIPTION_SEPARATOR = ' | ';
+
     private PaymentRequestRepository $paymentRequestRepository;
     private ContactRepository $contactRepository;
     private AddressRepository $addressRepository;
@@ -173,10 +187,19 @@ class PaymentRequestService
      * Approve an incoming payment request.
      * Triggers a full sendEiou() to the requester, then marks request approved.
      *
-     * @param string $requestId The request_id to approve
+     * The payer may optionally append a free-form note to the on-chain
+     * transaction description (e.g. "paid via coinbase txid abc123"). The
+     * note is joined to the requester's original description with " | ".
+     * If the combined string would exceed the 255-char ceiling, the
+     * "payment: " prefix is dropped first; if it still doesn't fit, the
+     * note is truncated. Callers that want a hard error instead of silent
+     * truncation should pre-validate against {@see maxPayerNoteLength()}.
+     *
+     * @param string      $requestId The request_id to approve
+     * @param string|null $payerNote Optional free-form note from the payer
      * @return array ['success' => bool, 'error' => string, 'message' => string, 'txid' => string|null]
      */
-    public function approve(string $requestId): array
+    public function approve(string $requestId, ?string $payerNote = null): array
     {
         $request = $this->paymentRequestRepository->getByRequestId($requestId);
         if (!$request) {
@@ -202,13 +225,7 @@ class PaymentRequestService
         $currency = $request['currency'];
         $rawDescription = $request['description'] ?? null;
 
-        // Build transaction description: "payment: {description}", but drop the prefix
-        // if the combined string would exceed the 255-char description limit
-        $description = null;
-        if (!empty($rawDescription)) {
-            $prefixed = 'payment: ' . $rawDescription;
-            $description = strlen($prefixed) <= 255 ? $prefixed : $rawDescription;
-        }
+        $description = self::composeApprovalDescription($rawDescription, $payerNote);
 
         // Trigger sendEiou via the existing transaction pipeline
         CliOutputManager::resetInstance();
@@ -251,6 +268,87 @@ class PaymentRequestService
             'message' => $messageInfo['message'],
             'txid'    => $txid,
         ];
+    }
+
+    /**
+     * Maximum bytes a payer note can occupy given a particular requester
+     * description. Returned value is for the no-prefix layout, so it's
+     * the most permissive cap: callers that surface an error to the user
+     * (CLI/API/GUI) reject anything strictly longer than this. The
+     * service still applies a defensive truncation if a longer note
+     * sneaks through.
+     *
+     * Returns 0 when the requester description alone leaves no room for
+     * a note + separator.
+     */
+    public static function maxPayerNoteLength(?string $requesterDescription): int
+    {
+        $reqLen = strlen((string)$requesterDescription);
+        $sepLen = strlen(self::DESCRIPTION_SEPARATOR);
+        $available = self::DESCRIPTION_MAX_LENGTH - $reqLen - $sepLen;
+        return $available > 0 ? $available : 0;
+    }
+
+    /**
+     * Compose the on-chain transaction description for an approved
+     * payment request. Cascade:
+     *
+     *   1. "payment: <req> | <note>"   if it fits
+     *   2. "<req> | <note>"            if it fits  (drop the prefix)
+     *   3. "<req> | <truncated note>"  truncate the note to fill what's
+     *                                  left under the 255-char ceiling
+     *   4. "payment: <req>" / <req>    when no note was supplied
+     *      (existing v0.1.13 behavior)
+     *   5. null                        when both pieces are empty
+     *
+     * Whitespace is trimmed off the note; an all-whitespace note is
+     * treated as no note at all.
+     */
+    public static function composeApprovalDescription(?string $rawDescription, ?string $payerNote): ?string
+    {
+        $req = $rawDescription !== null ? (string)$rawDescription : '';
+        $note = $payerNote !== null ? trim((string)$payerNote) : '';
+        $max = self::DESCRIPTION_MAX_LENGTH;
+
+        if ($req === '' && $note === '') {
+            return null;
+        }
+
+        // Existing behavior: no note → keep prefix when it fits, else strip it.
+        if ($note === '') {
+            $prefixed = self::DESCRIPTION_PREFIX . $req;
+            return strlen($prefixed) <= $max ? $prefixed : $req;
+        }
+
+        // Note-only: still gets the "payment: " prefix when it fits.
+        if ($req === '') {
+            $prefixed = self::DESCRIPTION_PREFIX . $note;
+            if (strlen($prefixed) <= $max) {
+                return $prefixed;
+            }
+            return strlen($note) <= $max ? $note : substr($note, 0, $max);
+        }
+
+        $sep = self::DESCRIPTION_SEPARATOR;
+
+        $full = self::DESCRIPTION_PREFIX . $req . $sep . $note;
+        if (strlen($full) <= $max) {
+            return $full;
+        }
+
+        $noPrefix = $req . $sep . $note;
+        if (strlen($noPrefix) <= $max) {
+            return $noPrefix;
+        }
+
+        // Truncate the note to fit. If req alone is already at/over the
+        // limit, drop the note entirely and fall back to the existing
+        // no-note behavior so the requester's wording is preserved.
+        $available = $max - strlen($req) - strlen($sep);
+        if ($available <= 0) {
+            return strlen($req) <= $max ? $req : substr($req, 0, $max);
+        }
+        return $req . $sep . substr($note, 0, $available);
     }
 
     /**
@@ -459,6 +557,19 @@ class PaymentRequestService
             'incoming' => $this->paymentRequestRepository->getAllIncoming($limit),
             'outgoing' => $this->paymentRequestRepository->getAllOutgoing($limit),
         ];
+    }
+
+    /**
+     * Fetch a single payment request by its request_id, or null if it
+     * doesn't exist. Thin pass-through over the repository, exposed so
+     * that the CLI / API entry layers can pre-validate a payer note
+     * against the existing requester description before calling
+     * approve() — avoids them reaching into the repository directly.
+     */
+    public function getByRequestId(string $requestId): ?array
+    {
+        $row = $this->paymentRequestRepository->getByRequestId($requestId);
+        return $row ?: null;
     }
 
     /**
