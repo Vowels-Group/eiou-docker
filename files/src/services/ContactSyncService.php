@@ -742,6 +742,25 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $this->transactionContactRepository->rejectReceivedContactTransaction($pubkey, $currency);
         }
 
+        // Tell the requester their outgoing-pending row is dead so
+        // their state matches ours and a retry doesn't trip the
+        // CONTACT_EXISTS path. Best-effort: failures land in the
+        // DLQ; ping/pong currency-status reconciliation acts as a
+        // backstop if the message is lost long-term. Wrapped in
+        // try/catch so a notification failure doesn't surface as a
+        // decline failure — the local decline already happened.
+        if ($deleted) {
+            try {
+                $this->sendCurrencyDeclineNotification($pubkeyHash, $currency);
+            } catch (\Throwable $notifyErr) {
+                Logger::getInstance()->info("Currency decline notify-send failed (non-fatal)", [
+                    'pubkey_hash' => substr($pubkeyHash, 0, 16),
+                    'currency' => $currency,
+                    'error' => $notifyErr->getMessage(),
+                ]);
+            }
+        }
+
         return $deleted;
     }
 
@@ -2200,6 +2219,89 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $this->completeReceivedContactTransaction($contact['pubkey'], $currency);
         }
 
+        return $sendResult['success'];
+    }
+
+    /**
+     * Notify a contact that we have declined one of their currency
+     * requests. Counterpart to {@see sendCurrencyAcceptanceNotification}
+     * — without this the requester's outgoing-pending row hangs
+     * forever and any retry hits the legacy CONTACT_EXISTS path. The
+     * receiver-side handler ({@see MessageService::handleContactMessageRequest}
+     * `status === 'declined'`) drops the requester's stale row.
+     *
+     * Best-effort: async=true so a degraded transport doesn't block
+     * the user-facing apply-decisions request that triggered the
+     * decline. If the message can't be delivered immediately it lands
+     * in the DLQ; in the meantime the requester's view is reconciled
+     * by the next ping/pong (see currency-status block in
+     * ContactStatusService::handlePingRequest).
+     *
+     * @param string $pubkeyHash The contact's pubkey hash (hex sha256)
+     * @param string $currency   The currency that was declined
+     * @return bool True when the first attempt succeeded
+     */
+    public function sendCurrencyDeclineNotification(string $pubkeyHash, string $currency): bool {
+        $addresses = $this->addressRepository->lookupByPubkeyHash($pubkeyHash);
+        $address = $addresses['http'] ?? $addresses['https'] ?? $addresses['tor'] ?? null;
+        if ($address === null) {
+            Logger::getInstance()->warning("Cannot send currency decline: no address found", [
+                'pubkey_hash' => substr($pubkeyHash, 0, 16),
+                'currency' => $currency,
+            ]);
+            return false;
+        }
+
+        $payload = $this->messagePayload->buildContactDeclined($address, $currency);
+        $messageId = 'currency-decline-' . hash('sha256', $address . $pubkeyHash . $currency . $this->timeUtility->getCurrentMicrotime());
+        $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true);
+
+        if (!$sendResult['success']) {
+            Logger::getInstance()->info("Currency decline notification deferred to DLQ", [
+                'recipient_address' => $address,
+                'currency' => $currency,
+                'message_id' => $messageId,
+                'error' => $sendResult['tracking']['error'] ?? 'unknown',
+            ]);
+        }
+        return $sendResult['success'];
+    }
+
+    /**
+     * Notify a contact that we have declined their whole contact
+     * request (every pending currency dismissed in one go via the
+     * `eiou contact decline` / GUI Decline button). Receiver removes
+     * the corresponding outgoing rows + rejects the contact
+     * transaction so their state matches ours.
+     *
+     * Same async / DLQ semantics as
+     * {@see sendCurrencyDeclineNotification} — fire-and-forget from
+     * the user-facing path.
+     *
+     * @param string $pubkeyHash The contact's pubkey hash (hex sha256)
+     * @return bool True when the first attempt succeeded
+     */
+    public function sendContactDeclineNotification(string $pubkeyHash): bool {
+        $addresses = $this->addressRepository->lookupByPubkeyHash($pubkeyHash);
+        $address = $addresses['http'] ?? $addresses['https'] ?? $addresses['tor'] ?? null;
+        if ($address === null) {
+            Logger::getInstance()->warning("Cannot send contact decline: no address found", [
+                'pubkey_hash' => substr($pubkeyHash, 0, 16),
+            ]);
+            return false;
+        }
+
+        $payload = $this->messagePayload->buildContactDeclined($address, null);
+        $messageId = 'contact-decline-' . hash('sha256', $address . $pubkeyHash . $this->timeUtility->getCurrentMicrotime());
+        $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true);
+
+        if (!$sendResult['success']) {
+            Logger::getInstance()->info("Contact decline notification deferred to DLQ", [
+                'recipient_address' => $address,
+                'message_id' => $messageId,
+                'error' => $sendResult['tracking']['error'] ?? 'unknown',
+            ]);
+        }
         return $sendResult['success'];
     }
 

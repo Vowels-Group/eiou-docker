@@ -718,6 +718,64 @@ class MessageService implements MessageServiceInterface {
 
             // Return acknowledgment with our available credit for delivery tracking
             echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress, $ackCreditByCurrency, $ackCreditCalculatedAt);
+        } elseif ($status === 'declined') {
+            // Remote peer rejected our request. Two flavours:
+            //   - currency present → just that currency was declined
+            //     (e.g. an `addCurrencyToExisting` proposal). Drop the
+            //     stale outgoing-pending row so a retry doesn't trip
+            //     the legacy CONTACT_EXISTS path. Reject the
+            //     corresponding contact transaction so the activity
+            //     log reflects the outcome.
+            //   - currency absent → the whole contact request was
+            //     declined. Reject every still-pending outgoing
+            //     contact transaction with this peer + drop any
+            //     orphan outgoing-pending currency rows.
+            $declinedCurrency = $decodedMessage['currency'] ?? null;
+            $senderPubkeyHashLocal = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+            if ($declinedCurrency !== null && $declinedCurrency !== '') {
+                if ($this->contactCurrencyRepository !== null) {
+                    $this->contactCurrencyRepository->deletePendingOutgoingCurrency(
+                        $senderPubkeyHashLocal,
+                        $declinedCurrency
+                    );
+                }
+                $this->transactionContactRepository->rejectSentContactTransaction(
+                    $senderPublicKey,
+                    $declinedCurrency
+                );
+                Logger::getInstance()->info("Currency-decline notification processed", [
+                    'sender_address' => $senderAddress,
+                    'currency' => $declinedCurrency,
+                ]);
+            } else {
+                if ($this->contactCurrencyRepository !== null) {
+                    foreach ($this->contactCurrencyRepository->getPendingCurrencies($senderPubkeyHashLocal, 'outgoing') as $row) {
+                        $ccy = strtoupper((string) ($row['currency'] ?? ''));
+                        if ($ccy === '') {
+                            continue;
+                        }
+                        $this->contactCurrencyRepository->deletePendingOutgoingCurrency(
+                            $senderPubkeyHashLocal,
+                            $ccy
+                        );
+                        $this->transactionContactRepository->rejectSentContactTransaction(
+                            $senderPublicKey,
+                            $ccy
+                        );
+                    }
+                }
+                Logger::getInstance()->info("Whole-contact decline notification processed", [
+                    'sender_address' => $senderAddress,
+                ]);
+            }
+
+            echo json_encode([
+                'status' => Constants::DELIVERY_RECEIVED,
+                'message' => 'Decline notification received',
+                'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
+                'senderPublicKey' => $this->currentUser->getPublicKey(),
+            ]);
         } elseif ($status === Constants::DELIVERY_CONTACT_DESCRIPTION) {
             // E2E encrypted contact description follow-up
             // The sender omitted the description from the initial cleartext contact request (non-TOR)

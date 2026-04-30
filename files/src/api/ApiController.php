@@ -1724,6 +1724,16 @@ class ApiController {
             }
         }
 
+        // Whole-contact decline notification — covers the contact
+        // transaction reject the per-currency declines can't infer.
+        if (!empty($declined)) {
+            try {
+                $contactSyncService->sendContactDeclineNotification($hash);
+            } catch (\Throwable $notifyErr) {
+                // Non-fatal; ping/pong reconciliation backs us up.
+            }
+        }
+
         if (!empty($errors)) {
             return $this->errorResponse(
                 'Some declines failed',

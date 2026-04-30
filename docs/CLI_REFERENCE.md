@@ -311,6 +311,8 @@ Decline every pending currency on a contact request in one shot.
 eiou contact decline <pubkey-hash|address|name>
 ```
 
+Each declined currency triggers a `contact_currency_declined` notification to the requester so their outgoing-pending row is dropped on the spot — without it the requester's view of the request hangs forever and a retry trips the legacy `CONTACT_EXISTS` path. After all per-currency declines, a single `contact_declined` notification is sent so the requester's contact transaction itself is rejected. Both message types are async-best-effort and fall back to DLQ retries on transport failure; the next ping/pong cycle reconciles any drift via `peerKnownCurrencies` (see `eiou contact ping` below).
+
 ### contact list
 
 List contacts grouped by status.
@@ -379,6 +381,8 @@ Accept or decline a single per-currency request that's pending on an existing co
 eiou contact currency accept <contact> <currency> --fee F --credit C
 eiou contact currency decline <contact> <currency>
 ```
+
+`decline` sends a `contact_currency_declined` notification to the requester (best-effort, async). The remote drops their stale outgoing-pending row immediately on receipt; if the message is lost in flight, the next ping/pong call reconciles it via the `peerKnownCurrencies` payload field. A retry by the requester (`contact currency add`) succeeds in either case — the dispatcher detects a stale outgoing-pending row and routes it through `addCurrencyToExisting` instead of bailing with `CONTACT_EXISTS`.
 
 ### contact currency list
 

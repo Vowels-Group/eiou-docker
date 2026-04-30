@@ -981,12 +981,10 @@ class ContactManagementServiceTest extends TestCase
             'status' => Constants::CONTACT_STATUS_ACCEPTED,
         ]);
         $this->contactRepo->method('isAcceptedContactPubkey')->willReturn(true);
-        $this->contactCurrencyRepo->method('hasCurrency')
-            ->willReturnMap([
-                // Initial existence check (no direction): currency is not yet set up.
-                ['', 'EUR', null, false],
-                // addCurrencyToContact's internal hasCurrency check: also false.
-            ]);
+        // Dispatcher's row-shape check — no existing row for this currency.
+        $this->contactCurrencyRepo->method('getCurrencyConfig')->willReturn(null);
+        // addCurrencyToContact's internal hasCurrency check: also no row.
+        $this->contactCurrencyRepo->method('hasCurrency')->willReturn(false);
         $this->contactCurrencyRepo->method('upsertCurrencyConfig')->willReturn(true);
 
         // The hallmark of the addCurrencyToExisting branch: handleNewContact
@@ -999,6 +997,101 @@ class ContactManagementServiceTest extends TestCase
         $output = $this->createMock(CliOutputManager::class);
         $this->service->addContact(
             ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'EUR'],
+            $output,
+        );
+    }
+
+    /**
+     * Dispatcher: a stale outgoing-pending row from a prior request the
+     * peer either declined silently or never received gets dropped and
+     * the request is re-sent via addCurrencyToExisting. Without this
+     * defensive fallback the user hits CONTACT_EXISTS on retry — the
+     * exact symptom that motivated this branch.
+     *
+     * Belt-and-braces for the case where both the new
+     * `contact_currency_declined` notification AND ping/pong
+     * peerKnownCurrencies reconciliation failed to clean up
+     * (degraded transport, peer unreachable for hours, etc).
+     */
+    public function testAddContactDropsStaleOutgoingPendingAndReSends(): void
+    {
+        if (!extension_loaded('bcmath')) {
+            $this->markTestSkipped('bcmath required for full addContact validation pipeline');
+        }
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD', 'EUR']);
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn([
+            'pubkey' => 'pubkey-bob',
+            'status' => Constants::CONTACT_STATUS_ACCEPTED,
+        ]);
+        $this->contactRepo->method('isAcceptedContactPubkey')->willReturn(true);
+
+        // Stale outgoing-pending row from a prior attempt.
+        $this->contactCurrencyRepo->method('getCurrencyConfig')->willReturn([
+            'currency' => 'EUR',
+            'fee_percent' => 100,
+            'credit_limit' => null,
+            'status' => Constants::STATUS_PENDING,
+            'direction' => 'outgoing',
+        ]);
+        // Must drop the stale row before re-sending.
+        $this->contactCurrencyRepo->expects($this->once())
+            ->method('deletePendingOutgoingCurrency')
+            ->with($this->anything(), 'EUR')
+            ->willReturn(true);
+        $this->contactCurrencyRepo->method('hasCurrency')->willReturn(false);
+        $this->contactCurrencyRepo->method('upsertCurrencyConfig')->willReturn(true);
+
+        // Routes to handleNewContact (addCurrencyToExisting → notify peer)
+        // — the same branch a never-tried currency takes.
+        $mockSync->expects($this->once())->method('handleNewContact');
+        $mockSync->expects($this->never())->method('handleExistingContact');
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact(
+            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'EUR'],
+            $output,
+        );
+    }
+
+    /**
+     * Dispatcher: a still-active row (status=accepted OR direction=incoming)
+     * is genuine "already exists" — must NOT trigger the stale-row drop.
+     * Routes through acceptIncoming so existing flows are preserved.
+     */
+    public function testAddContactDoesNotDropAcceptedCurrencyRow(): void
+    {
+        if (!extension_loaded('bcmath')) {
+            $this->markTestSkipped('bcmath required for full addContact validation pipeline');
+        }
+        $mockSync = $this->createServiceWithMockSync();
+
+        $this->currentUser->method('getUserAddresses')->willReturn([]);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
+        $this->transportUtility->method('determineTransportType')->willReturn('http');
+        $this->contactRepo->method('getContactByAddress')->willReturn([
+            'pubkey' => 'pubkey-bob',
+            'status' => Constants::CONTACT_STATUS_ACCEPTED,
+        ]);
+        $this->contactCurrencyRepo->method('getCurrencyConfig')->willReturn([
+            'currency' => 'USD',
+            'fee_percent' => 100,
+            'credit_limit' => null,
+            'status' => Constants::STATUS_ACCEPTED,
+            'direction' => 'outgoing',
+        ]);
+        // Must NOT delete an accepted row.
+        $this->contactCurrencyRepo->expects($this->never())
+            ->method('deletePendingOutgoingCurrency');
+
+        $mockSync->expects($this->once())->method('handleExistingContact');
+
+        $output = $this->createMock(CliOutputManager::class);
+        $this->service->addContact(
+            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD'],
             $output,
         );
     }
@@ -1021,6 +1114,7 @@ class ContactManagementServiceTest extends TestCase
             'pubkey' => 'pubkey-bob',
             'status' => Constants::CONTACT_STATUS_PENDING,
         ]);
+        $this->contactCurrencyRepo->method('getCurrencyConfig')->willReturn(null);
         $this->contactCurrencyRepo->method('hasCurrency')->willReturn(false);
 
         $mockSync->expects($this->once())->method('handleExistingContact');

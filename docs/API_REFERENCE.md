@@ -1025,6 +1025,8 @@ Decline every pending currency on an incoming contact request in one shot. Idemp
 
 If a per-currency decline throws, the endpoint returns 500 with `partial_decline_failure` and both `declined` and `errors` in the error context so callers don't need to re-query.
 
+**Decline notifications.** Each declined currency triggers an async `contact_currency_declined` send to the requester so their outgoing-pending row is dropped without a manual retry on their side. After the per-currency loop, a single `contact_declined` is sent so the requester's contact transaction itself is rejected. Both sends are async-best-effort — first attempt synchronous, failures land in the DLQ. The next ping/pong cycle reconciles any drift via the `peerKnownCurrencies` payload field.
+
 ---
 
 ### GET /api/v1/contacts/:hash/currencies
@@ -1107,6 +1109,8 @@ Decline a single pending currency. Mirrors `eiou contact currency decline`.
 ```json
 {"currency": "EUR"}
 ```
+
+A `contact_currency_declined` notification is sent to the requester so their outgoing-pending row clears immediately. If the message is lost in flight (DLQ exhausts retries), the next ping/pong reconciles via `peerKnownCurrencies`. The requester's retry succeeds in either case — `addContact`'s dispatcher detects a stale outgoing-pending row and routes it through `addCurrencyToExisting` instead of returning `CONTACT_EXISTS`.
 
 **Response:**
 

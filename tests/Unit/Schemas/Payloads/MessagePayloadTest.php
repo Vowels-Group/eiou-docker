@@ -200,6 +200,59 @@ class MessagePayloadTest extends TestCase
     }
 
     // =========================================================================
+    // buildContactDeclined() Tests
+    // =========================================================================
+
+    /**
+     * Per-currency decline notification — `currency` field carries the
+     * specific currency that was declined; the message text mentions
+     * which currency request the receiver had outstanding so the audit
+     * surface is interpretable without joining DB rows.
+     */
+    public function testBuildContactDeclinedWithCurrencyIncludesCurrencyField(): void
+    {
+        $this->transportUtility->expects($this->once())
+            ->method('resolveUserAddressForTransport')
+            ->willReturn('http://us.example.com');
+        $this->userContext->expects($this->once())
+            ->method('getPublicKey')
+            ->willReturn('decliner-pubkey');
+
+        $result = $this->messagePayload->buildContactDeclined('http://them.example.com', 'EUR');
+
+        $this->assertIsArray($result);
+        $this->assertEquals('message', $result['type']);
+        $this->assertEquals('contact', $result['typeMessage']);
+        $this->assertEquals('declined', $result['status']);
+        $this->assertEquals('EUR', $result['currency']);
+        $this->assertStringContainsString('EUR', $result['message']);
+        $this->assertStringContainsString('declined', $result['message']);
+        $this->assertEquals('http://us.example.com', $result['senderAddress']);
+        $this->assertEquals('decliner-pubkey', $result['senderPublicKey']);
+    }
+
+    /**
+     * Whole-contact decline — currency field omitted, message text
+     * reflects "your contact request" so the receiver can distinguish
+     * "the relationship is dead" from "just one currency was rejected".
+     */
+    public function testBuildContactDeclinedWithoutCurrencyOmitsCurrencyField(): void
+    {
+        $this->transportUtility->expects($this->once())
+            ->method('resolveUserAddressForTransport')
+            ->willReturn('http://us.example.com');
+        $this->userContext->expects($this->once())
+            ->method('getPublicKey')
+            ->willReturn('decliner-pubkey');
+
+        $result = $this->messagePayload->buildContactDeclined('http://them.example.com', null);
+
+        $this->assertEquals('declined', $result['status']);
+        $this->assertArrayNotHasKey('currency', $result);
+        $this->assertStringContainsString('contact request', $result['message']);
+    }
+
+    // =========================================================================
     // buildContactIsNotYetAccepted() Tests
     // =========================================================================
 
