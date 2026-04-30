@@ -16,6 +16,19 @@ use Eiou\Gui\Includes\SessionKeys;
 class Session
 {
     /**
+     * Cached per-node cookie suffix. Computed once per request from the
+     * wallet's public key — see {@see getNodeCookieSuffix}. Cleared by
+     * {@see overrideNodeCookieSuffixForTest()} in unit tests.
+     */
+    private static ?string $cachedNodeSuffix = null;
+
+    /**
+     * Test-only override path for the userconfig file. Production reads
+     * from /etc/eiou/config/userconfig.json; tests inject a temp file.
+     */
+    private static ?string $userconfigPathOverride = null;
+
+    /**
      * Initialize session if not already started with secure settings
      */
     public function __construct()
@@ -33,8 +46,15 @@ class Session
 
             session_set_cookie_params($cookieParams);
 
-            // Use a custom session name
-            session_name('EIOU_WALLET_SESSION');
+            // Per-node session name. Plain "EIOU_WALLET_SESSION" collides
+            // when two nodes share a hostname but differ only by port
+            // (e.g. localhost:443 vs localhost:8443 in dev) — cookies
+            // ignore port per RFC 6265, so the second login overwrites
+            // the first's session cookie and both tabs end up logged
+            // out. Suffixing with a stable per-node hash isolates the
+            // cookies on the same host. No effect in prod where each
+            // node already has its own hostname.
+            session_name(self::sessionCookieName());
 
             // Start the session
             session_start();
@@ -42,6 +62,63 @@ class Session
             // Regenerate session ID periodically for security
             $this->checkSessionRegeneration();
         }
+    }
+
+    /**
+     * Compute a stable, per-node suffix for cookie names. Derived from
+     * the wallet's public key (sha256, first 16 hex chars) so two nodes
+     * sharing a hostname but differing only by port — typical dev setup
+     * with `localhost:443` (alice) and `localhost:8443` (bob) — write
+     * cookies under different keys and don't clobber each other.
+     *
+     * Falls back to the literal string `default` when the userconfig
+     * file is missing or malformed (e.g. during the brief
+     * pre-initialization window before {@see Wallet::generate()}
+     * writes it). Cached for the life of the request.
+     */
+    public static function getNodeCookieSuffix(): string
+    {
+        if (self::$cachedNodeSuffix !== null) {
+            return self::$cachedNodeSuffix;
+        }
+
+        $path = self::$userconfigPathOverride ?? '/etc/eiou/config/userconfig.json';
+        if (!is_file($path) || !is_readable($path)) {
+            return self::$cachedNodeSuffix = 'default';
+        }
+        $raw = @file_get_contents($path);
+        if ($raw === false) {
+            return self::$cachedNodeSuffix = 'default';
+        }
+        $cfg = json_decode($raw, true);
+        $pem = is_array($cfg) ? ($cfg['public'] ?? null) : null;
+        if (!is_string($pem) || $pem === '') {
+            return self::$cachedNodeSuffix = 'default';
+        }
+        return self::$cachedNodeSuffix = substr(hash('sha256', $pem), 0, 16);
+    }
+
+    /** Cookie name the PHP session is registered under, per-node. */
+    private static function sessionCookieName(): string
+    {
+        return 'EIOU_WALLET_SESSION_' . self::getNodeCookieSuffix();
+    }
+
+    /** Cookie name the remember-me token is stored under, per-node. */
+    public static function rememberCookieName(): string
+    {
+        return \Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME . '_' . self::getNodeCookieSuffix();
+    }
+
+    /**
+     * Test-only seam: point the suffix derivation at an alternate
+     * userconfig file and reset the cache. Production code never calls
+     * this.
+     */
+    public static function overrideNodeCookieSuffixForTest(?string $userconfigPath): void
+    {
+        self::$userconfigPathOverride = $userconfigPath;
+        self::$cachedNodeSuffix = null;
     }
 
     /**
@@ -158,7 +235,7 @@ class Session
     public function setRememberCookie(string $rawToken, int $expiresAtUnix): void
     {
         setcookie(
-            \Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME,
+            self::rememberCookieName(),
             $rawToken,
             [
                 'expires'  => $expiresAtUnix,
@@ -178,7 +255,7 @@ class Session
     public function clearRememberCookie(): void
     {
         setcookie(
-            \Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME,
+            self::rememberCookieName(),
             '',
             [
                 'expires'  => time() - 42000,
@@ -196,7 +273,7 @@ class Session
      */
     public function getRememberCookie(): ?string
     {
-        $raw = $_COOKIE[\Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME] ?? null;
+        $raw = $_COOKIE[self::rememberCookieName()] ?? null;
         return (is_string($raw) && $raw !== '') ? $raw : null;
     }
 

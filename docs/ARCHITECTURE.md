@@ -2890,8 +2890,14 @@ class implements secure session handling:
 
 The GUI login form offers a "Remember this browser for N days" checkbox. When ticked,
 on successful auth the node mints a random 32-byte token, stores only its SHA-256 hash
-in the `remember_tokens` table, and writes the raw token into an `EIOU_REMEMBER`
-cookie (HttpOnly, SameSite=Strict, Secure when HTTPS).
+in the `remember_tokens` table, and writes the raw token into an `EIOU_REMEMBER_<nodeHash>`
+cookie (HttpOnly, SameSite=Strict, Secure when HTTPS). The cookie name is suffixed with
+`substr(sha256(public_key_pem), 0, 16)` so two nodes sharing a hostname (typical dev:
+`localhost:443` for one node, `localhost:8443` for another — cookies ignore port per
+RFC 6265) don't clobber each other's tokens. The same per-node suffix also applies to
+the PHP session cookie name. In production each node has its own hostname so the suffix
+is invisible but harmless; in dev it's load-bearing for being able to stay logged into
+two nodes simultaneously.
 
 On every subsequent page load where no session is authenticated but the cookie is
 present, `gui/index.html` asks `RememberTokenService::rotateToken(raw, ua)` to

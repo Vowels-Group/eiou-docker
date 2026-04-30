@@ -34,6 +34,12 @@ class SessionTest extends TestCase
             }
         }
 
+        // Reset the per-node suffix cache so each test starts from a
+        // known baseline (the production /etc/eiou/config/userconfig.json
+        // path is unreadable in the test sandbox so the suffix collapses
+        // to "default" unless a test explicitly overrides it).
+        Session::overrideNodeCookieSuffixForTest(null);
+
         // Don't start session here - let Session class handle it
         // This allows Session constructor to set custom session name and initialization
 
@@ -62,11 +68,97 @@ class SessionTest extends TestCase
     }
 
     /**
-     * Test constructor sets custom session name
+     * Test constructor sets custom session name. Now suffixed with the
+     * per-node hash so two nodes sharing a hostname (dev-only — typical
+     * setup is `localhost:443` for alice and `localhost:8443` for bob,
+     * where the browser ignores port for cookie scoping per RFC 6265)
+     * write their session cookies under different keys and don't
+     * clobber each other.
      */
     public function testConstructorSetsCustomSessionName(): void
     {
-        $this->assertEquals('EIOU_WALLET_SESSION', session_name());
+        $this->assertStringStartsWith('EIOU_WALLET_SESSION_', session_name());
+    }
+
+    // =========================================================================
+    // Per-node cookie suffix
+    // =========================================================================
+
+    /**
+     * Two distinct public keys must produce distinct cookie suffixes.
+     * Locks in the only invariant a multi-node localhost setup
+     * actually depends on — different nodes write different cookie
+     * names for the same hostname.
+     */
+    public function testCookieSuffixDiffersBetweenNodes(): void
+    {
+        $aliceConf = $this->writeUserConfig('alice', "-----BEGIN PUBLIC KEY-----\nALICE-FAKE-KEY\n-----END PUBLIC KEY-----\n");
+        Session::overrideNodeCookieSuffixForTest($aliceConf);
+        $aliceSuffix = Session::getNodeCookieSuffix();
+        $aliceCookie = Session::rememberCookieName();
+
+        $bobConf = $this->writeUserConfig('bob', "-----BEGIN PUBLIC KEY-----\nBOB-FAKE-KEY\n-----END PUBLIC KEY-----\n");
+        Session::overrideNodeCookieSuffixForTest($bobConf);
+        $bobSuffix = Session::getNodeCookieSuffix();
+        $bobCookie = Session::rememberCookieName();
+
+        $this->assertNotSame($aliceSuffix, $bobSuffix);
+        $this->assertNotSame($aliceCookie, $bobCookie);
+        $this->assertStringStartsWith('EIOU_REMEMBER_', $aliceCookie);
+        $this->assertStringStartsWith('EIOU_REMEMBER_', $bobCookie);
+        // 16-hex-char suffix → cookie names always 30 chars long.
+        $this->assertEquals(30, strlen($aliceCookie));
+        $this->assertEquals(30, strlen($bobCookie));
+    }
+
+    /**
+     * The same public key must produce the same suffix on every call —
+     * a node that re-deploys without rotating its wallet should keep
+     * its remembered devices, not log everyone out.
+     */
+    public function testCookieSuffixIsDeterministicForSamePublicKey(): void
+    {
+        $conf = $this->writeUserConfig('stable', "-----BEGIN PUBLIC KEY-----\nSTABLE\n-----END PUBLIC KEY-----\n");
+        Session::overrideNodeCookieSuffixForTest($conf);
+        $first = Session::getNodeCookieSuffix();
+        Session::overrideNodeCookieSuffixForTest($conf); // resets cache; should re-derive identically
+        $second = Session::getNodeCookieSuffix();
+        $this->assertSame($first, $second);
+    }
+
+    /**
+     * Missing / unreadable userconfig.json (the brief pre-init window
+     * before Wallet::generate() writes it for the first time) must
+     * fall back to a stable placeholder rather than throwing — the
+     * login page still has to render so the user can proceed to
+     * wallet generation.
+     */
+    public function testCookieSuffixFallsBackWhenUserconfigMissing(): void
+    {
+        Session::overrideNodeCookieSuffixForTest('/nonexistent/path/userconfig.json');
+        $this->assertSame('default', Session::getNodeCookieSuffix());
+        $this->assertSame('EIOU_REMEMBER_default', Session::rememberCookieName());
+    }
+
+    /**
+     * Malformed userconfig.json (no `public` field) must also fall
+     * back rather than blow up — guards against a partially-written
+     * file from an interrupted install.
+     */
+    public function testCookieSuffixFallsBackOnMalformedUserconfig(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'eiou-session-');
+        file_put_contents($tmp, '{"private_encrypted":{"ciphertext":"x"}}');  // no `public` key
+        Session::overrideNodeCookieSuffixForTest($tmp);
+        $this->assertSame('default', Session::getNodeCookieSuffix());
+        @unlink($tmp);
+    }
+
+    private function writeUserConfig(string $tag, string $publicKeyPem): string
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'eiou-session-' . $tag . '-');
+        file_put_contents($tmp, json_encode(['public' => $publicKeyPem]));
+        return $tmp;
     }
 
     // =========================================================================

@@ -832,7 +832,7 @@ The `Session` class provides secure session handling.
 | `httponly` | true | Prevent JavaScript access |
 | `samesite` | Strict | CSRF protection via cookie |
 | `secure` | auto | HTTPS-only when available |
-| `name` | EIOU_WALLET_SESSION | Custom session name |
+| `name` | `EIOU_WALLET_SESSION_<nodeHash>` | Custom session name. Suffixed with `substr(sha256(public_key_pem), 0, 16)` so two nodes sharing a hostname (only differ by port — typical localhost dev with `:443` and `:8443`) write distinct cookies. Cookies ignore port per RFC 6265, so without the suffix the second login overwrites the first's session and both tabs end up logged out. Falls back to `EIOU_WALLET_SESSION_default` while `userconfig.json` is missing (pre-init window). |
 
 ### Key Methods
 
