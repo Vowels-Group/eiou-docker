@@ -152,6 +152,82 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
+ * Mirror of files/src/utils/InputValidator.php::validateAddress() in
+ * client-side JS so the Add Contact form can reject malformed input
+ * before submitting — without this, a typo in the address would round-
+ * trip through the controller, redirect with an "Invalid address" toast,
+ * and the user would lose every typed value (name / fee / credit /
+ * description / requested-credit). Tor v2/v3 lengths come from
+ * Constants::VALIDATION_TOR_V2_ADDRESS_LENGTH / V3 (16 / 56).
+ *
+ * Returns the same shape as the PHP side:
+ *   {valid: bool, value: string|null, error: string|null, type: 'tor'|'https'|'http'|null}
+ */
+function validateContactAddressClient(address) {
+    if (typeof address !== 'string' || address === '') {
+        return { valid: false, value: null, error: 'Address cannot be empty', type: null };
+    }
+    var trimmed = address.trim();
+
+    // Strip http(s):// off .onion paste-mistakes (matches server-side
+    // normalization).
+    if (/\.onion(\/|$)/i.test(trimmed)) {
+        trimmed = trimmed.replace(/^https?:\/\//i, '');
+    }
+
+    // Tor v2 (16 chars) and v3 (56 chars) onion addresses, optional
+    // :port and /path suffix.
+    var torV2 = /^[a-z2-7]{16}\.onion(:\d+)?(\/.*)?$/i;
+    var torV3 = /^[a-z2-7]{56}\.onion(:\d+)?(\/.*)?$/i;
+    if (torV2.test(trimmed) || torV3.test(trimmed)) {
+        return {
+            valid: true,
+            value: trimmed.replace(/\/$/, ''),
+            error: null,
+            type: 'tor',
+        };
+    }
+
+    // HTTP/HTTPS — use the URL constructor as the JS analogue of
+    // FILTER_VALIDATE_URL. Reject anything without a scheme so a bare
+    // "alice.example.com" fails the way the PHP filter does.
+    try {
+        var url = new URL(trimmed);
+        if (url.protocol === 'https:') {
+            return { valid: true, value: trimmed, error: null, type: 'https' };
+        }
+        if (url.protocol === 'http:') {
+            return { valid: true, value: trimmed, error: null, type: 'http' };
+        }
+    } catch (_) { /* fall through */ }
+
+    return { valid: false, value: null, error: 'Invalid address format', type: null };
+}
+
+/**
+ * Bring a modal to the top of the stacking context by re-appending it
+ * to document.body. Browsers stack fixed-position elements with the
+ * same z-index by DOM order — last child wins. Calling this on every
+ * stacked-modal open keeps the most-recently-opened modal visually on
+ * top, even when chained through multiple jumps (contact → tx →
+ * different contact → tx) where two modals end up sharing the
+ * `.modal-stack-top` z-index tier (10010).
+ *
+ * Idempotent: re-appending a node that already exists at that position
+ * is a no-op DOM-wise (preserves listeners + form state).
+ */
+function bringModalToTop(modal) {
+    if (!modal) return;
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+        return;
+    }
+    if (modal !== document.body.lastElementChild) {
+        document.body.appendChild(modal);
+    }
+}
+
+/**
  * Escapes HTML special characters to prevent XSS attacks.
  *
  * Uses the DOM's textContent property to safely escape any HTML entities
@@ -1361,9 +1437,7 @@ function openPendingContactModalByPubkeyHash(pubkeyHash) {
     // Hoist to <body> so the modal overlays whichever tab the user is on. The
     // move preserves event listeners and form state; idempotent on subsequent
     // opens (already-hoisted modals stay where they are).
-    if (modal.parentNode !== document.body) {
-        document.body.appendChild(modal);
-    }
+    bringModalToTop(modal);
     modal.classList.remove('d-none');
     modal.classList.add('modal-stack-top');
 }
@@ -2190,10 +2264,51 @@ function initializeFormLoaders() {
     // Retry info text for contact operations
     var retryInfoText = 'Connecting to contact server. The message processor will continue retrying in the background.';
 
-    // Add contact form (now inside modal)
+    // Add contact form (now inside modal). Client-side validation runs
+    // first so an invalid address is caught here — without this, the
+    // form would post, the controller would redirect with an "Invalid
+    // address" toast, and the user would lose every typed value
+    // including the address they fat-fingered. Uses the HTML5
+    // setCustomValidity / reportValidity pair so the error appears in
+    // the same browser-native bubble style as the "Please fill out
+    // this field" tooltip on empty required fields — consistent UX.
     var addContactForm = document.getElementById('add-contact-form');
     if (addContactForm) {
-        addContactForm.addEventListener('submit', function() {
+        var addrInput = document.getElementById('address');
+        // Clear the custom validity message as soon as the user
+        // starts editing the address — matches how the native
+        // empty-required-field tooltip dismisses on input.
+        if (addrInput) {
+            addrInput.addEventListener('input', function() {
+                addrInput.setCustomValidity('');
+            });
+        }
+        addContactForm.addEventListener('submit', function(ev) {
+            if (!addrInput) return;
+            // Reset before re-validating so a stale message doesn't
+            // suppress the empty-field default browser bubble.
+            addrInput.setCustomValidity('');
+            var raw = (addrInput.value || '').trim();
+            // Empty case is already handled by the `required` attribute —
+            // browser shows "Please fill out this field" natively. Skip
+            // our format check when the value is empty so we don't
+            // double-block on the same condition.
+            if (raw !== '') {
+                var validation = validateContactAddressClient(raw);
+                if (!validation.valid) {
+                    ev.preventDefault();
+                    addrInput.setCustomValidity('Invalid address: ' + validation.error);
+                    addrInput.reportValidity();
+                    return;
+                }
+                // Mirror the server's normalization (strip http(s):// off
+                // .onion paste-mistakes, drop trailing slash) so the value
+                // posted matches what the server would have stored anyway.
+                if (validation.value && validation.value !== raw) {
+                    addrInput.value = validation.value;
+                }
+            }
+
             showLoader('Adding contact...', retryInfoText);
             startOperationTimeout('addContact', 'Still waiting for response. The message is being retried in the background. You can continue using the app and check back later.');
         });
@@ -7973,6 +8088,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                         originModal.getBoundingClientRect().width > 0;
                     if (originVisible) {
                         txModalEl.classList.add('modal-stack-top');
+                        // Re-append to body so DOM order matches click
+                        // order. Without this, a tx modal opened from
+                        // inside a contact modal that's itself stacked
+                        // on top of an earlier tx modal ends up behind
+                        // the contact modal because both share z=10010
+                        // and the contact modal sits later in DOM order.
+                        bringModalToTop(txModalEl);
                     } else {
                         txModalEl.classList.remove('modal-stack-top');
                     }
@@ -7989,7 +8111,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var cid = el.getAttribute('data-contact-id');
             if (!cid) return;
             var contactModalEl = document.getElementById('contactModal');
-            if (contactModalEl) contactModalEl.classList.add('modal-stack-top');
+            if (contactModalEl) {
+                contactModalEl.classList.add('modal-stack-top');
+                bringModalToTop(contactModalEl);
+            }
             openContactByContactId(cid);
         },
 
@@ -8168,7 +8293,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var cid = el.getAttribute('data-contact-id');
             if (!cid) return;
             var contactModalEl = document.getElementById('contactModal');
-            if (contactModalEl) contactModalEl.classList.add('modal-stack-top');
+            if (contactModalEl) {
+                contactModalEl.classList.add('modal-stack-top');
+                bringModalToTop(contactModalEl);
+            }
             openContactByContactId(cid);
         },
         'openResetToDefaultsModal': function() {
@@ -8877,17 +9005,31 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function refresh() {
-            return post({ action: 'apiKeysList' }).then(function(r) {
-                if (r.data && r.data.success) {
-                    renderList(r.data.keys || []);
-                    renderAccessState(r.data.seconds_remaining || 0);
-                    loaded = true;
-                } else {
-                    showToast('Error', (r.data && r.data.message) || 'Could not load API keys', 'error');
-                }
-            }).catch(function() {
-                showToast('Error', 'Network error while loading API keys', 'error');
-            });
+            // Silently retry once before surfacing the toast — refresh
+            // is triggered when the Settings tab becomes visible, and
+            // the fetch frequently coincides with the tab-switch
+            // animation / nav repaint and aborts on the first attempt.
+            // A genuine outage will still fail the second attempt and
+            // toast normally; transient flakes get swallowed.
+            var attempt = function(retried) {
+                return post({ action: 'apiKeysList' }).then(function(r) {
+                    if (r.data && r.data.success) {
+                        renderList(r.data.keys || []);
+                        renderAccessState(r.data.seconds_remaining || 0);
+                        loaded = true;
+                    } else {
+                        showToast('Error', (r.data && r.data.message) || 'Could not load API keys', 'error');
+                    }
+                }).catch(function() {
+                    if (!retried) {
+                        return new Promise(function(resolve) {
+                            setTimeout(function() { resolve(attempt(true)); }, 600);
+                        });
+                    }
+                    showToast('Error', 'Network error while loading API keys', 'error');
+                });
+            };
+            return attempt(false);
         }
 
         function ensureLoadedOnTab() {
@@ -9488,21 +9630,32 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function refresh() {
-            return post({ action: 'pluginsList' }).then(function(r) {
-                if (r.data && r.data.success) {
-                    renderList(r.data.plugins || []);
-                    // Banner reflects real divergence between desired enabled
-                    // flags and runtime status — not a sticky config-changed
-                    // flag. Toggling back to the original state clears it.
-                    updateRestartBanner();
-                    loaded = true;
-                } else {
-                    var msg = (r.data && r.data.message) || 'Could not load plugins';
-                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
-                }
-            }).catch(function() {
-                if (typeof showToast === 'function') showToast('Error', 'Network error while loading plugins', 'error');
-            });
+            // Same lazy-load + retry pattern as the API-keys panel —
+            // tab-switch + first AJAX attempt frequently race and the
+            // first attempt aborts. Silent retry once before toasting.
+            var attempt = function(retried) {
+                return post({ action: 'pluginsList' }).then(function(r) {
+                    if (r.data && r.data.success) {
+                        renderList(r.data.plugins || []);
+                        // Banner reflects real divergence between desired enabled
+                        // flags and runtime status — not a sticky config-changed
+                        // flag. Toggling back to the original state clears it.
+                        updateRestartBanner();
+                        loaded = true;
+                    } else {
+                        var msg = (r.data && r.data.message) || 'Could not load plugins';
+                        if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                    }
+                }).catch(function() {
+                    if (!retried) {
+                        return new Promise(function(resolve) {
+                            setTimeout(function() { resolve(attempt(true)); }, 600);
+                        });
+                    }
+                    if (typeof showToast === 'function') showToast('Error', 'Network error while loading plugins', 'error');
+                });
+            };
+            return attempt(false);
         }
 
         // -- Restart flow ----------------------------------------------------
