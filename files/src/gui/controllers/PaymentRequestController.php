@@ -102,7 +102,33 @@ class PaymentRequestController
             return;
         }
 
-        $result = $this->paymentRequestService->approve($requestId);
+        // Optional free-form note appended to the on-chain transaction
+        // description. The browser-side modal (script.js
+        // initializePaymentRequestApprovalHandler) already enforces the
+        // dynamic cap and shows a live counter; this is the
+        // server-side guard that catches a forged POST or a stale page
+        // whose budget no longer matches the current request.
+        $rawNote = isset($_POST['payer_note']) ? Security::sanitizeInput($_POST['payer_note']) : '';
+        $payerNote = trim((string)$rawNote);
+
+        if ($payerNote !== '') {
+            $existing = $this->paymentRequestService->getByRequestId($requestId);
+            if ($existing === null) {
+                MessageHelper::redirectMessage('Payment request not found', 'error');
+                return;
+            }
+            $maxNote = \Eiou\Services\PaymentRequestService::maxPayerNoteLength($existing['description'] ?? null);
+            if ($maxNote === 0) {
+                MessageHelper::redirectMessage('Requester description leaves no room for a note', 'error');
+                return;
+            }
+            if (strlen($payerNote) > $maxNote) {
+                MessageHelper::redirectMessage("Note too long (max {$maxNote} chars for this request)", 'error');
+                return;
+            }
+        }
+
+        $result = $this->paymentRequestService->approve($requestId, $payerNote !== '' ? $payerNote : null);
 
         if ($result['success']) {
             $msg = $result['message'] ?? 'Payment sent successfully';

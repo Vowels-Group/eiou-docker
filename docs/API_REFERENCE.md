@@ -1249,9 +1249,14 @@ Approve an incoming payment request. Internally calls `sendEiou` to the requeste
 
 ```json
 {
-  "request_id": "abc123def456..."
+  "request_id": "abc123def456...",
+  "payer_note": "paid via coinbase txid abc"
 }
 ```
+
+`payer_note` is **optional**. When supplied, it's appended to the on-chain transaction description with `" | "` so the final description becomes `"payment: <requester's description> | <your note>"`. The `"payment: "` prefix is dropped automatically if the joined string would otherwise exceed the 255-char on-chain ceiling.
+
+The note is length-capped *against this specific request's existing description* — `max_note = 255 − len(requester_description) − 3` (separator). The server rejects an over-long note with HTTP 400 + error code `payer_note_too_long` rather than silently truncating; if the requester's description already fills the budget the rejection message reads "Requester description leaves no room for a note". Whitespace-only notes are treated as no note.
 
 **Response:**
 
@@ -1265,7 +1270,7 @@ Approve an incoming payment request. Internally calls `sendEiou` to the requeste
 }
 ```
 
-Returns an error if: request not found, direction is not `incoming`, status is not `pending`, no return address on the request, or `sendEiou` fails.
+Returns an error if: request not found, direction is not `incoming`, status is not `pending`, no return address on the request, the supplied `payer_note` exceeds the dynamic cap, or `sendEiou` fails.
 
 ---
 

@@ -731,9 +731,10 @@ class CliHelpService
                     ],
                     'approve' => [
                         'description' => 'Approve an incoming request (sends the eIOU)',
-                        'usage' => 'request approve <request_id>',
+                        'usage' => 'request approve <request_id> [note]',
                         'arguments' => [
-                            'request_id' => ['type' => 'required', 'description' => 'The request ID to approve']
+                            'request_id' => ['type' => 'required', 'description' => 'The request ID to approve'],
+                            'note' => ['type' => 'optional', 'description' => 'Free-form payer note appended to the on-chain description with " | " (e.g. "paid via coinbase txid abc"). Length is capped against whatever space the requester\'s description leaves under the 255-char ceiling; over-long notes are rejected.']
                         ]
                     ],
                     'decline' => [
@@ -755,6 +756,7 @@ class CliHelpService
                     'request list' => 'List all payment requests',
                     'request create "Alice" 25.00 USD "Dinner"' => 'Request 25 USD from Alice',
                     'request approve req_abc123' => 'Approve and pay the request',
+                    'request approve req_abc123 "paid via coinbase txid abc"' => 'Approve and append a payer note to the on-chain description',
                     'request decline req_abc123' => 'Decline the request',
                     'request cancel req_abc123' => 'Cancel your outgoing request',
                     'request --json' => 'JSON output'
