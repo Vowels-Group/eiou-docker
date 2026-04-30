@@ -931,9 +931,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                 // Send acceptance notification so remote side marks their outgoing currency as accepted
                 // Use buildContactIsAccepted (not buildCreateRequest) to avoid triggering a new contact tx on the remote
+                //
+                // async=true so a degraded transport (slow Tor hop, self-signed
+                // TLS) doesn't stall the user-facing apply-decisions request:
+                // a single attempt runs synchronously to populate the credit
+                // response on the happy path; on failure the message lands in
+                // the DLQ for the background retry processor.
                 $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                 $messageId = 'currency-accept-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
-                $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
+                $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, true);
 
                 // Save available credit from the acknowledgment response
                 if ($sendResult['success'] && !empty($sendResult['response'])) {
@@ -1120,9 +1126,12 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                         // Send message of successful contact acceptance back to original contact requester with tracking
                         // Include the accepted currency so the remote can mark it as accepted
+                        //
+                        // async=true: single attempt then DLQ on failure, so a
+                        // bad transport doesn't hang the user-facing apply.
                         $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                         $messageId = 'accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
-                        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false); // sync delivery
+                        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, true);
 
                         // Log if acceptance message delivery failed
                         if (!$sendResult['success']) {
@@ -1338,9 +1347,13 @@ class ContactSyncService implements ContactSyncServiceInterface {
                             $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
 
                             // Send acceptance message back with currency info and available credit
+                            //
+                            // async=true: see same rationale at line 936/1125 —
+                            // first attempt synchronously, DLQ retries on
+                            // failure, no hang on the user-facing path.
                             $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
                             $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
-                            $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, false);
+                            $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, true);
 
                             if (!$sendResult['success']) {
                                 Logger::getInstance()->warning("Contact acceptance message delivery failed", [
@@ -2152,9 +2165,16 @@ class ContactSyncService implements ContactSyncServiceInterface {
         $creditData = $this->calculateAvailableCreditForContact($pubkey, $currency);
 
         // Build and send the acceptance message with currency info and available credit
+        //
+        // async=true so a degraded transport (slow Tor, self-signed TLS)
+        // doesn't stall the user-facing apply-decisions request the GUI is
+        // waiting on. First attempt still runs synchronously so the credit
+        // payload from a successful response can be saved below; only on
+        // first-attempt failure does control return immediately and the
+        // background DLQ retry processor take over.
         $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, null, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
         $messageId = 'currency-accept-' . hash('sha256', $address . $pubkeyHash . $currency . $this->timeUtility->getCurrentMicrotime());
-        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false);
+        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, true);
 
         if (!$sendResult['success']) {
             Logger::getInstance()->warning("Currency acceptance notification delivery failed", [
