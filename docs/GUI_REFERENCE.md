@@ -170,6 +170,10 @@ Handles all contact-related operations.
 
 Internally, the ping/pong protocol exchanges per-currency data: `prevTxidsByCurrency` (chain heads per currency), `chainStatusByCurrency` (per-currency chain validity), and `availableCreditByCurrency` (per-currency available credit). The AJAX response aggregates chain validity into a single `chain_valid` boolean. Per-currency available credit is stored in the `contact_credit` table and displayed in the contact modal.
 
+When the remote node responds with `status: rejected`, `ContactStatusService::describePingRejection()` translates the reason code into a sentence the user can act on rather than echoing the raw token. `unknown_contact` (the remote responded but doesn't recognize this user — almost always because the local-side acceptance hasn't been delivered yet) reads *"Contact is online but doesn't recognize you yet — your acceptance hasn't been delivered to them. Check the Failed Messages panel under Activity; delivery will keep retrying in the background."* `blocked` and `disabled` get reason-specific phrasings; any unrecognized reason falls back to the existing brief form so the message stays accurate as new reasons are added upstream.
+
+The Apply button on the Contact Request modal goes through the page-wide loader pattern (`showLoader` + `startOperationTimeout`, mirroring payment-request approve) so a degraded transport — slow Tor circuit or self-signed TLS hop — can't lock up the UI while the user-initiated outbound notification is in flight. Local state flips immediately; the notification is sent fire-and-forget by `ContactSyncService` (one synchronous attempt, then DLQ retries on failure) and the GUI auto-reloads after 15s with a post-reload toast pointing at the Failed Messages panel.
+
 ---
 
 ### TransactionController
