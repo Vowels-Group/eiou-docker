@@ -735,6 +735,18 @@ class ContactStatusService implements ContactStatusServiceInterface {
                             'strtoupper',
                             array_filter((array) $response['peerKnownCurrencies'], 'is_string')
                         );
+                        // Age guard. Don't reconcile rows younger than the
+                        // delivery-retention window — the original send
+                        // may still be retrying via DLQ / first-pass
+                        // queue, and prematurely dropping the row would
+                        // make the user give up on a request that's
+                        // about to land. After this many days the
+                        // underlying delivery record has been pruned by
+                        // the cleanup processor, so a peer that doesn't
+                        // recognize the currency genuinely never will
+                        // — reconcile is safe.
+                        $minAgeSeconds = $this->currentUser->getCleanupDeliveryRetentionDays() * 86400;
+                        $now = time();
                         try {
                             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
                             $ourOutgoingPending = $this->contactCurrencyRepository->getPendingCurrencies($contactPubkeyHash, 'outgoing');
@@ -742,6 +754,17 @@ class ContactStatusService implements ContactStatusServiceInterface {
                                 $ccy = strtoupper((string) ($row['currency'] ?? ''));
                                 if ($ccy === '') continue;
                                 if (in_array($ccy, $peerKnownCurrencies, true)) continue;
+                                $createdAtRaw = $row['created_at'] ?? null;
+                                $createdAt = $createdAtRaw !== null ? @strtotime((string) $createdAtRaw) : false;
+                                // Age guard: skip rows missing a timestamp
+                                // (defensive — shouldn't happen but better
+                                // than wrongly dropping them) or younger
+                                // than the retention window. Failure mode
+                                // is "row hangs around longer than
+                                // necessary," not "user loses a real
+                                // request" — strictly the safer side.
+                                if ($createdAt === false) continue;
+                                if (($now - $createdAt) < $minAgeSeconds) continue;
                                 $this->contactCurrencyRepository->deletePendingOutgoingCurrency($contactPubkeyHash, $ccy);
                                 if ($this->transactionContactRepository !== null) {
                                     $this->transactionContactRepository->rejectSentContactTransaction($contact['pubkey'], $ccy);
@@ -749,6 +772,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                                 Logger::getInstance()->info("Reconciled stale outgoing-pending currency from pong", [
                                     'contact_name' => $contact['name'] ?? '',
                                     'currency' => $ccy,
+                                    'age_seconds' => $now - $createdAt,
                                 ]);
                             }
                         } catch (\Throwable $e) {

@@ -415,7 +415,7 @@ class ContactCurrencyRepository extends AbstractRepository {
     public function getPendingCurrencies(string $pubkeyHash, ?string $direction = null): array {
         $params = [':pubkey_hash' => $pubkeyHash];
 
-        $query = "SELECT currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction, created_at
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND status = 'pending'";
 
@@ -443,6 +443,7 @@ class ContactCurrencyRepository extends AbstractRepository {
                     : null,
                 'status' => $row['status'],
                 'direction' => $row['direction'],
+                'created_at' => $row['created_at'] ?? null,
             ];
         }, $rows);
     }

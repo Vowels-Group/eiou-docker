@@ -2669,6 +2669,18 @@ the stale row + rejects the contact transaction so the user's next retry succeed
 the primary path (the peer's `contact_currency_declined` notification handled by
 `MessageService::handleContactMessageRequest`); reconcile catches lost messages.
 
+**Age guard.** Reconcile only fires for rows older than the
+`cleanupDeliveryRetentionDays` setting (default: 30 days, sourced from
+`UserContext::getCleanupDeliveryRetentionDays()`). Rows younger than that may still
+have an in-flight delivery attempt — first-pass retry queue or DLQ — and prematurely
+dropping them would make the user give up on a request that's about to land. After the
+retention window the underlying delivery record has been pruned by the cleanup
+processor, so a peer that doesn't recognize the currency genuinely never will and
+reconcile is safe. Failure mode of the guard is "stale row hangs around longer than
+necessary" rather than "user loses a real request" — strictly the safer side. No
+hard-coded threshold; the operator can tune the window via
+`changesettings cleanupDeliveryRetentionDays N`.
+
 **Privacy scope of peerKnownCurrencies.** Two layers of scoping:
 
 1. **Filtered by `pubkey_hash = <requesting peer>`** so it only contains currencies
