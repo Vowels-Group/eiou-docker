@@ -769,6 +769,14 @@ class ContactStatusService implements ContactStatusServiceInterface {
                                 if ($this->transactionContactRepository !== null) {
                                     $this->transactionContactRepository->rejectSentContactTransaction($contact['pubkey'], $ccy);
                                 }
+                                // Drop any orphan contact_credit row
+                                // for this currency too — the proposal
+                                // never landed, the credit row was
+                                // pre-emptively created and now has no
+                                // legitimate purpose.
+                                if ($this->contactCreditRepository !== null) {
+                                    $this->contactCreditRepository->deleteForContactCurrency($contactPubkeyHash, $ccy);
+                                }
                                 Logger::getInstance()->info("Reconciled stale outgoing-pending currency from pong", [
                                     'contact_name' => $contact['name'] ?? '',
                                     'currency' => $ccy,

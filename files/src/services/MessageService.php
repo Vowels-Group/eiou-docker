@@ -744,6 +744,18 @@ class MessageService implements MessageServiceInterface {
                     $senderPublicKey,
                     $declinedCurrency
                 );
+                // Drop the pre-emptive contact_credit row created by
+                // ContactManagementService::addCurrencyToContact when
+                // the user proposed this currency. Aggregation queries
+                // already filter to status='accepted' so a stale row
+                // doesn't show up on dashboards, but we still delete
+                // here to keep the table tight.
+                if ($this->contactCreditRepository !== null) {
+                    $this->contactCreditRepository->deleteForContactCurrency(
+                        $senderPubkeyHashLocal,
+                        $declinedCurrency
+                    );
+                }
                 Logger::getInstance()->info("Currency-decline notification processed", [
                     'sender_address' => $senderAddress,
                     'currency' => $declinedCurrency,
@@ -763,6 +775,12 @@ class MessageService implements MessageServiceInterface {
                             $senderPublicKey,
                             $ccy
                         );
+                        if ($this->contactCreditRepository !== null) {
+                            $this->contactCreditRepository->deleteForContactCurrency(
+                                $senderPubkeyHashLocal,
+                                $ccy
+                            );
+                        }
                     }
                 }
                 Logger::getInstance()->info("Whole-contact decline notification processed", [

@@ -742,6 +742,14 @@ class ContactSyncService implements ContactSyncServiceInterface {
             $this->transactionContactRepository->rejectReceivedContactTransaction($pubkey, $currency);
         }
 
+        // Drop any contact_credit row tied to this currency so it can't
+        // surface on dashboards even though the aggregation queries
+        // already filter on contact_currencies.status='accepted'. Cheap
+        // belt-and-braces.
+        if ($this->contactCreditRepository !== null) {
+            $this->contactCreditRepository->deleteForContactCurrency($pubkeyHash, $currency);
+        }
+
         // Tell the requester their outgoing-pending row is dead so
         // their state matches ours and a retry doesn't trip the
         // CONTACT_EXISTS path. Best-effort: failures land in the

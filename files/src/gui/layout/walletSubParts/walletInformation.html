@@ -35,16 +35,30 @@
             }
         }
         ?>
-        <!-- Mobile: currency tabs + stacked cards -->
+        <!-- Mobile: currency picker + stacked cards.
+             ≤4 currencies → button row (familiar / quick to scan).
+             >4 currencies → dropdown so the row doesn't wrap into
+             multiple lines or push the wallet stats off-screen. -->
         <?php $currencyKeys = array_keys($currencyRows); ?>
         <?php if (count($currencyKeys) > 1): ?>
-        <div class="wallet-currency-tabs">
-            <?php foreach ($currencyKeys as $i => $cur): ?>
-            <button type="button" class="wallet-currency-tab<?php echo $i === 0 ? ' active' : ''; ?>" data-action="switchWalletCurrency" data-currency="<?php echo htmlspecialchars($cur); ?>">
-                <?php echo htmlspecialchars($cur); ?>
-            </button>
-            <?php endforeach; ?>
-        </div>
+            <?php if (count($currencyKeys) <= 4): ?>
+            <div class="wallet-currency-tabs">
+                <?php foreach ($currencyKeys as $i => $cur): ?>
+                <button type="button" class="wallet-currency-tab<?php echo $i === 0 ? ' active' : ''; ?>" data-action="switchWalletCurrency" data-currency="<?php echo htmlspecialchars($cur); ?>">
+                    <?php echo htmlspecialchars($cur); ?>
+                </button>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div class="wallet-currency-tabs wallet-currency-tabs-dropdown">
+                <label for="walletCurrencySelect" class="wallet-currency-label">Currency:</label>
+                <select id="walletCurrencySelect" class="wallet-currency-select" data-action-change="switchWalletCurrencyFromSelect">
+                    <?php foreach ($currencyKeys as $i => $cur): ?>
+                    <option value="<?php echo htmlspecialchars($cur); ?>"<?php echo $i === 0 ? ' selected' : ''; ?>><?php echo htmlspecialchars($cur); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <div class="wallet-stats-container">

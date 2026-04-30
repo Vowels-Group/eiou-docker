@@ -241,12 +241,20 @@ class ContactManagementService implements ContactManagementServiceInterface
             // Stale outgoing-pending row from a prior attempt — drop
             // it and re-send. Defensive backstop for the case where
             // both the decline notification and the ping/pong
-            // reconciliation failed to clean up.
+            // reconciliation failed to clean up. Also drop the
+            // pre-emptive contact_credit row that addCurrencyToContact
+            // creates so the row from the prior attempt doesn't linger.
             if ($staleOutgoingPending && $this->contactCurrencyRepository !== null) {
                 $this->contactCurrencyRepository->deletePendingOutgoingCurrency(
                     $pubkeyHash,
                     $validated['currency']
                 );
+                if ($this->contactCreditRepository !== null) {
+                    $this->contactCreditRepository->deleteForContactCurrency(
+                        $pubkeyHash,
+                        $validated['currency']
+                    );
+                }
                 $this->addCurrencyToExisting($validated, $contact, $output);
                 return;
             }
