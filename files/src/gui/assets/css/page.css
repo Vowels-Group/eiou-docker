@@ -901,16 +901,20 @@ tr.paginator-hidden {
 }
 .paginator-range {
     color: #6c757d;
+    min-width: 7rem;
+    text-align: center;
 }
 .paginator-nav {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
 }
+/* The page indicator was a separate "Page X / Y" span sandwiched
+   between the prev/next arrows. Combined into the range now, so
+   the indicator class is unused — kept as zero-impact null rule
+   for any leftover markup floating in caches. */
 .paginator-page-indicator {
-    min-width: 5.5rem;
-    text-align: center;
-    color: #6c757d;
+    display: none;
 }
 .paginator-btn {
     display: inline-flex;
@@ -932,8 +936,18 @@ tr.paginator-hidden {
     opacity: 0.5;
     cursor: not-allowed;
 }
+/* No longer rendered — the next-arrow swallowed Load-older's job.
+   Kept for backward-compat with anyone styling it externally. */
 .paginator-load-more {
     margin-left: auto;
+}
+/* Square-up the prev/next arrows so they read as icon buttons rather
+   than oblong text-buttons. */
+.paginator-btn.paginator-prev,
+.paginator-btn.paginator-next {
+    padding: 0.25rem 0.55rem;
+    min-width: 2.1rem;
+    justify-content: center;
 }
 
 .contacts-table-wrapper {
