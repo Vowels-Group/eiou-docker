@@ -419,6 +419,20 @@ var Paginator = (function () {
             html += '</select>';
             html += '</label>';
 
+            // Arrows + range, all in one cluster. The next arrow does
+            // double-duty: when there's an unrendered next page in the
+            // already-loaded rows, it just pages forward; when we're
+            // at the end of the loaded set AND a server-side loadMore
+            // is available, it fetches the next batch and advances
+            // automatically once the rows land. The standalone "Load
+            // older" button used to live separately to the right —
+            // collapsing it into the arrow keeps pagination + lazy
+            // server fetch on a single, predictable control.
+            var hasMoreLocal = state.size !== 0 && (state.page + 1) < pages;
+            var hasMoreRemote = !!(state.loadMoreFn && !state.loadMoreExhausted);
+            var canGoPrev = state.page > 0;
+            var canGoNext = hasMoreLocal || hasMoreRemote;
+
             // Range summary
             var rangeText;
             if (visibleLen === 0) {
@@ -430,23 +444,18 @@ var Paginator = (function () {
                 var to = Math.min(from + state.size - 1, visibleLen);
                 rangeText = from + '–' + to + ' of ' + visibleLen;
             }
+
+            html += '<span class="paginator-nav">';
+            html += '<button type="button" class="paginator-btn paginator-prev" ' + (!canGoPrev ? 'disabled' : '') + ' data-paginator-action="prev" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>';
             html += '<span class="paginator-range">' + rangeText + '</span>';
-
-            // Page navigation (only when more than one page)
-            if (pages > 1) {
-                html += '<span class="paginator-nav">';
-                html += '<button type="button" class="paginator-btn paginator-prev" ' + (state.page === 0 ? 'disabled' : '') + ' data-paginator-action="prev" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>';
-                html += '<span class="paginator-page-indicator">Page ' + (state.page + 1) + ' / ' + pages + '</span>';
-                html += '<button type="button" class="paginator-btn paginator-next" ' + (state.page + 1 >= pages ? 'disabled' : '') + ' data-paginator-action="next" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Next page"><i class="fas fa-chevron-right"></i></button>';
-                html += '</span>';
-            }
-
-            // Load-older button (Phase 2)
-            if (state.loadMoreFn && !state.loadMoreExhausted) {
-                var busyIcon = state.loadMoreBusy ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt';
-                var busyLabel = state.loadMoreBusy ? 'Loading…' : state.loadMoreLabel;
-                html += '<button type="button" class="paginator-btn paginator-load-more" ' + (state.loadMoreBusy ? 'disabled' : '') + ' data-paginator-action="load-more" data-paginator-key="' + escapeHtml(state.key) + '"><i class="fas ' + busyIcon + '"></i> ' + escapeHtml(busyLabel) + '</button>';
-            }
+            // Inline busy spinner so the user sees the fetch is in
+            // flight without a separate "Loading…" button. Replaces
+            // the previous standalone Load-more visual.
+            var nextIcon = state.loadMoreBusy ? 'fa-spinner fa-spin' : 'fa-chevron-right';
+            var nextDisabled = !canGoNext || state.loadMoreBusy;
+            var nextAria = state.loadMoreBusy ? 'Loading more rows' : 'Next page';
+            html += '<button type="button" class="paginator-btn paginator-next" ' + (nextDisabled ? 'disabled' : '') + ' data-paginator-action="next" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="' + nextAria + '"><i class="fas ' + nextIcon + '"></i></button>';
+            html += '</span>';
 
             html += '</div>';
             state.container.innerHTML = html;
@@ -479,7 +488,19 @@ var Paginator = (function () {
         }
 
         function setLoadMoreBusy(busy) {
+            var wasBusy = state.loadMoreBusy;
             state.loadMoreBusy = !!busy;
+            // Falling edge: a server fetch just settled. If the user
+            // got here by clicking the next arrow at the end of the
+            // loaded set, bump them to the new last page so the just-
+            // arrived rows are what they see. Skip when state.size===0
+            // ("All") since there are no client-side pages to advance
+            // through.
+            var shouldAdvance = wasBusy && !state.loadMoreBusy && state.pendingAdvance && state.size !== 0;
+            state.pendingAdvance = false;
+            if (shouldAdvance) {
+                state.page = state.page + 1;
+            }
             apply();
         }
 
@@ -519,8 +540,34 @@ var Paginator = (function () {
                 if (action === 'prev') {
                     inst.goTo(inst.state.page - 1);
                 } else if (action === 'next') {
-                    inst.goTo(inst.state.page + 1);
+                    var s = inst.state;
+                    // Compute current pages count from visible (non-
+                    // filter-hidden) rows so the "do I need to fetch
+                    // more?" decision matches what apply() last
+                    // rendered.
+                    var visibleCount = 0;
+                    var rows = s.tbody.querySelectorAll(s.rowSelector);
+                    for (var r = 0; r < rows.length; r++) {
+                        if (!rows[r].classList.contains('filter-hidden')) visibleCount++;
+                    }
+                    var pages = (s.size === 0 || visibleCount <= 0) ? 1 : Math.ceil(visibleCount / s.size);
+                    var atLastLocalPage = (s.size === 0) || (s.page + 1 >= pages);
+                    if (atLastLocalPage && s.loadMoreFn && !s.loadMoreExhausted && !s.loadMoreBusy) {
+                        // Auto-advance after the fetch lands. setLoadMoreBusy
+                        // (called by the loadMore callback when it's done)
+                        // sees this flag and bumps the page on the user's
+                        // behalf so they end up on the freshly-loaded rows
+                        // instead of staring at the still-current page.
+                        s.pendingAdvance = true;
+                        inst.setLoadMoreBusy(true);
+                        s.loadMoreFn(inst);
+                    } else {
+                        inst.goTo(s.page + 1);
+                    }
                 } else if (action === 'load-more') {
+                    // Legacy entry point: nothing in v0.1.14+ renders this
+                    // button anymore (the next-arrow swallowed its job),
+                    // but external callers / tests may still dispatch it.
                     if (inst.state.loadMoreFn && !inst.state.loadMoreBusy) {
                         inst.setLoadMoreBusy(true);
                         inst.state.loadMoreFn(inst);
