@@ -369,14 +369,38 @@ elseif($request === "request"){
       exit(1);
     }
   } elseif ($subcommand === 'approve') {
-    // eiou request approve <request_id>
+    // eiou request approve <request_id> [note]
+    //
+    // [note] is an optional free-form annotation appended to the on-chain
+    // description with " | " (e.g. "paid via coinbase txid abc123"). The
+    // length is capped dynamically against whatever space is left after
+    // the requester's original description; over-long notes are rejected
+    // here rather than silently truncated.
     $requestId = $cleanArgv[3] ?? '';
+    $payerNote = isset($cleanArgv[4]) ? trim((string)$cleanArgv[4]) : '';
     if (empty($requestId)) {
-      $output->error("Usage: eiou request approve <request_id>", ErrorCodes::MISSING_ARGUMENT);
+      $output->error("Usage: eiou request approve <request_id> [note]", ErrorCodes::MISSING_ARGUMENT);
       exit(1);
     }
 
-    $result = $prService->approve($requestId);
+    if ($payerNote !== '') {
+      $existing = $prService->getByRequestId($requestId);
+      if ($existing === null) {
+        $output->error("Payment request not found", ErrorCodes::GENERAL_ERROR);
+        exit(1);
+      }
+      $maxNote = \Eiou\Services\PaymentRequestService::maxPayerNoteLength($existing['description'] ?? null);
+      if ($maxNote === 0) {
+        $output->error("Requester description leaves no room for a note", ErrorCodes::INVALID_ARGUMENT);
+        exit(1);
+      }
+      if (strlen($payerNote) > $maxNote) {
+        $output->error("Note too long (max {$maxNote} chars for this request)", ErrorCodes::INVALID_ARGUMENT);
+        exit(1);
+      }
+    }
+
+    $result = $prService->approve($requestId, $payerNote !== '' ? $payerNote : null);
     if ($result['success']) {
       $output->success($result['message'] ?? "Payment request approved", [
         'request_id' => $requestId,

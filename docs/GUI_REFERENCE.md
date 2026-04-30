@@ -493,7 +493,7 @@ Rendered below the Send form in the Send tab. Shows incoming and outgoing paymen
 | Requester name/address | Who sent the request |
 | Amount + currency | Requested amount |
 | Description | Optional note from requester |
-| Approve & Pay button | Sends the eIOU automatically, marks request approved |
+| Pay button | Opens a confirmation modal pre-loaded with the requester's description (read-only) and an optional payer-note textarea. The on-chain description becomes `"payment: <requester desc> \| <your note>"` if the note is filled. A live counter under the textarea shows remaining chars and decrements as the user types — the cap is computed dynamically against this specific request's description (`max_note = 255 − len(desc) − 3`) so the joined string always fits the on-chain ceiling. If the requester's description already fills the budget, the textarea is disabled and the user can still hit Pay (with no note). Same modal is used whether the user clicks Pay on the inline pending-row form or the Pay button inside the row-click "Payment Request Details" drill-down modal — the submit handler is event-delegated so dynamically-rendered Pay forms get caught too. |
 | Decline button | Rejects the request, notifies requester |
 
 **Outgoing Requests (pending):**

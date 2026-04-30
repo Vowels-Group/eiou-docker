@@ -1199,7 +1199,7 @@ eiou request [subcommand] [args...]
 |------------|--------|-------------|
 | *(none/list)* | `eiou request` | List all incoming and outgoing payment requests |
 | `create` | `eiou request create <contact> <amount> <currency> [description]` | Create and send a payment request to a contact |
-| `approve` | `eiou request approve <request_id>` | Approve an incoming request (sends eIOU automatically) |
+| `approve` | `eiou request approve <request_id> [note]` | Approve an incoming request (sends eIOU automatically). Optional `[note]` is appended to the on-chain description with `" \| "` (e.g. `"paid via coinbase txid abc"`). |
 | `decline` | `eiou request decline <request_id>` | Decline an incoming payment request |
 | `cancel` | `eiou request cancel <request_id>` | Cancel an outgoing request you created |
 
@@ -1218,6 +1218,12 @@ eiou request create "http://alice-node.example.com" 50.00 USD
 
 # Approve an incoming request (pays the requester)
 eiou request approve req_abc123def456
+
+# Approve and append a payer note to the on-chain description.
+# Final description becomes "payment: <requester desc> | <your note>" —
+# the note is capped against whatever space is left under the 255-char
+# ceiling and rejected with a clear error if it doesn't fit.
+eiou request approve req_abc123def456 "paid via coinbase txid abc"
 
 # Decline a request
 eiou request decline req_abc123def456

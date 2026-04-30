@@ -197,10 +197,14 @@ if ($user->getHideEmptyGuiSections()
                         <td class="col-tx-date col-pr-date text-right"><?php echo $createdAt; ?></td>
                         <td class="col-pr-actions text-center" style="white-space:nowrap" data-stop-propagation="true">
                             <?php if ($dir === 'incoming'): ?>
-                            <form method="POST" class="pr-action-form d-inline">
+                            <form method="POST" class="pr-action-form pr-approve-form d-inline"
+                                  data-pr-description="<?php echo htmlspecialchars($req['description'] ?? ''); ?>"
+                                  data-pr-amount="<?php echo $amount . ' ' . htmlspecialchars($req['currency'] ?? ''); ?>"
+                                  data-pr-counterparty="<?php echo htmlspecialchars($cpName); ?>">
                                 <input type="hidden" name="action" value="approvePaymentRequest">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($req['request_id']); ?>">
+                                <input type="hidden" name="payer_note" value="">
                                 <button type="submit" class="btn btn-success btn-sm" title="Approve &amp; Pay">
                                     <i class="fas fa-check"></i><span class="pr-action-label"> Pay</span>
                                 </button>
@@ -304,4 +308,55 @@ if ($user->getHideEmptyGuiSections()
     </div>
     <?php endif; ?>
 
+</div>
+
+<!--
+    Pay-confirmation modal opened by initializePaymentRequestApprovalHandler()
+    when an incoming Pay button is clicked. The requester's description is
+    pre-loaded read-only so it's clear the user is *appending* a note rather
+    than editing it; the live counter under the textarea decrements as the
+    payer types and is hard-capped at the budget left under the 255-char
+    on-chain description ceiling. Confirming injects the note into the
+    triggering form's hidden payer_note input and submits.
+-->
+<div id="pr-approve-modal" class="modal d-none">
+    <div class="modal-content modal-content-md">
+        <div class="modal-header">
+            <h3><i class="fas fa-check"></i> Pay payment request</h3>
+            <span class="close" data-action="closePrApproveModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <div class="pr-approve-summary text-muted" style="margin-bottom:0.75rem">
+                <div>To <b id="pr-approve-counterparty">…</b> — <b id="pr-approve-amount">…</b></div>
+            </div>
+
+            <div class="form-group">
+                <label>Requester's description</label>
+                <div id="pr-approve-orig-desc"
+                     class="form-control-plaintext"
+                     style="background:#0b1020;border:1px solid #2a3250;border-radius:6px;padding:0.45rem 0.6rem;min-height:2.2rem;color:#cbd5e1;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.85rem">—</div>
+                <small class="form-hint">Read-only — set by the requester. Add to it below.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="pr-approve-note">
+                    Adding to this <span class="text-muted">(optional)</span>
+                </label>
+                <textarea id="pr-approve-note" rows="3" autocomplete="off" spellcheck="false"
+                          placeholder='e.g. "paid via coinbase txid abc123"'
+                          style="width:100%;background:#0b1020;color:#e6e9ef;border:1px solid #2a3250;border-radius:6px;padding:0.45rem 0.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.85rem;resize:vertical"></textarea>
+                <small class="form-hint">
+                    Final on-chain description: <span class="monospace">payment: &lt;requester&gt; | &lt;your note&gt;</span>.
+                    <span id="pr-approve-counter">0 / 0 chars left</span>
+                </small>
+                <div id="pr-approve-error" class="form-error d-none" style="margin-top:0.4rem"></div>
+            </div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:0.5rem 1rem 1rem">
+            <button type="button" class="btn btn-secondary" data-action="closePrApproveModal">Cancel</button>
+            <button type="button" class="btn btn-success" id="pr-approve-confirm">
+                <i class="fas fa-check"></i> Pay
+            </button>
+        </div>
+    </div>
 </div>
