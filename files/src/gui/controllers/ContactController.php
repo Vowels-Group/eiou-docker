@@ -853,10 +853,30 @@ class ContactController
                     continue;
                 }
                 try {
+                    // Per-currency notify is handled inside
+                    // declineReceivedContactCurrency (best-effort
+                    // async send) — the whole-contact notify below
+                    // covers the contact-transaction cleanup that
+                    // can't be inferred from individual currency
+                    // declines.
                     $contactSyncService->declineReceivedContactCurrency($pubkeyHash, $ccy);
                     $declined[] = $ccy;
                 } catch (\Throwable $e) {
                     $errors[] = "{$ccy}: " . $e->getMessage();
+                }
+            }
+
+            // After all currencies are declined, send one
+            // whole-contact decline so the requester's contact
+            // transaction itself gets rejected — a per-currency
+            // handler can't know "that was the last one" without
+            // tracking remaining currencies.
+            if (!empty($declined)) {
+                try {
+                    $contactSyncService->sendContactDeclineNotification($pubkeyHash);
+                } catch (\Throwable $notifyErr) {
+                    // Non-fatal; ping/pong reconciliation will
+                    // eventually clean up if this didn't deliver.
                 }
             }
 

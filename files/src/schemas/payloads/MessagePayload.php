@@ -91,6 +91,41 @@ class MessagePayload extends BasePayload
     }
 
     /**
+     * Build a contact-decline notification. Sent by the recipient of a
+     * contact request (or a per-currency request to an existing accepted
+     * contact) when they decline, so the requester learns the request
+     * was declined and can clear their stale outgoing-pending state
+     * instead of seeing the row hang forever.
+     *
+     * If `$currency` is supplied this is a per-currency decline (Bob
+     * declined just EUR on a contact who's already otherwise accepted);
+     * if omitted the whole contact request was declined and the
+     * requester should remove every outgoing currency row + the contact
+     * transaction itself.
+     *
+     * @param string      $address  Original sender (= now the recipient of the decline)
+     * @param string|null $currency Currency declined, or null for whole-contact decline
+     */
+    public function buildContactDeclined(string $address, ?string $currency = null): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        $data = [
+            'type' => 'message',
+            'typeMessage' => 'contact',
+            'status' => 'declined',
+            'message' => $currency !== null
+                ? $myAddress . ' has declined your ' . $currency . ' currency request'
+                : $myAddress . ' has declined your contact request',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+        if ($currency !== null) {
+            $data['currency'] = $currency;
+        }
+        return $data;
+    }
+
+    /**
      * Build contact not yet accepted payload when user has not accepted the contact request yet
      *
      * @param string $address The recipient address

@@ -208,21 +208,52 @@ class ContactManagementService implements ContactManagementServiceInterface
             $validated['address']
         );
 
+        // Look up the existing currency row (if any) so we can
+        // distinguish "in-use" rows from stale outgoing-pending rows
+        // left behind by a prior request the peer declined silently
+        // (decline notification was lost / never sent by older peers).
+        // Without this distinction, retrying a request for a
+        // previously-declined currency mis-routes through
+        // acceptIncoming and dies with CONTACT_EXISTS.
+        $existingCurrency = null;
         $currencyAlreadyExists = false;
+        $staleOutgoingPending = false;
         if ($contact && $this->contactCurrencyRepository !== null) {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
-            $currencyAlreadyExists = $this->contactCurrencyRepository->hasCurrency(
+            $existingCurrency = $this->contactCurrencyRepository->getCurrencyConfig(
                 $pubkeyHash,
                 $validated['currency']
             );
+            if ($existingCurrency !== null) {
+                if (($existingCurrency['direction'] ?? '') === 'outgoing'
+                    && ($existingCurrency['status'] ?? '') === Constants::STATUS_PENDING
+                ) {
+                    $staleOutgoingPending = true;
+                } else {
+                    $currencyAlreadyExists = true;
+                }
+            }
         }
 
         if ($contact
             && $contact['status'] === Constants::CONTACT_STATUS_ACCEPTED
-            && !$currencyAlreadyExists
         ) {
-            $this->addCurrencyToExisting($validated, $contact, $output);
-            return;
+            // Stale outgoing-pending row from a prior attempt — drop
+            // it and re-send. Defensive backstop for the case where
+            // both the decline notification and the ping/pong
+            // reconciliation failed to clean up.
+            if ($staleOutgoingPending && $this->contactCurrencyRepository !== null) {
+                $this->contactCurrencyRepository->deletePendingOutgoingCurrency(
+                    $pubkeyHash,
+                    $validated['currency']
+                );
+                $this->addCurrencyToExisting($validated, $contact, $output);
+                return;
+            }
+            if (!$currencyAlreadyExists) {
+                $this->addCurrencyToExisting($validated, $contact, $output);
+                return;
+            }
         }
 
         if ($contact) {

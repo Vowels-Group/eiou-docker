@@ -49,7 +49,7 @@ class ContactStatusPayload extends BasePayload
      * @param int|null $processorsTotal Total expected message processors
      * @return string JSON encoded pong response
      */
-    public function buildResponse(array $request, bool $chainValid = true, array $chainStatusByCurrency = [], array $availableCreditByCurrency = [], ?int $processorsRunning = null, ?int $processorsTotal = null): string
+    public function buildResponse(array $request, bool $chainValid = true, array $chainStatusByCurrency = [], array $availableCreditByCurrency = [], ?int $processorsRunning = null, ?int $processorsTotal = null, ?array $peerKnownCurrencies = null): string
     {
         $this->ensureRequiredFields($request, ['senderAddress']);
 
@@ -71,6 +71,17 @@ class ContactStatusPayload extends BasePayload
         }
         if ($processorsTotal !== null) {
             $response['processorsTotal'] = $processorsTotal;
+        }
+        // List of currency codes we have any row for with the peer
+        // (any direction, any status). The caller uses this to
+        // reconcile their outgoing-pending rows that we either
+        // declined or never received — without it, a lost decline
+        // notification leaves the caller's row hanging forever and
+        // any retry trips CONTACT_EXISTS. Always send when we have a
+        // peer pubkey to derive it from; older receivers that don't
+        // know the field just ignore it (back-compat).
+        if ($peerKnownCurrencies !== null) {
+            $response['peerKnownCurrencies'] = array_values($peerKnownCurrencies);
         }
 
         return json_encode($response);

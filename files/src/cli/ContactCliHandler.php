@@ -267,6 +267,18 @@ class ContactCliHandler
             }
         }
 
+        // Whole-contact decline notification covers the contact-
+        // transaction reject the per-currency notifications can't
+        // infer. Best-effort; failures fall back to ping/pong
+        // reconciliation.
+        if (!empty($declined)) {
+            try {
+                $this->contactSyncService->sendContactDeclineNotification($pubkeyHash);
+            } catch (\Throwable $notifyErr) {
+                // Non-fatal.
+            }
+        }
+
         if (empty($errors)) {
             $this->output->success(
                 'Contact request declined',

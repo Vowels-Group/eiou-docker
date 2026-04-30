@@ -511,6 +511,45 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $currency Currency code (e.g. 'MXN')
      * @return bool True if a row was deleted
      */
+    /**
+     * Return every currency code we have any row for with the given
+     * peer (any direction, any status). Powers the peerKnownCurrencies
+     * field in the pong payload — the responder advertises which
+     * currencies it recognizes for this pair so the caller can
+     * reconcile its own outgoing-pending rows that the peer either
+     * declined silently or never received.
+     *
+     * @param string $pubkeyHash The peer's pubkey hash
+     * @return string[] Currency codes (e.g. ['USD', 'EUR']), unsorted
+     */
+    public function getAllCurrencyCodes(string $pubkeyHash): array {
+        $stmt = $this->execute(
+            "SELECT DISTINCT currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash",
+            [':pubkey_hash' => $pubkeyHash]
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return is_array($rows) ? array_values(array_filter($rows, 'is_string')) : [];
+    }
+
+    public function deletePendingOutgoingCurrency(string $pubkeyHash, string $currency): bool {
+        $query = "DELETE FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash
+                    AND currency = :currency
+                    AND direction = 'outgoing'
+                    AND status = 'pending'";
+        $stmt = $this->execute($query, [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency,
+        ]);
+        if (!$stmt) {
+            return false;
+        }
+        return $stmt->rowCount() > 0;
+    }
+
     public function declineIncomingCurrency(string $pubkeyHash, string $currency): bool {
         $query = "DELETE FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash

@@ -130,6 +130,12 @@ class ContactDecisionService
                 continue;
             }
             try {
+                // declineReceivedContactCurrency now also fires a
+                // currency-decline notification at the requester so
+                // their outgoing-pending row gets cleared. No extra
+                // wiring needed here — covers GUI batched-apply, CLI
+                // `eiou contact apply --decline ...`, and the
+                // single-currency API endpoint.
                 $this->contactSyncService->declineReceivedContactCurrency($pubkeyHash, $currency);
                 $declined[] = $currency;
             } catch (\Throwable $e) {

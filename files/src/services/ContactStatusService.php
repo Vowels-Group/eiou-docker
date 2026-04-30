@@ -104,6 +104,8 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     private ?\Eiou\Database\ContactCurrencyRepository $contactCurrencyRepository = null;
 
+    private ?\Eiou\Database\TransactionContactRepository $transactionContactRepository = null;
+
     /**
      * Get the sync trigger (must be injected via setSyncTrigger)
      *
@@ -178,6 +180,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         $this->balanceRepository = $repositoryFactory->get(\Eiou\Database\BalanceRepository::class);
         $this->contactCreditRepository = $repositoryFactory->get(\Eiou\Database\ContactCreditRepository::class);
         $this->contactCurrencyRepository = $repositoryFactory->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $this->transactionContactRepository = $repositoryFactory->get(\Eiou\Database\TransactionContactRepository::class);
         $this->syncTrigger = $syncTrigger;
     }
 
@@ -382,7 +385,18 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                         // Respond with pong including per-currency chain status and available credit
                         [$prRunning, $prTotal] = $this->checkProcessorHealth();
-                        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, $restoredAvailableCreditByCurrency, $prRunning, $prTotal);
+                        $peerKnownCurrencies = $this->contactCurrencyRepository !== null
+                            ? $this->contactCurrencyRepository->getAllCurrencyCodes($pubkeyHash)
+                            : [];
+                        echo $this->contactStatusPayload->buildResponse(
+                            $request,
+                            $chainValid,
+                            $chainStatusByCurrency,
+                            $restoredAvailableCreditByCurrency,
+                            $prRunning,
+                            $prTotal,
+                            $peerKnownCurrencies
+                        );
                         return;
                     } catch (\Exception $e) {
                         Logger::getInstance()->warning("Failed to auto-create pending contact from ping", [
@@ -523,8 +537,21 @@ class ContactStatusService implements ContactStatusServiceInterface {
         // Update the sender's online status since they pinged us
         $this->updateContactOnlineStatus($senderPubkey);
 
-        // Send pong response with per-currency credit, processor health, and chain status
-        echo $this->contactStatusPayload->buildResponse($request, $chainValid, $chainStatusByCurrency, $availableCreditByCurrency, $processorsRunning, $processorsTotal);
+        // Send pong response with per-currency credit, processor health, and chain status.
+        // peerKnownCurrencies lets the caller drop their stale outgoing-pending rows
+        // for currencies we no longer recognize (silently declined or never received).
+        $peerKnownCurrencies = $this->contactCurrencyRepository !== null
+            ? $this->contactCurrencyRepository->getAllCurrencyCodes(hash(Constants::HASH_ALGORITHM, $senderPubkey))
+            : [];
+        echo $this->contactStatusPayload->buildResponse(
+            $request,
+            $chainValid,
+            $chainStatusByCurrency,
+            $availableCreditByCurrency,
+            $processorsRunning,
+            $processorsTotal,
+            $peerKnownCurrencies
+        );
     }
 
     /**
@@ -690,6 +717,46 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
                     // Save available credit from pong response
                     $this->saveAvailableCreditFromPong($contact['pubkey'], $response);
+
+                    // Currency-status reconciliation. The peer
+                    // advertises peerKnownCurrencies — every currency
+                    // they have any row for with us. Any of our
+                    // outgoing-pending rows whose currency the peer
+                    // doesn't know about means they either declined
+                    // and the notification was lost, or never
+                    // received the request. Either way the row is
+                    // stale; drop it so a retry doesn't trip the
+                    // legacy CONTACT_EXISTS path. Older peers omit
+                    // the field — skip reconciliation in that case
+                    // (we treat absence as "unknown", not "empty
+                    // list = drop everything").
+                    if (array_key_exists('peerKnownCurrencies', $response) && $this->contactCurrencyRepository !== null) {
+                        $peerKnownCurrencies = array_map(
+                            'strtoupper',
+                            array_filter((array) $response['peerKnownCurrencies'], 'is_string')
+                        );
+                        try {
+                            $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
+                            $ourOutgoingPending = $this->contactCurrencyRepository->getPendingCurrencies($contactPubkeyHash, 'outgoing');
+                            foreach ($ourOutgoingPending as $row) {
+                                $ccy = strtoupper((string) ($row['currency'] ?? ''));
+                                if ($ccy === '') continue;
+                                if (in_array($ccy, $peerKnownCurrencies, true)) continue;
+                                $this->contactCurrencyRepository->deletePendingOutgoingCurrency($contactPubkeyHash, $ccy);
+                                if ($this->transactionContactRepository !== null) {
+                                    $this->transactionContactRepository->rejectSentContactTransaction($contact['pubkey'], $ccy);
+                                }
+                                Logger::getInstance()->info("Reconciled stale outgoing-pending currency from pong", [
+                                    'contact_name' => $contact['name'] ?? '',
+                                    'currency' => $ccy,
+                                ]);
+                            }
+                        } catch (\Throwable $e) {
+                            Logger::getInstance()->warning("Currency-status reconciliation failed (non-fatal)", [
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
 
                     // Check chain validity using per-currency comparison from pong
                     $chainValid = $response['chainValid'] ?? true;
