@@ -4415,8 +4415,6 @@ tr.tx-item-in-progress > td:first-child {
     font-size: 0.95rem;
     color: #6c757d;
     margin: 0 0 0.75rem 0;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     font-weight: 600;
 }
 .pending-about-title i {
@@ -4627,8 +4625,6 @@ tr.tx-item-in-progress > td:first-child {
     font-size: 0.95rem;
     color: #6c757d;
     margin: 0 0 0.75rem 0;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     font-weight: 600;
 }
 .pending-contact-accept-title i {
