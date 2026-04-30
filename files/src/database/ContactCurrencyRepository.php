@@ -512,19 +512,33 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @return bool True if a row was deleted
      */
     /**
-     * Return every currency code we have any row for with the given
-     * peer (any direction, any status). Powers the peerKnownCurrencies
-     * field in the pong payload — the responder advertises which
-     * currencies it recognizes for this pair so the caller can
-     * reconcile its own outgoing-pending rows that the peer either
-     * declined silently or never received.
+     * Currency codes the responder advertises in the `peerKnownCurrencies`
+     * pong field. Only includes rows that are *useful* to the requesting
+     * peer's reconciliation:
+     *
+     *   - direction='incoming'  AND status='pending'  — peer's outgoing-pending
+     *     should still be in flight; matches their row, no reconcile.
+     *   - status='accepted'     (any direction)       — both sides agreed;
+     *     matches the peer's pending or accepted row.
+     *
+     * Excluded:
+     *   - direction='outgoing' AND status='pending' — these are MY own
+     *     not-yet-delivered requests; the peer doesn't need to know about
+     *     them yet. Telling them prematurely would leak that "I'm planning
+     *     to ask you something" before the actual request arrives. They
+     *     find out via the request message itself.
      *
      * @param string $pubkeyHash The peer's pubkey hash
-     * @return string[] Currency codes (e.g. ['USD', 'EUR']), unsorted
+     * @return string[] Currency codes, unsorted
      */
-    public function getAllCurrencyCodes(string $pubkeyHash): array {
+    public function getPeerVisibleCurrencyCodes(string $pubkeyHash): array {
         $stmt = $this->execute(
-            "SELECT DISTINCT currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash",
+            "SELECT DISTINCT currency FROM {$this->tableName}
+             WHERE pubkey_hash = :pubkey_hash
+               AND (
+                   status = 'accepted'
+                   OR (direction = 'incoming' AND status = 'pending')
+               )",
             [':pubkey_hash' => $pubkeyHash]
         );
         if (!$stmt) {

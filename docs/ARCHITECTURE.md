@@ -2642,7 +2642,7 @@ and available credit synchronization.
 | `processorsTotal` | Expected total processors |
 | `availableCreditByCurrency` | `{currency: amount}` — how much credit the contact has available for us |
 | `chainStatusByCurrency` | Per-currency chain validity flags |
-| `peerKnownCurrencies` | Currency codes the responder has any row for with the requesting peer (any direction, any status). Used by the caller to reconcile stale outgoing-pending rows the responder either declined silently or never received. Older peers omit the field; the caller skips reconciliation when absent (back-compat). |
+| `peerKnownCurrencies` | Currency codes the responder has *visible to this peer* — specifically, rows where status='accepted' (any direction) OR (status='pending' AND direction='incoming'). Outgoing-pending rows on the responder's side are deliberately excluded so we don't pre-announce requests that haven't been delivered yet. Used by the caller to reconcile stale outgoing-pending rows the responder either declined silently or never received. Older peers omit the field; the caller skips reconciliation when absent (back-compat). |
 
 **Available credit update:** Available credit is explicitly reported by the remote
 contact and stored in the `contact_credit` table. There are three update paths:
@@ -2669,15 +2669,24 @@ the stale row + rejects the contact transaction so the user's next retry succeed
 the primary path (the peer's `contact_currency_declined` notification handled by
 `MessageService::handleContactMessageRequest`); reconcile catches lost messages.
 
-**Privacy scope of peerKnownCurrencies.** The list is filtered by
-`pubkey_hash = <requesting peer>` so it only contains currencies that already involve
-that specific peer (rows they originated, accepted, or are otherwise a party to). It
-cannot leak currencies you trade with other contacts, because those are stored under
-different pubkey-hashes. The pong is only sent to accepted contacts (blocked / unknown
-peers get a `buildRejection` response with no per-currency data). Net effect: the peer
-is told the union of state for *our pair*, which they already half-know from their own
-DB; the proactive list just makes lost state-change messages reconcilable in O(1)
-ping cycles instead of hanging forever.
+**Privacy scope of peerKnownCurrencies.** Two layers of scoping:
+
+1. **Filtered by `pubkey_hash = <requesting peer>`** so it only contains currencies
+   that already involve that specific peer. It cannot leak currencies you trade with
+   other contacts, because those are stored under different pubkey-hashes.
+2. **Filtered to `status='accepted' OR (status='pending' AND direction='incoming')`**
+   so the responder's *own* outgoing-pending rows — requests they're trying to send
+   but haven't successfully delivered yet — are excluded from the advertisement.
+   Without this scope, an in-flight outgoing-pending row would tell the peer "I'm
+   planning to ask you about X" before they receive the actual request, leaking
+   intent ahead of the message.
+
+The pong is only sent to accepted contacts (blocked / unknown peers get a
+`buildRejection` response with no per-currency data). Net effect: the peer is told the
+state for *our pair* that they already half-know from their own DB (their own request
+landed → they have the row → matching incoming-pending on our side); the proactive
+list just makes lost state-change messages reconcilable in O(1) ping cycles instead
+of hanging forever.
 
 **Online status determination:**
 

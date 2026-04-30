@@ -386,7 +386,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         // Respond with pong including per-currency chain status and available credit
                         [$prRunning, $prTotal] = $this->checkProcessorHealth();
                         $peerKnownCurrencies = $this->contactCurrencyRepository !== null
-                            ? $this->contactCurrencyRepository->getAllCurrencyCodes($pubkeyHash)
+                            ? $this->contactCurrencyRepository->getPeerVisibleCurrencyCodes($pubkeyHash)
                             : [];
                         echo $this->contactStatusPayload->buildResponse(
                             $request,
@@ -541,7 +541,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
         // peerKnownCurrencies lets the caller drop their stale outgoing-pending rows
         // for currencies we no longer recognize (silently declined or never received).
         $peerKnownCurrencies = $this->contactCurrencyRepository !== null
-            ? $this->contactCurrencyRepository->getAllCurrencyCodes(hash(Constants::HASH_ALGORITHM, $senderPubkey))
+            ? $this->contactCurrencyRepository->getPeerVisibleCurrencyCodes(hash(Constants::HASH_ALGORITHM, $senderPubkey))
             : [];
         echo $this->contactStatusPayload->buildResponse(
             $request,
