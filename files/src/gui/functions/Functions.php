@@ -108,10 +108,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
-    // Contact actions
-    if (in_array($action, ['addContact', 'acceptContact', 'acceptCurrency', 'acceptAllCurrencies', 'applyContactDecisions', 'declineCurrency', 'declineContact', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
-        $contactController->routeAction();
-    }
+    // Contact actions migrated to GuiActionRegistry. Registered in
+    // index.html via ContactController::registerActions(); covers
+    // addContact, acceptContact, addCurrency, acceptCurrency,
+    // acceptAllCurrencies, applyContactDecisions, declineCurrency,
+    // declineContact, deleteContact, blockContact, unblockContact,
+    // editContact, pingContact, proposeChainDrop, acceptChainDrop,
+    // rejectChainDrop. (`addCurrency` was unreachable here pre-
+    // migration; the handler exists but no GUI form posts it today.)
 
     // Transaction actions
     if (in_array($action, ['sendEIOU'])) {
@@ -160,28 +164,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // coreInlineActions.php for whatsNew*, the SettingsController
     // pointer above for the debug-report endpoints.)
 
-    // AJAX-only contact actions (returns JSON, exits immediately)
-    if ($action === 'pingContact') {
-        // contactController handles JSON header and response
-        try {
-            $contactController->routeAction();
-        } catch (Exception $e) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'Server error: ' . $e->getMessage()]);
-        }
-        exit; // Ensure we don't continue to render HTML
-    }
-
-    // AJAX-only tx drop actions (returns JSON, exits immediately)
-    if (in_array($action, ['proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop'])) {
-        try {
-            $contactController->routeAction();
-        } catch (Exception $e) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'Server error: ' . $e->getMessage()]);
-        }
-        exit;
-    }
+    // (pingContact + proposeChainDrop + acceptChainDrop +
+    // rejectChainDrop migrated to GuiActionRegistry alongside the
+    // other ContactController actions — see the consolidated note
+    // above.)
 
     // AJAX-only P2P approval actions (returns JSON, exits immediately)
     if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates', 'getTransactionByTxid'])) {

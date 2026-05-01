@@ -50,6 +50,7 @@ $user = UserContext::getInstance();
 
 // Create controllers
 $contactController = new ContactController($secureSession, $contactService);
+$contactController->registerActions($serviceContainer->getActionRegistry());
 $transactionController = new TransactionController($secureSession, $contactService, $transactionService);
 $repoFactory = $serviceContainer->getRepositoryFactory();
 $transactionController->setP2pApprovalDependencies(

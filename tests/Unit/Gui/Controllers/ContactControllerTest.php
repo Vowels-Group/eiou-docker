@@ -603,6 +603,32 @@ class ContactControllerTest extends TestCase
         $this->assertTrue(true);
     }
 
+    /**
+     * registerActions populates the shared registry with every owned
+     * action at TIER_AUTH so the dispatcher's CSRF gate doesn't fire —
+     * each handler does its own verifyCSRFToken() (rotating, mirroring
+     * the rest of the controller's pattern) and emits the legacy
+     * envelope shape on failure.
+     */
+    public function testRegisterActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        foreach ([
+            'addContact', 'acceptContact', 'addCurrency', 'acceptCurrency',
+            'acceptAllCurrencies', 'applyContactDecisions', 'declineCurrency',
+            'declineContact', 'deleteContact', 'blockContact', 'unblockContact',
+            'editContact', 'pingContact', 'proposeChainDrop', 'acceptChainDrop',
+            'rejectChainDrop',
+        ] as $a) {
+            $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
+    }
+
     protected function tearDown(): void
     {
         $_POST = [];
