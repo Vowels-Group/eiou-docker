@@ -2885,38 +2885,121 @@ API (8080). It uses an MVC-like structure with controllers, helpers, and HTML te
 
 ```
 /src/gui/
-├── controllers/              # POST request handlers
-│   ├── ContactController     # Contact add, accept, block, delete, settings
-│   ├── TransactionController # Send eIOU, transaction operations
-│   └── SettingsController    # Node settings management
+├── controllers/              # POST handlers (registered with GuiActionRegistry,
+│   │                         # see "GUI Action Registry" below)
+│   ├── ContactController     # add/accept/block/delete contacts, ping, chain-drop
+│   ├── TransactionController # sendEIOU, P2P approve/reject, getP2pCandidates
+│   ├── PaymentRequestController # create/approve/decline/cancel payment requests
+│   ├── SettingsController    # updateSettings, debug-report endpoints, analyticsConsent
+│   ├── DlqController         # dlqRetry/Abandon/RetryAll/AbandonAll
+│   ├── PaybackMethodsController # CRUD for payback rails (sentinel-unwind pattern)
+│   ├── PluginController      # plugin list / toggle / restart-banner / uninstall
+│   └── ApiKeysController     # API key CRUD (TIER_SENSITIVE for mutations)
 ├── helpers/                  # View data preparation
 │   ├── ContactDataBuilder    # Builds contact data arrays for templates
 │   ├── MessageHelper         # Flash message formatting and display
 │   └── ViewHelper            # Common view utilities
 ├── functions/
-│   └── Functions             # Shared template functions
+│   ├── Functions             # POST router (dispatcher → GuiActionRegistry); GET handlers
+│   ├── coreInlineActions     # No-controller POST closures (whatsNew, rememberSession,
+│   │                         # search/loadMore for transactions+payment requests)
+│   ├── TemplateHelpers       # cspNonce, formatTimestamp, status-icon maps,
+│   │                         # renderSection(), renderTable(),
+│   │                         # renderTransactionRowsForAjax() etc
+│   └── WalletTemplateHelpers # Post-auth template helpers (renderSection lives here)
 ├── includes/
 │   └── Session               # Secure session management (auth code-based + remember-me rotation tokens)
 ├── layout/
 │   ├── authenticationForm    # Login page (auth code entry)
 │   ├── wallet.html           # Main wallet layout (authenticated)
-│   └── walletSubParts/       # Wallet page sections
-│       ├── header             # Wallet title, logout button
-│       ├── banner             # System status banners
-│       ├── quickActions        # Action buttons (Send, Add Contact, etc.)
-│       ├── walletInformation   # Balance, earnings, available credit cards
-│       ├── contactSection      # Contact cards with scroll navigation
-│       ├── contactForm         # Contact modal (add/accept/view) with currency slider pills
-│       ├── eiouForm            # Send eIOU form with dynamic currency list and P2P options
-│       ├── transactionHistory  # Recent transactions list
-│       ├── settingsSection     # Node settings panel
-│       ├── notifications       # Toast notification container
-│       └── floatingButtons     # Refresh and back-to-top buttons
+│   └── walletSubParts/       # Wallet page sections (every standard section
+│       │                     # rendered through renderSection() — uniform
+│       │                     # form-container chrome + section-intro + body)
+│       ├── header / banner / notifications / quickActions / floatingButtons
+│       ├── walletInformation / paybackMethodsSection / dashboardTab
+│       ├── contactSection / contactsTab / pending-contacts (in contactSection)
+│       ├── eiouForm / sendTab / paymentRequestsSection
+│       ├── transactionHistory / activityTab
+│       ├── settingsSection / settingsTab / apiKeysSection / pluginsSection /
+│       │   debugSection
+│       └── _contactRow / _transactionHistoryRow / _paymentRequestRow (row partials
+│           reused by initial-render and AJAX append paths)
 └── assets/
     ├── css/                  # Stylesheets
     ├── js/                   # JavaScript (vanilla, Tor-compatible)
     └── fontawesome/          # Icon library
 ```
+
+### GUI Action Registry
+
+Every POST request from the wallet GUI flows through `GuiActionRegistry`. Plugin
+handlers and core handlers register against the same registry — there's no
+separate plugin path.
+
+The dispatcher at the top of `Functions.php` looks up `$_POST['action']`,
+checks the registered tier (`public` / `auth` / `csrf` / `sensitive`), and
+calls the handler. Tiers control what the registry enforces before dispatch:
+
+- `TIER_PUBLIC` — no gate (rare; reserved for unusual cases).
+- `TIER_AUTH` — authenticated session. Registry routes but does NOT check
+  CSRF, so the handler can keep its existing rotating
+  `verifyCSRFToken()` call and its existing failure-response shape
+  (e.g. plain-text 403 for HTML form submits).
+- `TIER_CSRF` — auth + non-rotating `validateCSRFToken($t, false)`.
+  On failure the registry emits
+  `{"success":false,"error":"csrf_error","message":"..."}` JSON 403.
+  Default for new plugin AJAX handlers.
+- `TIER_SENSITIVE` — `TIER_CSRF` + the session must hold a recent
+  sensitive-access grant (auth-code re-prompt, several minutes).
+
+Core entries register at `TIER_AUTH` because each handler keeps its own
+inline rotating-vs-non-rotating CSRF semantics and its own legacy envelope
+shape (no behavior change vs the pre-migration if-ladder).
+
+Last-write-wins on collision. A plugin that registers an action with a
+core action's name overrides core. The dispatcher invokes whatever's
+last-registered in the registry. This is documented as the override
+mechanic in `docs/PLUGINS.md` — plugins doing this MUST mirror the
+existing envelope shape or JS clients will break.
+
+Each controller exposes a `registerActions(GuiActionRegistry $r)` method
+called from `gui/index.html` after construction. No-controller AJAX
+handlers register from `gui/functions/coreInlineActions.php` (required
+from the top of `Functions.php` before the dispatcher).
+
+`Functions.php`'s POST router has zero hardcoded `if/in_array($action, ...)`
+branches as of this writing.
+
+### Plugin GUI Hooks
+
+Beyond the action registry, the GUI exposes four extension surfaces that
+let plugins extend rendering without forking templates:
+
+- **Render hooks (`gui.<area>.<position>`)** — fire-and-collect. Listeners
+  return HTML strings; the host concatenates them at the fire site.
+  Includes `gui.head.styles`, `gui.head.scripts`, `gui.footer.scripts`,
+  `gui.dashboard.before/after`, `gui.contacts.after`, `gui.activity.after`,
+  `gui.settings.section`, plus `gui.section.before.<id>` and
+  `gui.section.after.<id>` fired automatically by `renderSection()`.
+- **Filter hooks (`gui.<area>`)** — value-pipeline. Each listener
+  receives the value from the previous stage. Includes `gui.tabs`,
+  `gui.dashboard.widgets`, `gui.contact_modal.tabs` /
+  `gui.contact_modal.body`, `gui.contact.actions`.
+- **`PluginAssetRegistry`** — plugins call `enqueueStyle()` / `enqueueScript()`
+  in `boot()`; the host inlines small files with CSP-nonce or serves
+  larger files via `/gui/plugin-assets/<id>/<path>` (validated by
+  `PluginAssetServer`).
+- **`TabRegistry`** — the five core tabs are registry entries. Plugins
+  add their own tabs at chosen `order`.
+
+`renderSection()` and `renderTable()` helpers in
+`WalletTemplateHelpers.php` give plugin-authored sections the same chrome
+as core sections. See `docs/PLUGIN_GUI_HOOKS.md` for the design and
+`docs/PLUGINS.md` "Extending the GUI" for the plugin-author reference.
+
+Optional `PLUGIN_HOOKS_TRACE=1` env flag logs every hook fire (kind,
+hook, listener count, errors) — useful for plugin authors discovering
+which hooks the host actually calls without grepping templates.
 
 ### Session Management
 
@@ -3512,6 +3595,8 @@ public function testSearchContactsWithInvalidName(): void
 |----------|-------------|
 | [GUI_REFERENCE.md](GUI_REFERENCE.md) | Web interface documentation |
 | [GUI_QUICK_REFERENCE.md](GUI_QUICK_REFERENCE.md) | GUI quick reference card |
+| [PLUGIN_GUI_HOOKS.md](PLUGIN_GUI_HOOKS.md) | Plugin GUI hooks design (render slots, filter slots, asset registry, tab/action registries) |
+| [PLUGINS.md](PLUGINS.md) | Plugin authoring guide — see "Extending the GUI" for the day-to-day reference |
 
 ### Configuration and Errors
 
