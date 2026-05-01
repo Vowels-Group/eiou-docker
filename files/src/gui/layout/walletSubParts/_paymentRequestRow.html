@@ -3,18 +3,36 @@
 // paymentRequestsSection.html for the initial page render, and included
 // once per row by the loadMorePaymentRequests AJAX handler for "Load older"
 // fetches.
+//
 // Expected in-scope variables:
 //   $req                  (array)  — payment request row (direction+status+amount+…)
 //   $prContactsByHash     (array)  — pubkey_hash => contact row, for avatar lookup
 //   $prAvatarStyle        (string) — avatar style from user settings
 //   $prStatusIcons        (array)  — status => Font Awesome icon class map
-$status   = $req['status'] ?? '';
-$dir      = $req['_direction'] ?? '';
-$txid     = !empty($req['resulting_txid']) ? htmlspecialchars($req['resulting_txid']) : '';
-$amountRaw = isSplitAmount($req['amount']) ? $req['amount']->toMajorUnits() : (float)($req['amount_whole'] ?? 0);
+//
+// Defense-in-depth escape policy
+// ──────────────────────────────
+// Each row variable is computed RAW here (no `htmlspecialchars()` at
+// assignment) and escaped at every echo via `h()` / `attr()`. Earlier
+// versions pre-escaped some locals at assignment, then re-echoed them
+// in `data-*` attributes without re-escaping — that was technically
+// safe (double-encoding is harmless) but masked which echoes were
+// load-bearing for XSS prevention. Now every echo is explicit.
+//
+// `$statusIcon` is a Font Awesome class string. We constrain it to the
+// known whitelist (`$prStatusIcons` plus the `fa-circle` fallback) so
+// even a future drift in the source map can't surface user-controlled
+// content into a `class="..."` attribute.
+$h    = static fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+$attr = static fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+
+$status   = (string) ($req['status'] ?? '');
+$dir      = (string) ($req['_direction'] ?? '');
+$txid     = (string) ($req['resulting_txid'] ?? '');
+$amountRaw = isSplitAmount($req['amount']) ? $req['amount']->toMajorUnits() : (float) ($req['amount_whole'] ?? 0);
 $amount   = number_format($amountRaw, displayDecimals());
-$currency = htmlspecialchars($req['currency'] ?? '');
-$desc     = !empty($req['description']) ? htmlspecialchars($req['description']) : '';
+$currency = (string) ($req['currency'] ?? '');
+$desc     = (string) ($req['description'] ?? '');
 $dateRaw  = $req['responded_at'] ?? $req['created_at'] ?? '';
 $date     = !empty($dateRaw) ? formatTimestamp($dateRaw) : '';
 $dateTs   = !empty($dateRaw) ? (int) strtotime($dateRaw) : 0;
@@ -22,37 +40,52 @@ $dateTs   = !empty($dateRaw) ? (int) strtotime($dateRaw) : 0;
 // Counterparty name + lookup for avatar (prefer live name over stored snapshot)
 $cpHash = $dir === 'incoming' ? ($req['requester_pubkey_hash'] ?? '') : ($req['recipient_pubkey_hash'] ?? '');
 $cpContact = $prContactsByHash[$cpHash] ?? null;
-$cpName = $cpContact['name'] ?? $req['contact_name'] ?? substr($cpHash, 0, 12) . '…';
+$cpName = (string) ($cpContact['name'] ?? $req['contact_name'] ?? substr($cpHash, 0, 12) . '…');
 
-$statusIcon = $prStatusIcons[$status] ?? 'fa-circle';
+// Status-icon: whitelisted to the source map's registered classes plus
+// the explicit fallback. A drift in $prStatusIcons that introduced a
+// non-allowlisted value would render as the safe fallback rather than
+// landing in a class attribute. Allowed FA tokens are short fixed
+// identifiers (`fa-check`, `fa-times-circle`, …); pattern enforces
+// that shape so no value with whitespace / quotes can leak.
+$statusIconCandidate = (string) ($prStatusIcons[$status] ?? 'fa-circle');
+$statusIcon = preg_match('/^fa-[a-z0-9-]+$/', $statusIconCandidate)
+    ? $statusIconCandidate
+    : 'fa-circle';
+
+// Search-attr blob: lowercase concatenation of the row's textual
+// fields. Computed before the <tr> so the data-pr-search attribute
+// gets a single point-of-use escape.
+$searchParts = strtolower($cpName . ' ' . $cpHash . ' ' . $desc);
+if (!empty($req['requester_address'])) {
+    $searchParts .= ' ' . strtolower((string) $req['requester_address']);
+}
+if ($cpContact) {
+    foreach (validTransportIndices() as $_af) {
+        if (!empty($cpContact[$_af])) {
+            $searchParts .= ' ' . strtolower((string) $cpContact[$_af]);
+        }
+    }
+}
 ?>
 <tr class="pr-row contact-row cursor-pointer"
-    data-action="<?php echo $txid ? 'openTransactionModalByTxid' : 'openPrHistoryModal'; ?>"
-    <?php if ($txid): ?>data-txid="<?php echo $txid; ?>"<?php endif; ?>
-    data-pr-name="<?php echo htmlspecialchars($cpName); ?>"
-    data-pr-amount="<?php echo $amount . ' ' . $currency; ?>"
-    data-pr-desc="<?php echo $desc; ?>"
-    data-pr-date="<?php echo $date; ?>"
-    data-pr-direction="<?php echo htmlspecialchars($dir); ?>"
-    data-pr-status="<?php echo htmlspecialchars($status); ?>"
+    data-action="<?php echo $txid !== '' ? 'openTransactionModalByTxid' : 'openPrHistoryModal'; ?>"
+    <?php if ($txid !== ''): ?>data-txid="<?php echo $attr($txid); ?>"<?php endif; ?>
+    data-pr-name="<?php echo $attr($cpName); ?>"
+    data-pr-amount="<?php echo $attr($amount . ' ' . $currency); ?>"
+    data-pr-desc="<?php echo $attr($desc); ?>"
+    data-pr-date="<?php echo $attr($date); ?>"
+    data-pr-direction="<?php echo $attr($dir); ?>"
+    data-pr-status="<?php echo $attr($status); ?>"
     title="Click for details"
-    <?php
-        $searchParts = strtolower($cpName . ' ' . $cpHash . ' ' . $desc);
-        if (!empty($req['requester_address'])) $searchParts .= ' ' . strtolower($req['requester_address']);
-        if ($cpContact) {
-            foreach (validTransportIndices() as $_af) {
-                if (!empty($cpContact[$_af])) $searchParts .= ' ' . strtolower($cpContact[$_af]);
-            }
-        }
-    ?>
-    data-pr-search="<?php echo htmlspecialchars($searchParts); ?>"
-    data-status="<?php echo htmlspecialchars($status); ?>"
-    data-direction="<?php echo htmlspecialchars($dir); ?>"
-    data-amount="<?php echo $amountRaw; ?>"
-    data-date="<?php echo $dateTs; ?>">
+    data-pr-search="<?php echo $attr($searchParts); ?>"
+    data-status="<?php echo $attr($status); ?>"
+    data-direction="<?php echo $attr($dir); ?>"
+    data-amount="<?php echo $attr((string) $amountRaw); ?>"
+    data-date="<?php echo $attr((string) $dateTs); ?>">
     <td class="col-pr-status text-center">
-        <span class="pr-status-icon pr-status-<?php echo htmlspecialchars($status); ?>" title="<?php echo htmlspecialchars(ucfirst($status)); ?>">
-            <i class="fas <?php echo $statusIcon; ?>"></i>
+        <span class="pr-status-icon pr-status-<?php echo $attr($status); ?>" title="<?php echo $attr(ucfirst($status)); ?>">
+            <i class="fas <?php echo $attr($statusIcon); ?>"></i>
         </span>
     </td>
     <td class="col-name">
@@ -61,19 +94,19 @@ $statusIcon = $prStatusIcons[$status] ?? 'fa-circle';
                 <?php echo renderContactAvatar($cpHash, $cpName, $prAvatarStyle); ?>
             <?php endif; ?>
             <div>
-                <span class="contact-name-text"><?php echo htmlspecialchars($cpName); ?></span>
+                <span class="contact-name-text"><?php echo $h($cpName); ?></span>
                 <span class="pr-direction-hint"><?php echo $dir === 'incoming' ? 'requested' : 'you requested'; ?></span>
             </div>
         </div>
     </td>
-    <td class="col-number col-pr-amount text-right"><?php echo $amount . ' ' . $currency; ?></td>
-    <td class="col-tx-desc col-pr-desc" title="<?php echo $desc ?: 'No description'; ?>"><?php echo $desc ?: '—'; ?></td>
-    <td class="col-pr-txid" title="<?php echo $txid; ?>">
-        <?php if ($txid): ?>
-            <span class="monospace"><?php echo substr($txid, 0, 10); ?>…</span>
+    <td class="col-number col-pr-amount text-right"><?php echo $h($amount . ' ' . $currency); ?></td>
+    <td class="col-tx-desc col-pr-desc" title="<?php echo $attr($desc !== '' ? $desc : 'No description'); ?>"><?php echo $h($desc !== '' ? $desc : '—'); ?></td>
+    <td class="col-pr-txid" title="<?php echo $attr($txid); ?>">
+        <?php if ($txid !== ''): ?>
+            <span class="monospace"><?php echo $h(substr($txid, 0, 10)); ?>…</span>
         <?php else: ?>
             <span class="text-muted">—</span>
         <?php endif; ?>
     </td>
-    <td class="col-tx-date col-pr-date text-right"><?php echo $date; ?></td>
+    <td class="col-tx-date col-pr-date text-right"><?php echo $h($date); ?></td>
 </tr>

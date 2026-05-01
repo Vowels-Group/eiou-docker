@@ -136,6 +136,33 @@ class SettingsController
     }
 
     /**
+     * Sensitive-access gate for HTML-redirect (form-submit) handlers.
+     *
+     * Mirrors `ApiKeysController::requireSensitive()` but emits the
+     * legacy MessageHelper redirect-with-flash flow instead of a
+     * JSON 401 — this controller's handlers redirect after success,
+     * so the failure path needs to match.
+     *
+     * Calling this from a handler that's already verified the CSRF
+     * token guarantees: stolen-session-cookie alone cannot trigger
+     * settings mutations (the user must re-enter their auth code via
+     * the sensitive-access modal first). Existing sensitive-access
+     * grants persist for SENSITIVE_ACCESS_TTL_SECONDS so a user can
+     * make several edits in a row without re-prompting.
+     */
+    private function requireSensitiveAccessForRedirect(): void
+    {
+        if (!$this->session->hasSensitiveAccess()) {
+            MessageHelper::redirectMessage(
+                'Please re-enter your auth code to continue (sensitive action).',
+                'error'
+            );
+            // redirectMessage() exits, but be explicit for static analysis.
+            exit;
+        }
+    }
+
+    /**
      * Read the current p2pExpiration value from the saved config file.
      * Falls back to the Constants default if the file or key is absent.
      *
@@ -162,6 +189,14 @@ class SettingsController
     {
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
+
+        // Sensitive-access gate. Settings span the wallet's most
+        // privileged knobs (auth-code rotation, fee defaults, network
+        // basics) so a stolen session cookie shouldn't be enough to
+        // mutate them — the user must re-enter their auth code via
+        // the sensitive-access modal first. Mirrors what ApiKeys-
+        // Controller already does for its mutating actions.
+        $this->requireSensitiveAccessForRedirect();
 
         // Import validation and security classes
 
@@ -638,6 +673,10 @@ class SettingsController
         // CSRF Protection
         $this->session->verifyCSRFToken();
 
+        // Sensitive-access gate — clearing debug logs wipes operator-
+        // visible state and could mask incident traces.
+        $this->requireSensitiveAccessForRedirect();
+
         try {
             $debugRepo = new DebugRepository($this->getPdoConnection());
 
@@ -662,6 +701,11 @@ class SettingsController
     public function handleResetToDefaults(): void
     {
         $this->session->verifyCSRFToken();
+
+        // Sensitive-access gate — this is the most destructive
+        // settings action; a stolen session cookie should never be
+        // enough to wipe every saved preference.
+        $this->requireSensitiveAccessForRedirect();
 
         try {
             UserContext::getInstance()->resetToDefaults();
