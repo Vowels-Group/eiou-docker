@@ -10,6 +10,7 @@ use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactDecisionService;
 use Eiou\Services\ContactService;
 use Eiou\Services\GuiActionRegistry;
+use Eiou\Utils\ContactValidator;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
@@ -148,42 +149,25 @@ class ContactController
             $message = 'All fields are required';
             $messageType = 'error';
         } else {
-            // Validate address
-            $addressValidation = InputValidator::validateAddress($address);
-            if (!$addressValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+            // Bulk-validate the standard contact field set in one
+            // call. ContactValidator preserves the legacy bail-on-
+            // first-error behavior + error-message format
+            // ("Invalid {label}: …") so nothing user-visible changes.
+            $check = ContactValidator::validateContactFields([
+                'address'  => $address,
+                'name'     => $name,
+                'fee'      => $fee,
+                'credit'   => $credit,
+                'currency' => $currency,
+            ]);
+            if (!$check['ok']) {
+                MessageHelper::redirectMessage($check['error'], 'error');
                 return;
             }
 
-            // Validate contact name
-            $nameValidation = InputValidator::validateContactName($name);
-            if (!$nameValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid contact name: ' . $nameValidation['error'], 'error');
-                return;
-            }
-
-            // Validate fee percentage
-            $feeValidation = InputValidator::validateFeePercent($fee);
-            if (!$feeValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
-                return;
-            }
-
-            // Validate credit limit
-            $creditValidation = InputValidator::validateCreditLimit($credit);
-            if (!$creditValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid credit limit: ' . $creditValidation['error'], 'error');
-                return;
-            }
-
-            // Validate currency
-            $currencyValidation = InputValidator::validateCurrency($currency);
-            if (!$currencyValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
-                return;
-            }
-
-            // Validate requested credit limit if provided
+            // Optional requested-credit-limit validation stays inline
+            // because it has its own message prefix and only fires
+            // when the field is present.
             $requestedCreditValidated = null;
             if ($requestedCredit !== '' && $requestedCredit !== null) {
                 $reqCreditValidation = InputValidator::validateCreditLimit($requestedCredit);
@@ -195,11 +179,11 @@ class ContactController
             }
 
             // Use sanitized and validated values
-            $address = $addressValidation['value'];
-            $name = $nameValidation['value'];
-            $fee = $feeValidation['value'];
-            $credit = $creditValidation['value'];
-            $currency = $currencyValidation['value'];
+            $address  = $check['values']['address'];
+            $name     = $check['values']['name'];
+            $fee      = $check['values']['fee'];
+            $credit   = $check['values']['credit'];
+            $currency = $check['values']['currency'];
 
             // Create argv array with --json flag for structured output
             // $data[7] = requested credit limit (or NULL placeholder), $data[8] = description

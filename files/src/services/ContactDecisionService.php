@@ -204,6 +204,22 @@ class ContactDecisionService
         array &$errors,
     ): void {
         $completedCurrencies = [];
+        // All four repository writes for an accepted currency
+        // (currency-config update, paired outgoing-status flip,
+        // initial-balance seed, available-credit upsert) share one
+        // PDO connection because they're all wired through the same
+        // RepositoryFactory. Wrapping the per-currency block in a
+        // transaction makes the four-step accept atomic — if the
+        // credit upsert fails after the currency was marked accepted,
+        // we now roll back the status flip too instead of leaving
+        // the contact in a half-accepted state. balance/credit
+        // exceptions inside the inner try were already caught and
+        // treated as non-fatal; we keep that behavior so a failure
+        // there doesn't roll back the currency-config update (the
+        // credit will self-heal on next ping/pong, the currency
+        // shouldn't be unwound).
+        $pdo = $this->contactCurrencyRepository->getPdo();
+
         foreach ($acceptList as $entry) {
             $currency = strtoupper(Security::sanitizeInput($entry['currency'] ?? ''));
             $fee = Security::sanitizeInput($entry['fee'] ?? '');
@@ -234,43 +250,69 @@ class ContactDecisionService
                 Constants::FEE_CONVERSION_FACTOR
             );
 
-            $this->contactCurrencyRepository->updateCurrencyConfig(
-                $pubkeyHash,
-                $currency,
-                [
-                    'fee_percent' => $feeMinor,
-                    'credit_limit' => $creditMinor,
-                    'status' => 'accepted',
-                ],
-                'incoming'
-            );
-
-            if ($this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency, 'outgoing')) {
-                $this->contactCurrencyRepository->updateCurrencyStatus(
+            // Per-currency atomicity boundary. If anything between
+            // here and commit() throws (or returns false in a way the
+            // catch detects), we rollBack and leave the database
+            // exactly as it was before this iteration. Other
+            // currencies in the same $acceptList loop are unaffected
+            // (their writes either committed earlier or haven't
+            // started yet).
+            $pdo->beginTransaction();
+            $rolledBack = false;
+            try {
+                $this->contactCurrencyRepository->updateCurrencyConfig(
                     $pubkeyHash,
                     $currency,
-                    'accepted',
-                    'outgoing'
+                    [
+                        'fee_percent' => $feeMinor,
+                        'credit_limit' => $creditMinor,
+                        'status' => 'accepted',
+                    ],
+                    'incoming'
                 );
+
+                if ($this->contactCurrencyRepository->hasCurrency($pubkeyHash, $currency, 'outgoing')) {
+                    $this->contactCurrencyRepository->updateCurrencyStatus(
+                        $pubkeyHash,
+                        $currency,
+                        'accepted',
+                        'outgoing'
+                    );
+                }
+
+                $currentPubkey = $contactPubkey ?: $this->contactRepository->getContactPubkeyFromHash($pubkeyHash);
+                if ($currentPubkey) {
+                    $this->balanceRepository->insertInitialContactBalances($currentPubkey, $currency);
+                    try {
+                        $sentBalance = $this->balanceRepository->getContactSentBalance($currentPubkey, $currency);
+                        $receivedBalance = $this->balanceRepository->getContactReceivedBalance($currentPubkey, $currency);
+                        $balance = $sentBalance->subtract($receivedBalance);
+                        $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency)
+                            ?? SplitAmount::zero();
+                        $this->contactCreditRepository->upsertAvailableCredit(
+                            $pubkeyHash,
+                            $balance->add($creditLimit),
+                            $currency
+                        );
+                    } catch (\Exception $e) {
+                        // Non-fatal — credit will be corrected on next
+                        // ping/pong. Don't roll back the outer transaction
+                        // for this; the currency-status flip is the
+                        // load-bearing change we want to keep.
+                    }
+                }
+
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $rolledBack = true;
+                $errors[] = "{$currency}: " . $e->getMessage();
             }
 
-            $currentPubkey = $contactPubkey ?: $this->contactRepository->getContactPubkeyFromHash($pubkeyHash);
-            if ($currentPubkey) {
-                $this->balanceRepository->insertInitialContactBalances($currentPubkey, $currency);
-                try {
-                    $sentBalance = $this->balanceRepository->getContactSentBalance($currentPubkey, $currency);
-                    $receivedBalance = $this->balanceRepository->getContactReceivedBalance($currentPubkey, $currency);
-                    $balance = $sentBalance->subtract($receivedBalance);
-                    $creditLimit = $this->contactCurrencyRepository->getCreditLimit($pubkeyHash, $currency)
-                        ?? SplitAmount::zero();
-                    $this->contactCreditRepository->upsertAvailableCredit(
-                        $pubkeyHash,
-                        $balance->add($creditLimit),
-                        $currency
-                    );
-                } catch (\Exception $e) {
-                    // Non-fatal — credit will be corrected on next ping/pong
-                }
+            if ($rolledBack) {
+                continue;
             }
 
             $this->contactSyncService->sendCurrencyAcceptanceNotification($pubkeyHash, $currency);

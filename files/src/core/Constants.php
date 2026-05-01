@@ -52,7 +52,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 12;
+    const SCHEMA_VERSION = 13;
 
     /**
      * Plugin signature enforcement mode. One of:
@@ -202,6 +202,16 @@ class Constants {
     // collection impractical. Set to false via EIOU_TOR_FORCE_FAST env variable
     // to allow best-fee mode over Tor (useful for testing).
     const TOR_FORCE_FAST = true;
+
+    // Networking — host-side endpoints used for the local Tor SOCKS
+    // proxy and the loopback HTTP backplane. Lifted to constants so a
+    // future port change (or an operator-tunable proxy host) doesn't
+    // require grepping the codebase.
+    const LOCALHOST_IP    = '127.0.0.1';
+    const TOR_PROXY_HOST  = '127.0.0.1';
+    const TOR_PROXY_PORT  = 9050;
+    /** Combined `host:port` form — the shape `curl_setopt(CURLOPT_PROXY, …)` expects. */
+    const TOR_PROXY       = '127.0.0.1:9050';
 
     // Hop budget randomization
     // When true (default), P2P routing uses a geometric distribution (30% stop

@@ -276,7 +276,8 @@ class DebugReportService
     // =========================================================================
 
     private const SUBMIT_ENDPOINT = 'https://debug-reports.eiou.org/v1/report';
-    private const TOR_PROXY = '127.0.0.1:9050';
+    /** Tor SOCKS5 proxy address — sourced from Constants::TOR_PROXY so the host:port shape is defined in one place. */
+    private const TOR_PROXY = Constants::TOR_PROXY;
     private const CONNECT_TIMEOUT = 30;
     private const SUBMIT_TIMEOUT = 120;
     private const RATE_LIMIT_FILE = '/tmp/debug-report-submissions.json';

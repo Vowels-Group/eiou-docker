@@ -383,6 +383,14 @@ function runColumnMigrations(PDO $pdo): array {
         'dead_letter_queue' => [
             'idx_dlq_message_status' => 'message_id, status',
         ],
+        // contact_currencies pending-currency lookups in
+        // ContactCurrencyRepository previously hit the pubkey_hash-only
+        // index and filtered by status post-scan. Composite covers
+        // both columns so multi-currency accept/decline flows skip
+        // the row-walk.
+        'contact_currencies' => [
+            'idx_cc_hash_status' => 'pubkey_hash, status',
+        ],
     ];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
