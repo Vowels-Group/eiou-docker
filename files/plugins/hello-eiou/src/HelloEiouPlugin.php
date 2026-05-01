@@ -5,6 +5,7 @@ namespace Eiou\Plugins\HelloEiou;
 
 use Eiou\Contracts\PluginInterface;
 use Eiou\Services\ServiceContainer;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Utils\Logger;
@@ -50,7 +51,17 @@ class HelloEiouPlugin implements PluginInterface
 
     public function getVersion(): string
     {
-        return '1.1.0';
+        return '1.2.0';
+    }
+
+    /**
+     * Pure helper — pulled out so every surface (CLI, REST, GUI
+     * action, render hook) calls into the same source instead of
+     * each one re-implementing FORTUNES selection.
+     */
+    private function pickFortune(): string
+    {
+        return self::FORTUNES[array_rand(self::FORTUNES)];
     }
 
     /**
@@ -94,9 +105,88 @@ class HelloEiouPlugin implements PluginInterface
         // and the registry wraps it in the standard successResponse shape.
         $container->getPluginApiRegistry()->register('hello-eiou', 'GET', 'fortune',
             function (string $method, array $params, string $body): array {
-                $fortune = self::FORTUNES[array_rand(self::FORTUNES)];
-                return ['fortune' => $fortune];
+                return ['fortune' => $this->pickFortune()];
             }
         );
+
+        // ---------------------------------------------------------------------
+        // GUI hook surface — demonstrates each registry added in the
+        // plugin-GUI-hooks branch. See docs/PLUGIN_GUI_HOOKS.md.
+        // ---------------------------------------------------------------------
+        $hooks   = $container->getHooks();
+        $assets  = $container->getAssetRegistry();
+        $tabs    = $container->getTabRegistry();
+        $actions = $container->getActionRegistry();
+
+        // Phase 2 — own CSS for the dashboard widget. Lives next to the
+        // plugin's PHP under assets/. Inline-rendered with the page CSP
+        // nonce because it's smaller than the URL-mode threshold.
+        $assets->enqueueStyle('hello-eiou', 'assets/styles.css');
+
+        // Phase 1 — render a fortune widget on the dashboard. Uses
+        // `gui.dashboard.after` (pure render hook). Each request picks
+        // a fresh fortune so reloads change the line.
+        $hooks->onRender('gui.dashboard.after', function (): string {
+            $fortune = htmlspecialchars($this->pickFortune(), ENT_QUOTES);
+            return '<section class="plugin-hello-eiou-widget">'
+                 . '<h3><i class="fas fa-cookie-bite"></i> Fortune</h3>'
+                 . '<p>' . $fortune . '</p>'
+                 . '</section>';
+        });
+
+        // Phase 3 — register a top-level "Fortunes" tab. Uses a render
+        // callable instead of an include path so the plugin doesn't
+        // need a separate template file. The tab slots between
+        // Activity (40) and Settings (50).
+        $tabs->register([
+            'id'     => 'hello-eiou-fortunes',
+            'label'  => 'Fortunes',
+            'icon'   => 'fas fa-cookie-bite',
+            'order'  => 45,
+            'render' => function (): string {
+                $list = '';
+                foreach (self::FORTUNES as $f) {
+                    $list .= '<li>' . htmlspecialchars($f, ENT_QUOTES) . '</li>';
+                }
+                return '<div class="plugin-hello-eiou-tab"><h2>Fortunes</h2><ul>' . $list . '</ul></div>';
+            },
+        ]);
+
+        // Phase 4 — register a POST action plugins / GUI buttons can
+        // hit. Returns JSON; tier is `csrf` so Functions.php enforces
+        // a valid CSRF token before invoking the handler.
+        $actions->register('helloEiouFortune', function (array $request): void {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'fortune' => $this->pickFortune(),
+            ]);
+        }, GuiActionRegistry::TIER_CSRF, 'hello-eiou');
+
+        // Phase 5 — contribute to two filter slots:
+        //   * gui.dashboard.widgets — adds an extra widget after the
+        //     core widgets, sorted by order.
+        //   * gui.contact.actions   — adds a "Fortune" button to the
+        //     contact-modal settings tab that posts to the action
+        //     registered above.
+        $hooks->onFilter('gui.dashboard.widgets', function (array $widgets): array {
+            $widgets[] = [
+                'id'    => 'hello-eiou',
+                'order' => 200,
+                'html'  => '<section class="plugin-hello-eiou-mini">'
+                         . '<small>Tip: <em>' . htmlspecialchars($this->pickFortune(), ENT_QUOTES) . '</em></small>'
+                         . '</section>',
+            ];
+            return $widgets;
+        });
+
+        $hooks->onFilter('gui.contact.actions', function (array $a): array {
+            $a[] = [
+                'label'  => 'Fortune',
+                'icon'   => 'fas fa-cookie-bite',
+                'action' => 'helloEiouFortune',
+            ];
+            return $a;
+        });
     }
 }

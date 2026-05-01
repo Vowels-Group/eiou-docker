@@ -1,7 +1,7 @@
 {
   "name": "hello-eiou",
-  "version": "1.1.0",
-  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Logs a random eIOU fortune each time a sync completes — a minimal, readable demonstration of the plugin API.",
+  "version": "1.2.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the eIOU plugin API surface: events, CLI, REST, and the GUI hooks system (render hooks, asset enqueue, tab registry, action registry, filter slots).",
   "author": {
     "name": "EIOU",
     "url": "https://eiou.org"

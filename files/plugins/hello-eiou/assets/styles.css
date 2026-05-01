@@ -1,0 +1,50 @@
+/* hello-eiou plugin styles — namespaced under .plugin-hello-eiou-*
+   so the host's CSS rules stay untouched. Convention from
+   docs/PLUGIN_GUI_HOOKS.md (CSS isolation). */
+
+.plugin-hello-eiou-widget {
+    background: linear-gradient(135deg, #fdf6e3 0%, #fff8e1 100%);
+    border: 1px solid #e6d9b8;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    color: #5a4a2a;
+    font-style: italic;
+}
+
+.plugin-hello-eiou-widget h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.1em;
+    font-style: normal;
+    color: #8a6a2a;
+}
+
+.plugin-hello-eiou-widget p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.plugin-hello-eiou-mini {
+    margin-top: 8px;
+    color: #8a6a2a;
+    opacity: 0.85;
+}
+
+.plugin-hello-eiou-tab {
+    padding: 16px;
+}
+
+.plugin-hello-eiou-tab ul {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0;
+}
+
+.plugin-hello-eiou-tab li {
+    padding: 10px 14px;
+    margin: 6px 0;
+    background: #fdf6e3;
+    border-left: 3px solid #d4a960;
+    border-radius: 4px;
+    font-style: italic;
+}

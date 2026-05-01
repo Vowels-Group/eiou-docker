@@ -229,6 +229,63 @@ class ServiceContainer implements ContainerInterface {
     // repository instances. RepositoryFactory handles lazy creation & caching.
     // =========================================================================
 
+    /**
+     * Get the GUI hook registry. Plugins use this in their boot() to
+     * register render + filter listeners; templates and controllers
+     * call doRender() / applyFilter() at hook fire sites. See
+     * docs/PLUGIN_GUI_HOOKS.md for the full API + slot list.
+     */
+    public function getHooks(): Hooks
+    {
+        if (!isset($this->services['Hooks'])) {
+            $this->services['Hooks'] = new Hooks();
+        }
+        return $this->services['Hooks'];
+    }
+
+    /**
+     * Get the GUI tab registry. Core tabs are registered by
+     * Functions.php on each request; plugins register their tabs in
+     * boot(). wallet.html iterates the registry to build the tab nav
+     * + panels. See docs/PLUGIN_GUI_HOOKS.md.
+     */
+    public function getTabRegistry(): TabRegistry
+    {
+        if (!isset($this->services['TabRegistry'])) {
+            $this->services['TabRegistry'] = new TabRegistry();
+        }
+        return $this->services['TabRegistry'];
+    }
+
+    /**
+     * Get the plugin asset registry. Plugins call enqueueStyle /
+     * enqueueScript in boot(); the registry's renderStyles /
+     * renderScripts are drained by the host render listeners attached
+     * to gui.head.styles / gui.head.scripts / gui.footer.scripts. See
+     * docs/PLUGIN_GUI_HOOKS.md.
+     */
+    public function getAssetRegistry(): PluginAssetRegistry
+    {
+        if (!isset($this->services['PluginAssetRegistry'])) {
+            $this->services['PluginAssetRegistry'] = new PluginAssetRegistry();
+        }
+        return $this->services['PluginAssetRegistry'];
+    }
+
+    /**
+     * Get the GUI action registry. Plugins call register() in boot()
+     * to add new POST handlers; Functions.php dispatches via has() +
+     * the per-tier gates the registry exposes. See
+     * docs/PLUGIN_GUI_HOOKS.md.
+     */
+    public function getActionRegistry(): GuiActionRegistry
+    {
+        if (!isset($this->services['GuiActionRegistry'])) {
+            $this->services['GuiActionRegistry'] = new GuiActionRegistry();
+        }
+        return $this->services['GuiActionRegistry'];
+    }
+
     /** @return RepositoryFactory */
     public function getRepositoryFactory(): RepositoryFactory {
         if ($this->repositoryFactory === null) {

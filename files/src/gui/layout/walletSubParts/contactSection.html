@@ -193,6 +193,28 @@
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="settings-tab">
                 <i class="fas fa-cog"></i> Settings
             </button>
+            <?php
+            // gui.contact_modal.tabs — plugins return an array of
+            // {id, label, icon} entries that render as additional
+            // modal-tab buttons. The corresponding tab content is
+            // emitted via gui.contact_modal.body below; pairing the
+            // two on a shared id is the plugin author's contract.
+            // See docs/PLUGIN_GUI_HOOKS.md.
+            $contactModalTabs = $hooks->applyFilter('gui.contact_modal.tabs', [], ['user' => $user]);
+            if (is_array($contactModalTabs)) {
+                foreach ($contactModalTabs as $mt) {
+                    if (!is_array($mt) || empty($mt['id']) || empty($mt['label'])) continue;
+                    $mtId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$mt['id']);
+                    if ($mtId === '') continue;
+                    $mtIcon = isset($mt['icon']) && is_string($mt['icon']) ? $mt['icon'] : 'fas fa-puzzle-piece';
+                    ?>
+                    <button type="button" class="modal-tab" data-action="showModalTab" data-tab="<?= htmlspecialchars($mtId) ?>-tab">
+                        <i class="<?= htmlspecialchars($mtIcon) ?>"></i> <?= htmlspecialchars((string)$mt['label']) ?>
+                    </button>
+                    <?php
+                }
+            }
+            ?>
         </div>
 
         <!-- Info Tab -->
@@ -619,8 +641,53 @@
                     <button type="submit" form="editContactForm" class="btn btn-primary">
                         <i class="fas fa-save"></i> Save
                     </button>
+                    <?php
+                    // gui.contact.actions — plugins return an array of
+                    // {label, icon, action} entries that render as
+                    // additional buttons in the contact settings tab.
+                    // The `action` value is posted as the form's
+                    // action= field, so it must be a name that the
+                    // GuiActionRegistry has registered (Phase 4).
+                    // See docs/PLUGIN_GUI_HOOKS.md.
+                    $contactActions = $hooks->applyFilter('gui.contact.actions', [], ['user' => $user]);
+                    if (is_array($contactActions)) {
+                        foreach ($contactActions as $a) {
+                            if (!is_array($a) || empty($a['label']) || empty($a['action'])) continue;
+                            $aIcon = isset($a['icon']) && is_string($a['icon']) ? $a['icon'] : 'fas fa-bolt';
+                            ?>
+                            <form method="POST" class="plugin-contact-action">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="action" value="<?= htmlspecialchars((string)$a['action']) ?>">
+                                <input type="hidden" name="contact_address" class="plugin-contact-action-address">
+                                <button type="submit" class="btn btn-secondary">
+                                    <i class="<?= htmlspecialchars($aIcon) ?>"></i> <?= htmlspecialchars((string)$a['label']) ?>
+                                </button>
+                            </form>
+                            <?php
+                        }
+                    }
+                    ?>
                 </div>
         </div>
+        <?php
+        // gui.contact_modal.body — plugins render the panel body
+        // matching each tab they declared in gui.contact_modal.tabs.
+        // Each entry is {id, html}; the panel id must match the
+        // tab id (with `-tab` suffix added by showModalTab).
+        $contactModalBodies = $hooks->applyFilter('gui.contact_modal.body', [], ['user' => $user]);
+        if (is_array($contactModalBodies)) {
+            foreach ($contactModalBodies as $body) {
+                if (!is_array($body) || empty($body['id']) || empty($body['html'])) continue;
+                $bId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$body['id']);
+                if ($bId === '') continue;
+                ?>
+                <div id="<?= htmlspecialchars($bId) ?>-tab" class="modal-tab-content">
+                    <?= (string)$body['html'] ?>
+                </div>
+                <?php
+            }
+        }
+        ?>
     </div>
 </div>
 

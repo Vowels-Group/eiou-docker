@@ -19,11 +19,12 @@ default until the operator explicitly enables them.
 10. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
 11. [Writing a Plugin](#writing-a-plugin)
 12. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-13. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-14. [Testing a Plugin](#testing-a-plugin)
-15. [Safety Model and Limitations](#safety-model-and-limitations)
-16. [Troubleshooting](#troubleshooting)
-17. [Related Documentation](#related-documentation)
+13. [Extending the GUI](#extending-the-gui)
+14. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+15. [Testing a Plugin](#testing-a-plugin)
+16. [Safety Model and Limitations](#safety-model-and-limitations)
+17. [Troubleshooting](#troubleshooting)
+18. [Related Documentation](#related-documentation)
 
 ---
 
@@ -1138,6 +1139,210 @@ name.
 See `hello-eiou` — `eiou hello-eiou` returns a random fortune from the
 CLI, and `GET /api/v1/plugins/hello-eiou/fortune` returns one as JSON.
 Both registrations live in `HelloEiouPlugin::boot()`.
+
+---
+
+## Extending the GUI
+
+Plugins extend the wallet GUI through five complementary surfaces — render
+hooks, filter hooks, the asset registry, the tab registry, and the action
+registry. Each is exposed via `ServiceContainer` and meant to be used from
+`boot()`. Full design rationale lives in `docs/PLUGIN_GUI_HOOKS.md`; this
+section is the API reference plugin authors need day-to-day.
+
+```php
+public function boot(ServiceContainer $container): void
+{
+    $hooks   = $container->getHooks();          // render + filter primitives
+    $assets  = $container->getAssetRegistry();  // CSS / JS enqueue
+    $tabs    = $container->getTabRegistry();    // top-level tabs
+    $actions = $container->getActionRegistry(); // POST handlers
+    // … register surfaces below …
+}
+```
+
+### Render slots
+
+Render hooks let plugins inject HTML at named points in the templates. Each
+listener returns a string; the host concatenates them in priority order
+(lower runs first; default 10) and emits the result. Listener exceptions
+are logged and skipped.
+
+| Hook | Where | Typical use |
+|---|---|---|
+| `gui.head.styles` | `<head>` | Register `<style>` / `<link>` tags. The asset registry already drains here — most plugins enqueue rather than subscribe directly. |
+| `gui.head.scripts` | `<head>` | Head-mode `<script>` tags. Asset registry drains here for `enqueueScript(..., ['head' => true])`. |
+| `gui.footer.scripts` | end of `<body>` | Late-init `<script>` tags. Default destination of `enqueueScript`. |
+| `gui.dashboard.before` | dashboard tab top | Hero widget above the wallet-information block. |
+| `gui.dashboard.after` | dashboard tab bottom | Sidebar widget after the payback methods. |
+| `gui.contacts.after` | contacts tab bottom | Bulk-action panel under the contact list. |
+| `gui.activity.after` | activity tab bottom | Custom analytics under the transaction history. |
+| `gui.settings.section` | settings tab bottom | Plugin-owned settings section. |
+
+```php
+$hooks->onRender('gui.dashboard.after', function (array $ctx): string {
+    $name = htmlspecialchars($ctx['user']->getDisplayName() ?? '');
+    return "<section class=\"plugin-myplugin-widget\"><h3>Hi {$name}</h3></section>";
+}, 20);
+```
+
+The `$ctx` array carries whatever the host passed at the fire site — at
+present every wallet template fires with `['user' => $user]`. Listeners
+that don't need the context can ignore the parameter.
+
+### Filter slots
+
+Filter hooks let plugins transform a host value before render. Each
+listener receives the value from the previous stage and must return the
+next stage. Listeners that throw fall back to the previous value (so
+other listeners aren't punished for a misbehaving one).
+
+| Hook | Value shape | Use case |
+|---|---|---|
+| `gui.tabs` | array of tab entries (`id`, `label`, `icon`, `order`, …) | Add, hide, or reorder top-level tabs. Filters fire after `TabRegistry::all()` so registered plugin tabs are already present. |
+| `gui.dashboard.widgets` | array of `{id, html, order}` | Contribute ordered widget chunks; sorted by `order` (default 100) before render. |
+| `gui.contact_modal.tabs` | array of `{id, label, icon}` | Add an inner tab to the contact-detail modal. Pair with `gui.contact_modal.body` on a shared `id`. |
+| `gui.contact_modal.body` | array of `{id, html}` | Body HTML for the matching modal tab. Host renders it inside `<div id="<id>-tab" class="modal-tab-content">`. |
+| `gui.contact.actions` | array of `{label, icon, action}` | Buttons on the contact-modal Settings tab. The host wraps each entry in a CSRF-protected POST form whose hidden `contact_address` input is auto-populated when the modal opens. |
+
+```php
+$hooks->onFilter('gui.contact.actions', function (array $actions): array {
+    $actions[] = [
+        'label'  => 'Bookmark',
+        'icon'   => 'fas fa-star',
+        'action' => 'myPluginBookmark',   // must match a registered action
+    ];
+    return $actions;
+});
+```
+
+### Asset enqueue (`PluginAssetRegistry`)
+
+```php
+$assets->enqueueStyle('myplugin', 'assets/styles.css');
+$assets->enqueueScript('myplugin', 'assets/main.js');
+$assets->enqueueScript('myplugin', 'assets/early.js', ['head' => true]);
+$assets->enqueueStyle('myplugin', 'assets/big.css', ['priority' => 5]);
+```
+
+Paths resolve under the plugin root (`/etc/eiou/plugins/<id>/`). Path
+traversal (`..`, leading slash, backslashes) is rejected at enqueue and
+re-validated against `realpath()` at render so a symlinked target can't
+escape the plugin tree. Files smaller than `URL_MODE_THRESHOLD` (4 KiB)
+inline as `<style nonce>` / `<script nonce>` blocks; larger files get a
+`<link href="…?v=<hash>">` / `<script src="…?v=<hash>">` tag served by
+the `/gui/plugin-assets/<id>/<path>` route. Force a mode with
+`['inline' => true]` or `['inline' => false]`.
+
+CSP nonce stamping is automatic. Plugin authors don't think about it.
+
+CSS isolation is convention-only — namespace selectors with
+`.plugin-<id>` (`.plugin-myplugin .widget-title { … }`) or use Web
+Components / Shadow DOM. A misbehaving plugin's `body { … }` will affect
+the host page; treat plugin code with the same scrutiny you'd give any
+unsigned CSS bundle.
+
+### Tab registry (`TabRegistry`)
+
+```php
+$tabs->register([
+    'id'     => 'myplugin',           // kebab-case; must be unique
+    'label'  => 'My Plugin',
+    'icon'   => 'fas fa-puzzle-piece', // Font Awesome class
+    'order'  => 50,                    // <100 = before settings
+    'render' => fn() => '<div class="plugin-myplugin">…</div>',
+    // OR
+    // 'include' => '/etc/eiou/plugins/myplugin/views/tab.php',
+]);
+```
+
+The five core tabs (Dashboard 10, Payment 20, Contacts 30, Activity 40,
+Settings 50) are registered by Functions.php each request. Plugin tabs
+slot in by `order`. `wallet.html` iterates the registry once to build
+the desktop nav, mobile nav, and panel sections from a single source of
+truth — your tab automatically appears in all three places.
+
+Optional `badge` (int or callable returning int) renders a numeric pill
+on the tab button; `badgeTitle` (string or callable) provides hover
+text. Last-write-wins on `id` collision lets a plugin override a core
+tab if it really wants to.
+
+### Action registry (`GuiActionRegistry`)
+
+Replaces the `Functions.php` POST whitelist for plugin handlers. Register
+in `boot()`; the dispatcher in Functions.php enforces the tier before
+calling the handler.
+
+```php
+$actions->register('myPluginBookmark',
+    function (array $request): void {
+        // CSRF + auth already verified by the registry's tier gate.
+        // Echo a JSON response, redirect with a flash message, or
+        // anything else a normal POST handler does — same contract
+        // as the core action handlers.
+        \Eiou\Gui\Helpers\MessageHelper::redirectMessage('Bookmarked!', 'success');
+    },
+    GuiActionRegistry::TIER_CSRF,   // public | auth | csrf | sensitive
+    'myplugin'                       // plugin id (for diagnostics)
+);
+```
+
+| Tier | Constant | Gate |
+|---|---|---|
+| `public` | `TIER_PUBLIC` | None — anonymous callers OK. Use sparingly. |
+| `auth` | `TIER_AUTH` | Authenticated session required. |
+| `csrf` | `TIER_CSRF` | Auth + valid CSRF token. **Default for most actions.** |
+| `sensitive` | `TIER_SENSITIVE` | Auth + CSRF + recent sensitive-access grant (the same gate that protects "Reveal API key", "Delete account", etc.). |
+
+Action names are camelCase, 1–64 chars, no collisions with core actions
+(register-time check). Forms rendered by `gui.contact.actions` post to
+`/wallet?action=<name>`; you don't need a separate route.
+
+### Wiring `gui.contact.actions` to a registered handler
+
+Each `gui.contact.actions` entry renders as:
+
+```html
+<form method="POST" class="plugin-contact-action">
+  <input type="hidden" name="csrf_token" value="…">
+  <input type="hidden" name="action" value="myPluginBookmark">
+  <input type="hidden" name="contact_address" class="plugin-contact-action-address">
+  <button type="submit" class="btn btn-secondary">Bookmark</button>
+</form>
+```
+
+The host's `openContactModal()` JS populates every
+`.plugin-contact-action-address` input with the open contact's address,
+so the handler receives `$_POST['contact_address']` without any
+plugin-side wiring.
+
+### Discovering hooks at runtime (`PLUGIN_HOOKS_TRACE`)
+
+Set `PLUGIN_HOOKS_TRACE=1` in the node environment to log every hook
+fire (kind, name, listener count, errors) at INFO level. Useful for
+plugin authors discovering which hooks the host actually calls without
+grepping templates. Off by default — costs zero in production.
+
+```bash
+docker-compose exec alice sh -c 'PLUGIN_HOOKS_TRACE=1 php-fpm -D'
+# or set in docker-compose / .env and restart
+```
+
+The trace is also available programmatically as `Hooks::getTrace()` for
+test assertions.
+
+### Versioning + discoverability
+
+Hook names + payloads form an API. Breaking changes follow the same
+deprecation policy as any host-side API. New hooks are added as needed
+— file an issue if your plugin needs an injection point that doesn't
+yet exist.
+
+The `hello-eiou` example plugin (see `files/plugins/hello-eiou/`)
+exercises every surface above: an enqueued stylesheet, a dashboard
+render hook, a `Fortunes` top-level tab, the `helloEiouFortune` POST
+action with `TIER_CSRF`, the `gui.dashboard.widgets` filter, and the
+`gui.contact.actions` filter. It's the smallest end-to-end reference.
 
 ---
 

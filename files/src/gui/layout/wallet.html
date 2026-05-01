@@ -28,6 +28,16 @@
     <script nonce="<?php echo cspNonce(); ?>" src="/gui/assets/js/script.js?v=<?php echo appVersion(); ?>&amp;t=<?php echo @filemtime('/app/eiou/src/gui/assets/js/script.js') ?: time(); ?>"></script>
     <!-- Graceful degradation: show all sections when JS is disabled (Tor Safest mode) -->
     <noscript><style>.tab-panel{display:block!important}.tab-bar,.tab-bar-mobile{display:none!important}</style></noscript>
+    <!-- Plugin GUI hook: gui.head.styles. Plugins enqueue extra CSS
+         tags here. Empty string when no plugin subscribes — costs an
+         array_key_exists call. See docs/PLUGIN_GUI_HOOKS.md. -->
+    <?= $hooks->doRender('gui.head.styles', ['user' => $user]) ?>
+    <!-- Plugin GUI hook: gui.head.scripts. Plugins enqueue head-mode
+         JS here (enqueueScript with opts['head']=true). Most plugin
+         JS should default to gui.footer.scripts so the DOM has parsed
+         before it runs; head mode is for early-blocking concerns
+         (analytics, polyfills, viewport setup). -->
+    <?= $hooks->doRender('gui.head.scripts', ['user' => $user]) ?>
 </head>
 <body data-page="wallet" data-amount-colors="<?php echo htmlspecialchars($user->getAmountColorScheme()); ?>" data-status-colors="<?php echo htmlspecialchars($user->getStatusColorScheme()); ?>">
     <div class="container">
@@ -38,64 +48,61 @@
         <!-- Notifications -->
         <?php require_once("/app/eiou/src/gui/layout/walletSubParts/notifications.html");?>
 
+        <?php
+        // Tabs are now driven by the TabRegistry — Functions.php
+        // registers the 5 core tabs; plugins add their own in boot().
+        // We iterate `all()` once, build the desktop nav, the mobile
+        // nav, and the panel sections from the same data so a plugin
+        // tab automatically appears in all three places.
+        $tabsList = $tabRegistry->all();
+        // gui.tabs filter — plugins can add, hide, or reorder tabs
+        // without registering a fresh entry. The filter receives the
+        // already-sorted list; listeners that re-sort should respect
+        // the contract (return an array of tab entries). See
+        // docs/PLUGIN_GUI_HOOKS.md.
+        $tabsList = $hooks->applyFilter('gui.tabs', $tabsList, ['user' => $user]);
+        $firstTabId = !empty($tabsList) ? $tabsList[0]['id'] : null;
+        ?>
         <!-- Tab Bar (Desktop) -->
         <nav class="tab-bar" id="tab-bar">
-            <button type="button" class="tab-btn tab-active" data-action="switchTab" data-tab="dashboard">
-                <i class="fas fa-home"></i> <span class="tab-label">Dashboard</span>
-            </button>
-            <button type="button" class="tab-btn" data-action="switchTab" data-tab="send">
-                <i class="fas fa-paper-plane"></i> <span class="tab-label">Payment</span>
-                <?php if (!empty($pendingPaymentRequestCount) && $pendingPaymentRequestCount > 0): ?>
-                <span class="tab-badge"><?php echo (int)$pendingPaymentRequestCount; ?></span>
+            <?php foreach ($tabsList as $tab):
+                $isFirst = ($tab['id'] === $firstTabId);
+                $badge = \Eiou\Services\TabRegistry::resolveBadge($tab);
+            ?>
+            <button type="button" class="tab-btn<?php echo $isFirst ? ' tab-active' : ''; ?>" data-action="switchTab" data-tab="<?php echo htmlspecialchars($tab['id']); ?>">
+                <i class="<?php echo htmlspecialchars($tab['icon']); ?>"></i>
+                <span class="tab-label"><?php echo htmlspecialchars($tab['label']); ?></span>
+                <?php if ($badge > 0): ?>
+                <span class="tab-badge"<?php echo !empty($tab['badgeTitle']) ? ' title="' . htmlspecialchars($tab['badgeTitle']) . '"' : ''; ?>><?php echo $badge; ?></span>
                 <?php endif; ?>
             </button>
-            <button type="button" class="tab-btn" data-action="switchTab" data-tab="contacts">
-                <i class="fas fa-address-book"></i> <span class="tab-label">Contacts</span>
-                <?php if (!empty($contactsNeedingChainActionCount) && $contactsNeedingChainActionCount > 0): ?>
-                <span class="tab-badge" title="Contacts with chain gaps requiring action"><?php echo (int)$contactsNeedingChainActionCount; ?></span>
-                <?php endif; ?>
-            </button>
-            <button type="button" class="tab-btn" data-action="switchTab" data-tab="activity">
-                <i class="fas fa-history"></i> <span class="tab-label">Activity</span>
-                <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
-                <span class="tab-badge"><?php echo (int)$dlqPendingCount; ?></span>
-                <?php endif; ?>
-            </button>
-            <button type="button" class="tab-btn" data-action="switchTab" data-tab="settings">
-                <i class="fas fa-cog"></i> <span class="tab-label">Settings</span>
-            </button>
+            <?php endforeach; ?>
         </nav>
 
-        <!-- Tab: Dashboard -->
-        <div class="tab-panel" id="tab-panel-dashboard">
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/paybackMethodsSection.html");?>
+        <!-- Tab Panels — one per registered tab. Hidden by default
+             except the first one; switchTab() in script.js toggles
+             display based on data-tab. -->
+        <?php foreach ($tabsList as $tab):
+            $isFirst = ($tab['id'] === $firstTabId);
+        ?>
+        <div class="tab-panel" id="tab-panel-<?php echo htmlspecialchars($tab['id']); ?>"<?php echo $isFirst ? '' : ' style="display:none"'; ?>>
+            <?php
+            if (!empty($tab['include']) && is_string($tab['include']) && file_exists($tab['include'])) {
+                require_once $tab['include'];
+            } elseif (!empty($tab['render']) && is_callable($tab['render'])) {
+                try {
+                    echo (string) ($tab['render'])();
+                } catch (\Throwable $e) {
+                    // Plugin render errors logged but don't crash the
+                    // page; the tab just renders empty.
+                    if (function_exists('error_log')) {
+                        error_log("TabRegistry: render callback for '{$tab['id']}' threw: " . $e->getMessage());
+                    }
+                }
+            }
+            ?>
         </div>
-
-        <!-- Tab: Send -->
-        <div class="tab-panel" id="tab-panel-send" style="display:none">
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/paymentRequestsSection.html");?>
-        </div>
-
-        <!-- Tab: Contacts -->
-        <div class="tab-panel" id="tab-panel-contacts" style="display:none">
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/contactSection.html");?>
-        </div>
-
-        <!-- Tab: Activity -->
-        <div class="tab-panel" id="tab-panel-activity" style="display:none">
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/transactionHistory.html");?>
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/dlqSection.html");?>
-        </div>
-
-        <!-- Tab: Settings -->
-        <div class="tab-panel" id="tab-panel-settings" style="display:none">
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/settingsSection.html");?>
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/apiKeysSection.html");?>
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/pluginsSection.html");?>
-            <?php require_once("/app/eiou/src/gui/layout/walletSubParts/debugSection.html");?>
-        </div>
+        <?php endforeach; ?>
     </div>
 
     <!-- Global sensitive-action verify modal (used by API keys, payback methods, etc.) -->
@@ -133,37 +140,20 @@
         </div>
     </div>
 
-    <!-- Tab Bar (Mobile - fixed bottom) -->
+    <!-- Tab Bar (Mobile - fixed bottom) — driven by TabRegistry. -->
     <nav class="tab-bar-mobile" id="tab-bar-mobile">
-        <button type="button" class="tab-btn-mobile tab-active" data-action="switchTab" data-tab="dashboard" title="Dashboard">
-            <i class="fas fa-home"></i>
-            <span class="tab-label-mobile">Home</span>
-        </button>
-        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="send" title="Payment">
-            <i class="fas fa-paper-plane"></i>
-            <span class="tab-label-mobile">Payment</span>
-            <?php if (!empty($pendingPaymentRequestCount) && $pendingPaymentRequestCount > 0): ?>
-            <span class="tab-badge-mobile"><?php echo (int)$pendingPaymentRequestCount; ?></span>
+        <?php foreach ($tabsList as $tab):
+            $isFirst = ($tab['id'] === $firstTabId);
+            $badge = \Eiou\Services\TabRegistry::resolveBadge($tab);
+        ?>
+        <button type="button" class="tab-btn-mobile<?php echo $isFirst ? ' tab-active' : ''; ?>" data-action="switchTab" data-tab="<?php echo htmlspecialchars($tab['id']); ?>" title="<?php echo htmlspecialchars($tab['label']); ?>">
+            <i class="<?php echo htmlspecialchars($tab['icon']); ?>"></i>
+            <span class="tab-label-mobile"><?php echo htmlspecialchars($tab['mobileLabel']); ?></span>
+            <?php if ($badge > 0): ?>
+            <span class="tab-badge-mobile"<?php echo !empty($tab['badgeTitle']) ? ' title="' . htmlspecialchars($tab['badgeTitle']) . '"' : ''; ?>><?php echo $badge; ?></span>
             <?php endif; ?>
         </button>
-        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="contacts" title="Contacts">
-            <i class="fas fa-address-book"></i>
-            <span class="tab-label-mobile">Contacts</span>
-            <?php if (!empty($contactsNeedingChainActionCount) && $contactsNeedingChainActionCount > 0): ?>
-            <span class="tab-badge-mobile"><?php echo (int)$contactsNeedingChainActionCount; ?></span>
-            <?php endif; ?>
-        </button>
-        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="activity" title="Activity">
-            <i class="fas fa-history"></i>
-            <span class="tab-label-mobile">Activity</span>
-            <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
-            <span class="tab-badge-mobile"><?php echo (int)$dlqPendingCount; ?></span>
-            <?php endif; ?>
-        </button>
-        <button type="button" class="tab-btn-mobile" data-action="switchTab" data-tab="settings" title="Settings">
-            <i class="fas fa-cog"></i>
-            <span class="tab-label-mobile">Settings</span>
-        </button>
+        <?php endforeach; ?>
     </nav>
 
     <!-- Floating Action Buttons -->
@@ -235,6 +225,9 @@
             </div>
         </div>
     </div>
+    <!-- Plugin GUI hook: gui.footer.scripts. Plugins inject late-init
+         scripts that run after the main DOM has parsed. -->
+    <?= $hooks->doRender('gui.footer.scripts', ['user' => $user]) ?>
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner">
