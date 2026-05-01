@@ -220,4 +220,78 @@ class HooksTest extends TestCase
         $this->assertSame('rendered', $this->hooks->doRender('shared.name'));
         $this->assertSame('filtered', $this->hooks->applyFilter('shared.name', 'orig'));
     }
+
+    // =========================================================================
+    // Dev-mode tracing (PLUGIN_HOOKS_TRACE)
+    // =========================================================================
+
+    /**
+     * Default state is opt-in: with the env flag off, the trace buffer
+     * stays empty even when many fires happen. Plugin authors enable
+     * the flag in dev mode without paying for it in production.
+     */
+    public function testTraceIsEmptyWhenFlagDisabled(): void
+    {
+        $this->hooks->setTraceEnabled(false);
+        $this->hooks->onRender('gui.x', fn() => 'hi');
+        $this->hooks->onFilter('gui.tabs', fn($v) => $v);
+
+        $this->hooks->doRender('gui.x');
+        $this->hooks->applyFilter('gui.tabs', []);
+        $this->hooks->doRender('gui.empty');
+
+        $this->assertSame([], $this->hooks->getTrace());
+    }
+
+    /**
+     * With the flag on, every fire (including empty fast-path fires)
+     * appends a trace entry. That's the whole point — plugin authors
+     * grep the log for which hooks the host actually calls.
+     */
+    public function testTraceCapturesEveryFireWhenFlagEnabled(): void
+    {
+        $this->hooks->setTraceEnabled(true);
+        $this->hooks->onRender('gui.x', fn() => 'hi');
+        $this->hooks->onRender('gui.x', fn() => 'lo');
+        $this->hooks->onFilter('gui.tabs', fn($v) => $v);
+
+        $this->hooks->doRender('gui.x');
+        $this->hooks->doRender('gui.empty');
+        $this->hooks->applyFilter('gui.tabs', ['a']);
+
+        $trace = $this->hooks->getTrace();
+        $this->assertCount(3, $trace);
+        $this->assertSame(['render', 'gui.x',     2, 0], [$trace[0]['kind'], $trace[0]['hook'], $trace[0]['listeners'], $trace[0]['errors']]);
+        $this->assertSame(['render', 'gui.empty', 0, 0], [$trace[1]['kind'], $trace[1]['hook'], $trace[1]['listeners'], $trace[1]['errors']]);
+        $this->assertSame(['filter', 'gui.tabs',  1, 0], [$trace[2]['kind'], $trace[2]['hook'], $trace[2]['listeners'], $trace[2]['errors']]);
+    }
+
+    /**
+     * Trace counts errors separately from listeners so dev-mode logs
+     * call attention to misbehaving plugins (errors > 0) without
+     * obscuring the fact that the listener was wired up.
+     */
+    public function testTraceCountsListenerExceptionsAsErrors(): void
+    {
+        $this->hooks->setTraceEnabled(true);
+        $this->hooks->onRender('gui.x', fn() => 'ok');
+        $this->hooks->onRender('gui.x', function () { throw new \RuntimeException('boom'); });
+
+        $this->hooks->doRender('gui.x');
+
+        $trace = $this->hooks->getTrace();
+        $this->assertCount(1, $trace);
+        $this->assertSame(2, $trace[0]['listeners']);
+        $this->assertSame(1, $trace[0]['errors']);
+    }
+
+    public function testClearTraceResetsBuffer(): void
+    {
+        $this->hooks->setTraceEnabled(true);
+        $this->hooks->doRender('gui.x');
+        $this->assertCount(1, $this->hooks->getTrace());
+
+        $this->hooks->clearTrace();
+        $this->assertSame([], $this->hooks->getTrace());
+    }
 }

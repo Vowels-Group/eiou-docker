@@ -54,27 +54,13 @@ intentional.**
 A future iteration could:
 - Accept a `render` callable for lazy generation.
 - Accept asset references the host enqueues automatically.
-- Define a `data-plugin-tab="<id>"` attribute the host's existing
-  modal-tab JS already understands so plugin tabs participate in the
-  showModalTab / hide-others routine without extra wiring.
 
-The third bullet is the only one that's actually load-bearing — without
-it, plugin modal tabs may not toggle correctly in all browsers. Test
-in production-mode before promoting beyond design-partner plugins.
-
-### `gui.contact.actions` does not auto-wire `contact_address`
-
-Buttons rendered from `gui.contact.actions` get a hidden
-`<input name="contact_address">` but the form is *not* populated by
-the JS that populates the existing settings-tab forms. A plugin author
-has to either:
-- Subscribe to a (not-yet-existing) `openContactModal` JS event, or
-- Read `data-modal-contact` themselves on submit.
-
-**To resolve:** wire `script.js`'s `openContactModal` handler to also
-populate any `.plugin-contact-action-address` input. Single-line
-change; deferred only because it's outside the PHP layer this PR
-focused on.
+The earlier "load-bearing" concern about plugin modal tabs not
+participating in `showModalTab` was moot — the host emits plugin tab
+buttons with the standard `class="modal-tab" data-action="showModalTab"`
+and panels with `class="modal-tab-content"`, and `showModalTab()` is
+class-based, so plugin tabs already toggle correctly without any
+`data-plugin-tab` attribute.
 
 ### Per-row contact-table buttons skipped
 
@@ -127,20 +113,6 @@ new debt — but worth folding into any future nginx-config refactor.
 
 ## Cross-phase
 
-### Hooks introspection / dev-mode tracing
-
-The design doc mentioned a `dev`-mode "Hooks Inspector" that logs
-every fired hook so plugin authors can discover them at runtime.
-**Status: not built.**
-
-`Hooks::listRenderHooks()` and `listFilterHooks()` exist (return
-listener counts per hook), but there's no fire-time trace, no
-exposed-via-debug-page surface, no docs describing how to use them.
-
-**To resume:** add an opt-in env flag (`PLUGIN_HOOKS_TRACE=1`) the
-Hooks class checks at fire time and writes to a request-scoped log.
-~30 LOC; matters once we have more than two plugins in the wild.
-
 ### Plugin admin pages
 
 Tab registry can host them today (a plugin registers a tab at
@@ -191,41 +163,12 @@ WordPress hook-name conventions for two decades.
 
 ## Migration / hardening
 
-### CHANGELOG entry
+### Hello-eiou plugin manifest signature
 
-The plugin-GUI-hooks branch hasn't yet landed an entry under
-`[Unreleased]`. **Status: pending the merge PR.** Should describe
-the four new services (`Hooks`, `TabRegistry`, `PluginAssetRegistry`,
-`GuiActionRegistry`, `PluginAssetServer`) plus the asset URL route,
-filter-slot list, and CSP-nonce stamping.
-
-### `PLUGINS.md` reference section
-
-The design doc pointed at `PLUGINS.md` for the canonical hook
-reference. **Status: design-doc-only.** `PLUGINS.md` has not been
-updated to list each render slot, each filter slot, the action-tier
-contract, or the asset enqueue API.
-
-This is the single highest-leverage doc-debt item, since plugin
-authors can't discover the API without it. Folding it into the merge
-PR is cheap.
-
-### Smoke plugin
-
-The phases referenced a "hello-eiou" example plugin that exercises
-each new surface. **Status: shipped in this branch** as
-`files/plugins/hello-eiou` v1.2.0. Demonstrates every GUI registry:
-
-- `gui.dashboard.after` render hook → fortune widget
-- `PluginAssetRegistry::enqueueStyle` → `assets/styles.css`
-- `TabRegistry::register` → "Fortunes" top-level tab
-- `GuiActionRegistry::register('helloEiouFortune', TIER_CSRF)` → JSON
-- `gui.dashboard.widgets` + `gui.contact.actions` filters
-
-The plugin is unsigned in this branch — the manifest doesn't yet
-carry a signature block. Operators running with
-`PLUGIN_SIGNATURE_MODE=enforce` need to sign or move it to a trusted
-keys directory. Out of scope for the foundation PR.
+The plugin is unsigned in this branch — the manifest doesn't yet carry
+a signature block. Operators running with
+`PLUGIN_SIGNATURE_MODE=enforce` need to sign it or move it to a trusted
+keys directory before enabling. Out of scope for the foundation PR.
 
 ---
 
@@ -238,3 +181,41 @@ When a deferred item gets picked up:
    commit message.
 3. Update `PLUGIN_GUI_HOOKS.md` if the resolution changes any of the
    load-bearing design decisions.
+
+---
+
+## Resolved
+
+Picked up after the foundation commit, before the merge PR:
+
+- **Phase 1 render slots completed.** `gui.head.scripts` (was wired in
+  Functions.php but never fired in `wallet.html`),
+  `gui.dashboard.before`, `gui.contacts.after`, `gui.activity.after`,
+  and `gui.settings.section` are all wired in their respective tab
+  partials. Plugins enqueueing head-mode JS now actually receive a
+  fire site.
+- **`gui.contact.actions` auto-wires `contact_address`.** `script.js`'s
+  `openContactModal()` now populates every
+  `.plugin-contact-action-address` input alongside the core
+  block/unblock/delete pattern.
+- **Hooks dev-mode tracing.** `PLUGIN_HOOKS_TRACE=1` env flag makes
+  `Hooks::doRender` / `applyFilter` record every fire (kind, hook,
+  listener count, errors) in a request-scoped trace buffer accessible
+  via `Hooks::getTrace()` and mirrored to the logger at INFO. Costs
+  zero when the flag is off.
+- **CHANGELOG entry.** Landed under `[Unreleased]` in the foundation
+  commit (and updated to mention the resolved items above).
+- **`PLUGINS.md` reference section.** New "Extending the GUI" chapter
+  documents every render slot, every filter slot, the asset enqueue
+  API, the tab registry, the action tiers, the
+  `.plugin-contact-action-address` auto-wire contract, and the
+  `PLUGIN_HOOKS_TRACE` discoverability flag.
+- **Smoke plugin.** `files/plugins/hello-eiou` v1.2.0 exercises every
+  GUI registry — render hook, asset enqueue, tab register, action
+  register (TIER_CSRF), `gui.dashboard.widgets` filter,
+  `gui.contact.actions` filter.
+- **Modal-tab `data-plugin-tab`.** Concern was moot — host emits
+  plugin tab buttons with the standard `class="modal-tab"
+  data-action="showModalTab"` and panels with
+  `class="modal-tab-content"`, and `showModalTab()` is class-based,
+  so plugin tabs already toggle without any per-plugin attribute.

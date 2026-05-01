@@ -32,6 +32,12 @@
          tags here. Empty string when no plugin subscribes — costs an
          array_key_exists call. See docs/PLUGIN_GUI_HOOKS.md. -->
     <?= $hooks->doRender('gui.head.styles', ['user' => $user]) ?>
+    <!-- Plugin GUI hook: gui.head.scripts. Plugins enqueue head-mode
+         JS here (enqueueScript with opts['head']=true). Most plugin
+         JS should default to gui.footer.scripts so the DOM has parsed
+         before it runs; head mode is for early-blocking concerns
+         (analytics, polyfills, viewport setup). -->
+    <?= $hooks->doRender('gui.head.scripts', ['user' => $user]) ?>
 </head>
 <body data-page="wallet" data-amount-colors="<?php echo htmlspecialchars($user->getAmountColorScheme()); ?>" data-status-colors="<?php echo htmlspecialchars($user->getStatusColorScheme()); ?>">
     <div class="container">

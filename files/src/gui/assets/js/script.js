@@ -4400,6 +4400,16 @@ function openContactModal(contact, openTab) {
     document.getElementById('unblock_contact_address').value = contact.address;
     document.getElementById('delete_contact_address').value = contact.address;
 
+    // Plugin contact-action forms (gui.contact.actions filter): each
+    // form ships a hidden <input class="plugin-contact-action-address">
+    // the plugin author shouldn't have to populate themselves. Mirrors
+    // the core block/unblock/delete pattern above so a plugin POST
+    // reaches its handler with the same contact_address payload.
+    var pluginAddressInputs = document.querySelectorAll('.plugin-contact-action-address');
+    for (var p = 0; p < pluginAddressInputs.length; p++) {
+        pluginAddressInputs[p].value = contact.address || '';
+    }
+
     // Store current contact address for ping function
     currentContactAddress = contact.address;
 

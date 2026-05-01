@@ -50,6 +50,19 @@ class Hooks
     private array $filterListeners = [];
 
     /**
+     * Opt-in trace log (env: PLUGIN_HOOKS_TRACE=1). Each fire appends
+     * an entry — useful for plugin authors discovering which hooks
+     * exist + their order without reading templates. Kept request-
+     * scoped so tests can assert on it; never persisted.
+     *
+     * @var array<int, array{kind:string,hook:string,listeners:int,errors:int}>
+     */
+    private array $trace = [];
+
+    /** Cached PLUGIN_HOOKS_TRACE check — read once per instance. */
+    private ?bool $traceEnabled = null;
+
+    /**
      * Register a render-hook listener. Listener signature:
      *   function (array $context): string
      *
@@ -99,18 +112,28 @@ class Hooks
     public function doRender(string $hook, array $context = []): string
     {
         if (!isset($this->renderListeners[$hook])) {
+            if ($this->isTraceEnabled()) {
+                $this->recordTrace('render', $hook, 0, 0);
+            }
             return '';
         }
         $out = '';
+        $count = 0;
+        $errors = 0;
         foreach ($this->iterateByPriority($this->renderListeners[$hook]) as $listener) {
+            $count++;
             try {
                 $piece = $listener($context);
                 if (is_string($piece) && $piece !== '') {
                     $out .= $piece;
                 }
             } catch (\Throwable $e) {
+                $errors++;
                 $this->logListenerError('render', $hook, $e);
             }
+        }
+        if ($this->isTraceEnabled()) {
+            $this->recordTrace('render', $hook, $count, $errors);
         }
         return $out;
     }
@@ -132,16 +155,26 @@ class Hooks
     public function applyFilter(string $hook, mixed $value, array $context = []): mixed
     {
         if (!isset($this->filterListeners[$hook])) {
+            if ($this->isTraceEnabled()) {
+                $this->recordTrace('filter', $hook, 0, 0);
+            }
             return $value;
         }
+        $count = 0;
+        $errors = 0;
         foreach ($this->iterateByPriority($this->filterListeners[$hook]) as $listener) {
+            $count++;
             try {
                 $value = $listener($value, $context);
             } catch (\Throwable $e) {
+                $errors++;
                 $this->logListenerError('filter', $hook, $e);
                 // Keep $value at the pre-listener state — can't trust
                 // a half-mutated return from a thrower.
             }
+        }
+        if ($this->isTraceEnabled()) {
+            $this->recordTrace('filter', $hook, $count, $errors);
         }
         return $value;
     }
@@ -162,6 +195,72 @@ class Hooks
     public function listFilterHooks(): array
     {
         return array_keys($this->filterListeners);
+    }
+
+    /**
+     * Opt-in dev-mode trace of every fire (set PLUGIN_HOOKS_TRACE=1).
+     * Each entry records `kind` (render|filter), `hook`, `listeners`
+     * (count actually invoked), and `errors` (how many threw). Use
+     * this to discover hooks at runtime instead of grepping templates.
+     *
+     * Empty when the env flag is off — costs zero.
+     *
+     * @return array<int, array{kind:string,hook:string,listeners:int,errors:int}>
+     */
+    public function getTrace(): array
+    {
+        return $this->trace;
+    }
+
+    /**
+     * Test-only: clear the trace buffer between assertions. Production
+     * code shouldn't need this — the trace is request-scoped and dies
+     * with the process.
+     */
+    public function clearTrace(): void
+    {
+        $this->trace = [];
+    }
+
+    /**
+     * Force-set the trace flag (test seam). NULL re-evaluates the env
+     * variable on next fire.
+     */
+    public function setTraceEnabled(?bool $enabled): void
+    {
+        $this->traceEnabled = $enabled;
+    }
+
+    private function isTraceEnabled(): bool
+    {
+        if ($this->traceEnabled !== null) {
+            return $this->traceEnabled;
+        }
+        $val = getenv('PLUGIN_HOOKS_TRACE');
+        if ($val === false) $val = $_SERVER['PLUGIN_HOOKS_TRACE'] ?? '';
+        $this->traceEnabled = ($val === '1' || strtolower((string)$val) === 'true');
+        return $this->traceEnabled;
+    }
+
+    private function recordTrace(string $kind, string $hook, int $listeners, int $errors): void
+    {
+        $this->trace[] = [
+            'kind'      => $kind,
+            'hook'      => $hook,
+            'listeners' => $listeners,
+            'errors'    => $errors,
+        ];
+        // Mirror to the logger so plugin authors can `tail -f` the
+        // wallet log instead of plumbing a debug page. info-level so
+        // production logs aren't noisy unless the operator opts in.
+        try {
+            Logger::getInstance()->info(
+                "Hooks: {$kind} fire '{$hook}' ({$listeners} listeners, {$errors} errors)",
+                ['hook' => $hook, 'kind' => $kind, 'listeners' => $listeners, 'errors' => $errors]
+            );
+        } catch (\Throwable $_) {
+            // Logger unavailable in test scaffolding — swallow.
+        }
     }
 
     /**

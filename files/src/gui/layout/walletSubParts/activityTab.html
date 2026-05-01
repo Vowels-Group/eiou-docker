@@ -4,3 +4,5 @@
  */
 require_once("/app/eiou/src/gui/layout/walletSubParts/transactionHistory.html");
 require_once("/app/eiou/src/gui/layout/walletSubParts/dlqSection.html");
+?>
+<?= $hooks->doRender('gui.activity.after', ['user' => $user]) ?>

@@ -4,8 +4,13 @@
  * Wraps the existing wallet-information + payback-methods partials so
  * the registry-driven render loop in wallet.html can include this
  * single file per tab. Plugins inject extra widgets via the
- * `gui.dashboard.after` render hook fired below.
+ * `gui.dashboard.before` / `gui.dashboard.after` render hooks (fired
+ * around the core widgets) and the `gui.dashboard.widgets` filter
+ * (between them, for ordered/decorated widget chunks).
  */
+?>
+<?= $hooks->doRender('gui.dashboard.before', ['user' => $user]) ?>
+<?php
 require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");
 require_once("/app/eiou/src/gui/layout/walletSubParts/paybackMethodsSection.html");
 
