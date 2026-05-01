@@ -60,6 +60,11 @@ $transactionController->setP2pApprovalDependencies(
 );
 $transactionController->setApprovalService($serviceContainer->getP2pApprovalService());
 $settingsController = new SettingsController($secureSession);
+// Register settings actions in the shared GuiActionRegistry so the
+// dispatcher in Functions.php routes via the registry instead of the
+// hardcoded if-ladder. Each entry preserves the existing tier and
+// response shape verbatim — see SettingsController::registerActions.
+$settingsController->registerActions($serviceContainer->getActionRegistry());
 $apiKeysController = new ApiKeysController(
     $secureSession,
     $repoFactory->get(Eiou\Database\ApiKeyRepository::class)

@@ -115,21 +115,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $paymentRequestController->routeAction();
     }
 
-    // Settings actions
-    if (in_array($action, ['updateSettings', 'resetToDefaults', 'clearDebugLogs', 'sendDebugReport'])) {
-        $settingsController->routeAction();
-    }
-
-    // AJAX-only analytics consent (returns JSON, exits immediately)
-    if ($action === 'analyticsConsent') {
-        header('Content-Type: application/json');
-        try {
-            $settingsController->routeAction();
-        } catch (Exception $e) {
-            echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
-        }
-        exit;
-    }
+    // Settings actions (updateSettings, resetToDefaults, clearDebugLogs,
+    // sendDebugReport, analyticsConsent, getDebugReportJson,
+    // submitDebugReport) migrated to GuiActionRegistry. Registered in
+    // index.html via SettingsController::registerActions(); the
+    // dispatcher at the top of this file routes them before reaching
+    // this if-ladder. See CORE_ACTION_MIGRATION.md.
 
     // AJAX-only plugin actions (returns JSON, exits immediately)
     if (in_array($action, ['pluginsList', 'pluginsToggle', 'pluginsRequestRestart', 'pluginChangelog', 'pluginsUninstall'], true)) {
@@ -180,17 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
-    // AJAX-only settings actions (returns JSON, exits immediately)
-    if ($action === 'getDebugReportJson' || $action === 'submitDebugReport') {
-        // Set JSON header early to ensure clean response
-        header('Content-Type: application/json');
-        try {
-            $settingsController->routeAction();
-        } catch (Exception $e) {
-            echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
-        }
-        exit; // Ensure we don't continue to render HTML
-    }
+    // (getDebugReportJson + submitDebugReport migrated to
+    // GuiActionRegistry — see the consolidated note above.)
 
     // AJAX-only contact actions (returns JSON, exits immediately)
     if ($action === 'pingContact') {

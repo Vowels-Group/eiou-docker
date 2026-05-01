@@ -605,6 +605,39 @@ class SettingsControllerTest extends TestCase
         $this->assertTrue(true);
     }
 
+    /**
+     * registerActions populates the shared registry with every owned
+     * action at the documented tier. Migration step (action-registry).
+     */
+    #[Test]
+    public function registerActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        // HTML-redirect actions register at TIER_AUTH so the
+        // dispatcher's CSRF gate doesn't fire — handlers do their
+        // own rotating verifyCSRFToken().
+        $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier('updateSettings'));
+        $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier('resetToDefaults'));
+        $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier('clearDebugLogs'));
+        $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier('sendDebugReport'));
+
+        // JSON-AJAX actions register at TIER_CSRF so the dispatcher
+        // rejects missing/invalid tokens before the handler runs.
+        $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_CSRF, $registry->getTier('analyticsConsent'));
+        $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_CSRF, $registry->getTier('getDebugReportJson'));
+        $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_CSRF, $registry->getTier('submitDebugReport'));
+
+        // All 7 are owned by 'core'.
+        foreach (['updateSettings', 'resetToDefaults', 'clearDebugLogs', 'sendDebugReport',
+                  'analyticsConsent', 'getDebugReportJson', 'submitDebugReport'] as $a) {
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
+    }
+
     protected function tearDown(): void
     {
         $_POST = [];

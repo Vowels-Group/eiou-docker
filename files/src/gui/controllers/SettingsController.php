@@ -11,6 +11,7 @@ use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Database\DebugRepository;
 use Eiou\Services\DebugReportService;
+use Eiou\Services\GuiActionRegistry;
 use PDO;
 use Exception;
 use Eiou\Gui\Helpers\MessageHelper;
@@ -46,6 +47,82 @@ class SettingsController
     {
         $this->session = $session;
         $this->pdo = $pdo;
+    }
+
+    /**
+     * Register every action this controller owns with the shared
+     * GuiActionRegistry so Functions.php's dispatcher can route POSTs
+     * via the registry instead of a hardcoded if-ladder.
+     *
+     * Tier choice preserves existing behavior verbatim — the migration
+     * is structural, not policy. HTML-redirect handlers register at
+     * TIER_AUTH and keep their inline verifyCSRFToken() call so:
+     *   - the token still rotates on success (registry's CSRF check
+     *     does not rotate);
+     *   - CSRF failure still emits a plain-text 403, not the registry's
+     *     JSON envelope (which would render as raw JSON in the user's
+     *     browser after a form submit).
+     * JSON-AJAX handlers register at TIER_CSRF — the registry's
+     * non-rotating check + JSON-on-failure response shape matches what
+     * AJAX callers already expect.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        // HTML-redirect actions — TIER_AUTH preserves rotate-on-success
+        // and the plain-text 403 failure response.
+        $registry->register('updateSettings',     [$this, 'handleUpdateSettings'],     GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('resetToDefaults',    [$this, 'handleResetToDefaults'],    GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('clearDebugLogs',     [$this, 'handleClearDebugLogs'],     GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('sendDebugReport',    [$this, 'handleSendDebugReport'],    GuiActionRegistry::TIER_AUTH, 'core');
+
+        // JSON-AJAX actions — TIER_CSRF aligns with the existing
+        // non-rotating check. The handlers' own inline CSRF checks
+        // (where present) become redundant on the success path; we
+        // keep them for now (defense-in-depth + zero behavior change).
+        //
+        // Each is wrapped in a closure that:
+        //   (a) sets `Content-Type: application/json` BEFORE the handler
+        //       runs (Functions.php's pre-dispatch branches did this for
+        //       defense-in-depth; preserve so a handler that dies before
+        //       its own header() call still emits valid JSON);
+        //   (b) catches Exception and emits the LEGACY error envelope
+        //       (`{"success": false, "error": "Server error: …"}` for
+        //       analyticsConsent, `{"error": "Server error: …"}` for the
+        //       debug-report endpoints) so JS clients reading
+        //       `parsedData.error` get byte-identical text to today.
+        // The registry's own catch (in Functions.php) would emit a
+        // different envelope shape (`{"success":false,"error":"server_error","message":"…"}`)
+        // which is fine for plugin handlers but a UX regression for
+        // these long-standing core endpoints.
+        $registry->register('analyticsConsent', function (array $request): void {
+            header('Content-Type: application/json');
+            try {
+                $this->handleAnalyticsConsent();
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
+            }
+            exit;
+        }, GuiActionRegistry::TIER_CSRF, 'core');
+
+        $registry->register('getDebugReportJson', function (array $request): void {
+            header('Content-Type: application/json');
+            try {
+                $this->handleGetDebugReportJson();
+            } catch (Exception $e) {
+                echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+            }
+            exit;
+        }, GuiActionRegistry::TIER_CSRF, 'core');
+
+        $registry->register('submitDebugReport', function (array $request): void {
+            header('Content-Type: application/json');
+            try {
+                $this->handleSubmitDebugReport();
+            } catch (Exception $e) {
+                echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+            }
+            exit;
+        }, GuiActionRegistry::TIER_CSRF, 'core');
     }
 
     /**
@@ -739,7 +816,7 @@ class SettingsController
      *
      * @return void
      */
-    private function handleAnalyticsConsent(): void
+    public function handleAnalyticsConsent(): void
     {
         $this->session->verifyCSRFToken(false);
 
