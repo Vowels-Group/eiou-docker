@@ -138,6 +138,14 @@ class HelloEiouPlugin implements PluginInterface
         // callable instead of an include path so the plugin doesn't
         // need a separate template file. The tab slots between
         // Activity (40) and Settings (50).
+        //
+        // The render callback wraps its body in renderSection() so
+        // the tab visually matches every core section (form-container
+        // chrome, h2 underline, About-this-section disclosure) and
+        // automatically gains the gui.section.before.hello-eiou-fortunes
+        // / gui.section.after.hello-eiou-fortunes hooks. The cream-
+        // card list-item styling lives in assets/styles.css under the
+        // .plugin-hello-eiou-tab namespace and stays where it is.
         $tabs->register([
             'id'     => 'hello-eiou-fortunes',
             'label'  => 'Fortunes',
@@ -148,7 +156,21 @@ class HelloEiouPlugin implements PluginInterface
                 foreach (self::FORTUNES as $f) {
                     $list .= '<li>' . htmlspecialchars($f, ENT_QUOTES) . '</li>';
                 }
-                return '<div class="plugin-hello-eiou-tab"><h2>Fortunes</h2><ul>' . $list . '</ul></div>';
+                return renderSection([
+                    'id'    => 'hello-eiou-fortunes',
+                    'icon'  => 'fas fa-cookie-bite',
+                    'title' => 'Fortunes',
+                    'introTitle' => 'About these fortunes',
+                    'intro' =>
+                          'A demo of the eIOU plugin GUI surface. The cream-card list '
+                        . 'items are styled by <code>assets/styles.css</code> (enqueued '
+                        . 'via the plugin asset registry); the wrapper, underline, and '
+                        . 'disclosure come from the host\'s <code>renderSection()</code> '
+                        . 'helper, so this tab visually matches every core section. '
+                        . 'See <code>files/plugins/hello-eiou/src/HelloEiouPlugin.php</code> '
+                        . 'for the full reference.',
+                    'body'  => '<div class="plugin-hello-eiou-tab"><ul>' . $list . '</ul></div>',
+                ]);
             },
         ]);
 

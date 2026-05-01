@@ -7,33 +7,44 @@
 if ($user->getHideEmptyGuiSections() && empty($dlqItems)) {
     return;
 }
+
+// Detect retryable / active items once so both the desktop and mobile
+// header layouts read the same flags.
+$hasRetryable = false;
+$hasActive = false;
+if (!empty($dlqItems)) {
+    foreach ($dlqItems as $_i) {
+        $status = $_i['status'] ?? '';
+        if (in_array($status, ['pending', 'retrying'], true)) {
+            $hasActive = true;
+            if (in_array($_i['message_type'] ?? '', ['transaction', 'contact'], true)) {
+                $hasRetryable = true;
+            }
+        }
+    }
+}
+
+// --- Header extras: title-trailing badge + bulk-action buttons ------
+ob_start();
+if (!empty($dlqPendingCount) && $dlqPendingCount > 0) {
+    // Note: this badge is rendered AFTER the title closes, so it sits
+    // visually beside the section's bulk actions rather than inside the
+    // <h2>. Acceptable trade-off vs. complicating renderSection's title
+    // contract — the visual outcome is the same on every viewport.
+    echo '<span class="dlq-pending-badge">' . (int)$dlqPendingCount . '</span>';
+}
 ?>
-<!-- Dead Letter Queue Section -->
-<div id="dlq" class="dlq-section fade-in-up">
-    <div class="section-header">
-        <h2>
-            <i class="fas fa-inbox"></i> Failed Messages
-            <?php if (!empty($dlqPendingCount) && $dlqPendingCount > 0): ?>
-            <span class="dlq-pending-badge"><?php echo (int)$dlqPendingCount; ?></span>
-            <?php endif; ?>
-        </h2>
-        <?php if (!empty($dlqItems)): ?>
-        <?php $hasRetryable = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying']) && in_array($_i['message_type'] ?? '', ['transaction','contact'])) { $hasRetryable = true; break; } } ?>
-        <?php $hasActive = false; foreach ($dlqItems as $_i) { if (in_array($_i['status'] ?? '', ['pending','retrying'])) { $hasActive = true; break; } } ?>
-        <?php endif; ?>
         <!-- Desktop: inline buttons -->
         <div class="dlq-section-header-actions dlq-desktop-actions">
-            <?php if (!empty($dlqItems)): ?>
-            <?php if ($hasRetryable): ?>
+            <?php if (!empty($dlqItems) && $hasRetryable): ?>
             <button type="button" class="btn btn-success btn-sm" data-action="retryAllDlqItems" title="Retry all pending transaction and contact messages">
                 <i class="fas fa-redo"></i> Retry All
             </button>
             <?php endif; ?>
-            <?php if ($hasActive): ?>
+            <?php if (!empty($dlqItems) && $hasActive): ?>
             <button type="button" class="btn btn-secondary btn-sm" data-action="abandonAllDlqItems" title="Abandon all pending messages">
                 <i class="fas fa-ban"></i> Abandon All
             </button>
-            <?php endif; ?>
             <?php endif; ?>
             <button type="button" class="btn btn-primary btn-sm" data-action="reloadWithHash" data-hash="dlq">
                 <i class="fas fa-sync-alt"></i> Refresh
@@ -62,20 +73,12 @@ if ($user->getHideEmptyGuiSections() && empty($dlqItems)) {
                 </div>
             </div>
         </div>
-    </div>
+<?php
+$headerExtras = ob_get_clean();
 
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>What's in this queue?</span>
-        </summary>
-        <div class="section-intro-body">
-            Messages that could not be delivered after <?php echo deliveryMaxRetries(); ?> automatic attempts.
-            <strong>Transaction</strong> and <strong>Contact</strong> messages can be retried — they were initiated by you and remain valid.
-            <strong>P2P</strong> and <strong>Relay P2P</strong> messages are time-sensitive routing messages (<?php echo p2pDefaultExpirationSeconds(); ?>s expiry) that are stale by the time they reach this queue — abandon them to clear the backlog.
-        </div>
-    </details>
-
+// --- Body: stats bar, search, filter, table / empty state -----------
+ob_start();
+?>
     <?php if (!empty($dlqStats)): ?>
     <div class="dlq-stats-bar">
         <?php foreach ([
@@ -261,4 +264,20 @@ if ($user->getHideEmptyGuiSections() && empty($dlqItems)) {
     </div>
 
     <?php endif; ?>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'dlq',
+    'class' => 'dlq-section fade-in-up',
+    'icon'  => 'fas fa-inbox',
+    'title' => 'Failed Messages',
+    'headerExtras' => $headerExtras,
+    'introTitle'   => "What's in this queue?",
+    'intro' =>
+          'Messages that could not be delivered after ' . deliveryMaxRetries() . ' automatic attempts. '
+        . '<strong>Transaction</strong> and <strong>Contact</strong> messages can be retried — they were initiated by you and remain valid. '
+        . '<strong>P2P</strong> and <strong>Relay P2P</strong> messages are time-sensitive routing messages (' . p2pDefaultExpirationSeconds() . 's expiry) that are stale by the time they reach this queue — abandon them to clear the backlog.',
+    'body' => $body,
+]);
+?>

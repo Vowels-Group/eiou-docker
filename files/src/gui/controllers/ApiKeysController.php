@@ -7,6 +7,7 @@ use Eiou\Core\UserContext;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ApiKeyService;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Utils\Logger;
 use Eiou\Utils\Security;
 use Exception;
@@ -63,6 +64,44 @@ class ApiKeysController
     {
         $this->session = $session;
         $this->repository = $repository;
+    }
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     *
+     * routeAction() centralizes CSRF + sensitive-access gates and the
+     * sentinel-exception unwind, and per-action handlers are private.
+     * Each entry registers a delegate closure that calls routeAction()
+     * and catches the ApiKeysControllerResponseSent sentinel locally —
+     * same as the legacy Functions.php try/catch did. Tier is TIER_AUTH
+     * because routeAction() does its own non-rotating CSRF check;
+     * gating CSRF twice would mean fighting the controller's 403
+     * envelope shape with the registry's, and the controller's shape
+     * is what the JS client expects.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $delegate = function (array $request): void {
+            try {
+                $this->routeAction();
+            } catch (ApiKeysControllerResponseSent $sent) {
+                // Response already emitted by the controller via respond().
+            }
+        };
+        foreach ([
+            'apiKeysStatus',
+            'apiKeysVerify',
+            'apiKeysClearAccess',
+            'apiKeysList',
+            'apiKeysCreate',
+            'apiKeysToggle',
+            'apiKeysDelete',
+            'apiKeysUpdate',
+            'apiKeysDisableAll',
+            'apiKeysDeleteAll',
+        ] as $action) {
+            $registry->register($action, $delegate, GuiActionRegistry::TIER_AUTH, 'core');
+        }
     }
 
     /**

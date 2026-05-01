@@ -1242,7 +1242,90 @@ Components / Shadow DOM. A misbehaving plugin's `body { … }` will affect
 the host page; treat plugin code with the same scrutiny you'd give any
 unsigned CSS bundle.
 
-### Tab registry (`TabRegistry`)
+### Section helper (`renderSection()`)
+
+Every wallet section — the Plugins table, Failed Messages queue,
+Payback Methods card list, API Keys table, Settings, etc. — wraps its
+content in the same outer shape: a `form-container fade-in-up` div, a
+`section-header` with icon + h2 + optional inline buttons, an optional
+`<details>` "About this …" disclosure, and the body. `renderSection()`
+in `WalletTemplateHelpers.php` consolidates the wrapper so plugin
+sections look native and core sections stay consistent when CSS/UX
+refinements happen.
+
+```php
+echo renderSection([
+    'id'    => 'my-plugin-stats',           // div id + hook namespace
+    'icon'  => 'fas fa-chart-line',
+    'title' => 'My Plugin Stats',
+
+    // Optional: extra HTML rendered inside the header after the title
+    // (badges, inline buttons). Raw HTML — caller is responsible for
+    // any escaping inside the snippet.
+    'headerExtras' => '<button class="btn btn-sm btn-primary"
+                              data-action="myPluginRefresh">Refresh</button>',
+
+    // Optional: explanatory copy in a <details> disclosure. Raw HTML;
+    // pass null/'' to skip the disclosure entirely.
+    'introTitle' => 'About my plugin',
+    'intro'      => 'Plain prose with <strong>inline markup</strong> OK.',
+
+    // Required: the section body — table, form, list, anything.
+    'body'  => $myStatsHtml,
+]);
+```
+
+The helper auto-fires two render hooks around every section it
+renders:
+
+- `gui.section.before.<id>` — fired immediately before the section
+  opens. Plugins can inject a banner above someone else's section
+  without forking the template.
+- `gui.section.after.<id>` — fired after the section closes. Useful
+  for "additional details" panels that should attach to a specific
+  core section.
+
+The hook context is the full spec array, so listeners can adapt to
+which section they're inside (e.g. only inject for `id === 'dlq'`).
+
+```php
+// In a plugin's boot():
+$container->getHooks()->onRender('gui.section.after.dlq', function (array $ctx): string {
+    return '<div class="my-plugin-dlq-followup">…</div>';
+});
+```
+
+Every standard wallet section is rendered through `renderSection()`:
+`plugins-section`, `payback-methods-section`, `dlq`, `api-keys-section`,
+`transactions`, `payment-requests-section`, `debug-section`,
+`settings`, `contacts`, `pending-contacts`. The
+`gui.section.before.<id>` / `gui.section.after.<id>` hooks fire for
+every one of them.
+
+### Table helper (`renderTable()`)
+
+Every paginated table in the wallet wraps its `<table>` in
+`<div class="contacts-table-wrapper">` and adds a `contacts-table
+{variant}-table` class. `renderTable()` hides that boilerplate so
+plugin-authored tables get the same chrome.
+
+```php
+echo renderTable([
+    'id'           => 'my-plugin-table-wrapper', // optional <div id>
+    'wrapperClass' => 'contacts-table-wrapper d-none', // optional, default is just contacts-table-wrapper
+    'variant'      => 'my-plugin',  // becomes class="contacts-table my-plugin-table"
+    'headers'      => '<tr><th>Col 1</th><th>Col 2</th></tr>',
+    'body'         => $rowsHtml,    // your <tr>…</tr> rows; empty for JS-populated tables
+    'tbodyId'      => 'my-plugin-tbody', // optional <tbody id> for JS-populated tables
+]);
+```
+
+Column definitions stay as raw HTML — they're domain-specific (sort
+buttons, info-tooltip icons, custom `data-` attributes) and a generic
+config array would just push complexity around. The helper is just
+the wrapper.
+
+
 
 ```php
 $tabs->register([
@@ -1269,17 +1352,19 @@ tab if it really wants to.
 
 ### Action registry (`GuiActionRegistry`)
 
-Replaces the `Functions.php` POST whitelist for plugin handlers. Register
-in `boot()`; the dispatcher in Functions.php enforces the tier before
-calling the handler.
+Routes every authenticated POST in the wallet GUI through one
+registry. Both core handlers and plugin handlers register against the
+same registry; the dispatcher in `Functions.php` looks up `$_POST['action']`
+and calls the matching closure.
 
 ```php
 $actions->register('myPluginBookmark',
     function (array $request): void {
-        // CSRF + auth already verified by the registry's tier gate.
-        // Echo a JSON response, redirect with a flash message, or
-        // anything else a normal POST handler does — same contract
-        // as the core action handlers.
+        // The registry has already enforced the tier you declared at
+        // registration time (see the table below). The handler still
+        // emits whatever response shape it wants — JSON + exit, or
+        // MessageHelper::redirectMessage(...), or anything else a
+        // normal POST handler does.
         \Eiou\Gui\Helpers\MessageHelper::redirectMessage('Bookmarked!', 'success');
     },
     GuiActionRegistry::TIER_CSRF,   // public | auth | csrf | sensitive
@@ -1287,16 +1372,45 @@ $actions->register('myPluginBookmark',
 );
 ```
 
-| Tier | Constant | Gate |
+| Tier | Constant | Gate the registry enforces |
 |---|---|---|
 | `public` | `TIER_PUBLIC` | None — anonymous callers OK. Use sparingly. |
-| `auth` | `TIER_AUTH` | Authenticated session required. |
-| `csrf` | `TIER_CSRF` | Auth + valid CSRF token. **Default for most actions.** |
+| `auth` | `TIER_AUTH` | Authenticated session required. The registry routes but does NOT check CSRF — your handler is expected to do its own check (most useful when you need rotating CSRF, the legacy plain-text 403 body, or a per-handler envelope shape). |
+| `csrf` | `TIER_CSRF` | Auth + valid CSRF token (non-rotating). On failure the registry emits `{"success":false,"error":"csrf_error","message":"Invalid CSRF token"}` with HTTP 403 and `Content-Type: application/json`. **Default for new plugin AJAX handlers.** |
 | `sensitive` | `TIER_SENSITIVE` | Auth + CSRF + recent sensitive-access grant (the same gate that protects "Reveal API key", "Delete account", etc.). |
 
-Action names are camelCase, 1–64 chars, no collisions with core actions
-(register-time check). Forms rendered by `gui.contact.actions` post to
-`/wallet?action=<name>`; you don't need a separate route.
+Action names are camelCase, 1–64 chars. **Last-write-wins on collisions:**
+a plugin that registers an action with the same name as a core action
+overrides core, and a plugin that registers after another plugin
+overrides the earlier one. The registry runs in the order
+`Application::bootAll()` boots plugins, then `index.html` registers
+core controllers, then plugins' explicit late registrations. Naming
+collisions with core are documented but not blocked — exercise the
+override deliberately.
+
+#### Core actions are registry entries
+
+Every core POST action — contact / transaction / payment-request /
+settings / API-keys / plugin / payback-methods management, the
+remember-me revoke endpoints, the DLQ retry endpoints, the
+search/loadMore AJAX endpoints, and the "What's New" dismiss/notes
+endpoints — is registered with the registry by core's startup code at
+the same time plugins register theirs. That means a plugin can
+override `addContact`, `sendEIOU`, `apiKeysCreate`, etc. by
+registering a handler with the same name. Use this with care; the JS
+client expects specific response shapes and will misbehave if your
+override changes them.
+
+Core entries register with `'core'` as the plugin-id tag and at
+`TIER_AUTH` so each handler keeps its existing inline CSRF semantics
+(rotating for HTML form submits, non-rotating for AJAX) and its
+existing failure-response shape (plain-text 403 for HTML form submits,
+per-handler legacy JSON envelope for AJAX). When you write a plugin
+that overrides a core action, mirror those semantics or expect the JS
+to break.
+
+Forms rendered by `gui.contact.actions` post to `/wallet?action=<name>`;
+you don't need a separate route.
 
 ### Wiring `gui.contact.actions` to a registered handler
 

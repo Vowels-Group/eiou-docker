@@ -1,32 +1,12 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!-- Settings Section -->
-<div id="settings" class="form-container fade-in-up">
-    <h2><i class="fas fa-cog"></i> Wallet Settings</h2>
+<?php
+ob_start();
+?>
     <form method="POST">
         <input type="hidden" name="action" value="updateSettings">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-
-        <details class="section-intro text-muted">
-            <summary>
-                <i class="fas fa-info-circle"></i>
-                <span>How to change settings</span>
-            </summary>
-            <div class="section-intro-body">
-                <strong>One form, one Save button.</strong> Switch between sections
-                using the <strong>Section</strong> dropdown below — flip toggles,
-                change dropdowns, edit numbers in any section in any order. Your
-                edits stick as you move between sections (nothing is lost when you
-                switch view). When you're done, hit <strong>Save Settings</strong>
-                once at the bottom and every change across every section is
-                persisted in a single write.
-                <br><br>
-                <strong>Reset</strong> only reverts your current unsaved edits — it
-                does <em>not</em> wipe your saved settings. To throw every saved
-                setting back to the defaults this node ships with, pick
-                <strong>Reset to Defaults</strong> from the Section dropdown.
-            </div>
-        </details>
 
         <!-- Unified section selector — the whole settings page is a single
              view at a time, driven by this dropdown. Hidden sections stay in
@@ -1182,5 +1162,32 @@
             </form>
         </div>
     </div>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'         => 'settings',
+    'icon'       => 'fas fa-cog',
+    'title'      => 'Wallet Settings',
+    'introTitle' => 'How to change settings',
+    // Note: pre-migration this <details> lived inside the <form>. It
+    // carries no form inputs, so moving it above the form (where
+    // renderSection emits the section-intro) has zero functional
+    // impact and matches the structure of every other section.
+    'intro' =>
+          '<strong>One form, one Save button.</strong> Switch between sections '
+        . 'using the <strong>Section</strong> dropdown below — flip toggles, '
+        . 'change dropdowns, edit numbers in any section in any order. Your '
+        . 'edits stick as you move between sections (nothing is lost when you '
+        . 'switch view). When you\'re done, hit <strong>Save Settings</strong> '
+        . 'once at the bottom and every change across every section is '
+        . 'persisted in a single write.'
+        . '<br><br>'
+        . '<strong>Reset</strong> only reverts your current unsaved edits — it '
+        . 'does <em>not</em> wipe your saved settings. To throw every saved '
+        . 'setting back to the defaults this node ships with, pick '
+        . '<strong>Reset to Defaults</strong> from the Section dropdown.',
+    'body' => $body,
+]);
+?>
 

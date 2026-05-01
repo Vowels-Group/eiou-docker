@@ -4,6 +4,7 @@
 namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PaybackMethodService;
 use Eiou\Utils\Logger;
 use Throwable;
@@ -25,6 +26,43 @@ class PaybackMethodsController
     {
         $this->session = $session;
         $this->svc = $svc;
+    }
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     *
+     * routeAction() centralizes CSRF + sensitive-access gates and the
+     * sentinel-exception unwind, and per-action handlers are private.
+     * Rather than expose them all, every entry registers a closure that
+     * delegates to routeAction() and catches the
+     * PaybackMethodsControllerResponseSent sentinel locally — same as
+     * the legacy Functions.php branch did. Tier is TIER_AUTH because
+     * routeAction() does its own non-rotating CSRF check; gating CSRF
+     * twice would require fighting routeAction()'s 403 envelope shape
+     * with the registry's, and the controller's shape is what the JS
+     * client expects.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $delegate = function (array $request): void {
+            try {
+                $this->routeAction();
+            } catch (PaybackMethodsControllerResponseSent $sent) {
+                // Response already emitted by the controller via respond().
+            }
+        };
+        foreach ([
+            'paybackMethodsList',
+            'paybackMethodsGet',
+            'paybackMethodsReveal',
+            'paybackMethodsCreate',
+            'paybackMethodsUpdate',
+            'paybackMethodsDelete',
+            'paybackMethodsSharePolicy',
+            'paybackMethodsFetchFromContact',
+        ] as $action) {
+            $registry->register($action, $delegate, GuiActionRegistry::TIER_AUTH, 'core');
+        }
     }
 
     public function routeAction(): void

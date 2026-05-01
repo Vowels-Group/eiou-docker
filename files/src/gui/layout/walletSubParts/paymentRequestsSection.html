@@ -65,10 +65,11 @@ if ($user->getHideEmptyGuiSections()
     return;
 }
 ?>
-<div class="form-container fade-in-up" id="payment-requests-section">
-    <div class="section-header">
-        <h2><i class="fas fa-hand-holding-usd"></i> Payment Requests</h2>
-        <?php if (!empty($pendingIncoming) || !empty($pendingOutgoing)): ?>
+<?php
+// Header bulk-action buttons — only emitted when there's something to act on.
+ob_start();
+if (!empty($pendingIncoming) || !empty($pendingOutgoing)) {
+?>
         <!-- Desktop: inline buttons -->
         <div class="dlq-section-header-actions dlq-desktop-actions">
             <?php if (!empty($pendingIncoming)): ?>
@@ -118,9 +119,13 @@ if ($user->getHideEmptyGuiSections()
                 </div>
             </div>
         </div>
-        <?php endif; ?>
-    </div>
+<?php
+}
+$headerExtras = ob_get_clean();
 
+// Body
+ob_start();
+?>
     <!-- ============================================================
          Pending Requests — single table, direction indicated by icon
          ============================================================ -->
@@ -308,7 +313,18 @@ if ($user->getHideEmptyGuiSections()
     </div>
     <?php endif; ?>
 
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'           => 'payment-requests-section',
+    'icon'         => 'fas fa-hand-holding-usd',
+    'title'        => 'Payment Requests',
+    'headerExtras' => $headerExtras,
+    'intro'        => null, // No section-intro disclosure on this section.
+    'body'         => $body,
+]);
+?>
 
 <!--
     Pay-confirmation modal opened by initializePaymentRequestApprovalHandler()

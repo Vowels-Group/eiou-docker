@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
 use Eiou\Gui\Includes\SessionKeys;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PaymentRequestService;
 use Eiou\Utils\Security;
 use Eiou\Gui\Helpers\MessageHelper;
@@ -27,6 +28,33 @@ class PaymentRequestController
     {
         $this->session = $session;
         $this->paymentRequestService = $paymentRequestService;
+    }
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     * All payment-request actions are HTML-redirect (success +
+     * MessageHelper::redirectMessage flash, no JSON envelope), so they
+     * register at TIER_AUTH and let their handlers' inline rotating
+     * verifyCSRFToken() do the gate. This preserves rotate-on-success
+     * AND keeps the legacy plain-text "CSRF token validation failed…"
+     * 403 instead of the registry's JSON envelope (which would render
+     * as raw JSON in the user's browser after a form submit).
+     *
+     * declineAllPaymentRequests + cancelAllPaymentRequests have working
+     * handlers but were never reachable from Functions.php's pre-
+     * migration if-ladder (the if() listed only the four singular
+     * variants). Registering them here makes the existing "Decline All"
+     * / "Cancel All" GUI buttons actually work — a side-effect bug-fix,
+     * not a regression.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $registry->register('createPaymentRequest',     [$this, 'handleCreate'],     GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('approvePaymentRequest',    [$this, 'handleApprove'],    GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('declinePaymentRequest',    [$this, 'handleDecline'],    GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('cancelPaymentRequest',     [$this, 'handleCancel'],     GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('declineAllPaymentRequests',[$this, 'handleDeclineAll'], GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('cancelAllPaymentRequests', [$this, 'handleCancelAll'],  GuiActionRegistry::TIER_AUTH, 'core');
     }
 
     /**
@@ -62,7 +90,7 @@ class PaymentRequestController
     // Action handlers
     // =========================================================================
 
-    private function handleCreate(): void
+    public function handleCreate(): void
     {
         $this->session->verifyCSRFToken();
 
@@ -92,7 +120,7 @@ class PaymentRequestController
         }
     }
 
-    private function handleApprove(): void
+    public function handleApprove(): void
     {
         $this->session->verifyCSRFToken();
 
@@ -138,7 +166,7 @@ class PaymentRequestController
         }
     }
 
-    private function handleDecline(): void
+    public function handleDecline(): void
     {
         $this->session->verifyCSRFToken();
 
@@ -157,7 +185,7 @@ class PaymentRequestController
         }
     }
 
-    private function handleCancel(): void
+    public function handleCancel(): void
     {
         $this->session->verifyCSRFToken();
 
@@ -176,7 +204,7 @@ class PaymentRequestController
         }
     }
 
-    private function handleDeclineAll(): void
+    public function handleDeclineAll(): void
     {
         $this->session->verifyCSRFToken();
 
@@ -195,7 +223,7 @@ class PaymentRequestController
         MessageHelper::redirectMessage($msg, $failed > 0 ? 'warning' : 'info');
     }
 
-    private function handleCancelAll(): void
+    public function handleCancelAll(): void
     {
         $this->session->verifyCSRFToken();
 

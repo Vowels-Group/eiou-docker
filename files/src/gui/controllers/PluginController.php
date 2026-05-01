@@ -4,6 +4,7 @@
 namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PluginLoader;
 use Eiou\Services\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
@@ -39,6 +40,73 @@ class PluginController
         $this->loader = $loader;
         $this->restartRequester = $restartRequester ?? new RestartRequestService();
         $this->uninstallService = $uninstallService;
+    }
+
+    /**
+     * Action names this controller owns. Single source of truth so
+     * registerActions() (live path) and registerUnavailableStubs()
+     * (loader-not-ready path) can't drift.
+     */
+    private const OWNED_ACTIONS = [
+        'pluginsList',
+        'pluginsToggle',
+        'pluginsRequestRestart',
+        'pluginChangelog',
+        'pluginsUninstall',
+    ];
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     *
+     * routeAction() centralizes CSRF + the sentinel-exception unwind,
+     * and per-action handlers are private. Each entry registers a
+     * delegate closure that calls routeAction() and catches the
+     * PluginControllerResponseSent sentinel locally — same as the
+     * legacy Functions.php try/catch did. Tier is TIER_AUTH because
+     * routeAction() does its own non-rotating CSRF check; gating CSRF
+     * twice would mean fighting the controller's 403 envelope shape
+     * with the registry's, and the controller's shape is what the JS
+     * client expects.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $delegate = function (array $request): void {
+            try {
+                $this->routeAction();
+            } catch (PluginControllerResponseSent $sent) {
+                // Response already emitted by the controller via respond().
+            }
+        };
+        foreach (self::OWNED_ACTIONS as $action) {
+            $registry->register($action, $delegate, GuiActionRegistry::TIER_AUTH, 'core');
+        }
+    }
+
+    /**
+     * Register stub handlers that emit the legacy
+     * `{"success":false,"error":"plugin_loader_unavailable",...}`
+     * envelope. Called from the bootstrap when Application's
+     * PluginLoader hasn't discovered plugins yet (early-boot /
+     * no-wallet state) so a real PluginController can't be
+     * constructed. Without this, the registry would have no entries
+     * for the plugin* actions and POSTs would silently fall through
+     * to the wallet HTML render — the legacy if-branch's null check
+     * always emitted JSON.
+     */
+    public static function registerUnavailableStubs(GuiActionRegistry $registry): void
+    {
+        $stub = function (): void {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'error'   => 'plugin_loader_unavailable',
+                'message' => 'Plugin system is not initialized.',
+            ]);
+            exit;
+        };
+        foreach (self::OWNED_ACTIONS as $action) {
+            $registry->register($action, $stub, GuiActionRegistry::TIER_AUTH, 'core');
+        }
     }
 
     /**

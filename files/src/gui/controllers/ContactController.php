@@ -9,6 +9,7 @@ use Eiou\Core\UserContext;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactDecisionService;
 use Eiou\Services\ContactService;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
@@ -61,6 +62,51 @@ class ContactController
         $this->session = $session;
         $this->contactService = $contactService;
         $this->decisionService = $decisionService;
+    }
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     *
+     * All ContactController actions register at TIER_AUTH so the
+     * dispatcher's CSRF gate does not fire — every handler does its
+     * own verifyCSRFToken() (rotating for HTML-redirect, also rotating
+     * for the AJAX ping/chain-drop trio because that's the existing
+     * default and the existing behavior). This preserves:
+     *   - rotate-on-success for both the HTML-redirect and AJAX paths;
+     *   - the legacy plain-text 403 ("CSRF token validation failed…")
+     *     for HTML form submits (vs. the registry's JSON envelope,
+     *     which would render as raw JSON in the user's browser);
+     *   - the per-handler JSON error envelope shape AJAX clients
+     *     already parse.
+     *
+     * `addCurrency` was unreachable from Functions.php's pre-migration
+     * if-ladder (the whitelist listed only the other 11 contact
+     * actions), but the handler exists. Registering it here makes the
+     * action reachable should anything ever post it; no current GUI
+     * form does, so there is no observable behavior change today.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        // HTML-redirect actions — handler does rotating verifyCSRFToken().
+        $registry->register('addContact',             [$this, 'handleAddContact'],             GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptContact',          [$this, 'handleAcceptContact'],          GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('addCurrency',            [$this, 'handleAddCurrency'],            GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptCurrency',         [$this, 'handleAcceptCurrency'],         GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptAllCurrencies',    [$this, 'handleAcceptAllCurrencies'],    GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('applyContactDecisions',  [$this, 'handleApplyContactDecisions'],  GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('declineCurrency',        [$this, 'handleDeclineCurrency'],        GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('declineContact',         [$this, 'handleDeclineContact'],         GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('deleteContact',          [$this, 'handleDeleteContact'],          GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('blockContact',           [$this, 'handleBlockContact'],           GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('unblockContact',         [$this, 'handleUnblockContact'],         GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('editContact',            [$this, 'handleEditContact'],            GuiActionRegistry::TIER_AUTH, 'core');
+
+        // JSON-AJAX actions — handler sets Content-Type, does its own
+        // CSRF check, exits with JSON. Registry routes; doesn't gate.
+        $registry->register('pingContact',            [$this, 'handlePingContact'],            GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('proposeChainDrop',       [$this, 'handleProposeChainDrop'],       GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptChainDrop',        [$this, 'handleAcceptChainDrop'],        GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('rejectChainDrop',        [$this, 'handleRejectChainDrop'],        GuiActionRegistry::TIER_AUTH, 'core');
     }
 
     private function getDecisionService(): ContactDecisionService

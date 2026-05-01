@@ -7,6 +7,7 @@ use Eiou\Gui\Includes\Session;
 use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\Constants;
 
@@ -59,7 +60,27 @@ class DlqController
         }
     }
 
-    private function handleRetry(): void
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     * All four DLQ actions are JSON-AJAX, do their own non-rotating
+     * `validateCSRFToken($t, false)` inside the handler, and emit the
+     * legacy CSRF failure envelope (`{"success":false,"error":"Invalid CSRF token"}`).
+     * Registering at TIER_AUTH preserves both — the registry just
+     * provides routing; the handler's inline gate is unchanged.
+     *
+     * Uncaught exceptions fall through to the dispatcher's catch in
+     * Functions.php, which emits the same `{"success":false,"error":"server_error","message":...}`
+     * envelope the legacy DLQ branch did.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $registry->register('dlqRetry',       [$this, 'handleRetry'],       GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('dlqAbandon',     [$this, 'handleAbandon'],     GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('dlqRetryAll',    [$this, 'handleRetryAll'],    GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('dlqAbandonAll',  [$this, 'handleAbandonAll'],  GuiActionRegistry::TIER_AUTH, 'core');
+    }
+
+    public function handleRetry(): void
     {
         header('Content-Type: application/json');
 
@@ -176,7 +197,7 @@ class DlqController
         return null;
     }
 
-    private function handleAbandon(): void
+    public function handleAbandon(): void
     {
         header('Content-Type: application/json');
 
@@ -200,7 +221,7 @@ class DlqController
         exit;
     }
 
-    private function handleRetryAll(): void
+    public function handleRetryAll(): void
     {
         header('Content-Type: application/json');
 
@@ -285,7 +306,7 @@ class DlqController
         exit;
     }
 
-    private function handleAbandonAll(): void
+    public function handleAbandonAll(): void
     {
         header('Content-Type: application/json');
 

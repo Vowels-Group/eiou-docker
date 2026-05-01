@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactService;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\TransactionService;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
@@ -125,6 +126,31 @@ class TransactionController
     public function setApprovalService(P2pApprovalService $service): void
     {
         $this->approvalService = $service;
+    }
+
+    /**
+     * Register every owned POST action with the shared GuiActionRegistry.
+     *
+     * All five actions register at TIER_AUTH so the dispatcher's CSRF
+     * gate does not fire — every handler does its own CSRF check
+     * (sendEIOU rotates by default; the four AJAX handlers all use
+     * non-rotating validateCSRFToken/verifyCSRFToken(false) so
+     * in-flight XHRs don't race the form-submit token rotation). The
+     * registry is just the routing pass-through; envelopes and gates
+     * stay byte-identical to the legacy if-ladder.
+     *
+     * Note: handleCheckUpdates is invoked from the GET branch for
+     * `?check_updates` and stays called via routeAction() in
+     * Functions.php's GET handler — it is not a POST action and does
+     * not belong in the registry.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $registry->register('sendEIOU',              [$this, 'handleSendEIOU'],              GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('approveP2pTransaction', [$this, 'handleApproveP2p'],            GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('rejectP2pTransaction',  [$this, 'handleRejectP2p'],             GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('getP2pCandidates',      [$this, 'handleGetP2pCandidates'],      GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('getTransactionByTxid',  [$this, 'handleGetTransactionByTxid'],  GuiActionRegistry::TIER_AUTH, 'core');
     }
 
     /**
@@ -484,7 +510,7 @@ class TransactionController
      * AJAX: return the full formatted transaction data for a given txid.
      * Used by the GUI to open the transaction modal from payment request rows.
      */
-    private function handleGetTransactionByTxid(): void
+    public function handleGetTransactionByTxid(): void
     {
         header('Content-Type: application/json');
 
