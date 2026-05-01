@@ -6,7 +6,7 @@ namespace Eiou\Services;
 use Eiou\Utils\Logger;
 use Eiou\Utils\SystemClock;
 use Eiou\Contracts\BackupServiceInterface;
-use Eiou\Contracts\ClockInterface;
+use Psr\Clock\ClockInterface;
 use Eiou\Security\KeyEncryption;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;

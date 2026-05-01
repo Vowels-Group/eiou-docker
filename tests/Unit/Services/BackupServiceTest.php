@@ -410,7 +410,7 @@ class BackupServiceTest extends TestCase
     public function testGetNextScheduledBackupHonoursInjectedClock(): void
     {
         // Frozen-time fake — every call to now() returns the same moment.
-        $frozenClock = new class implements \Eiou\Contracts\ClockInterface {
+        $frozenClock = new class implements \Psr\Clock\ClockInterface {
             public function now(): \DateTimeImmutable
             {
                 // 2030-06-15 12:00:00 UTC — well after the BACKUP_CRON_HOUR

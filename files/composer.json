@@ -20,7 +20,8 @@
     },
     "require": {
         "php": ">=8.1",
-        "php-di/php-di": "^7.1"
+        "php-di/php-di": "^7.1",
+        "psr/clock": "^1.0"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.0",
