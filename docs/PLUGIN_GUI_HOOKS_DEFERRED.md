@@ -11,35 +11,6 @@ Each item names the phase it belongs to and a sketch of the work.
 
 ---
 
-## Phase 4 — Action registry
-
-### Existing core actions are not migrated
-
-The design doc proposed migrating every hardcoded action in
-`Functions.php:53-102` (and the longer AJAX-only list down to ~line
-500) into `GuiActionRegistry` entries owned by the existing
-controllers. **Status: not done.**
-
-That migration would touch ~1500 lines spread across
-`ContactController`, `TransactionController`, `PaymentRequestController`,
-`SettingsController`, `ApiKeysController`, `PluginController`, plus
-the `Functions.php` whitelist itself. Each action has its own response
-shape (HTML redirect vs. JSON-and-exit vs. mixed), its own CSRF /
-sensitive-access pattern, and its own error-handling style. Migrating
-them risks breaking auth flows, payment forms, and contact edits — for
-zero behavior change.
-
-The registry's primary value (plugins adding new POST handlers) is
-already delivered. Migration of core actions can land incrementally,
-one controller at a time, in follow-up PRs that can be reviewed and
-verified per-controller.
-
-**To resume:** pick the smallest controller (likely `SettingsController`
-or `PaymentRequestController`), register every action it owns in its
-`register()` method with the right tier, replace its branch of the
-`Functions.php` whitelist with `$registry->has()` short-circuit, smoke
-the existing flow, ship it, repeat.
-
 ---
 
 ## Phase 5 — Filter slots
@@ -219,3 +190,17 @@ Picked up after the foundation commit, before the merge PR:
   data-action="showModalTab"` and panels with
   `class="modal-tab-content"`, and `showModalTab()` is class-based,
   so plugin tabs already toggle without any per-plugin attribute.
+- **Core actions migrated to `GuiActionRegistry`.** Every
+  hardcoded `$_POST['action']` branch in `Functions.php` is gone —
+  contact / transaction / payment-request / settings / API-keys /
+  plugin / payback-methods / DLQ / search / loadMore / remember-me-
+  revoke / What's-New all register against the same registry as
+  plugin-contributed handlers. Tier choices preserve the existing
+  rotating-vs-non-rotating CSRF semantics and per-handler legacy
+  envelope shapes; no end-user behavior change. Two pre-existing
+  unreachable handlers (`declineAllPaymentRequests`,
+  `cancelAllPaymentRequests`) are now reachable via the registry
+  (the GUI's "Decline All" / "Cancel All" buttons start working as
+  a side-effect bug-fix). See the "Action registry" section of
+  `PLUGINS.md` for the new last-write-wins override mechanic
+  (plugins can now override core actions by name).

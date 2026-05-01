@@ -606,8 +606,8 @@ class SettingsControllerTest extends TestCase
     }
 
     /**
-     * registerActions populates the shared registry with every owned
-     * action at the documented tier. Migration step (action-registry).
+     * registerActions populates the shared GuiActionRegistry with
+     * every owned action at the documented tier and 'core' plugin id.
      */
     #[Test]
     public function registerActionsPopulatesRegistryWithCorrectTiers(): void

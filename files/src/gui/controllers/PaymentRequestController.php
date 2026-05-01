@@ -45,7 +45,7 @@ class PaymentRequestController
      * migration if-ladder (the if() listed only the four singular
      * variants). Registering them here makes the existing "Decline All"
      * / "Cancel All" GUI buttons actually work — a side-effect bug-fix,
-     * not a regression. Documented in the migration commit.
+     * not a regression.
      */
     public function registerActions(GuiActionRegistry $registry): void
     {

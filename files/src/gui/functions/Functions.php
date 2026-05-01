@@ -108,68 +108,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
-    // Contact actions migrated to GuiActionRegistry. Registered in
-    // index.html via ContactController::registerActions(); covers
-    // addContact, acceptContact, addCurrency, acceptCurrency,
-    // acceptAllCurrencies, applyContactDecisions, declineCurrency,
-    // declineContact, deleteContact, blockContact, unblockContact,
-    // editContact, pingContact, proposeChainDrop, acceptChainDrop,
-    // rejectChainDrop. (`addCurrency` was unreachable here pre-
-    // migration; the handler exists but no GUI form posts it today.)
-
-    // Transaction actions migrated to GuiActionRegistry. Registered
-    // in index.html via TransactionController::registerActions(); the
-    // dispatcher above routes them. Covers sendEIOU,
-    // approveP2pTransaction, rejectP2pTransaction, getP2pCandidates,
-    // getTransactionByTxid.
-
-    // Payment request actions migrated to GuiActionRegistry. See
-    // Phase B in CORE_ACTION_MIGRATION.md. Registered in index.html via
-    // PaymentRequestController::registerActions(); the dispatcher at
-    // the top of this file routes them before reaching the if-ladder.
-    // (declineAllPaymentRequests + cancelAllPaymentRequests were
-    // unreachable here pre-migration even though their GUI buttons
-    // existed — registering them now makes those buttons work.)
-
-    // Settings actions (updateSettings, resetToDefaults, clearDebugLogs,
-    // sendDebugReport, analyticsConsent, getDebugReportJson,
-    // submitDebugReport) migrated to GuiActionRegistry. Registered in
-    // index.html via SettingsController::registerActions(); the
-    // dispatcher at the top of this file routes them before reaching
-    // this if-ladder. See CORE_ACTION_MIGRATION.md.
-
-    // Plugin* AJAX actions migrated to GuiActionRegistry. Registered
-    // in index.html via PluginController::registerActions() (or a stub
-    // that emits the legacy plugin_loader_unavailable envelope when
-    // the loader isn't ready). The dispatcher above routes them.
-
-    // (whatsNewDismiss + whatsNewNotes + getDebugReportJson +
-    // submitDebugReport migrated to GuiActionRegistry — see
-    // coreInlineActions.php for whatsNew*, the SettingsController
-    // pointer above for the debug-report endpoints.)
-
-    // (pingContact + proposeChainDrop + acceptChainDrop +
-    // rejectChainDrop migrated to GuiActionRegistry alongside the
-    // other ContactController actions — see the consolidated note
-    // above.)
-
-    // (P2P approval AJAX actions migrated to GuiActionRegistry — see
-    // the consolidated TransactionController note above.)
-
-    // (revokeRememberSession + revokeAllRememberSessions migrated to
-    // GuiActionRegistry — see coreInlineActions.php.)
-
-    // API-keys AJAX actions migrated to GuiActionRegistry. Registered
-    // in index.html via ApiKeysController::registerActions(); the
-    // dispatcher above routes them. Each delegates to routeAction()
-    // and catches ApiKeysControllerResponseSent locally inside the
-    // closure registered with the registry.
-
-    // (searchTransactions, searchPaymentRequests, loadMoreTransactions,
-    // loadMoreContacts, loadMorePaymentRequests migrated to GuiActionRegistry —
-    // see coreInlineActions.php. paybackMethods* migrated via
-    // PaybackMethodsController::registerActions(). dlq* migrated via
-    // DlqController::registerActions().)
+    // Every core POST action is now routed through GuiActionRegistry
+    // by the dispatcher above. Controller-owned actions register
+    // themselves via each controller's registerActions(), called from
+    // index.html at construction time; no-controller AJAX handlers
+    // register from coreInlineActions.php (required at the top of
+    // this file). Plugin-contributed handlers register from each
+    // plugin's boot(). This section intentionally has no remaining
+    // if-branches — anything not in the registry falls through to the
+    // template render below, which is the correct behavior for an
+    // unknown action.
 }
 
 // Handle GET requests for update checking

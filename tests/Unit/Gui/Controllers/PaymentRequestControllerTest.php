@@ -13,13 +13,12 @@ use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PaymentRequestService;
 
 /**
- * Unit tests for PaymentRequestController — covers the action-registry
- * registration added during the core-action migration (Phase B).
- *
- * Behavior of the individual handlers is exercised by integration
- * tests against a live container; this file just asserts the
- * structural migration: registerActions() populates the registry with
- * every owned action at the documented tier and 'core' plugin id.
+ * Unit tests for PaymentRequestController — covers the
+ * GuiActionRegistry registration. Behavior of the individual handlers
+ * is exercised by integration tests against a live container; this
+ * file just asserts the structural wiring: registerActions()
+ * populates the registry with every owned action at the documented
+ * tier and 'core' plugin id.
  */
 #[CoversClass(PaymentRequestController::class)]
 class PaymentRequestControllerTest extends TestCase

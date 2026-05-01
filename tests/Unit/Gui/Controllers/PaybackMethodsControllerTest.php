@@ -13,9 +13,9 @@ use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PaybackMethodService;
 
 /**
- * Unit tests for PaybackMethodsController — covers the registry
- * registration added during the core-action migration. Behavior of
- * the per-action handlers is exercised live against a container.
+ * Unit tests for PaybackMethodsController — covers the
+ * GuiActionRegistry registration. Behavior of the per-action handlers
+ * is exercised live against a container.
  */
 #[CoversClass(PaybackMethodsController::class)]
 class PaybackMethodsControllerTest extends TestCase

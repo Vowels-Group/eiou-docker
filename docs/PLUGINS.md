@@ -1269,17 +1269,19 @@ tab if it really wants to.
 
 ### Action registry (`GuiActionRegistry`)
 
-Replaces the `Functions.php` POST whitelist for plugin handlers. Register
-in `boot()`; the dispatcher in Functions.php enforces the tier before
-calling the handler.
+Routes every authenticated POST in the wallet GUI through one
+registry. Both core handlers and plugin handlers register against the
+same registry; the dispatcher in `Functions.php` looks up `$_POST['action']`
+and calls the matching closure.
 
 ```php
 $actions->register('myPluginBookmark',
     function (array $request): void {
-        // CSRF + auth already verified by the registry's tier gate.
-        // Echo a JSON response, redirect with a flash message, or
-        // anything else a normal POST handler does — same contract
-        // as the core action handlers.
+        // The registry has already enforced the tier you declared at
+        // registration time (see the table below). The handler still
+        // emits whatever response shape it wants — JSON + exit, or
+        // MessageHelper::redirectMessage(...), or anything else a
+        // normal POST handler does.
         \Eiou\Gui\Helpers\MessageHelper::redirectMessage('Bookmarked!', 'success');
     },
     GuiActionRegistry::TIER_CSRF,   // public | auth | csrf | sensitive
@@ -1287,16 +1289,45 @@ $actions->register('myPluginBookmark',
 );
 ```
 
-| Tier | Constant | Gate |
+| Tier | Constant | Gate the registry enforces |
 |---|---|---|
 | `public` | `TIER_PUBLIC` | None — anonymous callers OK. Use sparingly. |
-| `auth` | `TIER_AUTH` | Authenticated session required. |
-| `csrf` | `TIER_CSRF` | Auth + valid CSRF token. **Default for most actions.** |
+| `auth` | `TIER_AUTH` | Authenticated session required. The registry routes but does NOT check CSRF — your handler is expected to do its own check (most useful when you need rotating CSRF, the legacy plain-text 403 body, or a per-handler envelope shape). |
+| `csrf` | `TIER_CSRF` | Auth + valid CSRF token (non-rotating). On failure the registry emits `{"success":false,"error":"csrf_error","message":"Invalid CSRF token"}` with HTTP 403 and `Content-Type: application/json`. **Default for new plugin AJAX handlers.** |
 | `sensitive` | `TIER_SENSITIVE` | Auth + CSRF + recent sensitive-access grant (the same gate that protects "Reveal API key", "Delete account", etc.). |
 
-Action names are camelCase, 1–64 chars, no collisions with core actions
-(register-time check). Forms rendered by `gui.contact.actions` post to
-`/wallet?action=<name>`; you don't need a separate route.
+Action names are camelCase, 1–64 chars. **Last-write-wins on collisions:**
+a plugin that registers an action with the same name as a core action
+overrides core, and a plugin that registers after another plugin
+overrides the earlier one. The registry runs in the order
+`Application::bootAll()` boots plugins, then `index.html` registers
+core controllers, then plugins' explicit late registrations. Naming
+collisions with core are documented but not blocked — exercise the
+override deliberately.
+
+#### Core actions are registry entries
+
+Every core POST action — contact / transaction / payment-request /
+settings / API-keys / plugin / payback-methods management, the
+remember-me revoke endpoints, the DLQ retry endpoints, the
+search/loadMore AJAX endpoints, and the "What's New" dismiss/notes
+endpoints — is registered with the registry by core's startup code at
+the same time plugins register theirs. That means a plugin can
+override `addContact`, `sendEIOU`, `apiKeysCreate`, etc. by
+registering a handler with the same name. Use this with care; the JS
+client expects specific response shapes and will misbehave if your
+override changes them.
+
+Core entries register with `'core'` as the plugin-id tag and at
+`TIER_AUTH` so each handler keeps its existing inline CSRF semantics
+(rotating for HTML form submits, non-rotating for AJAX) and its
+existing failure-response shape (plain-text 403 for HTML form submits,
+per-handler legacy JSON envelope for AJAX). When you write a plugin
+that overrides a core action, mirror those semantics or expect the JS
+to break.
+
+Forms rendered by `gui.contact.actions` post to `/wallet?action=<name>`;
+you don't need a separate route.
 
 ### Wiring `gui.contact.actions` to a registered handler
 
