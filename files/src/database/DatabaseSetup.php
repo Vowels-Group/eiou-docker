@@ -374,7 +374,16 @@ function runColumnMigrations(PDO $pdo): array {
 
 
     // Add missing indexes
-    $indexesToAdd = [];
+    $indexesToAdd = [
+        // dead_letter_queue.message_id was previously unindexed, so the
+        // duplicate-detection lookup in DeadLetterQueueRepository::add
+        // (`WHERE message_id = ? AND status IN ('pending','retrying')`)
+        // ran a full-table scan every time. Composite (message_id,
+        // status) covers both the equality and the status filter.
+        'dead_letter_queue' => [
+            'idx_dlq_message_status' => 'message_id, status',
+        ],
+    ];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
         foreach ($indexes as $indexName => $columnSpec) {

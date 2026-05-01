@@ -2436,24 +2436,28 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
         try {
             $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
+            // Coerce every entry to SplitAmount once, then write all
+            // currencies in a single round-trip via the batch upsert.
+            // Pre-batch this loop fired one INSERT per currency (5–10
+            // round-trips for typical multi-currency contacts on every
+            // sync ping).
+            $creditSplitByCurrency = [];
             foreach ($creditByCurrency as $cur => $credit) {
-                $creditSplit = (is_int($credit) || is_float($credit))
+                $creditSplitByCurrency[$cur] = (is_int($credit) || is_float($credit))
                     ? SplitAmount::fromMajorUnits((float) $credit)
                     : (SplitAmount::from($credit) ?: SplitAmount::fromMajorUnits(0.0));
-                if ($calculatedAt !== null) {
-                    $this->contactCreditRepository->upsertAvailableCreditIfNewer(
-                        $pubkeyHash,
-                        $creditSplit,
-                        $cur,
-                        (int) $calculatedAt
-                    );
-                } else {
-                    $this->contactCreditRepository->upsertAvailableCredit(
-                        $pubkeyHash,
-                        $creditSplit,
-                        $cur
-                    );
-                }
+            }
+            if ($calculatedAt !== null) {
+                $this->contactCreditRepository->upsertAvailableCreditIfNewerBatch(
+                    $pubkeyHash,
+                    $creditSplitByCurrency,
+                    (int) $calculatedAt
+                );
+            } else {
+                $this->contactCreditRepository->upsertAvailableCreditBatch(
+                    $pubkeyHash,
+                    $creditSplitByCurrency
+                );
             }
         } catch (\Exception $e) {
             Logger::getInstance()->warning("Failed to save available credit from response", [

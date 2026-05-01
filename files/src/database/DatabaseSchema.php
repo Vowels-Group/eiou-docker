@@ -464,7 +464,13 @@ function getDeadLetterQueueTableSchema() {
         INDEX idx_dlq_status (status),
         INDEX idx_dlq_message_type (message_type),
         INDEX idx_dlq_created_at (created_at),
-        INDEX idx_dlq_status_created (status, created_at)
+        INDEX idx_dlq_status_created (status, created_at),
+        /* Covers the duplicate-detection lookup at line ~64 of
+           DeadLetterQueueRepository.php:
+             WHERE message_id = ? AND status IN ('pending','retrying')
+           Without this composite, every DLQ retry click does a status-
+           filtered full-table scan of the dead_letter_queue table. */
+        INDEX idx_dlq_message_status (message_id, status)
     )";
 }
 

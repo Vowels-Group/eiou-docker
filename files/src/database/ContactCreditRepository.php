@@ -189,6 +189,103 @@ class ContactCreditRepository extends AbstractRepository {
     }
 
     /**
+     * Multi-currency batched upsert — equivalent to N
+     * `upsertAvailableCredit` calls collapsed into one INSERT round-trip.
+     *
+     * Avoids the N+1 pattern in ContactSyncService when storing credit
+     * for a contact who has many accepted currencies (5–10 common).
+     *
+     * @param string $pubkeyHash    Contact pubkey hash
+     * @param array  $creditByCurrency  ['USD' => SplitAmount, 'EUR' => SplitAmount, …]
+     * @return bool true on success (false if the prepared statement fails)
+     */
+    public function upsertAvailableCreditBatch(string $pubkeyHash, array $creditByCurrency): bool {
+        if (empty($creditByCurrency)) {
+            return true;
+        }
+        $rows = [];
+        $params = [];
+        foreach ($creditByCurrency as $currency => $availableCredit) {
+            $rows[] = '(?, ?, ?, ?, NOW(6))';
+            $params[] = $pubkeyHash;
+            $params[] = $availableCredit->whole;
+            $params[] = $availableCredit->frac;
+            $params[] = $currency;
+        }
+        $query = "INSERT INTO {$this->tableName}
+                  (pubkey_hash, available_credit_whole, available_credit_frac, currency, updated_at)
+                  VALUES " . implode(', ', $rows) . "
+                  ON DUPLICATE KEY UPDATE
+                  available_credit_whole = VALUES(available_credit_whole),
+                  available_credit_frac  = VALUES(available_credit_frac),
+                  currency               = VALUES(currency),
+                  updated_at             = NOW(6)";
+        try {
+            $stmt = $this->pdo->prepare($query);
+            // Positional `?` placeholders + numeric-keyed params: pass
+            // directly to execute() rather than through bindValue() (which
+            // expects 1-indexed integer keys for positional, but our flat
+            // array is 0-indexed). PDO::execute() handles the binding.
+            return $stmt->execute($params);
+        } catch (\PDOException $e) {
+            $this->logError("upsertAvailableCreditBatch failed", $e, $query);
+            return false;
+        }
+    }
+
+    /**
+     * Multi-currency batched if-newer upsert — equivalent to N
+     * `upsertAvailableCreditIfNewer` calls collapsed into one INSERT
+     * round-trip.
+     *
+     * Per-row "newer" check uses MySQL's `VALUES(col)` to read the
+     * about-to-be-inserted value inside the ON DUPLICATE KEY UPDATE
+     * clause, so each currency's update is gated on its own
+     * timestamp comparison (not the batch's first row).
+     *
+     * @param string $pubkeyHash       Contact pubkey hash
+     * @param array  $creditByCurrency ['USD' => SplitAmount, 'EUR' => SplitAmount, …]
+     * @param int    $calculatedAt     Single timestamp (sender's
+     *                                 microtime; same for every currency
+     *                                 in this response)
+     * @return bool true on success
+     */
+    public function upsertAvailableCreditIfNewerBatch(
+        string $pubkeyHash,
+        array $creditByCurrency,
+        int $calculatedAt
+    ): bool {
+        if (empty($creditByCurrency)) {
+            return true;
+        }
+        $timestamp = self::microtimeIntToTimestamp($calculatedAt);
+        $rows = [];
+        $params = [];
+        foreach ($creditByCurrency as $currency => $availableCredit) {
+            $rows[] = '(?, ?, ?, ?, ?)';
+            $params[] = $pubkeyHash;
+            $params[] = $availableCredit->whole;
+            $params[] = $availableCredit->frac;
+            $params[] = $currency;
+            $params[] = $timestamp;
+        }
+        $query = "INSERT INTO {$this->tableName}
+                  (pubkey_hash, available_credit_whole, available_credit_frac, currency, updated_at)
+                  VALUES " . implode(', ', $rows) . "
+                  ON DUPLICATE KEY UPDATE
+                  available_credit_whole = IF(VALUES(updated_at) > updated_at, VALUES(available_credit_whole), available_credit_whole),
+                  available_credit_frac  = IF(VALUES(updated_at) > updated_at, VALUES(available_credit_frac), available_credit_frac),
+                  updated_at             = IF(VALUES(updated_at) > updated_at, VALUES(updated_at), updated_at)";
+        try {
+            $stmt = $this->pdo->prepare($query);
+            return $stmt->execute($params);
+        } catch (\PDOException $e) {
+            $this->logError("upsertAvailableCreditIfNewerBatch failed", $e, $query);
+            return false;
+        }
+    }
+
+    /**
      * Convert app microtime integer to MySQL TIMESTAMP(6) string
      *
      * App uses (int)(microtime(true) * 10000), e.g. 17417499042270.
