@@ -73,6 +73,7 @@ $paymentRequestController = new PaymentRequestController(
     $secureSession,
     $serviceContainer->getPaymentRequestService()
 );
+$paymentRequestController->registerActions($serviceContainer->getActionRegistry());
 $dlqController = new DlqController(
     $secureSession,
     $repoFactory->get(Eiou\Database\DeadLetterQueueRepository::class),

@@ -110,10 +110,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $transactionController->routeAction();
     }
 
-    // Payment request actions
-    if (in_array($action, ['createPaymentRequest', 'approvePaymentRequest', 'declinePaymentRequest', 'cancelPaymentRequest'])) {
-        $paymentRequestController->routeAction();
-    }
+    // Payment request actions migrated to GuiActionRegistry. See
+    // Phase B in CORE_ACTION_MIGRATION.md. Registered in index.html via
+    // PaymentRequestController::registerActions(); the dispatcher at
+    // the top of this file routes them before reaching the if-ladder.
+    // (declineAllPaymentRequests + cancelAllPaymentRequests were
+    // unreachable here pre-migration even though their GUI buttons
+    // existed — registering them now makes those buttons work.)
 
     // Settings actions (updateSettings, resetToDefaults, clearDebugLogs,
     // sendDebugReport, analyticsConsent, getDebugReportJson,
