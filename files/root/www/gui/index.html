@@ -114,30 +114,14 @@ $pluginController = $app->pluginLoader !== null
     )
     : null;
 
-// Register plugin* actions either via the live controller, or via a
-// stub that emits the legacy "plugin_loader_unavailable" envelope when
-// the loader is unavailable. Either way, the registry has entries for
-// every plugin* action so the dispatcher routes them.
+// Register plugin* actions: live controller when the loader is
+// available, otherwise stubs that emit the legacy
+// "plugin_loader_unavailable" envelope. Either way, the registry has
+// entries for every plugin* action so the dispatcher routes them.
 if ($pluginController !== null) {
     $pluginController->registerActions($serviceContainer->getActionRegistry());
 } else {
-    $unavailable = function (): void {
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => false,
-            'error'   => 'plugin_loader_unavailable',
-            'message' => 'Plugin system is not initialized.',
-        ]);
-        exit;
-    };
-    foreach ([
-        'pluginsList', 'pluginsToggle', 'pluginsRequestRestart',
-        'pluginChangelog', 'pluginsUninstall',
-    ] as $a) {
-        $serviceContainer->getActionRegistry()->register(
-            $a, $unavailable, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core'
-        );
-    }
+    PluginController::registerUnavailableStubs($serviceContainer->getActionRegistry());
 }
 
 // Handle logout request

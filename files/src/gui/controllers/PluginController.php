@@ -43,6 +43,19 @@ class PluginController
     }
 
     /**
+     * Action names this controller owns. Single source of truth so
+     * registerActions() (live path) and registerUnavailableStubs()
+     * (loader-not-ready path) can't drift.
+     */
+    private const OWNED_ACTIONS = [
+        'pluginsList',
+        'pluginsToggle',
+        'pluginsRequestRestart',
+        'pluginChangelog',
+        'pluginsUninstall',
+    ];
+
+    /**
      * Register every owned action with the shared GuiActionRegistry.
      *
      * routeAction() centralizes CSRF + the sentinel-exception unwind,
@@ -54,11 +67,6 @@ class PluginController
      * twice would mean fighting the controller's 403 envelope shape
      * with the registry's, and the controller's shape is what the JS
      * client expects.
-     *
-     * Caller is responsible for handling the controller-is-null case
-     * (no plugin loader available); see index.html where a stub
-     * handler is registered when $app->pluginLoader is null so the
-     * legacy "plugin_loader_unavailable" envelope is preserved.
      */
     public function registerActions(GuiActionRegistry $registry): void
     {
@@ -69,14 +77,35 @@ class PluginController
                 // Response already emitted by the controller via respond().
             }
         };
-        foreach ([
-            'pluginsList',
-            'pluginsToggle',
-            'pluginsRequestRestart',
-            'pluginChangelog',
-            'pluginsUninstall',
-        ] as $action) {
+        foreach (self::OWNED_ACTIONS as $action) {
             $registry->register($action, $delegate, GuiActionRegistry::TIER_AUTH, 'core');
+        }
+    }
+
+    /**
+     * Register stub handlers that emit the legacy
+     * `{"success":false,"error":"plugin_loader_unavailable",...}`
+     * envelope. Called from the bootstrap when Application's
+     * PluginLoader hasn't discovered plugins yet (early-boot /
+     * no-wallet state) so a real PluginController can't be
+     * constructed. Without this, the registry would have no entries
+     * for the plugin* actions and POSTs would silently fall through
+     * to the wallet HTML render — the legacy if-branch's null check
+     * always emitted JSON.
+     */
+    public static function registerUnavailableStubs(GuiActionRegistry $registry): void
+    {
+        $stub = function (): void {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'error'   => 'plugin_loader_unavailable',
+                'message' => 'Plugin system is not initialized.',
+            ]);
+            exit;
+        };
+        foreach (self::OWNED_ACTIONS as $action) {
+            $registry->register($action, $stub, GuiActionRegistry::TIER_AUTH, 'core');
         }
     }
 

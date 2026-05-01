@@ -57,24 +57,18 @@ require_once __DIR__ . '/WalletTemplateHelpers.php';
 // place when the dispatcher inspects the registry.
 require_once __DIR__ . '/coreInlineActions.php';
 
-// Route controllers if POST request
+// Route POST actions through GuiActionRegistry. Controllers register
+// their own entries from index.html (after construction); no-
+// controller handlers register from coreInlineActions.php; plugins
+// register from boot(). The registry enforces tier gates (CSRF +
+// sensitive-access) and emits a JSON envelope + exit on failure;
+// uncaught exceptions in handlers become a JSON 500. Handlers that
+// reach this point and complete cleanly are expected to have written
+// their own response and exited; the exit at the end is defensive.
+// Anything not in the registry falls through to the wallet template
+// render below — correct for an unknown action.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
-
-    // Plugin / registry-dispatched POST actions. The action registry is
-    // populated by plugins' boot() (in Application::bootAll, which runs
-    // long before this file is included). Checked first so a plugin can
-    // also override a core action by registering one with the matching
-    // name — last-write-wins is the documented contract.
-    //
-    // The registry enforces tier gates here (CSRF + sensitive-access),
-    // then hands the request to the plugin handler. Handlers emit their
-    // own response (JSON or redirect) and exit; the trailing exit below
-    // is defensive in case a handler forgets.
-    //
-    // Failures emit a JSON envelope and exit so an XHR submit gets a
-    // structured error instead of an HTML page. See
-    // docs/PLUGIN_GUI_HOOKS.md.
     $actionRegistry = $serviceContainer->getActionRegistry();
     if ($actionRegistry->has($action)) {
         if ($actionRegistry->requiresCsrf($action)) {
@@ -96,8 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } catch (\Throwable $e) {
             \Eiou\Utils\Logger::getInstance()->logException($e, [
                 'context' => 'gui_action_registry_dispatch',
-                'action' => $action,
-                'plugin' => $actionRegistry->getPluginId($action),
+                'action'  => $action,
+                'plugin'  => $actionRegistry->getPluginId($action),
             ]);
             if (!headers_sent()) {
                 header('Content-Type: application/json');
@@ -107,17 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit;
     }
-
-    // Every core POST action is now routed through GuiActionRegistry
-    // by the dispatcher above. Controller-owned actions register
-    // themselves via each controller's registerActions(), called from
-    // index.html at construction time; no-controller AJAX handlers
-    // register from coreInlineActions.php (required at the top of
-    // this file). Plugin-contributed handlers register from each
-    // plugin's boot(). This section intentionally has no remaining
-    // if-branches — anything not in the registry falls through to the
-    // template render below, which is the correct behavior for an
-    // unknown action.
 }
 
 // Handle GET requests for update checking
