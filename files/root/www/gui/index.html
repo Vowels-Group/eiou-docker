@@ -18,6 +18,7 @@ use Eiou\Gui\Helpers\MessageHelper;
 use Eiou\Gui\Helpers\ViewHelper;
 use Eiou\Gui\Controllers\ContactController;
 use Eiou\Gui\Controllers\DlqController;
+use Eiou\Gui\Controllers\PaybackMethodsController;
 use Eiou\Gui\Controllers\PaymentRequestController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
@@ -81,6 +82,16 @@ $dlqController = new DlqController(
     $app->utilityServices->getTransportUtility(),
     $repoFactory->get(Eiou\Database\TransactionRepository::class)
 );
+$dlqController->registerActions($serviceContainer->getActionRegistry());
+
+// Payback-methods controller — was lazy-instantiated in Functions.php
+// pre-migration. Eager construction is cheap (just holds a service
+// ref) and lets registerActions() run at boot like the others.
+$paybackMethodsController = new PaybackMethodsController(
+    $secureSession,
+    $serviceContainer->getPaybackMethodService()
+);
+$paybackMethodsController->registerActions($serviceContainer->getActionRegistry());
 // Plugin controller — uses Application's PluginLoader so toggles flow to the
 // same state file the loader reads from at boot. If discover() never ran (no
 // userconfig.json yet) the loader is null and this controller stays absent;
