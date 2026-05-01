@@ -71,3 +71,113 @@ function contactAddressSearchAttr(array $contact): string {
     }
     return strtolower(implode(' ', $values));
 }
+
+/**
+ * Render a wallet section in the standard `form-container` shape.
+ *
+ * Every wallet sub-template currently hand-writes the same outer
+ * boilerplate — a `form-container fade-in-up` div, a `section-header`
+ * with an icon + h2, an optional `details.section-intro` wrapper for
+ * the explanatory copy, and the body. This helper consolidates the
+ * shape so:
+ *
+ *   1. Plugin authors writing a tab can reuse the same surface and
+ *      have their section visually match every core section by
+ *      default;
+ *   2. Two implicit hook fire sites (`gui.section.before.<id>` and
+ *      `gui.section.after.<id>`) appear automatically around every
+ *      section, so plugins can inject content into core sections
+ *      without forking the template;
+ *   3. Section markup stays consistent so future CSS/UX refinements
+ *      (e.g. shrinking the intro disclosure on small viewports)
+ *      apply everywhere by changing one helper instead of grepping
+ *      twelve files.
+ *
+ * @param array $spec Keys:
+ *   - `id`              (string, required) section id (used for the
+ *                       `<div id>` and the hook namespace);
+ *   - `icon`            (string, default `fas fa-circle`) Font-Awesome
+ *                       class for the title icon;
+ *   - `title`           (string, required) section heading;
+ *   - `headerExtras`    (string, optional) raw HTML rendered inside
+ *                       the section-header after the title (badges,
+ *                       inline action buttons);
+ *   - `intro`           (string|null, optional) explanatory copy. Omit
+ *                       to skip the `<details>` block entirely. Pass a
+ *                       string that may include `<br>`, `<strong>`,
+ *                       `<a>`, etc. — the helper does NOT escape it
+ *                       (intros frequently embed inline markup);
+ *   - `introTitle`      (string, default "About …") summary text on
+ *                       the intro disclosure;
+ *   - `body`            (string, required) the section content (table,
+ *                       form, list — anything the section displays);
+ *   - `class`           (string, default `form-container fade-in-up`)
+ *                       outer wrapper class. Override for sections that
+ *                       use a different container variant
+ *                       (e.g. `dlq-section`).
+ *
+ * @return string Rendered HTML (echo it).
+ */
+function renderSection(array $spec): string
+{
+    $id           = $spec['id']           ?? '';
+    $icon         = $spec['icon']         ?? 'fas fa-circle';
+    $title        = $spec['title']        ?? '';
+    $headerExtras = $spec['headerExtras'] ?? '';
+    $intro        = $spec['intro']        ?? null;
+    $introTitle   = $spec['introTitle']   ?? 'About this section';
+    $body         = $spec['body']         ?? '';
+    $class        = $spec['class']        ?? 'form-container fade-in-up';
+
+    if ($id === '' || $title === '') {
+        // Fail soft — emit a comment so a misconfigured caller doesn't
+        // produce silent gaps.
+        return "<!-- renderSection: missing required id/title -->\n";
+    }
+
+    // Plugins can inject before/after each section without forking the
+    // template. The hook is fired with the section spec as context so
+    // listeners can adapt to which section they're inside.
+    $hooks = null;
+    try {
+        $hooks = \Eiou\Core\Application::getInstance()->services->getHooks();
+    } catch (\Throwable $_) {
+        // Pre-boot or test scaffolding — silently skip the hook fires.
+    }
+
+    $beforeHook = $hooks ? $hooks->doRender('gui.section.before.' . $id, $spec) : '';
+    $afterHook  = $hooks ? $hooks->doRender('gui.section.after.'  . $id, $spec) : '';
+
+    $idAttr        = htmlspecialchars($id, ENT_QUOTES);
+    $classAttr     = htmlspecialchars($class, ENT_QUOTES);
+    $iconAttr      = htmlspecialchars($icon, ENT_QUOTES);
+    $titleEscaped  = htmlspecialchars($title);
+    $introTitleE   = htmlspecialchars($introTitle);
+
+    $out = $beforeHook;
+    $out .= "<div id=\"{$idAttr}\" class=\"{$classAttr}\">\n";
+    $out .= "    <div class=\"section-header\">\n";
+    $out .= "        <h2><i class=\"{$iconAttr}\"></i> {$titleEscaped}</h2>\n";
+    if ($headerExtras !== '') {
+        $out .= "        {$headerExtras}\n";
+    }
+    $out .= "    </div>\n";
+
+    if ($intro !== null && $intro !== '') {
+        $out .= "    <details class=\"section-intro text-muted\">\n";
+        $out .= "        <summary>\n";
+        $out .= "            <i class=\"fas fa-info-circle\"></i>\n";
+        $out .= "            <span>{$introTitleE}</span>\n";
+        $out .= "        </summary>\n";
+        $out .= "        <div class=\"section-intro-body\">\n";
+        $out .= "            {$intro}\n";
+        $out .= "        </div>\n";
+        $out .= "    </details>\n";
+    }
+
+    $out .= $body;
+    $out .= "</div>\n";
+    $out .= $afterHook;
+
+    return $out;
+}

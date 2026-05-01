@@ -1242,7 +1242,65 @@ Components / Shadow DOM. A misbehaving plugin's `body { … }` will affect
 the host page; treat plugin code with the same scrutiny you'd give any
 unsigned CSS bundle.
 
-### Tab registry (`TabRegistry`)
+### Section helper (`renderSection()`)
+
+Every wallet section — the Plugins table, Failed Messages queue,
+Payback Methods card list, API Keys table, Settings, etc. — wraps its
+content in the same outer shape: a `form-container fade-in-up` div, a
+`section-header` with icon + h2 + optional inline buttons, an optional
+`<details>` "About this …" disclosure, and the body. `renderSection()`
+in `WalletTemplateHelpers.php` consolidates the wrapper so plugin
+sections look native and core sections stay consistent when CSS/UX
+refinements happen.
+
+```php
+echo renderSection([
+    'id'    => 'my-plugin-stats',           // div id + hook namespace
+    'icon'  => 'fas fa-chart-line',
+    'title' => 'My Plugin Stats',
+
+    // Optional: extra HTML rendered inside the header after the title
+    // (badges, inline buttons). Raw HTML — caller is responsible for
+    // any escaping inside the snippet.
+    'headerExtras' => '<button class="btn btn-sm btn-primary"
+                              data-action="myPluginRefresh">Refresh</button>',
+
+    // Optional: explanatory copy in a <details> disclosure. Raw HTML;
+    // pass null/'' to skip the disclosure entirely.
+    'introTitle' => 'About my plugin',
+    'intro'      => 'Plain prose with <strong>inline markup</strong> OK.',
+
+    // Required: the section body — table, form, list, anything.
+    'body'  => $myStatsHtml,
+]);
+```
+
+The helper auto-fires two render hooks around every section it
+renders:
+
+- `gui.section.before.<id>` — fired immediately before the section
+  opens. Plugins can inject a banner above someone else's section
+  without forking the template.
+- `gui.section.after.<id>` — fired after the section closes. Useful
+  for "additional details" panels that should attach to a specific
+  core section.
+
+The hook context is the full spec array, so listeners can adapt to
+which section they're inside (e.g. only inject for `id === 'dlq'`).
+
+```php
+// In a plugin's boot():
+$container->getHooks()->onRender('gui.section.after.dlq', function (array $ctx): string {
+    return '<div class="my-plugin-dlq-followup">…</div>';
+});
+```
+
+Core sections that have been migrated to the helper at the time of
+writing: `plugins-section`, `payback-methods-section`, `dlq`. The
+remaining sections still use the manual wrapper but emit identical
+markup; migrate-on-touch as they need updates.
+
+
 
 ```php
 $tabs->register([
