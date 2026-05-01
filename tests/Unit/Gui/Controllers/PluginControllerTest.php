@@ -240,4 +240,27 @@ class PluginControllerTest extends TestCase
         $this->assertSame(400, $result['status']);
         $this->assertSame('invalid_name', $result['payload']['error']);
     }
+
+    /**
+     * registerActions populates the shared registry with every owned
+     * plugins* action at TIER_AUTH so the dispatcher's CSRF gate
+     * doesn't fire — routeAction() does its own non-rotating CSRF
+     * check internally.
+     */
+    #[Test]
+    public function registerActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        foreach ([
+            'pluginsList', 'pluginsToggle', 'pluginsRequestRestart',
+            'pluginChangelog', 'pluginsUninstall',
+        ] as $a) {
+            $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
+    }
 }

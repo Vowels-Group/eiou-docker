@@ -297,4 +297,28 @@ class ApiKeysControllerTest extends TestCase
         $this->assertTrue($result['payload']['sensitive_access']);
         $this->assertSame(123, $result['payload']['seconds_remaining']);
     }
+
+    /**
+     * registerActions populates the shared registry with every owned
+     * apiKeys* action at TIER_AUTH so the dispatcher's CSRF gate
+     * doesn't fire — routeAction() does its own non-rotating CSRF
+     * check + sensitive-access gate internally.
+     */
+    public function testRegisterActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        foreach ([
+            'apiKeysStatus', 'apiKeysVerify', 'apiKeysClearAccess',
+            'apiKeysList', 'apiKeysCreate', 'apiKeysToggle',
+            'apiKeysDelete', 'apiKeysUpdate', 'apiKeysDisableAll',
+            'apiKeysDeleteAll',
+        ] as $a) {
+            $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
+    }
 }

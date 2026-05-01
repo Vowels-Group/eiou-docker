@@ -138,27 +138,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // dispatcher at the top of this file routes them before reaching
     // this if-ladder. See CORE_ACTION_MIGRATION.md.
 
-    // AJAX-only plugin actions (returns JSON, exits immediately)
-    if (in_array($action, ['pluginsList', 'pluginsToggle', 'pluginsRequestRestart', 'pluginChangelog', 'pluginsUninstall'], true)) {
-        if ($pluginController === null) {
-            header('Content-Type: application/json');
-            echo json_encode([
-                'success' => false,
-                'error' => 'plugin_loader_unavailable',
-                'message' => 'Plugin system is not initialized.'
-            ]);
-            exit;
-        }
-        try {
-            $pluginController->routeAction();
-        } catch (\Eiou\Gui\Controllers\PluginControllerResponseSent $sent) {
-            // Response already emitted by the controller — fall through to exit.
-        } catch (Exception $e) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
-        }
-        exit;
-    }
+    // Plugin* AJAX actions migrated to GuiActionRegistry. Registered
+    // in index.html via PluginController::registerActions() (or a stub
+    // that emits the legacy plugin_loader_unavailable envelope when
+    // the loader isn't ready). The dispatcher above routes them.
 
     // (whatsNewDismiss + whatsNewNotes + getDebugReportJson +
     // submitDebugReport migrated to GuiActionRegistry — see
@@ -176,27 +159,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // (revokeRememberSession + revokeAllRememberSessions migrated to
     // GuiActionRegistry — see coreInlineActions.php.)
 
-    // AJAX-only API keys actions (returns JSON, exits immediately)
-    if (in_array($action, [
-        'apiKeysStatus',
-        'apiKeysVerify',
-        'apiKeysClearAccess',
-        'apiKeysList',
-        'apiKeysCreate',
-        'apiKeysToggle',
-        'apiKeysDelete',
-        'apiKeysUpdate',
-        'apiKeysDisableAll',
-        'apiKeysDeleteAll',
-    ], true)) {
-        try {
-            $apiKeysController->routeAction();
-        } catch (\Eiou\Gui\Controllers\ApiKeysControllerResponseSent $e) {
-            // Response body + status were already written; unwind to here
-            // and exit cleanly so the wallet.html template does not render.
-        }
-        exit;
-    }
+    // API-keys AJAX actions migrated to GuiActionRegistry. Registered
+    // in index.html via ApiKeysController::registerActions(); the
+    // dispatcher above routes them. Each delegates to routeAction()
+    // and catches ApiKeysControllerResponseSent locally inside the
+    // closure registered with the registry.
 
     // (searchTransactions, searchPaymentRequests, loadMoreTransactions,
     // loadMoreContacts, loadMorePaymentRequests migrated to GuiActionRegistry —

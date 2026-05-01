@@ -4,6 +4,7 @@
 namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
+use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PluginLoader;
 use Eiou\Services\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
@@ -39,6 +40,44 @@ class PluginController
         $this->loader = $loader;
         $this->restartRequester = $restartRequester ?? new RestartRequestService();
         $this->uninstallService = $uninstallService;
+    }
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     *
+     * routeAction() centralizes CSRF + the sentinel-exception unwind,
+     * and per-action handlers are private. Each entry registers a
+     * delegate closure that calls routeAction() and catches the
+     * PluginControllerResponseSent sentinel locally — same as the
+     * legacy Functions.php try/catch did. Tier is TIER_AUTH because
+     * routeAction() does its own non-rotating CSRF check; gating CSRF
+     * twice would mean fighting the controller's 403 envelope shape
+     * with the registry's, and the controller's shape is what the JS
+     * client expects.
+     *
+     * Caller is responsible for handling the controller-is-null case
+     * (no plugin loader available); see index.html where a stub
+     * handler is registered when $app->pluginLoader is null so the
+     * legacy "plugin_loader_unavailable" envelope is preserved.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $delegate = function (array $request): void {
+            try {
+                $this->routeAction();
+            } catch (PluginControllerResponseSent $sent) {
+                // Response already emitted by the controller via respond().
+            }
+        };
+        foreach ([
+            'pluginsList',
+            'pluginsToggle',
+            'pluginsRequestRestart',
+            'pluginChangelog',
+            'pluginsUninstall',
+        ] as $action) {
+            $registry->register($action, $delegate, GuiActionRegistry::TIER_AUTH, 'core');
+        }
     }
 
     /**
