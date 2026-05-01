@@ -588,7 +588,7 @@ class TransportUtilityService implements TransportServiceInterface
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, Constants::TOR_CONNECT_TIMEOUT_SECONDS);
-        curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
+        curl_setopt($ch, CURLOPT_PROXY, Constants::TOR_PROXY);
         curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
@@ -672,7 +672,7 @@ class TransportUtilityService implements TransportServiceInterface
             curl_setopt($ch, CURLOPT_URL, $torUrl);
             curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, Constants::TOR_CONNECT_TIMEOUT_SECONDS);
-            curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
+            curl_setopt($ch, CURLOPT_PROXY, Constants::TOR_PROXY);
             curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         } else {
             $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';

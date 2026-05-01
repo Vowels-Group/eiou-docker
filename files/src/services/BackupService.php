@@ -4,7 +4,9 @@
 namespace Eiou\Services;
 
 use Eiou\Utils\Logger;
+use Eiou\Utils\SystemClock;
 use Eiou\Contracts\BackupServiceInterface;
+use Eiou\Contracts\ClockInterface;
 use Eiou\Security\KeyEncryption;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
@@ -38,11 +40,25 @@ class BackupService implements BackupServiceInterface
     private UserContext $currentUser;
     private PDO $pdo;
     private string $backupDirectory;
+    /**
+     * Nullable so tests that instantiate via reflection (bypassing
+     * __construct) still see a usable BackupService — `getNextScheduledBackup()`
+     * lazily falls back to SystemClock when this is null. Production
+     * always passes a clock via the constructor.
+     */
+    private ?ClockInterface $clock = null;
 
-    public function __construct(UserContext $currentUser, PDO $pdo)
+    /**
+     * @param ClockInterface|null $clock Time source for cron-schedule
+     *   computation. Defaults to SystemClock for production. Tests
+     *   inject a frozen-time fake so getNextScheduledBackup() returns
+     *   deterministic values without monkeypatching `new DateTime()`.
+     */
+    public function __construct(UserContext $currentUser, PDO $pdo, ?ClockInterface $clock = null)
     {
         $this->currentUser = $currentUser;
         $this->pdo = $pdo;
+        $this->clock = $clock ?? new SystemClock();
         $this->backupDirectory = Constants::BACKUP_DIRECTORY;
         $this->ensureBackupDirectory();
     }
@@ -711,10 +727,18 @@ class BackupService implements BackupServiceInterface
         $hour = $this->currentUser->getBackupCronHour();
         $minute = $this->currentUser->getBackupCronMinute();
 
-        $next = new DateTime();
+        // Read "now" exactly once so the if-condition below uses the
+        // same instant as the schedule comparison — under the previous
+        // `new DateTime() ... new DateTime()` shape the two could in
+        // principle straddle a second boundary and produce inconsistent
+        // results.
+        $clock = $this->clock ?? new SystemClock();
+        $now = \DateTime::createFromImmutable($clock->now());
+
+        $next = clone $now;
         $next->setTime($hour, $minute, 0);
 
-        if ($next <= new DateTime()) {
+        if ($next <= $now) {
             $next->modify('+1 day');
         }
 

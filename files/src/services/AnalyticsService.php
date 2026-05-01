@@ -34,9 +34,10 @@ class AnalyticsService
     private const ID_LENGTH = 32;
 
     /**
-     * Tor SOCKS5 proxy address
+     * Tor SOCKS5 proxy address — sourced from Constants::TOR_PROXY so
+     * the host:port shape is defined in one place across the codebase.
      */
-    private const TOR_PROXY = '127.0.0.1:9050';
+    private const TOR_PROXY = Constants::TOR_PROXY;
 
     /**
      * HTTP connect timeout in seconds (generous for Tor circuit setup)

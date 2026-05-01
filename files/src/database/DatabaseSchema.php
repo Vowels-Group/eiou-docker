@@ -83,7 +83,13 @@ function getContactCurrenciesTableSchema() {
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE INDEX idx_cc_hash_currency (pubkey_hash, currency),
-        INDEX idx_cc_pubkey_hash (pubkey_hash)
+        INDEX idx_cc_pubkey_hash (pubkey_hash),
+        /* Covers per-contact pending-currency lookups in
+           ContactCurrencyRepository (WHERE pubkey_hash = ? AND status
+           = pending). Pre-existing pubkey_hash-only index forces a
+           status filter post-scan; this composite lets the optimizer
+           index-range straight to the rows. */
+        INDEX idx_cc_hash_status (pubkey_hash, status)
     )";
 }
 
