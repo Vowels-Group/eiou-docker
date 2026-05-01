@@ -61,6 +61,7 @@ $transactionController->setP2pApprovalDependencies(
     $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
 $transactionController->setApprovalService($serviceContainer->getP2pApprovalService());
+$transactionController->registerActions($serviceContainer->getActionRegistry());
 $settingsController = new SettingsController($secureSession);
 // Register settings actions in the shared GuiActionRegistry so the
 // dispatcher in Functions.php routes via the registry instead of the

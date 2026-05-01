@@ -117,10 +117,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // rejectChainDrop. (`addCurrency` was unreachable here pre-
     // migration; the handler exists but no GUI form posts it today.)
 
-    // Transaction actions
-    if (in_array($action, ['sendEIOU'])) {
-        $transactionController->routeAction();
-    }
+    // Transaction actions migrated to GuiActionRegistry. Registered
+    // in index.html via TransactionController::registerActions(); the
+    // dispatcher above routes them. Covers sendEIOU,
+    // approveP2pTransaction, rejectP2pTransaction, getP2pCandidates,
+    // getTransactionByTxid.
 
     // Payment request actions migrated to GuiActionRegistry. See
     // Phase B in CORE_ACTION_MIGRATION.md. Registered in index.html via
@@ -169,16 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // other ContactController actions — see the consolidated note
     // above.)
 
-    // AJAX-only P2P approval actions (returns JSON, exits immediately)
-    if (in_array($action, ['approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates', 'getTransactionByTxid'])) {
-        try {
-            $transactionController->routeAction();
-        } catch (Exception $e) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
-        }
-        exit;
-    }
+    // (P2P approval AJAX actions migrated to GuiActionRegistry — see
+    // the consolidated TransactionController note above.)
 
     // (revokeRememberSession + revokeAllRememberSessions migrated to
     // GuiActionRegistry — see coreInlineActions.php.)
