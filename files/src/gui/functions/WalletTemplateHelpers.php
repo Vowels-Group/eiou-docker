@@ -138,6 +138,17 @@ function renderSection(array $spec): string
     // Plugins can inject before/after each section without forking the
     // template. The hook is fired with the section spec as context so
     // listeners can adapt to which section they're inside.
+    //
+    // SECURITY-INTENT: the doRender() output below is concatenated
+    // into the page raw — listener returns are HTML strings the host
+    // inlines verbatim. This is by design (mirrors every other render
+    // hook in the wallet) and the trust boundary is operator-vetted
+    // plugins, same model documented in PLUGINS.md "Action registry".
+    // A hostile plugin can already emit raw HTML via gui.dashboard.after
+    // etc — gui.section.before/after.<id> is no different. If the
+    // threat model ever changes to "third-party plugins from a
+    // marketplace", the doRender output here (and across every render
+    // hook) will need passthrough sanitization.
     $hooks = null;
     try {
         $hooks = \Eiou\Core\Application::getInstance()->services->getHooks();

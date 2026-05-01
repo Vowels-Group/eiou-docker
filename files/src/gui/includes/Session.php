@@ -218,6 +218,26 @@ class Session
      * Mark the current session as authenticated without requiring an authcode
      * POST — used by the remember-me flow when a valid EIOU_REMEMBER cookie
      * is presented. Still regenerates the session id to prevent fixation.
+     *
+     * Token rotation policy
+     * ─────────────────────
+     * The remember-me token itself is rotated single-use by
+     * `RememberTokenService::rotateToken()`, which is invoked from
+     * `gui/index.html` BEFORE this method runs. Each successful
+     * remember-me login:
+     *   1. Looks up the old token's hash in remember_tokens.
+     *   2. Mints a fresh raw token (32 random bytes, hex-encoded).
+     *   3. Inserts the new row, revokes the old row.
+     *   4. Writes the new raw token into the EIOU_REMEMBER cookie.
+     *
+     * Replay detection: a stolen cookie stops working the moment the
+     * real owner next logs in, because the thief's old token-hash
+     * gets revoked when the legitimate session rotates.
+     *
+     * Lifetime: the new row inherits the old row's remaining
+     * `expires_at` — "remember me for 30 days" means 30 days from the
+     * initial opt-in, not a perpetually-sliding window. Prevents a
+     * silent forever-session via repeated rotation.
      */
     public function markAuthenticatedFromRememberToken(): void
     {

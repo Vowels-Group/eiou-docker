@@ -164,6 +164,88 @@ class TransportUtilityService implements TransportServiceInterface
     }
 
     /**
+     * Validate the constructed delivery URL before handing it to curl.
+     *
+     * The HTTP send paths build the URL via plain string concatenation
+     * (`$protocol . $recipient . "/eiou/"`). `AddressValidator::isAddress()`
+     * upstream is regex-based; if a control character or newline ever
+     * slipped past it, `curl_setopt(CURLOPT_URL, $url)` could misparse
+     * the URL and end up issuing the request against an unintended
+     * host (or sending CRLF-injection headers).
+     *
+     * This belt-and-braces check uses `parse_url()` for structural
+     * parsing and asserts:
+     *   - scheme is one of {http, https} (allowlist)
+     *   - host is non-empty
+     *   - no userinfo (no `https://attacker@victim/...` form)
+     *   - no control characters anywhere in the URL
+     *   - no `?` query / `#` fragment (we never construct those)
+     *
+     * Throws on anything off the allowlist. Callers should NEVER pass
+     * `?suppress` style flags that would weaken this — the gate is a
+     * blanket precondition for `curl_setopt(CURLOPT_URL, ...)`.
+     *
+     * @throws \InvalidArgumentException on any disallowed shape
+     */
+    /**
+     * Format a recipient address for log fields.
+     *
+     * Default (production): returns `<scheme>://<sha256-truncated-12>`
+     * — preserves the scheme so log readers can distinguish Tor /
+     * HTTPS / HTTP delivery flows, but redacts the host/onion so a
+     * leaked log file can't be used to enumerate which contacts a
+     * wallet talks to.
+     *
+     * Debug mode (APP_DEBUG=true): returns the full address verbatim
+     * for diagnosis. Operators opt in by setting the env var on the
+     * container — same gate the rest of the wallet uses for
+     * detail-level diagnostics.
+     */
+    private static function loggableRecipient(string $recipient): string
+    {
+        if (Constants::isDebug()) {
+            return $recipient;
+        }
+        // Lift the scheme prefix (if any) so log readers see the
+        // transport at a glance; hash the rest.
+        $scheme = '';
+        if (preg_match('/^(https?:\/\/)/', $recipient, $m)) {
+            $scheme = $m[1];
+            $recipient = substr($recipient, strlen($scheme));
+        } elseif (str_ends_with($recipient, '.onion')) {
+            $scheme = 'tor:';
+        }
+        return $scheme . substr(hash('sha256', $recipient), 0, 12);
+    }
+
+    private static function assertSafeDeliveryUrl(string $url): void
+    {
+        // Reject embedded control characters / newlines first — these
+        // are the CRLF-injection footgun that motivated this gate.
+        if (preg_match('/[[:cntrl:]]/', $url)) {
+            throw new \InvalidArgumentException("delivery URL contains control characters");
+        }
+        $parts = parse_url($url);
+        if ($parts === false || $parts === null) {
+            throw new \InvalidArgumentException("delivery URL is malformed");
+        }
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            throw new \InvalidArgumentException("delivery URL scheme must be http or https, got '{$scheme}'");
+        }
+        $host = (string) ($parts['host'] ?? '');
+        if ($host === '') {
+            throw new \InvalidArgumentException("delivery URL has no host");
+        }
+        if (isset($parts['user']) || isset($parts['pass'])) {
+            throw new \InvalidArgumentException("delivery URL must not contain userinfo");
+        }
+        if (isset($parts['query']) || isset($parts['fragment'])) {
+            throw new \InvalidArgumentException("delivery URL must not contain query string or fragment");
+        }
+    }
+
+    /**
      * Determine if address is valid HTTP, HTTPS, or TOR
      *
      * @param string $address The address of the sender
@@ -391,6 +473,20 @@ class TransportUtilityService implements TransportServiceInterface
         $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
 
         $url = $protocol . $recipient . "/eiou/";
+        try {
+            self::assertSafeDeliveryUrl($url);
+        } catch (\InvalidArgumentException $e) {
+            curl_close($ch);
+            Logger::getInstance()->warning("Rejected unsafe delivery URL", [
+                'recipient_hash' => substr(hash('sha256', $recipient), 0, 12),
+                'reason' => $e->getMessage(),
+            ]);
+            return json_encode([
+                'status' => 'error',
+                'message' => 'Invalid recipient address (refused to construct delivery URL)',
+                'error_code' => 'invalid_url',
+            ]);
+        }
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getHttpTransportTimeoutSeconds());
@@ -432,7 +528,7 @@ class TransportUtilityService implements TransportServiceInterface
 
             // Log the error for debugging
             Logger::getInstance()->warning("HTTP request failed", [
-                'recipient' => $recipient,
+                'recipient' => self::loggableRecipient($recipient),
                 'curl_error' => $curlError,
                 'curl_errno' => $curlErrno
             ]);
@@ -463,7 +559,7 @@ class TransportUtilityService implements TransportServiceInterface
         // Check if this .onion address is in cooldown from repeated failures
         if (!TorCircuitHealth::isAvailable($recipient)) {
             Logger::getInstance()->info("Tor address in cooldown, skipping delivery", [
-                'recipient' => $recipient,
+                'recipient' => self::loggableRecipient($recipient),
             ]);
             return json_encode([
                 'status' => 'error',
@@ -473,7 +569,22 @@ class TransportUtilityService implements TransportServiceInterface
         }
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
+        $torUrl = "http://$recipient/eiou/";
+        try {
+            self::assertSafeDeliveryUrl($torUrl);
+        } catch (\InvalidArgumentException $e) {
+            curl_close($ch);
+            Logger::getInstance()->warning("Rejected unsafe Tor delivery URL", [
+                'recipient_hash' => substr(hash('sha256', $recipient), 0, 12),
+                'reason' => $e->getMessage(),
+            ]);
+            return json_encode([
+                'status' => 'error',
+                'message' => 'Invalid recipient address (refused to construct delivery URL)',
+                'error_code' => 'invalid_url',
+            ]);
+        }
+        curl_setopt($ch, CURLOPT_URL, $torUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, Constants::TOR_CONNECT_TIMEOUT_SECONDS);
@@ -496,7 +607,7 @@ class TransportUtilityService implements TransportServiceInterface
 
             // Log the error for debugging
             Logger::getInstance()->warning("TOR request failed", [
-                'recipient' => $recipient,
+                'recipient' => self::loggableRecipient($recipient),
                 'curl_error' => $curlError,
                 'curl_errno' => $curlErrno
             ]);
@@ -552,7 +663,13 @@ class TransportUtilityService implements TransportServiceInterface
         $ch = curl_init();
 
         if ($this->isTorAddress($recipient)) {
-            curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou/");
+            $torUrl = "http://$recipient/eiou/";
+            // Note: createCurlHandle is a builder used by sendBatch; if
+            // an unsafe URL surfaces here, throwing is preferable to
+            // silently returning a misconfigured handle. Caller surface
+            // is internal so a thrown exception is the right contract.
+            self::assertSafeDeliveryUrl($torUrl);
+            curl_setopt($ch, CURLOPT_URL, $torUrl);
             curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getTorTransportTimeoutSeconds());
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, Constants::TOR_CONNECT_TIMEOUT_SECONDS);
             curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
@@ -560,6 +677,7 @@ class TransportUtilityService implements TransportServiceInterface
         } else {
             $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
             $url = $protocol . $recipient . "/eiou/";
+            self::assertSafeDeliveryUrl($url);
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_TIMEOUT, $this->currentUser->getHttpTransportTimeoutSeconds());
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
@@ -612,7 +730,7 @@ class TransportUtilityService implements TransportServiceInterface
             $signingResult = $this->signWithCapture($payload, $recipient);
             if ($signingResult === false) {
                 Logger::getInstance()->warning("Failed to sign payload for batch recipient", [
-                    'recipient' => $recipient
+                    'recipient' => self::loggableRecipient($recipient)
                 ]);
                 continue;
             }
@@ -643,7 +761,7 @@ class TransportUtilityService implements TransportServiceInterface
 
                 $transportType = $this->isTorAddress($recipient) ? 'TOR' : 'HTTP';
                 Logger::getInstance()->warning("$transportType batch request failed", [
-                    'recipient' => $recipient,
+                    'recipient' => self::loggableRecipient($recipient),
                     'curl_error' => $curlError,
                     'curl_errno' => $curlErrno
                 ]);
@@ -695,7 +813,7 @@ class TransportUtilityService implements TransportServiceInterface
             if ($signingResult === false) {
                 Logger::getInstance()->warning("Failed to sign payload for multi-batch send", [
                     'key' => $key,
-                    'recipient' => $recipient
+                    'recipient' => self::loggableRecipient($recipient)
                 ]);
                 continue;
             }

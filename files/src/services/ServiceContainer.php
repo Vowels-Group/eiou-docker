@@ -286,6 +286,29 @@ class ServiceContainer implements ContainerInterface {
         return $this->services['GuiActionRegistry'];
     }
 
+    /**
+     * Get a per-plugin session store. Each store namespaces its keys
+     * under `plugin_<id>_*` so plugins can't accidentally (or
+     * deliberately) write to core session fields like
+     * SessionKeys::AUTHENTICATED or SessionKeys::CSRF_TOKEN. See
+     * `Eiou\Services\PluginSessionStore` for the supported API and
+     * the trust-boundary discussion.
+     *
+     * Stores are memoised per plugin id — repeat calls with the same
+     * id return the same instance.
+     *
+     * @param string $pluginId Plugin id (kebab-case, must match
+     *                         plugin.json's name field).
+     */
+    public function getPluginSessionStore(string $pluginId): PluginSessionStore
+    {
+        $cacheKey = 'PluginSessionStore.' . $pluginId;
+        if (!isset($this->services[$cacheKey])) {
+            $this->services[$cacheKey] = new PluginSessionStore($pluginId);
+        }
+        return $this->services[$cacheKey];
+    }
+
     /** @return RepositoryFactory */
     public function getRepositoryFactory(): RepositoryFactory {
         if ($this->repositoryFactory === null) {

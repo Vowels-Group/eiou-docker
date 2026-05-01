@@ -382,10 +382,15 @@ class P2pService implements P2pServiceInterface {
         $senderAddress = $request['senderAddress'];
         $pubkey = $request['senderPublicKey'];
 
-        // Rate limit P2P requests by sender public key hash
+        // Rate limit P2P requests by sender public key hash.
+        // Bypass-gate hardened against runtime env-var spoofing: the
+        // `EIOU_TEST_MODE` PHP constant is defined ONLY by the PHPUnit
+        // bootstrap; production builds never define it, so a hostile
+        // env var on a deployed container can no longer disable P2P
+        // rate limiting. Mirrors the RateLimiterService change.
         $senderKeyHash = hash('sha256', $pubkey);
         $rateLimitKey = 'p2p:' . $senderKeyHash;
-        $testMode = getenv('EIOU_TEST_MODE') === 'true';
+        $testMode = defined('EIOU_TEST_MODE') && EIOU_TEST_MODE === true;
         if (!$testMode && $this->currentUser->getRateLimitEnabled()) {
             static $p2pRateCounts = [];
             static $p2pRateWindow = null;
