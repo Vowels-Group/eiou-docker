@@ -360,11 +360,28 @@ class Security {
      *
      * @return string Client IP address
      */
-    public static function getClientIp(): string {
+    public static function getClientIp(?\Eiou\Core\AppConfig $appConfig = null): string {
         $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        // Parse trusted proxies from: env var > persisted config > constant
-        $trustedProxiesStr = getenv('TRUSTED_PROXIES') ?: '';
+        // Parse trusted proxies from: AppConfig (env var) > persisted config > constant.
+        //
+        // FOLLOW-UP. The `?AppConfig $appConfig = null` parameter is a
+        // transitional shape — the env-fallback branch should disappear
+        // once every caller in the chain threads the typed config:
+        //   ApiController:3617
+        //     -> ApiAuthService::getClientIp()  (also static, also no DI)
+        //     -> Security::getClientIp()        (here)
+        // plus the dead-code RateLimiterService::getClientIp wrapper.
+        // Removing the fallback means adding `?AppConfig` to both
+        // ApiAuthService::getClientIp() and the RateLimiter wrapper, and
+        // having ApiController pass `$this->container->getAppConfig()`
+        // at the call site. Out of scope for the current AppConfig
+        // introduction — leaving a focused follow-up rather than
+        // bundling 3+ files of unrelated rewiring with the env-read
+        // refactor.
+        $trustedProxiesStr = $appConfig !== null
+            ? $appConfig->trustedProxies
+            : (getenv('TRUSTED_PROXIES') ?: '');
         if ($trustedProxiesStr === '') {
             $trustedProxiesStr = UserContext::getInstance()->getTrustedProxies();
         }

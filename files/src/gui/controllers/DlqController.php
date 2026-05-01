@@ -4,6 +4,7 @@
 namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Includes\Session;
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
@@ -85,28 +86,24 @@ class DlqController
         header('Content-Type: application/json');
 
         if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
-            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
-            exit;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token');
         }
 
         $dlqId = isset($_POST['dlq_id']) ? (int)$_POST['dlq_id'] : 0;
         if ($dlqId <= 0) {
-            echo json_encode(['success' => false, 'error' => 'Invalid DLQ item ID']);
-            exit;
+            GuiErrorResponse::send('dlq_id_invalid', 'Invalid DLQ item ID');
         }
 
         // Verify item exists and is a retryable type before attempting
         $item = $this->dlqRepository->getById($dlqId);
         if (!$item) {
-            echo json_encode(['success' => false, 'error' => 'DLQ item not found']);
-            exit;
+            GuiErrorResponse::send('dlq_not_found', 'DLQ item not found', 404);
         }
         if (in_array($item['message_type'], ['p2p', 'rp2p'], true)) {
-            echo json_encode([
-                'success' => false,
-                'error' => 'P2P and relay messages cannot be retried — they are time-sensitive routing messages that expire quickly. Abandon them instead.'
-            ]);
-            exit;
+            GuiErrorResponse::send(
+                'dlq_not_retryable',
+                'P2P and relay messages cannot be retried — they are time-sensitive routing messages that expire quickly. Abandon them instead.'
+            );
         }
 
         // For transaction type: refresh expires_at and reset cancelled status before retrying.
@@ -202,22 +199,20 @@ class DlqController
         header('Content-Type: application/json');
 
         if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
-            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
-            exit;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token');
         }
 
         $dlqId = isset($_POST['dlq_id']) ? (int)$_POST['dlq_id'] : 0;
         if ($dlqId <= 0) {
-            echo json_encode(['success' => false, 'error' => 'Invalid DLQ item ID']);
-            exit;
+            GuiErrorResponse::send('dlq_id_invalid', 'Invalid DLQ item ID');
         }
 
         $success = $this->dlqRepository->markAbandoned($dlqId, 'Manually abandoned via GUI');
 
-        echo json_encode([
-            'success' => $success,
-            'error' => $success ? null : 'Failed to abandon item'
-        ]);
+        if (!$success) {
+            GuiErrorResponse::send('dlq_abandon_failed', 'Failed to abandon item', 500);
+        }
+        echo json_encode(['success' => true]);
         exit;
     }
 
@@ -226,8 +221,7 @@ class DlqController
         header('Content-Type: application/json');
 
         if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
-            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
-            exit;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token');
         }
 
         // Only retry transaction, contact, and payment_request types — p2p/rp2p are time-sensitive and should not be bulk-retried
@@ -311,8 +305,7 @@ class DlqController
         header('Content-Type: application/json');
 
         if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
-            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
-            exit;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token');
         }
 
         $items = $this->dlqRepository->getItems('pending');
