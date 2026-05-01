@@ -181,3 +181,63 @@ function renderSection(array $spec): string
 
     return $out;
 }
+
+/**
+ * Render a table inside the standard `contacts-table-wrapper` shell.
+ *
+ * Every paginated table in the wallet (Contacts, Recent Transactions,
+ * Payment Requests history, DLQ, API Keys, Plugins) wraps its
+ * `<table>` in `<div class="contacts-table-wrapper">` and adds a
+ * `contacts-table {variant}-table` class. This helper hides those
+ * four lines of boilerplate so plugin-authored tables get the same
+ * chrome (and so a future styling refinement applies everywhere).
+ *
+ * The helper deliberately doesn't try to abstract column definitions
+ * or row markup — those are domain-specific and a generic config
+ * array would push complexity around without reducing it.
+ *
+ * @param array $spec Keys:
+ *   - `variant`         (string, required) appended to the table
+ *                       class as `contacts-table {variant}-table`
+ *                       (e.g. `plugins`, `dlq`, `tx`).
+ *   - `headers`         (string, required) raw HTML for `<thead>` —
+ *                       caller emits `<tr><th>…</th></tr>` so column
+ *                       attributes / `data-action="sortX"` etc. stay
+ *                       under their control.
+ *   - `body`            (string, required) raw HTML for `<tbody>` —
+ *                       caller emits the rows.
+ *   - `id`              (string, optional) added to the wrapper div
+ *                       (e.g. `api-keys-table-wrapper`).
+ *   - `wrapperClass`    (string, default `contacts-table-wrapper`)
+ *                       extra wrapper classes append onto this
+ *                       (e.g. `contacts-table-wrapper api-keys-table-wrapper d-none`).
+ *   - `tbodyId`         (string, optional) `<tbody>` id (e.g. for
+ *                       JS-populated tables).
+ *
+ * @return string Rendered HTML (echo it).
+ */
+function renderTable(array $spec): string
+{
+    $variant      = $spec['variant']      ?? '';
+    $headers      = $spec['headers']      ?? '';
+    $body         = $spec['body']         ?? '';
+    $wrapperId    = $spec['id']           ?? '';
+    $wrapperClass = $spec['wrapperClass'] ?? 'contacts-table-wrapper';
+    $tbodyId      = $spec['tbodyId']      ?? '';
+
+    if ($variant === '' || $headers === '') {
+        return "<!-- renderTable: missing required variant/headers -->\n";
+    }
+
+    $idAttr     = $wrapperId !== '' ? ' id="' . htmlspecialchars($wrapperId, ENT_QUOTES) . '"' : '';
+    $classAttr  = htmlspecialchars($wrapperClass, ENT_QUOTES);
+    $variantClass = 'contacts-table ' . htmlspecialchars($variant, ENT_QUOTES) . '-table';
+    $tbodyAttr  = $tbodyId !== '' ? ' id="' . htmlspecialchars($tbodyId, ENT_QUOTES) . '"' : '';
+
+    return "<div{$idAttr} class=\"{$classAttr}\">\n"
+         . "    <table class=\"{$variantClass}\">\n"
+         . "        <thead>{$headers}</thead>\n"
+         . "        <tbody{$tbodyAttr}>{$body}</tbody>\n"
+         . "    </table>\n"
+         . "</div>\n";
+}

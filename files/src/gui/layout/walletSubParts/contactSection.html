@@ -1,31 +1,9 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!-- Contacts Section -->
-<div id="contacts" class="contacts-section fade-in-up">
-    <div class="section-header">
-        <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
-        <button type="button" class="btn btn-success btn-nowrap" data-action="openAddContactModal"><i class="fas fa-user-plus"></i> New Contact</button>
-    </div>
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>About Your Contacts</span>
-        </summary>
-        <div class="section-intro-body">
-            Every peer this wallet knows about — accepted contacts you can transact
-            with, pending requests in either direction, and blocked parties. Search
-            by name or address, filter by status, chain state, or online state, or
-            click any row to open the contact detail.
-            <br><br>
-            <small>
-                <strong>Subnote on restored contacts.</strong>
-                <code>RestoredContact&lt;N&gt;</code> names are auto-assigned when a
-                contact reappears after deletion or when this node is re-seeded (the
-                number is just restore order, not an ID). Rename them anytime by
-                opening the contact and editing the Name field.
-            </small>
-        </div>
-    </details>
+<?php
+ob_start();
+?>
     <?php if (!empty($allContacts)): ?>
     <div class="contacts-search-bar mb-lg">
         <div class="search-icon-wrapper">
@@ -163,7 +141,35 @@
     <!-- Paginator controls — populated by Paginator.create('contacts', …) -->
     <div id="contacts-paginator" class="paginator-container"></div>
     <?php endif; ?>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'contacts',
+    'class' => 'contacts-section fade-in-up',
+    'icon'  => 'fas fa-address-book',
+    'title' => 'Your Contacts',
+    'headerExtras' =>
+          '<button type="button" class="btn btn-success btn-nowrap" data-action="openAddContactModal">'
+        . '<i class="fas fa-user-plus"></i> New Contact'
+        . '</button>',
+    'introTitle' => 'About Your Contacts',
+    'intro' =>
+          'Every peer this wallet knows about — accepted contacts you can transact '
+        . 'with, pending requests in either direction, and blocked parties. Search '
+        . 'by name or address, filter by status, chain state, or online state, or '
+        . 'click any row to open the contact detail.'
+        . '<br><br>'
+        . '<small>'
+        . '<strong>Subnote on restored contacts.</strong> '
+        . '<code>RestoredContact&lt;N&gt;</code> names are auto-assigned when a '
+        . 'contact reappears after deletion or when this node is re-seeded (the '
+        . 'number is just restore order, not an ID). Rename them anytime by '
+        . 'opening the contact and editing the Name field.'
+        . '</small>',
+    'body' => $body,
+]);
+?>
 
 <!-- Contact Modal (Tabbed Interface) -->
 <div id="contactModal" class="modal d-none">
@@ -700,34 +706,9 @@
      in Settings → Advanced → Display and the section hides when
      there's nothing pending. -->
 <?php if (!$user->getHideEmptyGuiSections() || !empty($pendingContacts)): ?>
-<div id="pending-contacts" class="contacts-section fade-in-up">
-    <div class="section-header">
-        <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
-    </div>
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>About Pending Contact Requests</span>
-        </summary>
-        <div class="section-intro-body">
-            Incoming requests from other wallets that want to connect with you.
-            Accepting creates a bilateral contact record (and adds any currencies
-            they use if they aren't already in your <strong>Allowed Currencies</strong>
-            list). Rejecting silently drops the request — the other side isn't told.
-            Outgoing requests you've sent that are still waiting on the other party
-            also live here until they respond.
-            <br><br>
-            <small>
-                <strong>Subnote on currencies.</strong>
-                If a request carries a currency outside your Allowed Currencies list,
-                you'll see an explicit per-currency accept toggle so you can pick
-                which to allow rather than accepting everything blindly. The default
-                behaviour (accept what the contact offers) can be changed under
-                Settings → Feature Toggles → Contacts → <em>Auto-reject Unknown
-                Currency</em>.
-            </small>
-        </div>
-    </details>
+<?php
+ob_start();
+?>
 <?php if (empty($pendingContacts)): ?>
     <!-- Big empty-state panel matching the Payment Requests / Your
          Contacts / Recent Transactions style, so empty states feel
@@ -1268,7 +1249,35 @@
         </div><!-- /pending-contact-modal-<?php echo $index; ?> -->
     <?php endforeach; ?>
 <?php endif; ?>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'pending-contacts',
+    'class' => 'contacts-section fade-in-up',
+    'icon'  => 'fas fa-user-clock',
+    'title' => 'Pending Contact Requests',
+    'introTitle' => 'About Pending Contact Requests',
+    'intro' =>
+          'Incoming requests from other wallets that want to connect with you. '
+        . 'Accepting creates a bilateral contact record (and adds any currencies '
+        . 'they use if they aren\'t already in your <strong>Allowed Currencies</strong> '
+        . 'list). Rejecting silently drops the request — the other side isn\'t told. '
+        . 'Outgoing requests you\'ve sent that are still waiting on the other party '
+        . 'also live here until they respond.'
+        . '<br><br>'
+        . '<small>'
+        . '<strong>Subnote on currencies.</strong> '
+        . 'If a request carries a currency outside your Allowed Currencies list, '
+        . 'you\'ll see an explicit per-currency accept toggle so you can pick '
+        . 'which to allow rather than accepting everything blindly. The default '
+        . 'behaviour (accept what the contact offers) can be changed under '
+        . 'Settings → Feature Toggles → Contacts → <em>Auto-reject Unknown '
+        . 'Currency</em>.'
+        . '</small>',
+    'body' => $body,
+]);
+?>
 <?php endif; ?>
 
 <!-- Add Contact Modal -->

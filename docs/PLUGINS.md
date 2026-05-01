@@ -1295,10 +1295,35 @@ $container->getHooks()->onRender('gui.section.after.dlq', function (array $ctx):
 });
 ```
 
-Core sections that have been migrated to the helper at the time of
-writing: `plugins-section`, `payback-methods-section`, `dlq`. The
-remaining sections still use the manual wrapper but emit identical
-markup; migrate-on-touch as they need updates.
+Every standard wallet section is rendered through `renderSection()`:
+`plugins-section`, `payback-methods-section`, `dlq`, `api-keys-section`,
+`transactions`, `payment-requests-section`, `debug-section`,
+`settings`, `contacts`, `pending-contacts`. The
+`gui.section.before.<id>` / `gui.section.after.<id>` hooks fire for
+every one of them.
+
+### Table helper (`renderTable()`)
+
+Every paginated table in the wallet wraps its `<table>` in
+`<div class="contacts-table-wrapper">` and adds a `contacts-table
+{variant}-table` class. `renderTable()` hides that boilerplate so
+plugin-authored tables get the same chrome.
+
+```php
+echo renderTable([
+    'id'           => 'my-plugin-table-wrapper', // optional <div id>
+    'wrapperClass' => 'contacts-table-wrapper d-none', // optional, default is just contacts-table-wrapper
+    'variant'      => 'my-plugin',  // becomes class="contacts-table my-plugin-table"
+    'headers'      => '<tr><th>Col 1</th><th>Col 2</th></tr>',
+    'body'         => $rowsHtml,    // your <tr>…</tr> rows; empty for JS-populated tables
+    'tbodyId'      => 'my-plugin-tbody', // optional <tbody id> for JS-populated tables
+]);
+```
+
+Column definitions stay as raw HTML — they're domain-specific (sort
+buttons, info-tooltip icons, custom `data-` attributes) and a generic
+config array would just push complexity around. The helper is just
+the wrapper.
 
 
 

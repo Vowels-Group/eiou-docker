@@ -25,20 +25,23 @@ ob_start();
         <i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;
     </div>
 
-    <div id="plugins-table-wrapper" class="contacts-table-wrapper d-none">
-        <table class="contacts-table plugins-table">
-            <thead>
-                <tr>
-                    <th class="col-plugin-dot text-center" aria-label="Enabled"></th>
-                    <th class="col-name">Name</th>
-                    <th class="col-version">Version</th>
-                    <th class="col-description">Description</th>
-                    <th class="col-enabled text-right">Enabled</th>
-                </tr>
-            </thead>
-            <tbody id="plugins-tbody"></tbody>
-        </table>
-    </div>
+    <?php
+    echo renderTable([
+        'id'           => 'plugins-table-wrapper',
+        'wrapperClass' => 'contacts-table-wrapper d-none',
+        'variant'      => 'plugins',
+        'headers'      =>
+              '<tr>'
+            . '<th class="col-plugin-dot text-center" aria-label="Enabled"></th>'
+            . '<th class="col-name">Name</th>'
+            . '<th class="col-version">Version</th>'
+            . '<th class="col-description">Description</th>'
+            . '<th class="col-enabled text-right">Enabled</th>'
+            . '</tr>',
+        'body'         => '',
+        'tbodyId'      => 'plugins-tbody',
+    ]);
+    ?>
 <?php
 $body = ob_get_clean();
 

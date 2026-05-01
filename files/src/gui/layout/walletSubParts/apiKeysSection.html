@@ -1,43 +1,9 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!-- API Keys Section -->
-<div id="api-keys-section" class="form-container fade-in-up">
-    <div class="section-header">
-        <h2><i class="fas fa-key"></i> API Keys</h2>
-        <button type="button" class="btn btn-success btn-nowrap" data-action="openApiKeyCreateModal">
-            <i class="fas fa-plus"></i> Create API Key
-        </button>
-    </div>
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>About API Keys</span>
-        </summary>
-        <div class="section-intro-body">
-            API keys let external tools &mdash; scripts, accounting importers,
-            monitoring dashboards, mobile apps &mdash; talk to this node over
-            HTTPS without ever seeing your auth code. Each key carries a fixed
-            subset of <strong>permissions</strong> (scopes) granted at creation:
-            a read-only key for an accounting importer never needs to send, a
-            send-only key for a point-of-sale app never needs to list contacts.
-            Scopes are locked at creation time and cannot be widened afterwards
-            &mdash; create a new key instead.
-            <br><br>
-            Keys authenticate via <strong>HMAC-SHA256</strong> over the request
-            body plus a timestamp, so even a passive observer on the wire
-            can't replay or modify the call. The shared secret is shown
-            <strong>once</strong> on the create screen and is never retrievable
-            again &mdash; copy it straight into the tool that will use it. If
-            you lose it, disable the key and make a new one.
-            <br><br>
-            Creating, disabling, or deleting a key is a sensitive action and
-            re-prompts for your auth code. The re-auth covers a short window
-            (a few minutes) so you can make several edits in a row without
-            typing the code again, but it expires on its own and is
-            independent of <em>Remember me</em> on login.
-        </div>
-    </details>
-
+<?php
+ob_start();
+?>
     <div id="api-keys-filters" class="api-keys-filters d-none">
         <div class="api-keys-search-row search-icon-wrapper">
             <i class="fas fa-search search-icon-positioned"></i>
@@ -118,7 +84,43 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
     <div id="api-keys-no-matches" class="api-keys-empty text-muted d-none">
         No keys match the current filters.
     </div>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'api-keys-section',
+    'icon'  => 'fas fa-key',
+    'title' => 'API Keys',
+    'headerExtras' =>
+          '<button type="button" class="btn btn-success btn-nowrap" data-action="openApiKeyCreateModal">'
+        . '<i class="fas fa-plus"></i> Create API Key'
+        . '</button>',
+    'introTitle' => 'About API Keys',
+    'intro' =>
+          'API keys let external tools &mdash; scripts, accounting importers, '
+        . 'monitoring dashboards, mobile apps &mdash; talk to this node over '
+        . 'HTTPS without ever seeing your auth code. Each key carries a fixed '
+        . 'subset of <strong>permissions</strong> (scopes) granted at creation: '
+        . 'a read-only key for an accounting importer never needs to send, a '
+        . 'send-only key for a point-of-sale app never needs to list contacts. '
+        . 'Scopes are locked at creation time and cannot be widened afterwards '
+        . '&mdash; create a new key instead.'
+        . '<br><br>'
+        . 'Keys authenticate via <strong>HMAC-SHA256</strong> over the request '
+        . 'body plus a timestamp, so even a passive observer on the wire '
+        . 'can\'t replay or modify the call. The shared secret is shown '
+        . '<strong>once</strong> on the create screen and is never retrievable '
+        . 'again &mdash; copy it straight into the tool that will use it. If '
+        . 'you lose it, disable the key and make a new one.'
+        . '<br><br>'
+        . 'Creating, disabling, or deleting a key is a sensitive action and '
+        . 're-prompts for your auth code. The re-auth covers a short window '
+        . '(a few minutes) so you can make several edits in a row without '
+        . 'typing the code again, but it expires on its own and is '
+        . 'independent of <em>Remember me</em> on login.',
+    'body' => $body,
+]);
+?>
 
 <!-- Create API key modal -->
 <div id="apiKeysCreateModal" class="modal d-none">
