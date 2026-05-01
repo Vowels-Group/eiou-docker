@@ -44,6 +44,13 @@ class TransportUtilityServiceTest extends TestCase
             ->method('getRepositoryFactory')
             ->willReturn($mockRepoFactory);
 
+        // AppConfig is a final value object — return a concrete
+        // instance built from the test environment rather than
+        // auto-stubbing (PHPUnit can't double final classes).
+        $this->serviceContainer->expects($this->any())
+            ->method('getAppConfig')
+            ->willReturn(\Eiou\Core\AppConfig::fromEnvironment());
+
         // Create the service
         $this->service = new TransportUtilityService($this->serviceContainer);
     }

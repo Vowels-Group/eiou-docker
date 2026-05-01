@@ -17,6 +17,7 @@ namespace Eiou\Tests\Services;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Eiou\Core\AppConfig;
 use Eiou\Services\Hooks;
 
 #[CoversClass(Hooks::class)]
@@ -26,7 +27,7 @@ class HooksFilterSlotsTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->hooks = new Hooks();
+        $this->hooks = new Hooks(AppConfig::fromEnvironment());
     }
 
     // =========================================================================

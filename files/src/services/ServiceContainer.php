@@ -7,6 +7,7 @@ use Psr\Container\ContainerInterface;
 use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
+use Eiou\Core\AppConfig;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\SyncTriggerInterface;
@@ -238,9 +239,33 @@ class ServiceContainer implements ContainerInterface {
     public function getHooks(): Hooks
     {
         if (!isset($this->services['Hooks'])) {
-            $this->services['Hooks'] = new Hooks();
+            $this->services['Hooks'] = new Hooks($this->getAppConfig());
         }
         return $this->services['Hooks'];
+    }
+
+    /**
+     * Typed runtime configuration (env-driven flags). Built once per
+     * request via `AppConfig::fromEnvironment()`; consumers depend on
+     * this object instead of calling `getenv()` directly. See
+     * `Eiou\Core\AppConfig` for scope notes.
+     */
+    public function getAppConfig(): AppConfig
+    {
+        if (!isset($this->services['AppConfig'])) {
+            $this->services['AppConfig'] = AppConfig::fromEnvironment();
+        }
+        return $this->services['AppConfig'];
+    }
+
+    /**
+     * Override the AppConfig instance for tests that need to flip a
+     * specific env-driven flag without touching process env. Pass
+     * an `AppConfig::fromEnvironment()->withOverrides([...])` instance.
+     */
+    public function setAppConfig(AppConfig $appConfig): void
+    {
+        $this->services['AppConfig'] = $appConfig;
     }
 
     /**
@@ -783,7 +808,8 @@ class ServiceContainer implements ContainerInterface {
     public function getCliSettingsService(): CliSettingsService {
         if (!isset($this->services['CliSettingsService'])) {
             $this->services['CliSettingsService'] = new CliSettingsService(
-                $this->currentUser
+                $this->currentUser,
+                $this->getAppConfig()
             );
         }
         return $this->services['CliSettingsService'];

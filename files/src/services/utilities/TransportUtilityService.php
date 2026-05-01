@@ -504,13 +504,21 @@ class TransportUtilityService implements TransportServiceInterface
         //   - P2P_CA_CERT=/path/to/ca   → custom CA for verification
         //   - EIOU_TEST_MODE=true        → disables verification (test suites)
         if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
+            $appConfig = $this->container->getAppConfig();
+            // EIOU_TEST_MODE bypass is read RAW here, not from AppConfig,
+            // pending the dedicated security remediation tracked in
+            // AUDIT_SECURITY finding #10 — that fix will gate the bypass
+            // on the bootstrap-only `define()` constant and add the
+            // loud-warning telemetry. AppConfig deliberately omits the
+            // flag so we don't bake a runtime env override into the
+            // typed config seam.
             $testMode = getenv('EIOU_TEST_MODE') === 'true';
-            $verifySsl = !$testMode && getenv('P2P_SSL_VERIFY') !== 'false';
+            $verifySsl = !$testMode && $appConfig->p2pSslVerify;
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
 
             // If a CA certificate is provided, use it for verification
-            $caCertPath = getenv('P2P_CA_CERT');
+            $caCertPath = $appConfig->p2pCaCert;
             if ($caCertPath && file_exists($caCertPath)) {
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
@@ -684,12 +692,15 @@ class TransportUtilityService implements TransportServiceInterface
 
             // SSL options for HTTPS connections (see sendByHttp for full documentation)
             if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
+                $appConfig = $this->container->getAppConfig();
+                // EIOU_TEST_MODE read RAW here pending AUDIT_SECURITY
+                // finding #10 (see sendByHttp for the full reasoning).
                 $testMode = getenv('EIOU_TEST_MODE') === 'true';
-                $verifySsl = !$testMode && getenv('P2P_SSL_VERIFY') !== 'false';
+                $verifySsl = !$testMode && $appConfig->p2pSslVerify;
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
 
-                $caCertPath = getenv('P2P_CA_CERT');
+                $caCertPath = $appConfig->p2pCaCert;
                 if ($caCertPath && file_exists($caCertPath)) {
                     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
                     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);

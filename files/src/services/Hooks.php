@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Eiou\Core\AppConfig;
 use Eiou\Utils\Logger;
 
 /**
@@ -61,6 +62,14 @@ class Hooks
 
     /** Cached PLUGIN_HOOKS_TRACE check — read once per instance. */
     private ?bool $traceEnabled = null;
+
+    /** Source of truth for the trace flag — read once at first call. */
+    private AppConfig $appConfig;
+
+    public function __construct(AppConfig $appConfig)
+    {
+        $this->appConfig = $appConfig;
+    }
 
     /**
      * Register a render-hook listener. Listener signature:
@@ -236,9 +245,7 @@ class Hooks
         if ($this->traceEnabled !== null) {
             return $this->traceEnabled;
         }
-        $val = getenv('PLUGIN_HOOKS_TRACE');
-        if ($val === false) $val = $_SERVER['PLUGIN_HOOKS_TRACE'] ?? '';
-        $this->traceEnabled = ($val === '1' || strtolower((string)$val) === 'true');
+        $this->traceEnabled = $this->appConfig->pluginHooksTrace;
         return $this->traceEnabled;
     }
 

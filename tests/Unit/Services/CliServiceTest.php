@@ -17,6 +17,7 @@ namespace Eiou\Tests\Services;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
+use Eiou\Core\AppConfig;
 use Eiou\Services\CliService;
 use Eiou\Services\CliSettingsService;
 use Eiou\Services\CliHelpService;
@@ -76,7 +77,7 @@ class CliServiceTest extends TestCase
         );
 
         // Inject sub-services for delegation (ARCH-04)
-        $this->service->setSettingsService(new CliSettingsService($this->userContext));
+        $this->service->setSettingsService(new CliSettingsService($this->userContext, AppConfig::fromEnvironment()));
         $this->service->setHelpService(new CliHelpService());
     }
 

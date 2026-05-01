@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Eiou\Core\AppConfig;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
 use Eiou\Utils\InputValidator;
@@ -20,10 +21,12 @@ use Eiou\Services\AnalyticsService;
 class CliSettingsService
 {
     private UserContext $currentUser;
+    private AppConfig $appConfig;
 
-    public function __construct(UserContext $currentUser)
+    public function __construct(UserContext $currentUser, AppConfig $appConfig)
     {
         $this->currentUser = $currentUser;
+        $this->appConfig = $appConfig;
     }
 
     // =========================================================================
@@ -1362,8 +1365,8 @@ class CliSettingsService
         }
         $sanList .= ",IP:127.0.0.1";
 
-        // Add extra SANs from environment if set
-        $extraSans = getenv('SSL_EXTRA_SANS');
+        // Add extra SANs from environment if set.
+        $extraSans = $this->appConfig->sslExtraSans;
         if ($extraSans) {
             $sanList .= ",{$extraSans}";
         }
