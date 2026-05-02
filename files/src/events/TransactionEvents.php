@@ -21,6 +21,23 @@ namespace Eiou\Events;
 class TransactionEvents
 {
     /**
+     * Dispatched **before** a transaction is validated. Listeners may
+     * throw an `\Eiou\Core\TransactionPreValidationException` (or any
+     * subclass of `\RuntimeException`) to abort the validation and
+     * prevent the transaction from being created — useful for compliance
+     * or anti-fraud plugins that need a veto point in the pipeline.
+     *
+     * Emitted by `TransactionValidationService::checkTransactionPossible()`
+     * as the first call in the method, so the abort costs no DB work.
+     *
+     * Event data:
+     *   - request: array - The raw transaction request being validated
+     *                      (includes senderPublicKey, receiverPublicKey,
+     *                      amount, currency, txid, etc.)
+     */
+    public const PRE_VALIDATE = 'transaction.pre_validate';
+
+    /**
      * Dispatched when a pending outbound transaction is inserted into the
      * `transactions` table, before any delivery attempt.
      *

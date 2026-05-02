@@ -362,9 +362,11 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * Delegates to Security::getClientIp() which only trusts proxy headers
      * when REMOTE_ADDR is in the trusted proxies list.
      *
+     * @param \Eiou\Core\AppConfig $appConfig Typed config snapshot (carries
+     *     the `TRUSTED_PROXIES` value); pass `$container->getAppConfig()`.
      * @return string IP address
      */
-    public static function getClientIp(): string {
-        return Security::getClientIp();
+    public static function getClientIp(\Eiou\Core\AppConfig $appConfig): string {
+        return Security::getClientIp($appConfig);
     }
 }

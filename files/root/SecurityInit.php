@@ -30,6 +30,7 @@
 // Load Composer autoloader (safe to call multiple times due to double-inclusion guard)
 require_once __DIR__ . '/src/bootstrap.php';
 
+use Eiou\Core\AppConfig;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorHandler;
 use Eiou\Utils\Security;
@@ -38,6 +39,12 @@ use Eiou\Database\RateLimiterRepository;
 use Eiou\Services\RateLimiterService;
 use Eiou\Gui\Helpers\MessageHelper;
 use Eiou\Gui\Includes\SessionKeys;
+
+// SecurityInit runs before the service container is built (it has $pdo
+// only). Build a one-shot AppConfig snapshot from the environment so the
+// downstream `getClientIp()` calls can use the typed config seam without
+// the global service container being available yet.
+$securityInitAppConfig = AppConfig::fromEnvironment();
 
 // Initialize secure logging
 Logger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
@@ -109,7 +116,7 @@ if (php_sapi_name() !== 'cli') {
         }
 
         // Check rate limit and redirect with flash message if exceeded
-        $ip = RateLimiterService::getClientIp();
+        $ip = RateLimiterService::getClientIp($securityInitAppConfig);
         $limits = $rateLimits[$action];
         $result = $rateLimiterService->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
         if (!$result['allowed']) {
@@ -182,6 +189,6 @@ function u($string) {
 // Log application start
 Logger::getInstance()->info("Application initialized", [
     'sapi' => php_sapi_name(),
-    'ip' => php_sapi_name() !== 'cli' ? RateLimiterService::getClientIp() : 'CLI',
+    'ip' => php_sapi_name() !== 'cli' ? RateLimiterService::getClientIp($securityInitAppConfig) : 'CLI',
     'request_uri' => $_SERVER['REQUEST_URI'] ?? 'N/A'
 ]);

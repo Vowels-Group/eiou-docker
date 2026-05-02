@@ -598,6 +598,7 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRepositoryFactory()->get(TransactionChainRepository::class),
                 $this->getRepositoryFactory()->get(TransactionContactRepository::class),
                 $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(HeldTransactionRepository::class),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -1197,6 +1198,7 @@ class ServiceContainer implements ContainerInterface {
         if (!isset($this->services['TransactionValidationService'])) {
             $this->services['TransactionValidationService'] = new TransactionValidationService(
                 $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
                 $this->getContactService(),
                 $this->getUtilityContainer()->getValidationUtility(),
                 $this->getInputValidator(),

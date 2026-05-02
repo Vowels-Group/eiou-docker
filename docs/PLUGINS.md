@@ -908,6 +908,7 @@ below has a live emit point.
 
 | Constant                         | When it fires                                           |
 | -------------------------------- | ------------------------------------------------------- |
+| `SYNC_STARTED`                   | A sync round is about to begin (companion to `SYNC_COMPLETED`); listeners may throw to abort |
 | `SYNC_COMPLETED`                 | A sync round with a contact completed successfully      |
 | `SYNC_FAILED`                    | A sync round failed                                     |
 | `CHAIN_GAP_DETECTED`             | A missing chain link was detected during sync           |
@@ -944,6 +945,7 @@ contract.
 
 | Constant              | When it fires                                                                |
 | --------------------- | ---------------------------------------------------------------------------- |
+| `PRE_VALIDATE`        | Before a transaction is validated; listeners may throw to veto and abort     |
 | `TRANSACTION_CREATED` | A pending outbound tx was inserted in `SendOperationService` (direct or P2P) |
 | `TRANSACTION_SENT`    | After successful direct delivery (`handleAcceptedTransaction`)               |
 | `TRANSACTION_RECEIVED`| An inbound direct transaction was persisted (`processStandardIncoming`)      |

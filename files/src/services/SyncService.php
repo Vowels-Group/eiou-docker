@@ -140,6 +140,14 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
     private TransactionContactRepository $transactionContactRepository;
 
     /**
+     * @var HeldTransactionRepository Held-transaction repository instance.
+     * Was previously instantiated `new HeldTransactionRepository()` inline
+     * inside `releaseHeldTransaction()`, bypassing the factory cache and
+     * making the dependency invisible to the constructor signature.
+     */
+    private HeldTransactionRepository $heldTransactionRepository;
+
+    /**
      * Set the held transaction service (setter injection for circular dependency)
      *
      * @param HeldTransactionService $service Held transaction service
@@ -192,6 +200,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         TransactionChainRepository $transactionChainRepository,
         TransactionContactRepository $transactionContactRepository,
         BalanceRepository $balanceRepository,
+        HeldTransactionRepository $heldTransactionRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
@@ -203,6 +212,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         $this->transactionChainRepository = $transactionChainRepository;
         $this->transactionContactRepository = $transactionContactRepository;
         $this->balanceRepository = $balanceRepository;
+        $this->heldTransactionRepository = $heldTransactionRepository;
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
@@ -1229,15 +1239,13 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      */
     private function releaseHeldTransaction(string $txid): bool {
         try {
-            $heldRepository = new HeldTransactionRepository();
-
             // Check if transaction is held
-            if (!$heldRepository->isTransactionHeld($txid)) {
+            if (!$this->heldTransactionRepository->isTransactionHeld($txid)) {
                 return true; // Not held, nothing to release
             }
 
             // Release it to prevent HeldTransactionService from overwriting
-            $released = $heldRepository->releaseTransaction($txid);
+            $released = $this->heldTransactionRepository->releaseTransaction($txid);
 
             if ($released) {
                 Logger::getInstance()->info("Released held transaction after chain conflict resolution", [
@@ -1810,6 +1818,14 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             'currencies' => [],
             'error' => null
         ];
+
+        // SYNC_STARTED hook — companion to SYNC_COMPLETED below. Plugin
+        // listeners can record the attempt or short-circuit by throwing.
+        EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_STARTED, [
+            'contact_pubkey'  => $contactPubkey,
+            'contact_address' => null,
+            'sync_type'       => 'balance',
+        ]);
 
         try {
             // Get the user's addresses to determine transaction direction
