@@ -69,3 +69,27 @@ Plugins MAY read `UserContext` but must NOT mutate it. Plugin per-plugin state g
 - The wallet user adjusts it interactively at runtime → flows through **`UserContext`**.
 
 Conflict resolution: layer 4 wins for keys it exposes; otherwise layer 3; otherwise layer 2; otherwise layer 1. There is intentionally no layer-skipping (e.g. an env var can't override a `userconfig.json` value the user set deliberately) — the operator is expected to remove the JSON entry first.
+
+---
+
+## Startup validation
+
+`Eiou\Core\ConfigValidator` runs once during `Application::init()` (after `migrateDefaultConfig()`, before `loadCurrentUser()`). It surfaces likely misconfigurations at boot rather than letting them appear as opaque downstream failures (TLS handshake errors, JSON parse warnings on the request path, debug output leaking on a production node).
+
+The validator is **non-fatal**: each issue logs a `warning` or `error` line through the active `Logger`, but the wallet still starts. The intent is to give the operator a single visible signal at boot, not to lock them out of fixing the problem from the GUI.
+
+Current rule set:
+
+| Code | Severity | Trigger |
+|---|---|---|
+| `prod_debug_enabled` | warning | `APP_ENV=production` and `APP_DEBUG=true` |
+| `prod_ssl_verify_disabled` | error | `APP_ENV=production` and `P2P_SSL_VERIFY=false` |
+| `p2p_ca_cert_missing` | error | `P2P_CA_CERT` set but the path doesn't exist |
+| `dbconfig_unreadable` | error | `dbconfig.json` exists but the running user can't read it |
+| `dbconfig_invalid_json` | error | `dbconfig.json` exists but isn't valid JSON |
+| `dbconfig_missing_fields` | error | `dbconfig.json` missing one of `dbHost` / `dbName` / `dbUser` / `dbPass` |
+| `config_unreadable` | warning | `defaultconfig.json` / `userconfig.json` exists but is empty / unreadable |
+| `config_invalid_json` | warning | `defaultconfig.json` / `userconfig.json` exists but isn't valid JSON |
+| `trusted_proxies_malformed` | warning | `TRUSTED_PROXIES` contains entries that don't parse as IP or CIDR |
+
+To extend the rule set when an incident exposes a new layer-conflict pattern, add a `validateXyz()` method on `ConfigValidator` that returns the issue array shape and append it from `validate()`. Tests live at `tests/Unit/Core/ConfigValidatorTest.php` — pin every new rule with both the firing case and the silent case.
