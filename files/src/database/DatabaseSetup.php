@@ -373,6 +373,87 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
 
+    // Column type changes: tighten loose types on existing tables.
+    // Pattern: [tableName => [columnName => ['from' => regex, 'to' => new MySQL definition]]]
+    // The `from` regex matches against `SHOW COLUMNS` "Type"; only run
+    // the MODIFY if the current type still matches. Idempotent.
+    $columnTypeChanges = [
+        // addresses.pubkey_hash and balances.pubkey_hash were TEXT but
+        // every value is a SHA-256 hex digest (exactly 64 chars). The
+        // contacts / contact_credit / contact_currencies tables already
+        // store pubkey_hash as VARCHAR(64). Aligning the two TEXT
+        // columns avoids implicit type coercion on the heavily-used
+        // `addresses a JOIN contacts c ON a.pubkey_hash = c.pubkey_hash`
+        // and lets the existing pubkey indexes work as full-key
+        // equality indexes instead of TEXT prefix indexes.
+        'addresses' => [
+            'pubkey_hash' => ['from' => '/^text$/i', 'to' => 'VARCHAR(64) NOT NULL'],
+        ],
+        'balances' => [
+            'pubkey_hash' => ['from' => '/^text$/i', 'to' => 'VARCHAR(64) NOT NULL'],
+        ],
+    ];
+
+    foreach ($columnTypeChanges as $tableName => $columns) {
+        foreach ($columns as $columnName => $spec) {
+            try {
+                $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
+                $columnInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$columnInfo) {
+                    $results["{$tableName}.{$columnName}_type"] = 'missing_column';
+                    continue;
+                }
+
+                if (!preg_match($spec['from'], $columnInfo['Type'])) {
+                    $results["{$tableName}.{$columnName}_type"] = 'already_updated';
+                    continue;
+                }
+
+                // Defensive guard: refuse to truncate. If any existing
+                // value is longer than the target VARCHAR length, log
+                // and skip — operator can investigate (this should
+                // never happen for SHA-256 hashes but the cost of the
+                // check is one cheap query).
+                if (preg_match('/VARCHAR\((\d+)\)/i', $spec['to'], $m)) {
+                    $maxLen = (int) $m[1];
+                    $check = $pdo->query(
+                        "SELECT MAX(CHAR_LENGTH(`$columnName`)) AS max_len FROM `$tableName`"
+                    );
+                    $row = $check->fetch(PDO::FETCH_ASSOC);
+                    $observedMax = (int) ($row['max_len'] ?? 0);
+                    if ($observedMax > $maxLen) {
+                        $results["{$tableName}.{$columnName}_type"] =
+                            "skipped: existing value length $observedMax exceeds target $maxLen";
+                        if (class_exists('Eiou\\Utils\\Logger')) {
+                            Logger::getInstance()->error(
+                                "Column type migration skipped (would truncate)",
+                                [
+                                    'table' => $tableName,
+                                    'column' => $columnName,
+                                    'observed_max_length' => $observedMax,
+                                    'target_definition' => $spec['to'],
+                                ]
+                            );
+                        }
+                        continue;
+                    }
+                }
+
+                $pdo->exec("ALTER TABLE `$tableName` MODIFY COLUMN `$columnName` {$spec['to']}");
+                $results["{$tableName}.{$columnName}_type"] = 'updated';
+            } catch (PDOException $e) {
+                $results["{$tableName}.{$columnName}_type"] = 'error: ' . $e->getMessage();
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("Column type migration failed for {$tableName}.{$columnName}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
+
     // Add missing indexes
     $indexesToAdd = [
         // dead_letter_queue.message_id was previously unindexed, so the

@@ -135,13 +135,36 @@ class PaymentRequestRepository extends AbstractRepository
      *               the `direction` column set, so callers can tag it
      *               onto the `$req['_direction']` the row partial expects
      */
-    public function getResolvedHistoryPage(int $limit, int $offset = 0): array
+    public function getResolvedHistoryPage(int $limit, int $offset = 0, ?array $cursor = null): array
     {
         // UNION ALL across live + archive so paginated history includes
         // archived rows without the caller knowing. Archive rows are always
         // non-pending by construction, so the status filter is only needed
         // on the live side. Column list kept identical on both sides so the
         // union is well-formed regardless of the archive-specific `archived_at`.
+        //
+        // Pagination modes (mutually exclusive — `$cursor` wins):
+        //   - **Offset mode** (legacy): linear-in-offset on deep history.
+        //   - **Cursor mode**: keyset on `(COALESCE(responded_at, created_at), id)`,
+        //     constant-time at any depth. `id` is the strict-total-order
+        //     tiebreaker so two requests resolved in the same second can't
+        //     land in the same page twice.
+        $useCursor = $cursor !== null
+            && isset($cursor['ts'], $cursor['id']);
+
+        // The cursor predicate has to be applied INSIDE each leg of the
+        // UNION because MySQL's UNION semantics don't let you reference
+        // a single tuple post-union except via subquery wrapping. Cheaper
+        // to push it down.
+        $cursorClause = $useCursor
+            ? " AND (COALESCE(responded_at, created_at) < :cursor_ts
+                  OR (COALESCE(responded_at, created_at) = :cursor_ts AND id < :cursor_id))"
+            : "";
+
+        $orderTail = $useCursor
+            ? " ORDER BY COALESCE(responded_at, created_at) DESC, id DESC LIMIT :limit"
+            : " ORDER BY COALESCE(responded_at, created_at) DESC LIMIT :limit OFFSET :offset";
+
         $sql = "
             SELECT id, request_id, direction, status, requester_pubkey_hash,
                    requester_address, contact_name, recipient_pubkey_hash,
@@ -149,7 +172,7 @@ class PaymentRequestRepository extends AbstractRepository
                    created_at, expires_at, responded_at, resulting_txid,
                    signed_message_content
               FROM {$this->tableName}
-             WHERE status != 'pending'
+             WHERE status != 'pending'" . $cursorClause . "
             UNION ALL
             SELECT id, request_id, direction, status, requester_pubkey_hash,
                    requester_address, contact_name, recipient_pubkey_hash,
@@ -157,25 +180,32 @@ class PaymentRequestRepository extends AbstractRepository
                    created_at, expires_at, responded_at, resulting_txid,
                    signed_message_content
               FROM " . self::ARCHIVE_TABLE . "
-            ORDER BY COALESCE(responded_at, created_at) DESC
-            LIMIT :limit OFFSET :offset";
+              WHERE 1=1" . $cursorClause . "
+            " . $orderTail;
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->bindValue(':limit', max(0, $limit), PDO::PARAM_INT);
-        $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        if ($useCursor) {
+            $stmt->bindValue(':cursor_ts', (string) $cursor['ts']);
+            $stmt->bindValue(':cursor_id', (int) $cursor['id'], PDO::PARAM_INT);
+        } else {
+            $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        }
         try {
             $stmt->execute();
         } catch (PDOException $e) {
             // Archive table may not exist yet on a freshly-migrated node — fall
             // back to live-only so history pagination keeps working.
-            $fallback = $this->pdo->prepare(
-                "SELECT * FROM {$this->tableName}
-                 WHERE status != 'pending'
-                 ORDER BY COALESCE(responded_at, created_at) DESC
-                 LIMIT :limit OFFSET :offset"
-            );
+            $fallbackSql = "SELECT * FROM {$this->tableName}
+                 WHERE status != 'pending'" . $cursorClause . $orderTail;
+            $fallback = $this->pdo->prepare($fallbackSql);
             $fallback->bindValue(':limit', max(0, $limit), PDO::PARAM_INT);
-            $fallback->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+            if ($useCursor) {
+                $fallback->bindValue(':cursor_ts', (string) $cursor['ts']);
+                $fallback->bindValue(':cursor_id', (int) $cursor['id'], PDO::PARAM_INT);
+            } else {
+                $fallback->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+            }
             $fallback->execute();
             return $this->mapRows($fallback->fetchAll(PDO::FETCH_ASSOC));
         }

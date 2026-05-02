@@ -584,9 +584,9 @@ class PaymentRequestService
      * @param int $offset Zero-based offset
      * @return array Resolved rows newest-first
      */
-    public function getResolvedHistoryPage(int $limit, int $offset = 0): array
+    public function getResolvedHistoryPage(int $limit, int $offset = 0, ?array $cursor = null): array
     {
-        return $this->paymentRequestRepository->getResolvedHistoryPage($limit, $offset);
+        return $this->paymentRequestRepository->getResolvedHistoryPage($limit, $offset, $cursor);
     }
 
     /**

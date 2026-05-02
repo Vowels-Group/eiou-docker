@@ -127,13 +127,20 @@ class ChainDropServiceTest extends TestCase
     {
         $contactPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
 
-        // Contact lookup returns contact with pubkey
+        // proposeChainDrop now uses the leaner pubkey-only lookup
+        // (no addresses JOIN). resolveContactAddress, called separately
+        // via the backup-recovery path, still goes through the JOIN-based
+        // lookup — keep both mocks in case the test's success path runs
+        // through that code branch.
         $this->contactRepository->expects($this->atLeastOnce())
-            ->method('lookupByPubkeyHash')
+            ->method('findPubkeyByPubkeyHash')
+            ->with($contactPubkeyHash)
+            ->willReturn(self::TEST_CONTACT_PUBKEY);
+        $this->contactRepository->method('lookupByPubkeyHash')
             ->with($contactPubkeyHash)
             ->willReturn([
                 'pubkey' => self::TEST_CONTACT_PUBKEY,
-                'http' => self::TEST_CONTACT_ADDRESS
+                'http' => self::TEST_CONTACT_ADDRESS,
             ]);
 
         // Chain integrity shows a gap
@@ -183,14 +190,11 @@ class ChainDropServiceTest extends TestCase
     {
         $contactPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
 
-        // Contact lookup returns contact with pubkey
+        // proposeChainDrop's pubkey lookup is JOIN-free now.
         $this->contactRepository->expects($this->once())
-            ->method('lookupByPubkeyHash')
+            ->method('findPubkeyByPubkeyHash')
             ->with($contactPubkeyHash)
-            ->willReturn([
-                'pubkey' => self::TEST_CONTACT_PUBKEY,
-                'http' => self::TEST_CONTACT_ADDRESS
-            ]);
+            ->willReturn(self::TEST_CONTACT_PUBKEY);
 
         // Chain integrity reports valid chain
         $this->transactionChainRepository->expects($this->once())
@@ -547,8 +551,16 @@ class ChainDropServiceTest extends TestCase
             ->method('updateStatus')
             ->with(self::TEST_PROPOSAL_ID, 'accepted');
 
-        // Contact address lookup (called for balance sync and sending acceptance)
+        // Lookups split by need now: `updateChainStatusAfterDrop` and
+        // `syncContactBalanceAfterDrop` use the leaner pubkey-only
+        // `findPubkeyByPubkeyHash` (no JOIN); `resolveContactAddress`
+        // (the acceptance-send path) needs transport columns and stays
+        // on the JOIN-based `lookupByPubkeyHash`.
         $this->contactRepository->expects($this->exactly(2))
+            ->method('findPubkeyByPubkeyHash')
+            ->with($contactPubkeyHash)
+            ->willReturn(self::TEST_CONTACT_PUBKEY);
+        $this->contactRepository->expects($this->once())
             ->method('lookupByPubkeyHash')
             ->with($contactPubkeyHash)
             ->willReturn(['http' => self::TEST_CONTACT_ADDRESS]);

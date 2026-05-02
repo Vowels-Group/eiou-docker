@@ -1579,6 +1579,217 @@ class ContactRepositoryTest extends TestCase
         $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $id, 'Contact ID should be lowercase hex');
     }
 
+    // =========================================================================
+    // getContactsGroupedByStatus() request-scoped cache
+    // =========================================================================
+
+    /**
+     * Two consecutive calls to getContactsGroupedByStatus() in the same
+     * request must hit the DB once. Templates fire this ≥3× per render
+     * (Functions.php + two TemplateHelpers helpers) — caching means the
+     * grouped query runs once, not once per call site.
+     */
+    public function testGetContactsGroupedByStatusCachesWithinRequest(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('fetchAll')->willReturn([
+            ['status' => 'accepted', 'name' => 'Alice', 'pubkey_hash' => 'hash1'],
+            ['status' => 'pending',  'name' => 'Bob',   'pubkey_hash' => 'hash2'],
+            ['status' => 'blocked',  'name' => 'Carol', 'pubkey_hash' => 'hash3'],
+        ]);
+
+        $first  = $this->repository->getContactsGroupedByStatus();
+        $second = $this->repository->getContactsGroupedByStatus();
+
+        $this->assertSame($first, $second, 'cache should return the identical result');
+        $this->assertCount(1, $first['accepted']);
+        $this->assertCount(1, $first['user_pending']);
+        $this->assertCount(1, $first['blocked']);
+    }
+
+    /**
+     * Failures must NOT poison the cache. A transient DB blip should
+     * cause the next call to retry — otherwise the rest of the request
+     * sees stale empty buckets.
+     */
+    public function testGetContactsGroupedByStatusDoesNotCacheOnQueryFailure(): void
+    {
+        // First call: prepare returns mock that throws on execute → empty
+        // result, MUST not be cached. Second call: prepare returns a
+        // healthy mock that yields one row → must be the visible result.
+        $failingStmt = $this->createMock(PDOStatement::class);
+        $failingStmt->method('execute')->willThrowException(new \PDOException('transient'));
+
+        $healthyStmt = $this->createMock(PDOStatement::class);
+        $healthyStmt->method('execute')->willReturn(true);
+        $healthyStmt->method('fetchAll')->willReturn([
+            ['status' => 'accepted', 'name' => 'Alice', 'pubkey_hash' => 'hash1'],
+        ]);
+
+        $this->pdo->expects($this->exactly(2))
+            ->method('prepare')
+            ->willReturnOnConsecutiveCalls($failingStmt, $healthyStmt);
+
+        $first  = $this->repository->getContactsGroupedByStatus();
+        $second = $this->repository->getContactsGroupedByStatus();
+
+        $this->assertSame([], $first['accepted'], 'failed query yields empty bucket');
+        $this->assertCount(1, $second['accepted'], 'next call must retry, not serve cached failure');
+    }
+
+    /**
+     * `updateContactStatus()` writes via raw `execute()` (bypassing
+     * parent::update), so it has its own explicit cache-invalidation
+     * call. Confirms that path actually clears the cache.
+     */
+    public function testUpdateContactStatusInvalidatesGroupedByStatusCache(): void
+    {
+        // Pre-populate cache: prepare → fetchAll once.
+        $readStmt = $this->createMock(PDOStatement::class);
+        $readStmt->method('execute')->willReturn(true);
+        $readStmt->method('fetchAll')->willReturn([
+            ['status' => 'accepted', 'name' => 'Alice', 'pubkey_hash' => 'hash1'],
+        ]);
+
+        $writeStmt = $this->createMock(PDOStatement::class);
+        $writeStmt->method('execute')->willReturn(true);
+
+        $reReadStmt = $this->createMock(PDOStatement::class);
+        $reReadStmt->method('execute')->willReturn(true);
+        $reReadStmt->method('fetchAll')->willReturn([
+            ['status' => 'blocked', 'name' => 'Alice', 'pubkey_hash' => 'hash1'],
+        ]);
+
+        // 3 prepares: initial read, the UPDATE, the post-write re-read.
+        $this->pdo->expects($this->exactly(3))
+            ->method('prepare')
+            ->willReturnOnConsecutiveCalls($readStmt, $writeStmt, $reReadStmt);
+
+        $before = $this->repository->getContactsGroupedByStatus();
+        $this->assertCount(1, $before['accepted']);
+
+        $this->repository->updateContactStatus('hash1', 'blocked');
+
+        $after = $this->repository->getContactsGroupedByStatus();
+        $this->assertCount(0, $after['accepted'], 'accepted bucket should empty after status flip');
+        $this->assertCount(1, $after['blocked'],  'blocked bucket should pick up the row post-write');
+    }
+
+    // =========================================================================
+    // findPubkeyByPubkeyHash()
+    // =========================================================================
+
+    /**
+     * Returns the pubkey string when the row exists. Used by callers
+     * that don't need the addresses JOIN (chain verify, sync triggers).
+     */
+    public function testFindPubkeyByPubkeyHashReturnsPubkeyOnHit(): void
+    {
+        $capturedSql = null;
+        $this->pdo->method('prepare')->willReturnCallback(function (string $sql) use (&$capturedSql) {
+            $capturedSql = $sql;
+            return $this->stmt;
+        });
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('fetchColumn')->willReturn('contact-pubkey-xyz');
+
+        $result = $this->repository->findPubkeyByPubkeyHash('hash1');
+
+        $this->assertSame('contact-pubkey-xyz', $result);
+        $this->assertStringContainsString('SELECT pubkey', $capturedSql);
+        $this->assertStringNotContainsString('JOIN addresses', $capturedSql,
+            'leaner method must not pay for the addresses JOIN');
+    }
+
+    public function testFindPubkeyByPubkeyHashReturnsNullOnMiss(): void
+    {
+        $this->pdo->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('fetchColumn')->willReturn(false);
+
+        $this->assertNull($this->repository->findPubkeyByPubkeyHash('missing'));
+    }
+
+    // =========================================================================
+    // getAcceptedContactsPage() cursor vs offset
+    // =========================================================================
+
+    /**
+     * Without a cursor, getAcceptedContactsPage falls back to LIMIT/OFFSET
+     * — preserves the legacy first-page render path.
+     */
+    public function testGetAcceptedContactsPageOffsetModeUsesOffsetSql(): void
+    {
+        $capturedSql = null;
+        $this->pdo->method('prepare')->willReturnCallback(function (string $sql) use (&$capturedSql) {
+            $capturedSql = $sql;
+            return $this->stmt;
+        });
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('fetchAll')->willReturn([]);
+
+        $this->repository->getAcceptedContactsPage(10, 20);
+
+        $this->assertStringContainsString('LIMIT :limit OFFSET :offset', $capturedSql);
+        $this->assertStringNotContainsString(':cursor_name', $capturedSql);
+    }
+
+    /**
+     * With a cursor, the OFFSET branch is NOT used — query becomes a
+     * `WHERE (name, id) > cursor` keyset and binds cursor_name + cursor_id
+     * instead of offset.
+     */
+    public function testGetAcceptedContactsPageCursorModeUsesKeysetSql(): void
+    {
+        $capturedSql = null;
+        $boundParams = [];
+        $this->pdo->method('prepare')->willReturnCallback(function (string $sql) use (&$capturedSql) {
+            $capturedSql = $sql;
+            return $this->stmt;
+        });
+        $this->stmt->method('bindValue')->willReturnCallback(function ($k, $v) use (&$boundParams) {
+            $boundParams[$k] = $v;
+            return true;
+        });
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('fetchAll')->willReturn([]);
+
+        $this->repository->getAcceptedContactsPage(10, 0, ['name' => 'Alice', 'id' => 7]);
+
+        $this->assertStringContainsString(':cursor_name', $capturedSql, 'cursor mode must bind cursor_name');
+        $this->assertStringContainsString(':cursor_id',   $capturedSql, 'cursor mode must bind cursor_id');
+        $this->assertStringContainsString('ORDER BY c.name ASC, c.id ASC LIMIT :limit', $capturedSql);
+        $this->assertStringNotContainsString('OFFSET', $capturedSql, 'cursor mode must skip OFFSET');
+        $this->assertSame('Alice', $boundParams[':cursor_name']);
+        $this->assertSame(7, $boundParams[':cursor_id']);
+    }
+
+    /**
+     * A cursor missing required keys must NOT trigger cursor mode — fall
+     * back to offset so a malformed/forged cursor doesn't quietly blow up
+     * the query.
+     */
+    public function testGetAcceptedContactsPageMalformedCursorFallsBackToOffset(): void
+    {
+        $capturedSql = null;
+        $this->pdo->method('prepare')->willReturnCallback(function (string $sql) use (&$capturedSql) {
+            $capturedSql = $sql;
+            return $this->stmt;
+        });
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('fetchAll')->willReturn([]);
+
+        // Missing 'id' → cursor mode must NOT activate.
+        $this->repository->getAcceptedContactsPage(10, 0, ['name' => 'Alice']);
+
+        $this->assertStringContainsString('OFFSET :offset', $capturedSql);
+        $this->assertStringNotContainsString(':cursor_name', $capturedSql);
+    }
+
     /**
      * Test generateContactId falls back to random when user context has no public key
      */

@@ -1809,9 +1809,9 @@ class ContactManagementService implements ContactManagementServiceInterface
      * @param int $limit  Max rows per page
      * @param int $offset Zero-based offset
      */
-    public function getAcceptedContactsPage(int $limit, int $offset = 0): array
+    public function getAcceptedContactsPage(int $limit, int $offset = 0, ?array $cursor = null): array
     {
-        return $this->contactRepository->getAcceptedContactsPage($limit, $offset);
+        return $this->contactRepository->getAcceptedContactsPage($limit, $offset, $cursor);
     }
 
     /**

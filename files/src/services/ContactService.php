@@ -379,9 +379,9 @@ class ContactService implements ContactServiceInterface
      * @param int $offset Zero-based offset
      * @return array Rows in the same shape as getAcceptedContacts()
      */
-    public function getAcceptedContactsPage(int $limit, int $offset = 0): array
+    public function getAcceptedContactsPage(int $limit, int $offset = 0, ?array $cursor = null): array
     {
-        return $this->managementService->getAcceptedContactsPage($limit, $offset);
+        return $this->managementService->getAcceptedContactsPage($limit, $offset, $cursor);
     }
 
     /**

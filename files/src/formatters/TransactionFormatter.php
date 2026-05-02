@@ -119,6 +119,14 @@ class TransactionFormatter
             'direction' => $tx['direction'] ?? null,
             'status' => $tx['status'],
             'date' => $tx['timestamp'],
+            // `time` (UNIX seconds, may be null) and `timestamp` (DATETIME)
+            // are forwarded so the keyset-pagination "Load older" handler
+            // can build a `(time, timestamp, txid)` cursor from the last
+            // row of the page without going back to the database. The
+            // existing `date` field is kept as the display alias of
+            // `timestamp` for the GUI.
+            'time' => $tx['time'] ?? null,
+            'timestamp' => $tx['timestamp'] ?? null,
             'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
             'amount' => self::convertAmount(self::extractAmount($tx, 'amount')),
             'currency' => $tx['currency'],

@@ -189,7 +189,7 @@ class DatabaseSchemaTest extends TestCase
 
         $expectedColumns = [
             'id INTEGER PRIMARY KEY AUTO_INCREMENT',
-            'pubkey_hash TEXT NOT NULL',
+            'pubkey_hash VARCHAR(64) NOT NULL',
             'http VARCHAR(255)',
             'https VARCHAR(255)',
             'tor VARCHAR(255)'
@@ -256,9 +256,11 @@ class DatabaseSchemaTest extends TestCase
 
         $expectedColumns = [
             'id INTEGER PRIMARY KEY AUTO_INCREMENT',
-            'pubkey_hash TEXT NOT NULL',
-            'received BIGINT NOT NULL',
-            'sent BIGINT NOT NULL',
+            'pubkey_hash VARCHAR(64) NOT NULL',
+            'received_whole BIGINT NOT NULL',
+            'received_frac BIGINT NOT NULL',
+            'sent_whole BIGINT NOT NULL',
+            'sent_frac BIGINT NOT NULL',
             'currency VARCHAR(10)'
         ];
 
@@ -376,8 +378,10 @@ class DatabaseSchemaTest extends TestCase
             'time BIGINT NOT NULL',
             'expiration BIGINT NOT NULL',
             'currency VARCHAR(10) NOT NULL',
-            'amount BIGINT NOT NULL',
-            'my_fee_amount BIGINT',
+            'amount_whole BIGINT NOT NULL',
+            'amount_frac BIGINT NOT NULL',
+            'my_fee_amount_whole BIGINT',
+            'my_fee_amount_frac BIGINT',
             'destination_address VARCHAR(255)',
             'destination_pubkey TEXT',
             'destination_signature TEXT',
@@ -475,7 +479,8 @@ class DatabaseSchemaTest extends TestCase
             'id INTEGER PRIMARY KEY AUTO_INCREMENT',
             'hash VARCHAR(255) NOT NULL UNIQUE',
             'time BIGINT NOT NULL',
-            'amount BIGINT NOT NULL',
+            'amount_whole BIGINT NOT NULL',
+            'amount_frac BIGINT NOT NULL',
             'currency VARCHAR(10) NOT NULL',
             'sender_public_key TEXT NOT NULL',
             'sender_address VARCHAR(255) NOT NULL',
@@ -539,7 +544,8 @@ class DatabaseSchemaTest extends TestCase
             'receiver_address VARCHAR(255) NOT NULL',
             'receiver_public_key TEXT NOT NULL',
             'receiver_public_key_hash VARCHAR(64)',
-            'amount BIGINT NOT NULL',
+            'amount_whole BIGINT NOT NULL',
+            'amount_frac BIGINT NOT NULL',
             'currency VARCHAR(10) NOT NULL',
             'timestamp DATETIME(6)',
             'txid VARCHAR(255) UNIQUE NOT NULL',

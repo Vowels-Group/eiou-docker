@@ -5169,14 +5169,28 @@ function loadMoreContacts(inst) {
  * @param {string} key    - Paginator key (for logging / debugging only)
  * @param {Object} inst   - Paginator instance returned by Paginator.create
  */
+// Per-paginator next-page cursor cache. Cursors are opaque base64url
+// strings minted server-side from the last row of each page; we hold
+// them in plain object property (NOT localStorage) so the cursor stays
+// scoped to this tab's instance, matching Tor Browser's first-party
+// isolation expectations and avoiding any cross-tab leakage.
+var loadMoreCursors = {};
+
 function loadMoreViaGuiAction(action, key, inst) {
-    var offset = inst.getLoadedCount();
     var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
     var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
 
     var formData = new FormData();
     formData.append('action', action);
-    formData.append('offset', String(offset));
+    // Send both `cursor` and `offset`. The server prefers cursor when
+    // present (constant-time keyset query, regardless of how deep the
+    // history goes), and falls back to `offset` for the first request
+    // and for actions whose server side hasn't been migrated to the
+    // cursor mode yet. Sending both keeps the rollout incremental.
+    if (loadMoreCursors[key]) {
+        formData.append('cursor', loadMoreCursors[key]);
+    }
+    formData.append('offset', String(inst.getLoadedCount()));
     formData.append('csrf_token', csrfToken);
 
     fetch(window.location.pathname, {
@@ -5202,6 +5216,14 @@ function loadMoreViaGuiAction(action, key, inst) {
             for (var i = 0; i < data.rows.length; i++) {
                 transactionData.push(data.rows[i]);
             }
+        }
+        // Stash the cursor for the next click. If the server didn't mint
+        // one (older endpoint, or page is exhausted), drop the cached
+        // cursor so the next click falls back cleanly to offset mode.
+        if (typeof data.next_cursor === 'string' && data.next_cursor !== '') {
+            loadMoreCursors[key] = data.next_cursor;
+        } else {
+            delete loadMoreCursors[key];
         }
         if (data.exhausted) {
             inst.setLoadMoreExhausted(true);
