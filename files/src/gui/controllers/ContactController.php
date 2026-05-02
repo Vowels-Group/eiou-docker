@@ -6,6 +6,7 @@ namespace Eiou\Gui\Controllers;
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactDecisionService;
 use Eiou\Services\ContactService;
@@ -676,20 +677,17 @@ class ContactController
             $credit = Security::sanitizeInput($_POST['credit'] ?? '');
 
             if (empty($pubkey) || empty($currency) || $fee === '' || $credit === '') {
-                echo json_encode(['success' => false, 'error' => 'missing_fields', 'message' => 'All fields are required']);
-                return;
+                GuiErrorResponse::send('missing_fields', 'All fields are required', 400);
             }
 
             $feeValidation = InputValidator::validateFeePercent($fee);
             if (!$feeValidation['valid']) {
-                echo json_encode(['success' => false, 'error' => 'invalid_fee', 'message' => $feeValidation['error']]);
-                return;
+                GuiErrorResponse::send('invalid_fee', $feeValidation['error'], 400);
             }
 
             $creditValidation = InputValidator::validateAmount($credit, $currency);
             if (!$creditValidation['valid']) {
-                echo json_encode(['success' => false, 'error' => 'invalid_credit', 'message' => $creditValidation['error']]);
-                return;
+                GuiErrorResponse::send('invalid_credit', $creditValidation['error'], 400);
             }
 
             $app = Application::getInstance();
@@ -706,11 +704,15 @@ class ContactController
             if ($result) {
                 echo json_encode(['success' => true, 'message' => "Currency {$currency} added to contact"]);
             } else {
-                echo json_encode(['success' => false, 'error' => 'add_currency_failed', 'message' => 'Failed to add currency. Contact may not be accepted or currency already exists.']);
+                GuiErrorResponse::send(
+                    'add_currency_failed',
+                    'Failed to add currency. Contact may not be accepted or currency already exists.',
+                    400
+                );
             }
         } catch (\Exception $e) {
             Logger::getInstance()->logException($e);
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'An unexpected error occurred']);
+            GuiErrorResponse::send('server_error', 'An unexpected error occurred', 500);
         }
     }
 
@@ -1165,23 +1167,17 @@ class ContactController
             $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
 
             if (empty($contactAddress)) {
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'missing_address',
-                    'message' => 'Contact address is required'
-                ]);
-                return;
+                GuiErrorResponse::send('missing_address', 'Contact address is required', 400);
             }
 
             // Validate address
             $addressValidation = InputValidator::validateAddress($contactAddress);
             if (!$addressValidation['valid']) {
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'invalid_address',
-                    'message' => 'Invalid address: ' . $addressValidation['error']
-                ]);
-                return;
+                GuiErrorResponse::send(
+                    'invalid_address',
+                    'Invalid address: ' . $addressValidation['error'],
+                    400
+                );
             }
 
             $contactAddress = $addressValidation['value'];
@@ -1199,13 +1195,13 @@ class ContactController
                 'controller' => 'ContactController',
                 'action' => __FUNCTION__
             ]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::isDebug()
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::isDebug()
                     ? 'Internal server error: ' . $e->getMessage()
-                    : 'Internal server error'
-            ]);
+                    : 'Internal server error',
+                500
+            );
         }
     }
 
@@ -1298,8 +1294,7 @@ class ContactController
             $this->session->verifyCSRFToken();
             $contactPubkeyHash = Security::sanitizeInput($_POST['contact_pubkey_hash'] ?? '');
             if (empty($contactPubkeyHash)) {
-                echo json_encode(['success' => false, 'error' => 'missing_pubkey_hash', 'message' => 'Contact pubkey hash is required']);
-                return;
+                GuiErrorResponse::send('missing_pubkey_hash', 'Contact pubkey hash is required', 400);
             }
             $app = Application::getInstance();
             $chainDropService = $app->services->getChainDropService();
@@ -1307,11 +1302,13 @@ class ContactController
             echo json_encode($result);
         } catch (\Throwable $e) {
             Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
-            ]);
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::getAppEnv() !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error',
+                500
+            );
         }
     }
 
@@ -1327,8 +1324,7 @@ class ContactController
             $this->session->verifyCSRFToken();
             $proposalId = Security::sanitizeInput($_POST['proposal_id'] ?? '');
             if (empty($proposalId)) {
-                echo json_encode(['success' => false, 'error' => 'missing_proposal_id', 'message' => 'Proposal ID is required']);
-                return;
+                GuiErrorResponse::send('missing_proposal_id', 'Proposal ID is required', 400);
             }
             $app = Application::getInstance();
             $chainDropService = $app->services->getChainDropService();
@@ -1336,11 +1332,13 @@ class ContactController
             echo json_encode($result);
         } catch (\Throwable $e) {
             Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
-            ]);
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::getAppEnv() !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error',
+                500
+            );
         }
     }
 
@@ -1356,8 +1354,7 @@ class ContactController
             $this->session->verifyCSRFToken();
             $proposalId = Security::sanitizeInput($_POST['proposal_id'] ?? '');
             if (empty($proposalId)) {
-                echo json_encode(['success' => false, 'error' => 'missing_proposal_id', 'message' => 'Proposal ID is required']);
-                return;
+                GuiErrorResponse::send('missing_proposal_id', 'Proposal ID is required', 400);
             }
             $app = Application::getInstance();
             $chainDropService = $app->services->getChainDropService();
@@ -1368,11 +1365,13 @@ class ContactController
             echo json_encode($result);
         } catch (\Throwable $e) {
             Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
-            ]);
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::getAppEnv() !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error',
+                500
+            );
         }
     }
 
