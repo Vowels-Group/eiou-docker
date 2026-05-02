@@ -42,9 +42,14 @@ function getContactsTableSchema() {
 
 // Address table
 function getAddressTableSchema(){
+    /* pubkey_hash is a SHA-256 hex digest — always exactly 64 chars.
+       Stored as VARCHAR(64) (matching contacts/contact_credit/etc.) so
+       the JOIN against contacts.pubkey_hash uses the same column type
+       (no implicit conversion) and idx_addresses_pubkey is a real
+       full-key equality index instead of a TEXT-prefix index. */
     return "CREATE TABLE IF NOT EXISTS addresses (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash TEXT NOT NULL,
+        pubkey_hash VARCHAR(64) NOT NULL,
         http VARCHAR(255) UNIQUE DEFAULT NULL,
         https VARCHAR(255) UNIQUE DEFAULT NULL,
         tor VARCHAR(255) UNIQUE DEFAULT NULL,
@@ -95,9 +100,14 @@ function getContactCurrenciesTableSchema() {
 
 // Balance table - per-contact sent/received totals, joined on pubkey_hash
 function getBalancesTableSchema() {
+    /* pubkey_hash is a SHA-256 hex digest — always exactly 64 chars.
+       Stored as VARCHAR(64) so balances joins line up with contacts /
+       contact_credit on the same column type (avoids implicit type
+       coercion) and idx_balances_pubkey_hash works as a full-key
+       equality index. */
     return "CREATE TABLE IF NOT EXISTS balances (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash TEXT NOT NULL,
+        pubkey_hash VARCHAR(64) NOT NULL,
         received_whole BIGINT NOT NULL,
         received_frac BIGINT NOT NULL,
         sent_whole BIGINT NOT NULL,

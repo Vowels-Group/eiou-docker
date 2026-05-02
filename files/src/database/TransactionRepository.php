@@ -619,13 +619,36 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Get transaction history with limit
+     * Get transaction history with limit.
      *
-     * @param int $limit Maximum number of transactions to return
-     * @param string|null $currency Optional currency filter
+     * Pagination modes (mutually exclusive — `$cursor` wins if both set):
+     *   - **Offset mode** (legacy): `$offset` skips that many rows. Linear
+     *     in offset on deep history because MySQL still has to scan past
+     *     every skipped row even with covering indexes. Kept for backwards
+     *     compatibility with the first-page render and any caller that
+     *     still passes a numeric offset.
+     *   - **Cursor mode** (preferred for "Load older"): `$cursor` carries
+     *     the last-seen row's `(time, timestamp, txid)` triple. The query
+     *     becomes `WHERE keyset < cursor LIMIT N`, which uses the existing
+     *     ORDER BY index in constant time regardless of how deep the
+     *     paginator has walked. The triple — `(COALESCE(time,0), timestamp,
+     *     txid)` — is a strict total order: time may tie across same-second
+     *     transactions, timestamp is the database write order, txid is
+     *     unique per row, so duplicates and skips are impossible.
+     *
+     * @param int                  $limit    Max rows to return
+     * @param string|null          $currency Optional currency filter
+     * @param int                  $offset   Legacy offset (ignored if cursor passed)
+     * @param array<string,scalar>|null $cursor Decoded keyset cursor with
+     *                                            keys `time`, `timestamp`, `txid`
      * @return array
      */
-    public function getTransactionHistory(int $limit = 10, ?string $currency = null, int $offset = 0): array
+    public function getTransactionHistory(
+        int $limit = 10,
+        ?string $currency = null,
+        int $offset = 0,
+        ?array $cursor = null,
+    ): array
     {
         $userAddresses = $this->getUserAddressesOrNull();
 
@@ -653,6 +676,7 @@ class TransactionRepository extends AbstractRepository {
                     t.amount_frac,
                     t.currency,
                     t.timestamp,
+                    t.time,
                     t.memo,
                     t.description,
                     t.previous_txid,
@@ -679,11 +703,39 @@ class TransactionRepository extends AbstractRepository {
             $additionalParams[] = $currency;
         }
 
-        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ? OFFSET ?";
-        $additionalParams[] = $limit;
-        $additionalParams[] = max(0, $offset);
+        // Cursor mode wins over offset mode when both supplied. The
+        // OR-expanded keyset predicate is more index-friendly across
+        // older MySQL/MariaDB versions than the row-value form
+        // `(a,b,c) < (?,?,?)` — both are semantically equivalent but
+        // the optimizer picks ranges more reliably from the OR form.
+        if (
+            $cursor !== null
+            && isset($cursor['time'], $cursor['timestamp'], $cursor['txid'])
+        ) {
+            $query .= " AND (
+                COALESCE(t.time, 0) < ?
+                OR (COALESCE(t.time, 0) = ? AND t.timestamp < ?)
+                OR (COALESCE(t.time, 0) = ? AND t.timestamp = ? AND t.txid < ?)
+            )";
+            $additionalParams[] = (int) $cursor['time'];
+            $additionalParams[] = (int) $cursor['time'];
+            $additionalParams[] = (string) $cursor['timestamp'];
+            $additionalParams[] = (int) $cursor['time'];
+            $additionalParams[] = (string) $cursor['timestamp'];
+            $additionalParams[] = (string) $cursor['txid'];
 
-        // Bind parameters - addresses twice for both IN clauses, then optional currency, then limit, offset
+            // Cursor mode: txid as final tiebreaker so the order is a
+            // strict total order — avoids the duplicate-row hazard if
+            // two transactions share both `time` and `timestamp`.
+            $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC, t.txid DESC LIMIT ?";
+            $additionalParams[] = $limit;
+        } else {
+            $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ? OFFSET ?";
+            $additionalParams[] = $limit;
+            $additionalParams[] = max(0, $offset);
+        }
+
+        // Bind parameters - addresses twice for both IN clauses, then optional currency, then keyset/offset tail
         $params = $this->buildInClauseParams($userAddresses, 2, $additionalParams);
         try {
             $stmt = $this->pdo->prepare($query);

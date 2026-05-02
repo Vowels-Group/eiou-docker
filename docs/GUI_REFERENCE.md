@@ -510,7 +510,7 @@ Resolved requests (approved/declined) appear in a collapsed history section. App
 
 **History Paginator (resolved requests only):**
 - Same shared `Paginator` IIFE as the Recent Transactions and Contacts tables. Page buttons + size selector (25 / 50 / 100 / All), persisted as `eiou_paginator_size_payment-requests`.
-- **"Load older" button** — fetches next server-side page via `loadMorePaymentRequests` GUI AJAX action. Backed by `PaymentRequestRepository::getResolvedHistoryPage($limit, $offset)` — a single SQL query on the unified table with `WHERE status != 'pending' ORDER BY COALESCE(responded_at, created_at) DESC LIMIT ? OFFSET ?`, matching the initial template's `usort` key so pages append cleanly. Rows rendered via a shared `_paymentRequestRow.html` partial.
+- **"Load older" button** — fetches next server-side page via `loadMorePaymentRequests` GUI AJAX action. Backed by `PaymentRequestRepository::getResolvedHistoryPage($limit, $offset, ?$cursor)`. When the client posts a `cursor` (default for second-and-later pages), the query uses a keyset predicate on `(COALESCE(responded_at, created_at), id)` and runs in constant time regardless of depth; without a cursor it falls back to `LIMIT ? OFFSET ?` on the same ORDER BY. Sort key matches the initial template's `usort` so pages append cleanly. Rows rendered via a shared `_paymentRequestRow.html` partial.
 - **"Showing the last N requests"** counter is dynamic via `#pr-meta-loaded-count`; updates after each Load-older click.
 
 **Search database (server-side):**

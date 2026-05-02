@@ -227,6 +227,140 @@ class DatabaseSetupTest extends TestCase
         $this->assertArrayNotHasKey('contacts.online_status_enum', $result);
     }
 
+    // =========================================================================
+    // Column-type-changes Tests (addresses/balances pubkey_hash TEXT → VARCHAR)
+    // =========================================================================
+
+    /**
+     * Build a PDO mock whose `query()` and `exec()` route based on SQL
+     * content. Simpler and order-independent compared to consecutive-call
+     * mocking — runColumnMigrations issues SHOW COLUMNS and MAX(CHAR_LENGTH)
+     * for many tables and the order is implementation-detail.
+     *
+     * @param string $pubkeyHashType  the Type that SHOW COLUMNS reports for
+     *                                addresses.pubkey_hash and balances.pubkey_hash
+     *                                (e.g. 'text' or 'varchar(64)')
+     * @param int $observedMaxLen     the value MAX(CHAR_LENGTH(pubkey_hash))
+     *                                returns for both tables
+     * @param array &$execStatements  out-parameter; collects every exec()
+     *                                statement the migration runs
+     */
+    private function buildSqlAwarePdoMock(
+        string $pubkeyHashType,
+        int $observedMaxLen,
+        array &$execStatements,
+    ): PDO {
+        $pdo = $this->createMock(PDO::class);
+
+        $pdo->method('query')->willReturnCallback(function (string $sql) use ($pubkeyHashType, $observedMaxLen) {
+            $stmt = $this->createMock(PDOStatement::class);
+
+            if (strpos($sql, 'SHOW COLUMNS') !== false && strpos($sql, "LIKE 'pubkey_hash'") !== false) {
+                // addresses/balances pubkey_hash type lookup
+                $stmt->method('rowCount')->willReturn(1);
+                $stmt->method('fetch')->willReturn(['Field' => 'pubkey_hash', 'Type' => $pubkeyHashType]);
+                return $stmt;
+            }
+
+            if (strpos($sql, 'MAX(CHAR_LENGTH(`pubkey_hash`))') !== false) {
+                $stmt->method('rowCount')->willReturn(1);
+                $stmt->method('fetch')->willReturn(['max_len' => (string) $observedMaxLen]);
+                return $stmt;
+            }
+
+            // Fallback: pretend other SHOW COLUMNS / SHOW INDEX calls
+            // report "row exists, type already current" so the rest of
+            // runColumnMigrations is a no-op for our purposes.
+            $stmt->method('rowCount')->willReturn(1);
+            $stmt->method('fetch')->willReturn([
+                'Field' => 'unused',
+                // Pre-populated ENUM string covers every value the
+                // existing enumUpdates block looks for, so the
+                // 'already_updated' branch fires.
+                'Type' => "enum('transaction','p2p','rp2p','contact','all','payment_request','route_cancel')",
+            ]);
+            return $stmt;
+        });
+
+        $pdo->method('exec')->willReturnCallback(function (string $sql) use (&$execStatements) {
+            $execStatements[] = $sql;
+            return 0;
+        });
+
+        return $pdo;
+    }
+
+    /**
+     * When SHOW COLUMNS reports the legacy TEXT type AND no row exceeds 64
+     * chars, runColumnMigrations should issue the ALTER ... MODIFY COLUMN and
+     * mark both tables 'updated'.
+     */
+    public function testColumnTypeMigrationRunsWhenColumnIsText(): void
+    {
+        $execStatements = [];
+        $pdo = $this->buildSqlAwarePdoMock('text', 64, $execStatements);
+
+        $result = runColumnMigrations($pdo);
+
+        $this->assertSame('updated', $result['addresses.pubkey_hash_type']);
+        $this->assertSame('updated', $result['balances.pubkey_hash_type']);
+
+        $modifyAddresses = array_filter(
+            $execStatements,
+            fn (string $s) => strpos($s, 'ALTER TABLE `addresses` MODIFY COLUMN `pubkey_hash` VARCHAR(64) NOT NULL') !== false,
+        );
+        $modifyBalances = array_filter(
+            $execStatements,
+            fn (string $s) => strpos($s, 'ALTER TABLE `balances` MODIFY COLUMN `pubkey_hash` VARCHAR(64) NOT NULL') !== false,
+        );
+        $this->assertCount(1, $modifyAddresses, 'addresses MODIFY COLUMN should fire exactly once');
+        $this->assertCount(1, $modifyBalances, 'balances MODIFY COLUMN should fire exactly once');
+    }
+
+    /**
+     * When SHOW COLUMNS already reports VARCHAR(64) the migration should be a
+     * no-op marked 'already_updated' — guarantees re-runs don't re-ALTER.
+     */
+    public function testColumnTypeMigrationSkipsWhenAlreadyVarchar(): void
+    {
+        $execStatements = [];
+        $pdo = $this->buildSqlAwarePdoMock('varchar(64)', 64, $execStatements);
+
+        $result = runColumnMigrations($pdo);
+
+        $this->assertSame('already_updated', $result['addresses.pubkey_hash_type']);
+        $this->assertSame('already_updated', $result['balances.pubkey_hash_type']);
+
+        $modifyHits = array_filter(
+            $execStatements,
+            fn (string $s) => strpos($s, 'MODIFY COLUMN `pubkey_hash`') !== false,
+        );
+        $this->assertEmpty($modifyHits, 'must not re-ALTER when column is already VARCHAR(64)');
+    }
+
+    /**
+     * If any row already exceeds the target VARCHAR length the migration must
+     * skip and log rather than truncate the data. SHA-256 hex is always 64
+     * chars in practice, but defense-in-depth matters when the operator may
+     * have legacy non-hex data.
+     */
+    public function testColumnTypeMigrationSkipsWhenObservedLengthExceedsTarget(): void
+    {
+        $execStatements = [];
+        $pdo = $this->buildSqlAwarePdoMock('text', 128, $execStatements);
+
+        $result = runColumnMigrations($pdo);
+
+        $this->assertStringStartsWith('skipped:', (string) $result['addresses.pubkey_hash_type']);
+        $this->assertStringStartsWith('skipped:', (string) $result['balances.pubkey_hash_type']);
+
+        $modifyHits = array_filter(
+            $execStatements,
+            fn (string $s) => strpos($s, 'MODIFY COLUMN `pubkey_hash`') !== false,
+        );
+        $this->assertEmpty($modifyHits, 'must not ALTER when truncation would occur');
+    }
+
     /**
      * Test runMigrations merges column migration results
      */

@@ -238,35 +238,67 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
         $offset = max(0, (int) ($_POST['offset'] ?? 0));
         $limit  = (int) $user->getDisplayRecentTransactionsLimit();
         if ($limit <= 0) { $limit = 10; }
+        // Cursor wins over offset when both are present (or offset is the
+        // first-page sentinel 0). Decoded once here so each branch below
+        // can pass it down without re-parsing. A malformed cursor decodes
+        // to null — the safe fallback is page one.
+        $cursor = \Eiou\Utils\PaginationCursor::decode($_POST['cursor'] ?? null);
 
         if ($action === 'loadMoreTransactions') {
-            $transactions = $transactionService->getTransactionHistory($limit, $offset);
+            $transactions = $transactionService->getTransactionHistory($limit, $offset, $cursor);
             $rendered = renderTransactionRowsForAjax(
                 $transactions, $offset,
                 $contactService, $transactionService, $serviceContainer, $user
             );
+            // Build the next-page cursor from the last row of THIS page so
+            // the client can post it back verbatim. Cursor key matches the
+            // ORDER BY tuple in TransactionRepository::getTransactionHistory:
+            // (COALESCE(time, 0), timestamp, txid).
+            $nextCursor = null;
+            if (!empty($transactions) && count($transactions) >= $limit) {
+                $last = end($transactions);
+                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                    'time'      => (int) ($last['time'] ?? 0),
+                    'timestamp' => (string) ($last['timestamp'] ?? ''),
+                    'txid'      => (string) ($last['txid'] ?? ''),
+                ]);
+            }
             echo json_encode([
-                'success'   => true,
-                'html'      => $rendered['html'],
-                'rows'      => $rendered['rows'],
-                'exhausted' => count($transactions) < $limit,
+                'success'     => true,
+                'html'        => $rendered['html'],
+                'rows'        => $rendered['rows'],
+                'exhausted'   => count($transactions) < $limit,
+                'next_cursor' => $nextCursor,
             ]);
             exit;
         }
 
         if ($action === 'loadMorePaymentRequests') {
-            $more = $serviceContainer->getPaymentRequestService()->getResolvedHistoryPage($limit, $offset);
+            $more = $serviceContainer->getPaymentRequestService()->getResolvedHistoryPage($limit, $offset, $cursor);
             $html = renderPaymentRequestRowsForAjax(
                 $more, $contactService, $transactionService, $user
             );
+            // Cursor for the next page mirrors the repository ORDER BY:
+            // (COALESCE(responded_at, created_at), id). Build only when
+            // the page came back full — a short page means we're at the
+            // tail and the next click should fall back to exhausted.
+            $nextCursor = null;
+            if (!empty($more) && count($more) >= $limit) {
+                $last = end($more);
+                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                    'ts' => (string) ($last['responded_at'] ?? $last['created_at'] ?? ''),
+                    'id' => (int) ($last['id'] ?? 0),
+                ]);
+            }
             echo json_encode([
-                'success'   => true,
-                'html'      => $html,
+                'success'     => true,
+                'html'        => $html,
                 // exhausted lets the client hide the Load older button
                 // once it's done. Short-page → exhausted; exact-fit
                 // page → not exhausted yet (next click will return 0
                 // rows + exhausted=true).
-                'exhausted' => count($more) < $limit,
+                'exhausted'   => count($more) < $limit,
+                'next_cursor' => $nextCursor,
             ]);
             exit;
         }
@@ -276,7 +308,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             // bounded and always rendered up-front in the initial
             // template, so the paginator append path stays pure "more
             // accepted rows".
-            $rawAccepted = $contactService->getAcceptedContactsPage($limit, $offset);
+            $rawAccepted = $contactService->getAcceptedContactsPage($limit, $offset, $cursor);
             $exhausted = count($rawAccepted) < $limit;
 
             if (empty($rawAccepted)) {
@@ -366,10 +398,23 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             }
             $html = ob_get_clean();
 
+            // Cursor for the next contacts page mirrors the repository
+            // ORDER BY: (c.name ASC, c.id ASC). Names may be null in the
+            // table; cursor encodes whatever the row has so the next
+            // request lines up byte-for-byte.
+            $nextCursor = null;
+            if (!empty($rawAccepted) && count($rawAccepted) >= $limit) {
+                $last = end($rawAccepted);
+                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                    'name' => (string) ($last['name'] ?? ''),
+                    'id'   => (int) ($last['id'] ?? 0),
+                ]);
+            }
             echo json_encode([
-                'success'   => true,
-                'html'      => $html,
-                'exhausted' => $exhausted,
+                'success'     => true,
+                'html'        => $html,
+                'exhausted'   => $exhausted,
+                'next_cursor' => $nextCursor,
             ]);
             exit;
         }
