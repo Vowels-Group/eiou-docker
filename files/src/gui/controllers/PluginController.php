@@ -3,6 +3,7 @@
 
 namespace Eiou\Gui\Controllers;
 
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PluginLoader;
@@ -96,13 +97,11 @@ class PluginController
     public static function registerUnavailableStubs(GuiActionRegistry $registry): void
     {
         $stub = function (): void {
-            header('Content-Type: application/json');
-            echo json_encode([
-                'success' => false,
-                'error'   => 'plugin_loader_unavailable',
-                'message' => 'Plugin system is not initialized.',
-            ]);
-            exit;
+            GuiErrorResponse::send(
+                'plugin_loader_unavailable',
+                'Plugin system is not initialized.',
+                500
+            );
         };
         foreach (self::OWNED_ACTIONS as $action) {
             $registry->register($action, $stub, GuiActionRegistry::TIER_AUTH, 'core');
@@ -122,7 +121,7 @@ class PluginController
             // Validate CSRF on every call. Don't rotate — the GUI may make
             // multiple AJAX calls from the same page load.
             if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
-                $this->respond(['success' => false, 'error' => 'csrf_error'], 403);
+                $this->respondError('csrf_invalid', 'Invalid CSRF token', 403);
             }
 
             switch ($action) {
@@ -142,7 +141,7 @@ class PluginController
                     $this->uninstallPlugin();
                     break;
                 default:
-                    $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
+                    $this->respondError('unknown_action', 'Unknown action', 400);
             }
         } catch (PluginControllerResponseSent $sent) {
             throw $sent;
@@ -151,11 +150,7 @@ class PluginController
                 'context' => 'plugin_controller',
                 'action' => $_POST['action'] ?? '',
             ]);
-            $this->respond([
-                'success' => false,
-                'error' => 'server_error',
-                'message' => $e->getMessage(),
-            ], 500);
+            $this->respondError('server_error', $e->getMessage(), 500);
         }
     }
 
@@ -213,11 +208,11 @@ class PluginController
         }
 
         if (!$this->restartRequester->request('gui', $pubkeyHash)) {
-            $this->respond([
-                'success' => false,
-                'error' => 'request_failed',
-                'message' => 'Could not write the restart request file.',
-            ], 500);
+            $this->respondError(
+                'request_failed',
+                'Could not write the restart request file.',
+                500
+            );
         }
 
         Logger::getInstance()->info('node_restart_requested_via_gui', [
@@ -241,18 +236,18 @@ class PluginController
         // Plugin names from manifests are kebab-case alphanumerics. Reject
         // anything else to keep arbitrary keys out of the state file.
         if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
-            $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+            $this->respondError('invalid_name', 'Invalid plugin name', 400);
         }
 
         // Refuse to toggle a plugin that doesn't exist on disk — otherwise
         // the state file accumulates ghost entries.
         $known = array_column($this->loader->listAllPlugins(), 'name');
         if (!in_array($name, $known, true)) {
-            $this->respond(['success' => false, 'error' => 'unknown_plugin'], 404);
+            $this->respondError('unknown_plugin', 'Plugin not found', 404);
         }
 
         if (!$this->loader->setEnabled($name, $enabled)) {
-            $this->respond(['success' => false, 'error' => 'persist_failed'], 500);
+            $this->respondError('persist_failed', 'Could not persist the new state', 500);
         }
 
         Logger::getInstance()->info('plugin_toggled_via_gui', [
@@ -279,28 +274,24 @@ class PluginController
     {
         $name = (string) ($_POST['name'] ?? '');
         if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
-            $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+            $this->respondError('invalid_name', 'Invalid plugin name', 400);
         }
 
         if ($this->uninstallService === null) {
-            $this->respond([
-                'success' => false,
-                'error' => 'uninstall_unavailable',
-                'message' => 'Plugin uninstall service is not wired in this context.',
-            ], 500);
+            $this->respondError(
+                'uninstall_unavailable',
+                'Plugin uninstall service is not wired in this context.',
+                500
+            );
         }
 
         try {
             $result = $this->uninstallService->uninstall($name);
         } catch (\InvalidArgumentException $e) {
-            $this->respond(['success' => false, 'error' => 'unknown_plugin', 'message' => $e->getMessage()], 404);
+            $this->respondError('unknown_plugin', $e->getMessage(), 404);
         } catch (\RuntimeException $e) {
             // "Cannot uninstall enabled plugin" lands here.
-            $this->respond([
-                'success' => false,
-                'error' => 'plugin_still_enabled',
-                'message' => $e->getMessage(),
-            ], 409);
+            $this->respondError('plugin_still_enabled', $e->getMessage(), 409);
         }
 
         Logger::getInstance()->info('plugin_uninstalled_via_gui', [
@@ -322,12 +313,12 @@ class PluginController
     {
         $name = (string) ($_POST['name'] ?? '');
         if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
-            $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+            $this->respondError('invalid_name', 'Invalid plugin name', 400);
         }
 
         $markdown = $this->loader->readChangelog($name);
         if ($markdown === null) {
-            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+            $this->respondError('not_found', 'Changelog not found', 404);
         }
 
         $this->respond([
@@ -348,6 +339,21 @@ class PluginController
         http_response_code($status);
         echo json_encode($payload);
         throw new PluginControllerResponseSent($status);
+    }
+
+    /**
+     * Emit a canonical GUI error envelope through the test-seam `respond()`.
+     * Mirrors the helper in ApiKeysController / PaybackMethodsController.
+     *
+     * @param array<string,mixed> $extras
+     */
+    private function respondError(string $code, string $message, int $status, array $extras = []): void
+    {
+        $payload = GuiErrorResponse::make($code, $message);
+        if ($extras !== []) {
+            $payload = array_merge($payload, $extras);
+        }
+        $this->respond($payload, $status);
     }
 }
 

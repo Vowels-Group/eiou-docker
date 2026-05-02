@@ -92,11 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'action'  => $action,
                 'plugin'  => $actionRegistry->getPluginId($action),
             ]);
-            if (!headers_sent()) {
-                header('Content-Type: application/json');
-                http_response_code(500);
-            }
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+            // GuiErrorResponse::send sets headers + status (idempotent if
+            // a handler already sent them) and emits the canonical envelope
+            // before exiting.
+            GuiErrorResponse::send('server_error', $e->getMessage(), 500);
         }
         exit;
     }

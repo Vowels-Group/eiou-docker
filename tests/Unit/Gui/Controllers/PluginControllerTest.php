@@ -92,7 +92,10 @@ class PluginControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(403, $result['status']);
-        $this->assertSame('csrf_error', $result['payload']['error']);
+        // Canonical envelope: machine code at `code`; `error` carries
+        // the human message. Code itself renamed to `csrf_invalid` to
+        // match every other migrated GUI controller.
+        $this->assertSame('csrf_invalid', $result['payload']['code']);
     }
 
     #[Test]
@@ -104,7 +107,7 @@ class PluginControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('unknown_action', $result['payload']['error']);
+        $this->assertSame('unknown_action', $result['payload']['code']);
     }
 
     #[Test]
@@ -226,7 +229,7 @@ class PluginControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(404, $result['status']);
-        $this->assertSame('not_found', $result['payload']['error']);
+        $this->assertSame('not_found', $result['payload']['code']);
     }
 
     #[Test]
@@ -238,7 +241,7 @@ class PluginControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('invalid_name', $result['payload']['error']);
+        $this->assertSame('invalid_name', $result['payload']['code']);
     }
 
     /**
