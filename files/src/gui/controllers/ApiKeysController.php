@@ -5,6 +5,7 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Core\UserContext;
 use Eiou\Database\ApiKeyRepository;
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ApiKeyService;
 use Eiou\Services\GuiActionRegistry;
@@ -117,7 +118,7 @@ class ApiKeysController
             // CSRF for every state-changing call. Don't rotate — the GUI
             // sends many AJAX calls from the same page load.
             if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
-                $this->respond(['success' => false, 'error' => 'csrf_error'], 403);
+                $this->respondError('csrf_invalid', 'Invalid CSRF token', 403);
             }
 
             switch ($action) {
@@ -168,7 +169,7 @@ class ApiKeysController
                     $this->respond(['success' => true, 'count' => $count]);
                     break;
                 default:
-                    $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
+                    $this->respondError('unknown_action', 'Unknown action', 400);
             }
         } catch (ApiKeysControllerResponseSent $responseSent) {
             // A handler already wrote the JSON response — rethrow so the
@@ -180,7 +181,7 @@ class ApiKeysController
                 'context' => 'api_keys_controller',
                 'action' => $_POST['action'] ?? '',
             ]);
-            $this->respond(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()], 500);
+            $this->respondError('server_error', $e->getMessage(), 500);
         }
     }
 
@@ -191,7 +192,7 @@ class ApiKeysController
     {
         $authCode = (string) ($_POST['authcode'] ?? '');
         if ($authCode === '') {
-            $this->respond(['success' => false, 'error' => 'missing_authcode'], 400);
+            $this->respondError('missing_authcode', 'Auth code is required', 400);
         }
 
         $user = UserContext::getInstance();
@@ -200,7 +201,7 @@ class ApiKeysController
         if ($expected === null || !hash_equals($expected, $authCode)) {
             // Same generic failure message the login form uses — don't
             // confirm whether the user has an auth code set.
-            $this->respond(['success' => false, 'error' => 'invalid_authcode'], 401);
+            $this->respondError('invalid_authcode', 'Auth code is invalid', 401);
         }
 
         $this->session->grantSensitiveAccess();
@@ -247,7 +248,7 @@ class ApiKeysController
     {
         $name = trim(Security::sanitizeInput((string) ($_POST['name'] ?? '')));
         if ($name === '' || strlen($name) > 64) {
-            $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+            $this->respondError('invalid_name', 'Name must be 1–64 characters', 400);
         }
 
         $rawPermissions = $_POST['permissions'] ?? [];
@@ -258,27 +259,24 @@ class ApiKeysController
         $permissions = array_values(array_unique(array_filter($rawPermissions, 'is_string')));
 
         if (empty($permissions)) {
-            $this->respond(['success' => false, 'error' => 'no_permissions'], 400);
+            $this->respondError('no_permissions', 'At least one permission is required', 400);
         }
 
         $validation = ApiKeyService::validatePermissions($permissions);
         if (!$validation['valid']) {
-            $this->respond([
-                'success' => false,
-                'error' => 'invalid_permission',
-                'invalid_permission' => $validation['invalid_permission'],
-            ], 400);
+            $this->respondError(
+                'invalid_permission',
+                'One of the requested permissions is not recognised',
+                400,
+                ['invalid_permission' => $validation['invalid_permission']]
+            );
         }
 
         $rateLimit = 100;
         if (isset($_POST['rate_limit_per_minute']) && $_POST['rate_limit_per_minute'] !== '') {
             $rateValidation = ApiKeyService::validateRateLimit($_POST['rate_limit_per_minute']);
             if (!$rateValidation['valid']) {
-                $this->respond([
-                    'success' => false,
-                    'error' => 'invalid_rate_limit',
-                    'message' => $rateValidation['error'],
-                ], 400);
+                $this->respondError('invalid_rate_limit', $rateValidation['error'], 400);
             }
             $rateLimit = $rateValidation['value'];
         }
@@ -287,7 +285,7 @@ class ApiKeysController
         $expiresInDays = $_POST['expires_in_days'] ?? '';
         if ($expiresInDays !== '' && $expiresInDays !== '0') {
             if (!ctype_digit((string) $expiresInDays) || (int) $expiresInDays < 1 || (int) $expiresInDays > 3650) {
-                $this->respond(['success' => false, 'error' => 'invalid_expiration'], 400);
+                $this->respondError('invalid_expiration', 'Expiration must be 1–3650 days', 400);
             }
             $expiresAt = gmdate('Y-m-d H:i:s', time() + ((int) $expiresInDays) * 86400);
         }
@@ -327,19 +325,19 @@ class ApiKeysController
     {
         $keyId = (string) ($_POST['key_id'] ?? '');
         if (!$this->isValidKeyId($keyId)) {
-            $this->respond(['success' => false, 'error' => 'invalid_key_id'], 400);
+            $this->respondError('invalid_key_id', 'Invalid key id', 400);
         }
 
         $existing = $this->repository->getByKeyId($keyId);
         if ($existing === null) {
-            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+            $this->respondError('not_found', 'API key not found', 404);
         }
 
         $newName = null;
         if (array_key_exists('name', $_POST)) {
             $name = trim(Security::sanitizeInput((string) $_POST['name']));
             if ($name === '' || strlen($name) > 64) {
-                $this->respond(['success' => false, 'error' => 'invalid_name'], 400);
+                $this->respondError('invalid_name', 'Name must be 1–64 characters', 400);
             }
             $newName = $name;
         }
@@ -348,11 +346,7 @@ class ApiKeysController
         if (array_key_exists('rate_limit_per_minute', $_POST) && $_POST['rate_limit_per_minute'] !== '') {
             $rateValidation = ApiKeyService::validateRateLimit($_POST['rate_limit_per_minute']);
             if (!$rateValidation['valid']) {
-                $this->respond([
-                    'success' => false,
-                    'error' => 'invalid_rate_limit',
-                    'message' => $rateValidation['error'],
-                ], 400);
+                $this->respondError('invalid_rate_limit', $rateValidation['error'], 400);
             }
             $newRateLimit = $rateValidation['value'];
         }
@@ -361,7 +355,7 @@ class ApiKeysController
         if (array_key_exists('expires_in_days', $_POST) && $_POST['expires_in_days'] !== '') {
             $days = $_POST['expires_in_days'];
             if (!ctype_digit((string) $days) || (int) $days < 1 || (int) $days > 3650) {
-                $this->respond(['success' => false, 'error' => 'invalid_expiration'], 400);
+                $this->respondError('invalid_expiration', 'Expiration must be 1–3650 days', 400);
             }
             $candidate = gmdate('Y-m-d H:i:s', time() + ((int) $days) * 86400);
             // Reject extension: if the key already has an expiry, the new
@@ -369,17 +363,17 @@ class ApiKeysController
             // any finite expiry is a shortening, so that's always allowed.
             $currentExpiresAt = $existing['expires_at'] ?? null;
             if ($currentExpiresAt !== null && $candidate > $currentExpiresAt) {
-                $this->respond([
-                    'success' => false,
-                    'error' => 'expiration_extension_not_allowed',
-                    'message' => 'Expiry can only be shortened. Delete and recreate the key to extend it.',
-                ], 400);
+                $this->respondError(
+                    'expiration_extension_not_allowed',
+                    'Expiry can only be shortened. Delete and recreate the key to extend it.',
+                    400
+                );
             }
             $newExpiresAt = $candidate;
         }
 
         if ($newName === null && $newRateLimit === null && $newExpiresAt === null) {
-            $this->respond(['success' => false, 'error' => 'nothing_to_update'], 400);
+            $this->respondError('nothing_to_update', 'Nothing to update', 400);
         }
 
         $this->repository->updateKey($keyId, $newName, $newRateLimit, $newExpiresAt);
@@ -406,7 +400,7 @@ class ApiKeysController
         $enable = isset($_POST['enable']) && $_POST['enable'] === '1';
 
         if (!$this->isValidKeyId($keyId)) {
-            $this->respond(['success' => false, 'error' => 'invalid_key_id'], 400);
+            $this->respondError('invalid_key_id', 'Invalid key id', 400);
         }
 
         $ok = $enable
@@ -417,7 +411,7 @@ class ApiKeysController
             // Either not found, or already in the requested state. Re-check
             // existence to tell the two apart for a helpful error.
             if ($this->repository->getByKeyId($keyId) === null) {
-                $this->respond(['success' => false, 'error' => 'not_found'], 404);
+                $this->respondError('not_found', 'API key not found', 404);
             }
             // Already in requested state — treat as success (idempotent).
         }
@@ -437,12 +431,12 @@ class ApiKeysController
     {
         $keyId = (string) ($_POST['key_id'] ?? '');
         if (!$this->isValidKeyId($keyId)) {
-            $this->respond(['success' => false, 'error' => 'invalid_key_id'], 400);
+            $this->respondError('invalid_key_id', 'Invalid key id', 400);
         }
 
         $deleted = $this->repository->deleteKey($keyId);
         if (!$deleted) {
-            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+            $this->respondError('not_found', 'API key not found', 404);
         }
 
         Logger::getInstance()->info('api_key_deleted_via_gui', [
@@ -459,12 +453,34 @@ class ApiKeysController
     private function requireSensitive(): void
     {
         if (!$this->session->hasSensitiveAccess()) {
-            $this->respond([
-                'success' => false,
-                'error' => 'sensitive_access_required',
-                'message' => 'Please re-enter your auth code to continue.',
-            ], 401);
+            $this->respondError(
+                'sensitive_access_required',
+                'Please re-enter your auth code to continue.',
+                401
+            );
         }
+    }
+
+    /**
+     * Emit a canonical GUI error envelope through the test-seam `respond()`
+     * method. Routes through `GuiErrorResponse::make()` so the wire shape
+     * matches every other migrated GUI controller; the throw of
+     * `ApiKeysControllerResponseSent` (from `respond()`) means tests can
+     * still capture without `exit()`.
+     *
+     * Optional extras get merged on top — for the rare cases where the
+     * legacy envelope shipped extra fields (e.g. `invalid_permission` →
+     * which permission failed) that JS readers still consume.
+     *
+     * @param array<string,mixed> $extras
+     */
+    private function respondError(string $code, string $message, int $status, array $extras = []): void
+    {
+        $payload = GuiErrorResponse::make($code, $message);
+        if ($extras !== []) {
+            $payload = array_merge($payload, $extras);
+        }
+        $this->respond($payload, $status);
     }
 
     /**

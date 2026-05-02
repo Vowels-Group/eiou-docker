@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Utils\PaginationCursor;
+
 /**
  * Core "inline" GUI actions — POST handlers that historically lived
  * as raw `if ($action === ...)` branches in Functions.php and have no
@@ -242,7 +244,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
         // first-page sentinel 0). Decoded once here so each branch below
         // can pass it down without re-parsing. A malformed cursor decodes
         // to null — the safe fallback is page one.
-        $cursor = \Eiou\Utils\PaginationCursor::decode($_POST['cursor'] ?? null);
+        $cursor = PaginationCursor::decode($_POST['cursor'] ?? null);
 
         if ($action === 'loadMoreTransactions') {
             $transactions = $transactionService->getTransactionHistory($limit, $offset, $cursor);
@@ -257,7 +259,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             $nextCursor = null;
             if (!empty($transactions) && count($transactions) >= $limit) {
                 $last = end($transactions);
-                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                $nextCursor = PaginationCursor::encode([
                     'time'      => (int) ($last['time'] ?? 0),
                     'timestamp' => (string) ($last['timestamp'] ?? ''),
                     'txid'      => (string) ($last['txid'] ?? ''),
@@ -285,7 +287,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             $nextCursor = null;
             if (!empty($more) && count($more) >= $limit) {
                 $last = end($more);
-                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                $nextCursor = PaginationCursor::encode([
                     'ts' => (string) ($last['responded_at'] ?? $last['created_at'] ?? ''),
                     'id' => (int) ($last['id'] ?? 0),
                 ]);
@@ -405,7 +407,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             $nextCursor = null;
             if (!empty($rawAccepted) && count($rawAccepted) >= $limit) {
                 $last = end($rawAccepted);
-                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                $nextCursor = PaginationCursor::encode([
                     'name' => (string) ($last['name'] ?? ''),
                     'id'   => (int) ($last['id'] ?? 0),
                 ]);

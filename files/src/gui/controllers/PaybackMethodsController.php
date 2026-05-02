@@ -3,6 +3,7 @@
 
 namespace Eiou\Gui\Controllers;
 
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PaybackMethodService;
@@ -73,7 +74,7 @@ class PaybackMethodsController
             $action = $_POST['action'] ?? '';
 
             if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
-                $this->respond(['success' => false, 'error' => 'csrf_error'], 403);
+                $this->respondError('csrf_invalid', 'Invalid CSRF token', 403);
             }
 
             switch ($action) {
@@ -107,7 +108,7 @@ class PaybackMethodsController
                     $this->fetchFromContact();
                     break;
                 default:
-                    $this->respond(['success' => false, 'error' => 'unknown_action'], 400);
+                    $this->respondError('unknown_action', 'Unknown action', 400);
             }
         } catch (PaybackMethodsControllerResponseSent $sent) {
             throw $sent;
@@ -116,10 +117,7 @@ class PaybackMethodsController
                 'context' => 'payback_methods_controller',
                 'action' => $_POST['action'] ?? '',
             ]);
-            $this->respond(
-                ['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()],
-                500
-            );
+            $this->respondError('server_error', $e->getMessage(), 500);
         }
     }
 
@@ -149,7 +147,7 @@ class PaybackMethodsController
         $id = $this->requireMethodId();
         $row = $this->svc->get($id);
         if ($row === null) {
-            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+            $this->respondError('not_found', 'Payback method not found', 404);
         }
         $this->respond(['success' => true, 'method' => $row]);
     }
@@ -159,7 +157,7 @@ class PaybackMethodsController
         $id = $this->requireMethodId();
         $row = $this->svc->getReveal($id);
         if ($row === null) {
-            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+            $this->respondError('not_found', 'Payback method not found', 404);
         }
         $this->respond(['success' => true, 'method' => $row]);
     }
@@ -180,11 +178,12 @@ class PaybackMethodsController
 
         $result = $this->svc->add($type, $label, $currency, $fields, $sharePolicy, $priority);
         if ($result['errors'] !== []) {
-            $this->respond([
-                'success' => false,
-                'error' => 'validation_failed',
-                'errors' => $result['errors'],
-            ], 400);
+            $this->respondError(
+                'validation_failed',
+                'Validation failed',
+                400,
+                ['errors' => $result['errors']]
+            );
         }
         Logger::getInstance()->info('payback_method_create_via_gui', [
             'method_id' => $result['method_id'], 'type' => $type, 'currency' => $currency,
@@ -212,11 +211,14 @@ class PaybackMethodsController
         if ($errors !== []) {
             $codes = array_column($errors, 'code');
             if (in_array('not_found', $codes, true)) {
-                $this->respond(['success' => false, 'error' => 'not_found'], 404);
+                $this->respondError('not_found', 'Payback method not found', 404);
             }
-            $this->respond([
-                'success' => false, 'error' => 'validation_failed', 'errors' => $errors,
-            ], 400);
+            $this->respondError(
+                'validation_failed',
+                'Validation failed',
+                400,
+                ['errors' => $errors]
+            );
         }
         Logger::getInstance()->info('payback_method_update_via_gui', ['method_id' => $id]);
         $this->respond(['success' => true, 'method_id' => $id]);
@@ -226,7 +228,7 @@ class PaybackMethodsController
     {
         $id = $this->requireMethodId();
         if (!$this->svc->remove($id)) {
-            $this->respond(['success' => false, 'error' => 'not_found'], 404);
+            $this->respondError('not_found', 'Payback method not found', 404);
         }
         Logger::getInstance()->info('payback_method_delete_via_gui', ['method_id' => $id]);
         $this->respond(['success' => true, 'method_id' => $id, 'deleted' => true]);
@@ -240,11 +242,14 @@ class PaybackMethodsController
         if ($errors !== []) {
             $codes = array_column($errors, 'code');
             if (in_array('not_found', $codes, true)) {
-                $this->respond(['success' => false, 'error' => 'not_found'], 404);
+                $this->respondError('not_found', 'Payback method not found', 404);
             }
-            $this->respond([
-                'success' => false, 'error' => 'validation_failed', 'errors' => $errors,
-            ], 400);
+            $this->respondError(
+                'validation_failed',
+                'Validation failed',
+                400,
+                ['errors' => $errors]
+            );
         }
         Logger::getInstance()->info('payback_method_share_policy_via_gui', [
             'method_id' => $id, 'share_policy' => $policy,
@@ -262,7 +267,7 @@ class PaybackMethodsController
     {
         $address = trim((string) ($_POST['address'] ?? ''));
         if ($address === '') {
-            $this->respond(['success' => false, 'error' => 'missing_address'], 400);
+            $this->respondError('missing_address', 'Address is required', 400);
         }
         $currency = isset($_POST['currency']) ? strtoupper((string) $_POST['currency']) : null;
         if ($currency === '' || $currency === 'ALL') {
@@ -292,11 +297,12 @@ class PaybackMethodsController
         $result = $delivery->sendMessage('payback_methods', $address, $payload, $messageId, false);
 
         if (empty($result['success'])) {
-            $this->respond([
-                'success' => false,
-                'error'   => 'delivery_failed',
-                'detail'  => $result['tracking']['stage'] ?? 'unknown',
-            ], 502);
+            $this->respondError(
+                'delivery_failed',
+                'Delivery to contact failed',
+                502,
+                ['detail' => $result['tracking']['stage'] ?? 'unknown']
+            );
         }
 
         // Receiver echoes {success, status: 'received', response: {...}}. We
@@ -304,11 +310,12 @@ class PaybackMethodsController
         $outer = $result['response'] ?? [];
         $inner = is_array($outer) ? ($outer['response'] ?? null) : null;
         if (!is_array($inner)) {
-            $this->respond([
-                'success' => false,
-                'error'   => 'unexpected_response',
-                'raw'     => $outer,
-            ], 502);
+            $this->respondError(
+                'unexpected_response',
+                'Unexpected response shape from contact',
+                502,
+                ['raw' => $outer]
+            );
         }
 
         $this->respond([
@@ -343,11 +350,11 @@ class PaybackMethodsController
     {
         $id = (string) ($_POST['method_id'] ?? '');
         if ($id === '') {
-            $this->respond(['success' => false, 'error' => 'missing_method_id'], 400);
+            $this->respondError('missing_method_id', 'Method id is required', 400);
         }
         // Method ids are uuid v4.
         if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $id)) {
-            $this->respond(['success' => false, 'error' => 'invalid_method_id'], 400);
+            $this->respondError('invalid_method_id', 'Invalid method id', 400);
         }
         return $id;
     }
@@ -355,7 +362,11 @@ class PaybackMethodsController
     private function requireSensitive(): void
     {
         if (!$this->session->hasSensitiveAccess()) {
-            $this->respond(['success' => false, 'error' => 'sensitive_access_required'], 403);
+            $this->respondError(
+                'sensitive_access_required',
+                'Please re-enter your auth code to continue.',
+                403
+            );
         }
     }
 
@@ -370,6 +381,22 @@ class PaybackMethodsController
         http_response_code($status);
         echo json_encode($payload);
         throw new PaybackMethodsControllerResponseSent($status);
+    }
+
+    /**
+     * Emit a canonical GUI error envelope through the test-seam `respond()`.
+     * Same contract as `ApiKeysController::respondError`. Optional extras
+     * cover legacy fields (`errors` for the validation-failed shape, etc.).
+     *
+     * @param array<string,mixed> $extras
+     */
+    private function respondError(string $code, string $message, int $status, array $extras = []): void
+    {
+        $payload = GuiErrorResponse::make($code, $message);
+        if ($extras !== []) {
+            $payload = array_merge($payload, $extras);
+        }
+        $this->respond($payload, $status);
     }
 }
 
