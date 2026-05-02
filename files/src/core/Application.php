@@ -121,6 +121,14 @@ class Application {
         // Migrate default config to add any new configurable keys
         $this->migrateDefaultConfig();
 
+        // Validate the four-layer configuration (Constants -> env -> JSON ->
+        // UserContext) once at boot. Surfaces SSL-verify-off in production,
+        // unreadable JSON config files, missing CA bundles, malformed
+        // TRUSTED_PROXIES entries, etc. — all of which would otherwise show up
+        // as opaque downstream failures. Non-fatal: issues are logged so the
+        // operator can see them at startup without locking the wallet.
+        ConfigValidator::fromEnvironment()->validateAndLog($this->getLogger());
+
         // Setup user config
         if(file_exists('/etc/eiou/config/userconfig.json') && !$this->currentUserLoaded()){
             // Get UserContext instance

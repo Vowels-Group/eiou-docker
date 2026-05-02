@@ -1269,531 +1269,104 @@ class ContactSyncService implements ContactSyncServiceInterface {
     public function handleNewContact(string $address, string $name, int $fee, SplitAmount $credit, string $currency, ?CliOutputManager $output = null, ?string $description = null, ?SplitAmount $requestedCreditLimit = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
-        // $fee is a scaled integer (e.g., 10 for 0.1%), $credit is a SplitAmount
-        // Build contact data for JSON response
+        // $fee is a scaled integer (e.g., 10 for 0.1%), $credit is a SplitAmount.
+        // Build contact data for JSON response.
         $contactData = [
             'address' => $address,
             'name' => $name,
             'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
             'credit' => $credit->toMajorUnits(),
-            'currency' => $currency
+            'currency' => $currency,
         ];
 
-        // Build the payload array (include currency so receiver knows sender's preference)
-        // For TOR addresses: include description in the contact request (single phase, TOR provides transport encryption)
-        // For non-TOR addresses: omit description — it will be sent as a separate E2E encrypted follow-up
-        $isTorAddress = $this->transportUtility->isTorAddress($address);
-        $descriptionForPayload = $isTorAddress ? $description : null;
-        $requestedCreditArray = $requestedCreditLimit !== null ? $requestedCreditLimit->toArray() : null;
-        $payload = $this->contactPayload->buildCreateRequest($address, $currency, $descriptionForPayload, $requestedCreditArray);
+        // Build the wire payload + retry metadata + tracking message ID.
+        $request = $this->buildNewContactRequestPayload($address, $name, $fee, $credit, $currency, $description, $requestedCreditLimit);
+        $payload = $request['payload'];
+        $messageId = $request['messageId'];
+        $isTorAddress = $request['isTorAddress'];
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
 
-        // Store contact creation params as metadata in the payload.
-        // If the first delivery attempt fails and the message is queued for retry,
-        // these params are needed when the retry succeeds to complete contact insertion.
-        // The remote node ignores unknown keys in the payload.
-        $payload['_contact_params'] = [
-            'name' => $name,
-            'fee' => $fee,
-            'credit' => $credit->toArray(),
-            'currency' => $currency
-        ];
-        if ($requestedCreditLimit !== null) {
-            $payload['_contact_params']['requested_credit_limit'] = $requestedCreditLimit->toArray();
-        }
-        // Store description and TOR flag for retry path — if the initial send is queued
-        // for retry, handleRetryDeliveryCompleted() needs to send the E2E follow-up
-        if ($description !== null && $description !== '') {
-            $payload['_contact_params']['description'] = $description;
-            $payload['_contact_params']['is_tor'] = $isTorAddress;
-        }
-
-        // Generate unique message ID for contact creation tracking
-        // Message ID format: create-{hash} (message_type 'contact' provides context)
-        $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
-
-        // Send contact creation request with delivery tracking
-        // Allow transport fallback for contact requests — if TOR fails, try HTTP/HTTPS
-        // so the initial handshake can succeed even when the hidden service is unreachable
+        // Send contact creation request with delivery tracking. Allow transport
+        // fallback so the initial handshake can succeed even when the hidden
+        // service is unreachable (TOR fails -> try HTTP/HTTPS).
         $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId, true, true);
         $responseData = $sendResult['response'];
 
-        if (isset($responseData['status'])){
-            $senderPublicKey = $responseData['senderPublicKey'];
-            $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        if (!isset($responseData['status'])) {
+            $this->processNewContactNoResponse($address, $sendResult, $contactData, $output);
+            return;
+        }
 
-            // Check if we already have this contact stored locally (under a different address)
-            // This handles the case where user adds a known contact via new address type
-            // OR the case where they sent us a request while we were sending ours
-            // Store remote version from contact creation response
-            $remoteVersion = $responseData['version'] ?? null;
+        $senderPublicKey = $responseData['senderPublicKey'];
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
-            $existingLocalContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
-            if ($existingLocalContact) {
-                // Update the address with new transport type
-                $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
-
-                // Store remote version from response
-                if ($remoteVersion !== null) {
-                    $this->contactRepository->updateContactFields($senderPublicKey, ['remote_version' => $remoteVersion]);
-                }
-
-                if ($this->messageDeliveryService !== null) {
-                    $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
-                }
-
-                // If contact is pending without name (we received their request), check currency match
-                if ($existingLocalContact['status'] === Constants::CONTACT_STATUS_PENDING && $existingLocalContact['name'] === null) {
-                    // Look up pending incoming currencies for this contact
-                    $pendingIncomingCurrencies = [];
-                    if ($this->contactCurrencyRepository !== null) {
-                        $pendingIncomingCurrencies = array_column(
-                            $this->contactCurrencyRepository->getPendingCurrencies($senderPublicKeyHash, 'incoming'),
-                            'currency'
-                        );
-                    }
-
-                    $currencyMatches = in_array($currency, $pendingIncomingCurrencies);
-
-                    if ($currencyMatches) {
-                        // Currency matches — accept the contact
-                        if ($this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency)) {
-                            // Update the single currency row to accepted
-                            if ($this->contactCurrencyRepository !== null) {
-                                $this->contactCurrencyRepository->updateCurrencyConfig($senderPublicKeyHash, $currency, [
-                                    'fee_percent' => (int) $fee,
-                                    'credit_limit' => $credit,
-                                    'status' => 'accepted',
-                                ]);
-                            }
-
-                            // Generate recipient signature for dual-signature protocol
-                            $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
-
-                            // Calculate available credit to include in acceptance message
-                            $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
-
-                            // Send acceptance message back with currency info and available credit
-                            //
-                            // async=true: see same rationale at line 936/1125 —
-                            // first attempt synchronously, DLQ retries on
-                            // failure, no hang on the user-facing path.
-                            $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
-                            $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
-                            $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, true);
-
-                            if (!$sendResult['success']) {
-                                Logger::getInstance()->warning("Contact acceptance message delivery failed", [
-                                    'recipient_address' => $address,
-                                    'message_id' => $acceptMessageId,
-                                    'error' => $sendResult['tracking']['error'] ?? 'unknown'
-                                ]);
-                            }
-
-                            // Save available credit from the acknowledgment response
-                            if ($sendResult['success'] && !empty($sendResult['response'])) {
-                                $this->saveAvailableCreditFromResponse($senderPublicKey, $sendResult['response']);
-                            }
-
-                            // Complete the received contact transaction
-                            $this->completeReceivedContactTransaction($senderPublicKey, $currency);
-
-                            $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
-                            $contactData['pubkey'] = $senderPublicKey;
-                            $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
-                            return;
-                        }
-                    } else {
-                        // Currency mismatch — update contact name but keep pending
-                        $this->contactRepository->updateContactFields($senderPublicKey, [
-                            'name' => $name,
-                        ]);
-
-                        // Store outgoing currency as pending
-                        if ($this->contactCurrencyRepository !== null && !empty($currency)) {
-                            if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
-                                $this->contactCurrencyRepository->insertCurrencyConfig(
-                                    $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
-                                );
-                            }
-                        }
-
-                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
-                        $contactData['pubkey'] = $senderPublicKey;
-                        $pendingInfo = !empty($pendingIncomingCurrencies) ? ' (pending incoming: ' . implode(', ', $pendingIncomingCurrencies) . ')' : '';
-                        $output->success("Contact request sent with currency " . $currency . ", awaiting acceptance" . $pendingInfo, $contactData, "Contact request sent");
-                        return;
-                    }
-                }
-
-                // Contact exists with name or non-pending status
-                // If response is DELIVERY_RECEIVED, the receiver stored our new currency request
-                // We need to create the outgoing currency entry and contact transaction for this currency
-                if ($responseData['status'] === Constants::DELIVERY_RECEIVED && !empty($currency)) {
-                    // Store outgoing currency as pending (or accepted if contact is already accepted)
-                    $currencyStatus = ($existingLocalContact['status'] === Constants::CONTACT_STATUS_ACCEPTED) ? 'accepted' : 'pending';
-                    if ($this->contactCurrencyRepository !== null) {
-                        if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
-                            $this->contactCurrencyRepository->insertCurrencyConfig(
-                                $senderPublicKeyHash, $currency, (int) $fee, $credit, $currencyStatus, 'outgoing'
-                            );
-                        }
-                    }
-
-                    // Initialize balance for the new currency and calculate available credit
-                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
-                    if ($this->contactCreditRepository !== null) {
-                        try {
-                            $newCurrencyCreditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
-                            $newCurrencyAvailableCredit = $newCurrencyCreditData['availableCreditByCurrency'][$currency] ?? 0;
-                            $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, SplitAmount::fromMajorUnits((float) $newCurrencyAvailableCredit), $currency);
-                        } catch (\Exception $e) {
-                            Logger::getInstance()->log('Failed to store credit for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
-                        }
-                    }
-
-                    // Create contact transaction for this currency
-                    $txid = $responseData['txid'] ?? null;
-                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
-
-                    // Store signature data
-                    $signingData = $sendResult['signing_data'] ?? null;
-                    if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
-                        $this->transactionRepository->updateSignatureData(
-                            $txid,
-                            $signingData['signature'],
-                            $signingData['nonce']
-                        );
-                    }
-
-                    $contactData['status'] = $existingLocalContact['status'];
-                    $contactData['pubkey'] = $senderPublicKey;
-                    $output->success("Currency " . $currency . " added to contact " . $name, $contactData, "New currency added to existing contact");
-                    return;
-                }
-
-                $contactData['status'] = $existingLocalContact['status'];
-                $contactData['pubkey'] = $senderPublicKey;
-                $output->success("Contact address updated for " . $name, $contactData, "New address type added to existing contact");
-                return;
-            }
-
-            // Contact request was received (initial insert on their end as pending, awaiting acceptance)
-            if($responseData['status'] === Constants::DELIVERY_RECEIVED){
-                // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
-                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
-                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
-
-                    // Store any additional addresses from senderAddresses if present
-                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
-                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
-                    }
-
-                    // Store remote version from response
-                    if ($remoteVersion !== null) {
-                        $this->contactRepository->updateContactFields($senderPublicKey, ['remote_version' => $remoteVersion]);
-                    }
-
-                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
-
-                    // Track outgoing currency request in contact_currencies
-                    // This records that WE requested this currency from them (direction=outgoing)
-                    if ($this->contactCurrencyRepository !== null && !empty($currency)) {
-                        $this->contactCurrencyRepository->insertCurrencyConfig(
-                            $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
-                        );
-                    }
-
-                    // Insert contact transaction (first transaction between users, amount=0)
-                    // Use the txid from the response to ensure both parties have matching txids
-                    $txid = $responseData['txid'] ?? null;
-                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
-
-                    // Store signature data for future sync verification
-                    $signingData = $sendResult['signing_data'] ?? null;
-                    if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
-                        $this->transactionRepository->updateSignatureData(
-                            $txid,
-                            $signingData['signature'],
-                            $signingData['nonce']
-                        );
-                    }
-
-                    // Update delivery stage: received -> inserted -> completed (using MessageDeliveryService directly)
-                    // Contact request phase is complete (awaiting acceptance is a separate phase)
-                    if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
-                    }
-
-                    // For non-TOR: send description as E2E encrypted follow-up now that we have recipient's public key
-                    if (!$isTorAddress && $description !== null && $description !== '') {
-                        $this->sendContactDescriptionE2E($address, $description);
-                    }
-
-                    $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
-                    $contactData['pubkey'] = $senderPublicKey;
-                    $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
-                } else{
-                    $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
-                    return;
-                }
-            }
-            // Remote auto-accepted because they already had us as a pending contact (mutual request)
-            elseif($responseData['status'] === Constants::STATUS_ACCEPTED){
-                // Insert contact on our end with returned pubkey
-                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
-                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
-
-                    // Store any additional addresses from senderAddresses if present
-                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
-                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
-                    }
-
-                    // Accept the contact (sets status to 'accepted', inserts balances, creates credit, syncs balance)
-                    $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
-
-                    // Insert contact transaction if one doesn't already exist
-                    if (!$this->contactTransactionExists($senderPublicKey)) {
-                        $txid = $responseData['txid'] ?? null;
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
-
-                        // Store signature data for future sync verification
-                        $signingData = $sendResult['signing_data'] ?? null;
-                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
-                            $this->transactionRepository->updateSignatureData(
-                                $txid,
-                                $signingData['signature'],
-                                $signingData['nonce']
-                            );
-                        }
-                    }
-
-                    // Store recipient signature from remote's response on our sent contact TX
-                    // The remote generates the recipient signature and includes it in the acceptance response
-                    $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
-
-                    // Save available credit from the remote's mutual acceptance response
-                    $this->saveAvailableCreditFromResponse($senderPublicKey, $responseData);
-
-                    // Update delivery stage
-                    if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
-                    }
-
-                    // For non-TOR: send description as E2E encrypted follow-up
-                    if (!$isTorAddress && $description !== null && $description !== '') {
-                        $this->sendContactDescriptionE2E($address, $description);
-                    }
-
-                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
-                    $contactData['pubkey'] = $senderPublicKey;
-                    $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (mutual request)");
-                } else {
-                    $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
-                    return;
-                }
-            }
-            // Our contact pubkey exists on their end, but not provided address
-            // we are known under a different address or transport type
-            // Note: If contact existed locally, we would have returned early above
-            // So reaching here means contact was deleted locally - need to re-insert and sync
-            elseif($responseData['status'] === Constants::DELIVERY_UPDATED){
-                $senderAddress = $responseData['senderAddress'];
-                // Contact was deleted locally - re-insert and sync
-                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
-                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
-
-                    // Store any additional addresses from senderAddresses if present
-                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
-                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
-                    }
-
-                    // Insert initial balances - will be updated by full sync below
-                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
-
-                    // Only create a new contact TX if the remote doesn't have one (no txid in response)
-                    // AND we don't have one locally. When the remote provides a txid, syncReaddedContact()
-                    // will sync the original contact TX with correct signatures.
-                    $remoteTxid = $responseData['txid'] ?? null;
-                    if ($remoteTxid === null && !$this->contactTransactionExists($senderPublicKey)) {
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency, null, $description);
-
-                        // Store signature data for future sync verification
-                        $signingData = $sendResult['signing_data'] ?? null;
-                        $txid = $this->transactionContactRepository->getContactTransactionByParties(
-                            $this->currentUser->getPublicKey(), $senderPublicKey
-                        )['txid'] ?? null;
-                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
-                            $this->transactionRepository->updateSignatureData(
-                                $txid,
-                                $signingData['signature'],
-                                $signingData['nonce']
-                            );
-                        }
-                    }
-
-                    if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
-                    }
-
-                    // Full sync for re-added contact: sync contact status, transaction chain, and balances
-                    $syncService = $this->requireSyncTrigger();
-                    $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
-
-                    // Safety net: if sync didn't bring in the recipient_signature, store it from the response
-                    $recipientSignature = $responseData['recipientSignature'] ?? null;
-                    if ($recipientSignature !== null) {
-                        $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
-                            $this->currentUser->getPublicKey(), $senderPublicKey
-                        );
-                        if ($contactTx && isset($contactTx['txid'])) {
-                            $this->transactionRepository->updateRecipientSignature($contactTx['txid'], $recipientSignature);
-                        }
-                    }
-
-                    if ($syncResult['success']) {
-                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
-                        $contactData['pubkey'] = $senderPublicKey;
-                        $contactData['sync'] = [
-                            'transactions_synced' => $syncResult['transactions_synced'],
-                            'balances_synced' => $syncResult['balances_synced'],
-                            'currencies' => $syncResult['currencies']
-                        ];
-                        $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
-                    } else {
-                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
-                        $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
-                    }
-                } else {
-                    $output->error("Failed to re-add contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
-                }
-            }
-            // Our contact pubkey and address both exist on their end (Case when we delete the contact and try re-adding it)
-            elseif($responseData['status'] === Constants::DELIVERY_WARNING){
-                // Insert contact and perform full sync (transactions + balances)
-                if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
-                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
-
-                    // Store any additional addresses from senderAddresses if present
-                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
-                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
-                    }
-
-                    // Insert initial balances - will be updated by full sync below
-                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
-
-                    // Only create a new contact TX if the remote doesn't have one (no txid in response)
-                    // AND we don't have one locally. When the remote provides a txid, it means the
-                    // original contact TX exists on their end — syncReaddedContact() will sync it
-                    // with the correct txid, nonce, and signatures from the original establishment.
-                    $remoteTxid = $responseData['txid'] ?? null;
-                    if ($remoteTxid === null && !$this->contactTransactionExists($senderPublicKey)) {
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency, null, $description);
-
-                        // Store signature data for future sync verification
-                        $signingData = $sendResult['signing_data'] ?? null;
-                        $txid = $this->transactionContactRepository->getContactTransactionByParties(
-                            $this->currentUser->getPublicKey(), $senderPublicKey
-                        )['txid'] ?? null;
-                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
-                            $this->transactionRepository->updateSignatureData(
-                                $txid,
-                                $signingData['signature'],
-                                $signingData['nonce']
-                            );
-                        }
-                    }
-
-                    // Update delivery stage: warning -> inserted -> completed (using MessageDeliveryService directly)
-                    if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
-                    }
-
-                    // Full sync for re-added contact: sync contact status, transaction chain, and balances
-                    // If contact still has transaction chain on their end, resync from original contact transaction
-                    // through all known transactions (verifying signatures) and finally sync balances
-                    // This will bring in the original contact TX with its recipient_signature
-                    $syncService = $this->requireSyncTrigger();
-                    $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
-
-                    // Safety net: if sync didn't bring in the recipient_signature, store it from the response
-                    $recipientSignature = $responseData['recipientSignature'] ?? null;
-                    if ($recipientSignature !== null) {
-                        $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
-                            $this->currentUser->getPublicKey(), $senderPublicKey
-                        );
-                        if ($contactTx && isset($contactTx['txid'])) {
-                            $this->transactionRepository->updateRecipientSignature($contactTx['txid'], $recipientSignature);
-                        }
-                    }
-
-                    if ($syncResult['success']) {
-                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
-                        $contactData['pubkey'] = $senderPublicKey;
-                        $contactData['sync'] = [
-                            'transactions_synced' => $syncResult['transactions_synced'],
-                            'balances_synced' => $syncResult['balances_synced'],
-                            'currencies' => $syncResult['currencies']
-                        ];
-                        $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
-                    } else {
-                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
-                        $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
-                    }
-                }
-            }
-            // Our contact request could not be processed on their end
-            elseif($responseData['status'] === Constants::STATUS_REJECTED){
-                // Defensive: a 'sent' contact tx for this currency may already
-                // exist if an earlier delivery attempt (retry / DLQ-resolution)
-                // inserted one before the rejection landed. Flip it to
-                // 'rejected' so the row doesn't sit on the single-check
-                // indicator forever. No-op when no matching row is present.
-                $rejectedPubkey = $responseData['senderPublicKey'] ?? null;
-                if ($rejectedPubkey !== null) {
-                    $this->rejectSentContactTransaction($rejectedPubkey, $currency);
-                }
-
-                $output->error("Contact request rejected by " . $address . " : " . ($responseData['message'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
-                    'contact' => $contactData,
-                    'response' => $responseData
-                ]);
-                return;
-            }
-        } else{
-            // No immediate response - check if message was queued for background retry
-            // This is expected behavior for async mode over slow Tor connections
-            if ($sendResult['queued_for_retry'] ?? false) {
-                // Message is being retried in the background by the message processor
-                // Insert contact locally as pending so user can see it in their contact list
-                $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
-                $contactData['delivery_status'] = 'queued_for_retry';
-                $output->success(
-                    "Contact request sent to " . $address . ". Awaiting response (message being delivered in background).",
-                    $contactData,
-                    "Contact request sent, delivery in progress"
-                );
-                return;
-            }
-
-            // Message delivery failed completely (not queued for retry)
-            // Tracking results are nested inside 'tracking' key from sendContactMessageInternal
-            $trackingResult = $sendResult['tracking'] ?? [];
-            $attempts = $trackingResult['attempts'] ?? 'unknown';
-            $lastError = $trackingResult['error'] ?? 'No response received';
-
-            $output->error(
-                "Failed to reach contact address after " . $attempts . " attempts. " .
-                "Address " . $address . " may not exist or is offline.",
-                ErrorCodes::CONTACT_UNREACHABLE,
-                null,
-                [
-                    'contact' => $contactData,
-                    'attempts' => $attempts,
-                    'last_error' => $lastError,
-                    'moved_to_dlq' => $trackingResult['dlq'] ?? false
-                ]
+        // Contact already stored locally (under a different address, or because
+        // they sent a request while we were sending ours).
+        $existingLocalContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+        if ($existingLocalContact) {
+            $this->processExistingLocalContact(
+                $existingLocalContact, $address, $senderPublicKey, $senderPublicKeyHash,
+                $name, $fee, $credit, $currency, $description,
+                $messageId, $sendResult, $responseData, $transportIndexAssociative,
+                $contactData, $output
             );
+            return;
+        }
+
+        $status = $responseData['status'];
+        if ($status === Constants::DELIVERY_RECEIVED) {
+            // Contact request was received (initial insert on their end as pending, awaiting acceptance).
+            $this->processNewContactPending(
+                $address, $senderPublicKey, $senderPublicKeyHash,
+                $name, $fee, $credit, $currency, $description, $isTorAddress,
+                $messageId, $sendResult, $responseData, $transportIndexAssociative,
+                $contactData, $output
+            );
+            return;
+        }
+
+        if ($status === Constants::STATUS_ACCEPTED) {
+            // Remote auto-accepted (mutual request).
+            $this->processNewContactMutualAccept(
+                $address, $senderPublicKey, $senderPublicKeyHash,
+                $name, $fee, $credit, $currency, $description, $isTorAddress,
+                $messageId, $sendResult, $responseData, $transportIndexAssociative,
+                $contactData, $output
+            );
+            return;
+        }
+
+        if ($status === Constants::DELIVERY_UPDATED) {
+            // Our pubkey exists on their end under a different address — we were
+            // deleted locally; re-insert and full-sync.
+            if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
+                $this->processReaddedContactPostInsert(
+                    $address, $senderPublicKey, $senderPublicKeyHash, $currency, $description,
+                    $messageId, $sendResult, $responseData, $transportIndexAssociative,
+                    $contactData, $output
+                );
+            } else {
+                $output->error("Failed to re-add contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
+            }
+            return;
+        }
+
+        if ($status === Constants::DELIVERY_WARNING) {
+            // Our pubkey AND address both exist on their end (we deleted, re-adding).
+            // Note the deliberate asymmetry vs DELIVERY_UPDATED: no error output
+            // on insert failure here. Preserved as-is from pre-extraction behaviour.
+            if ($this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
+                $this->processReaddedContactPostInsert(
+                    $address, $senderPublicKey, $senderPublicKeyHash, $currency, $description,
+                    $messageId, $sendResult, $responseData, $transportIndexAssociative,
+                    $contactData, $output
+                );
+            }
+            return;
+        }
+
+        if ($status === Constants::STATUS_REJECTED) {
+            $this->processNewContactRejected($address, $currency, $responseData, $contactData, $output);
             return;
         }
     }
@@ -2574,5 +2147,607 @@ class ContactSyncService implements ContactSyncServiceInterface {
             }
         }
         return $success;
+    }
+
+    // =========================================================================
+    // handleNewContact extraction helpers
+    // =========================================================================
+    //
+    // The branches below were extracted from a single 530-LOC method. The
+    // outer dispatcher `handleNewContact()` is now a thin status switch; each
+    // helper owns one response-status branch (or one shared sub-step).
+    //
+    // Behaviour-preservation notes:
+    //   - The pre-existing asymmetry between DELIVERY_UPDATED (emits an error
+    //     output if `insertContactWithEvent` fails) and DELIVERY_WARNING
+    //     (silent on insert failure) is intentionally preserved.
+    //   - `processReaddedContactPostInsert()` runs AFTER `insertContactWithEvent`
+    //     succeeds — failure handling stays in the caller so each status
+    //     branch can choose its own failure response.
+
+    /**
+     * Build the wire payload + retry-metadata + messageId for an outbound
+     * new-contact request. Returns ['payload' => array, 'messageId' => string,
+     * 'isTorAddress' => bool].
+     */
+    private function buildNewContactRequestPayload(
+        string $address,
+        string $name,
+        int $fee,
+        SplitAmount $credit,
+        string $currency,
+        ?string $description,
+        ?SplitAmount $requestedCreditLimit
+    ): array {
+        $isTorAddress = $this->transportUtility->isTorAddress($address);
+        // For TOR addresses: include description in the contact request (single phase, TOR provides transport encryption)
+        // For non-TOR addresses: omit description — it will be sent as a separate E2E encrypted follow-up
+        $descriptionForPayload = $isTorAddress ? $description : null;
+        $requestedCreditArray = $requestedCreditLimit !== null ? $requestedCreditLimit->toArray() : null;
+        $payload = $this->contactPayload->buildCreateRequest($address, $currency, $descriptionForPayload, $requestedCreditArray);
+
+        // Store contact creation params as metadata in the payload.
+        // If the first delivery attempt fails and the message is queued for retry,
+        // these params are needed when the retry succeeds to complete contact insertion.
+        // The remote node ignores unknown keys in the payload.
+        $payload['_contact_params'] = [
+            'name' => $name,
+            'fee' => $fee,
+            'credit' => $credit->toArray(),
+            'currency' => $currency,
+        ];
+        if ($requestedCreditLimit !== null) {
+            $payload['_contact_params']['requested_credit_limit'] = $requestedCreditLimit->toArray();
+        }
+        // Store description and TOR flag for retry path — handleRetryDeliveryCompleted()
+        // needs to send the E2E follow-up if the initial send is queued for retry.
+        if ($description !== null && $description !== '') {
+            $payload['_contact_params']['description'] = $description;
+            $payload['_contact_params']['is_tor'] = $isTorAddress;
+        }
+
+        // Message ID format: create-{hash} (message_type 'contact' provides context)
+        $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+
+        return ['payload' => $payload, 'messageId' => $messageId, 'isTorAddress' => $isTorAddress];
+    }
+
+    /**
+     * Persist any sender-side address records returned with the response.
+     */
+    private function applySenderAddresses(string $senderPublicKeyHash, array $responseData): void
+    {
+        if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+            $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+        }
+    }
+
+    /**
+     * Persist sender's `version` from a response onto the local contact row.
+     */
+    private function applyRemoteVersion(string $senderPublicKey, ?string $remoteVersion): void
+    {
+        if ($remoteVersion !== null) {
+            $this->contactRepository->updateContactFields($senderPublicKey, ['remote_version' => $remoteVersion]);
+        }
+    }
+
+    /**
+     * Persist signing data on a contact-transaction row, if both the txid and
+     * signing data are non-null and signing data has the expected fields.
+     */
+    private function storeContactTxSigningData(?string $txid, ?array $signingData): void
+    {
+        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+            $this->transactionRepository->updateSignatureData(
+                $txid,
+                $signingData['signature'],
+                $signingData['nonce']
+            );
+        }
+    }
+
+    /**
+     * Mark the contact-creation message-delivery stage as locally-inserted.
+     */
+    private function markContactInserted(?string $messageId): void
+    {
+        if ($this->messageDeliveryService !== null && $messageId !== null) {
+            $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+        }
+    }
+
+    /**
+     * Safety net for re-added contacts: if `syncReaddedContact` didn't bring
+     * in the recipient signature, store it from the response directly.
+     */
+    private function applyRecipientSignatureSafetyNet(string $senderPublicKey, ?string $recipientSignature): void
+    {
+        if ($recipientSignature === null) {
+            return;
+        }
+        $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
+            $this->currentUser->getPublicKey(), $senderPublicKey
+        );
+        if ($contactTx && isset($contactTx['txid'])) {
+            $this->transactionRepository->updateRecipientSignature($contactTx['txid'], $recipientSignature);
+        }
+    }
+
+    /**
+     * Look up the locally-stored contact-transaction txid for the (currentUser, contact) pair.
+     */
+    private function lookupContactTxid(string $contactPublicKey): ?string
+    {
+        return $this->transactionContactRepository->getContactTransactionByParties(
+            $this->currentUser->getPublicKey(), $contactPublicKey
+        )['txid'] ?? null;
+    }
+
+    /**
+     * Insert a contact-transaction and persist its signing data, when no
+     * transaction yet exists locally and the remote didn't provide a txid.
+     *
+     * Used by both DELIVERY_UPDATED and DELIVERY_WARNING re-add paths — when
+     * the remote provides a txid, syncReaddedContact() will sync the original
+     * contact TX with correct signatures, so we skip insertion to avoid
+     * duplicate rows.
+     */
+    private function insertReaddedContactTransaction(
+        string $address,
+        string $senderPublicKey,
+        string $currency,
+        ?string $description,
+        array $sendResult,
+        array $responseData
+    ): void {
+        $remoteTxid = $responseData['txid'] ?? null;
+        if ($remoteTxid !== null || $this->contactTransactionExists($senderPublicKey)) {
+            return;
+        }
+        $this->insertContactTransaction($senderPublicKey, $address, $currency, null, $description);
+        $this->storeContactTxSigningData($this->lookupContactTxid($senderPublicKey), $sendResult['signing_data'] ?? null);
+    }
+
+    /**
+     * Common post-insert body for re-added contacts (DELIVERY_UPDATED + DELIVERY_WARNING).
+     *
+     * Caller has already invoked `insertContactWithEvent` and confirmed it
+     * succeeded. Failure-response is left in the caller because the two
+     * status branches handle it differently (see class-level note above).
+     */
+    private function processReaddedContactPostInsert(
+        string $address,
+        string $senderPublicKey,
+        string $senderPublicKeyHash,
+        string $currency,
+        ?string $description,
+        string $messageId,
+        array $sendResult,
+        array $responseData,
+        array $transportIndexAssociative,
+        array &$contactData,
+        CliOutputManager $output
+    ): void {
+        $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+        $this->applySenderAddresses($senderPublicKeyHash, $responseData);
+
+        // Insert initial balances - will be updated by full sync below
+        $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+        $this->insertReaddedContactTransaction($address, $senderPublicKey, $currency, $description, $sendResult, $responseData);
+
+        $this->markContactInserted($messageId);
+
+        // Full sync for re-added contact: sync contact status, transaction chain, and balances
+        $syncResult = $this->requireSyncTrigger()->syncReaddedContact($address, $senderPublicKey);
+
+        $this->applyRecipientSignatureSafetyNet($senderPublicKey, $responseData['recipientSignature'] ?? null);
+
+        if ($syncResult['success']) {
+            $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+            $contactData['pubkey'] = $senderPublicKey;
+            $contactData['sync'] = [
+                'transactions_synced' => $syncResult['transactions_synced'],
+                'balances_synced' => $syncResult['balances_synced'],
+                'currencies' => $syncResult['currencies'],
+            ];
+            $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
+        } else {
+            $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+            $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
+        }
+    }
+
+    /**
+     * existingLocalContact branch: contact already exists locally under same
+     * or different address. Decides between mutual-accept, currency-mismatch
+     * pending, currency add-on, or address update. Returns true if the branch
+     * fully handled the request (caller should return).
+     */
+    private function processExistingLocalContact(
+        array $existingLocalContact,
+        string $address,
+        string $senderPublicKey,
+        string $senderPublicKeyHash,
+        string $name,
+        int $fee,
+        SplitAmount $credit,
+        string $currency,
+        ?string $description,
+        string $messageId,
+        array $sendResult,
+        array $responseData,
+        array $transportIndexAssociative,
+        array $contactData,
+        CliOutputManager $output
+    ): void {
+        // Update the address with new transport type
+        $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
+
+        $this->applyRemoteVersion($senderPublicKey, $responseData['version'] ?? null);
+
+        $this->markContactInserted($messageId);
+
+        // If contact is pending without name (we received their request), check currency match
+        if ($existingLocalContact['status'] === Constants::CONTACT_STATUS_PENDING && $existingLocalContact['name'] === null) {
+            $this->processExistingPendingContact(
+                $address, $senderPublicKey, $senderPublicKeyHash,
+                $name, $fee, $credit, $currency,
+                $contactData, $output
+            );
+            return;
+        }
+
+        // Contact exists with name or non-pending status
+        // If response is DELIVERY_RECEIVED, the receiver stored our new currency request
+        // We need to create the outgoing currency entry and contact transaction for this currency
+        if ($responseData['status'] === Constants::DELIVERY_RECEIVED && !empty($currency)) {
+            $this->processExistingContactCurrencyAdded(
+                $existingLocalContact, $address, $senderPublicKey, $senderPublicKeyHash,
+                $name, $fee, $credit, $currency, $description,
+                $sendResult, $responseData,
+                $contactData, $output
+            );
+            return;
+        }
+
+        $contactData['status'] = $existingLocalContact['status'];
+        $contactData['pubkey'] = $senderPublicKey;
+        $output->success("Contact address updated for " . $name, $contactData, "New address type added to existing contact");
+    }
+
+    /**
+     * existingLocalContact + pending + null-name sub-branch: a request crossed
+     * with our send. Either auto-accept (if currency matches a pending
+     * incoming request) or upgrade the local row to "pending with name" and
+     * track our outgoing currency.
+     */
+    private function processExistingPendingContact(
+        string $address,
+        string $senderPublicKey,
+        string $senderPublicKeyHash,
+        string $name,
+        int $fee,
+        SplitAmount $credit,
+        string $currency,
+        array $contactData,
+        CliOutputManager $output
+    ): void {
+        // Look up pending incoming currencies for this contact
+        $pendingIncomingCurrencies = [];
+        if ($this->contactCurrencyRepository !== null) {
+            $pendingIncomingCurrencies = array_column(
+                $this->contactCurrencyRepository->getPendingCurrencies($senderPublicKeyHash, 'incoming'),
+                'currency'
+            );
+        }
+
+        $currencyMatches = in_array($currency, $pendingIncomingCurrencies);
+
+        if ($currencyMatches) {
+            // Currency matches — accept the contact
+            if ($this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                // Update the single currency row to accepted
+                if ($this->contactCurrencyRepository !== null) {
+                    $this->contactCurrencyRepository->updateCurrencyConfig($senderPublicKeyHash, $currency, [
+                        'fee_percent' => (int) $fee,
+                        'credit_limit' => $credit,
+                        'status' => 'accepted',
+                    ]);
+                }
+
+                // Generate recipient signature for dual-signature protocol
+                $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
+                // Calculate available credit to include in acceptance message
+                $creditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
+
+                // Send acceptance message back with currency info and available credit
+                //
+                // async=true: see same rationale at line 936/1125 — first
+                // attempt synchronously, DLQ retries on failure, no hang on
+                // the user-facing path.
+                $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig, $currency, $creditData['availableCreditByCurrency'], $creditData['creditCalculatedAt']);
+                $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
+                $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, true);
+
+                if (!$sendResult['success']) {
+                    Logger::getInstance()->warning("Contact acceptance message delivery failed", [
+                        'recipient_address' => $address,
+                        'message_id' => $acceptMessageId,
+                        'error' => $sendResult['tracking']['error'] ?? 'unknown',
+                    ]);
+                }
+
+                // Save available credit from the acknowledgment response
+                if ($sendResult['success'] && !empty($sendResult['response'])) {
+                    $this->saveAvailableCreditFromResponse($senderPublicKey, $sendResult['response']);
+                }
+
+                // Complete the received contact transaction
+                $this->completeReceivedContactTransaction($senderPublicKey, $currency);
+
+                $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                $contactData['pubkey'] = $senderPublicKey;
+                $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
+            }
+            return;
+        }
+
+        // Currency mismatch — update contact name but keep pending
+        $this->contactRepository->updateContactFields($senderPublicKey, [
+            'name' => $name,
+        ]);
+
+        // Store outgoing currency as pending
+        if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+            if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                $this->contactCurrencyRepository->insertCurrencyConfig(
+                    $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
+                );
+            }
+        }
+
+        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+        $contactData['pubkey'] = $senderPublicKey;
+        $pendingInfo = !empty($pendingIncomingCurrencies) ? ' (pending incoming: ' . implode(', ', $pendingIncomingCurrencies) . ')' : '';
+        $output->success("Contact request sent with currency " . $currency . ", awaiting acceptance" . $pendingInfo, $contactData, "Contact request sent");
+    }
+
+    /**
+     * existingLocalContact + DELIVERY_RECEIVED sub-branch: receiver stored
+     * our new-currency request — create the outgoing currency entry and the
+     * contact transaction for this currency.
+     */
+    private function processExistingContactCurrencyAdded(
+        array $existingLocalContact,
+        string $address,
+        string $senderPublicKey,
+        string $senderPublicKeyHash,
+        string $name,
+        int $fee,
+        SplitAmount $credit,
+        string $currency,
+        ?string $description,
+        array $sendResult,
+        array $responseData,
+        array $contactData,
+        CliOutputManager $output
+    ): void {
+        // Store outgoing currency as pending (or accepted if contact is already accepted)
+        $currencyStatus = ($existingLocalContact['status'] === Constants::CONTACT_STATUS_ACCEPTED) ? 'accepted' : 'pending';
+        if ($this->contactCurrencyRepository !== null) {
+            if (!$this->contactCurrencyRepository->hasCurrency($senderPublicKeyHash, $currency, 'outgoing')) {
+                $this->contactCurrencyRepository->insertCurrencyConfig(
+                    $senderPublicKeyHash, $currency, (int) $fee, $credit, $currencyStatus, 'outgoing'
+                );
+            }
+        }
+
+        // Initialize balance for the new currency and calculate available credit
+        $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+        if ($this->contactCreditRepository !== null) {
+            try {
+                $newCurrencyCreditData = $this->calculateAvailableCreditForContact($senderPublicKey, $currency);
+                $newCurrencyAvailableCredit = $newCurrencyCreditData['availableCreditByCurrency'][$currency] ?? 0;
+                $this->contactCreditRepository->upsertAvailableCredit($senderPublicKeyHash, SplitAmount::fromMajorUnits((float) $newCurrencyAvailableCredit), $currency);
+            } catch (\Exception $e) {
+                Logger::getInstance()->log('Failed to store credit for currency ' . $currency . ': ' . $e->getMessage(), 'DEBUG');
+            }
+        }
+
+        // Create contact transaction for this currency
+        $txid = $responseData['txid'] ?? null;
+        $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
+        $this->storeContactTxSigningData($txid, $sendResult['signing_data'] ?? null);
+
+        $contactData['status'] = $existingLocalContact['status'];
+        $contactData['pubkey'] = $senderPublicKey;
+        $output->success("Currency " . $currency . " added to contact " . $name, $contactData, "New currency added to existing contact");
+    }
+
+    /**
+     * DELIVERY_RECEIVED branch (no existing local contact): remote stored as
+     * pending awaiting acceptance, we mirror locally as pending.
+     */
+    private function processNewContactPending(
+        string $address,
+        string $senderPublicKey,
+        string $senderPublicKeyHash,
+        string $name,
+        int $fee,
+        SplitAmount $credit,
+        string $currency,
+        ?string $description,
+        bool $isTorAddress,
+        string $messageId,
+        array $sendResult,
+        array $responseData,
+        array $transportIndexAssociative,
+        array $contactData,
+        CliOutputManager $output
+    ): void {
+        if (!$this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
+            $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
+            return;
+        }
+
+        $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+        $this->applySenderAddresses($senderPublicKeyHash, $responseData);
+        $this->applyRemoteVersion($senderPublicKey, $responseData['version'] ?? null);
+
+        $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+        // Track outgoing currency request in contact_currencies (we requested this currency)
+        if ($this->contactCurrencyRepository !== null && !empty($currency)) {
+            $this->contactCurrencyRepository->insertCurrencyConfig(
+                $senderPublicKeyHash, $currency, (int) $fee, $credit, 'pending', 'outgoing'
+            );
+        }
+
+        // Insert contact transaction (first transaction between users, amount=0)
+        // Use the txid from the response to ensure both parties have matching txids
+        $txid = $responseData['txid'] ?? null;
+        $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
+        $this->storeContactTxSigningData($txid, $sendResult['signing_data'] ?? null);
+
+        // Update delivery stage: received -> inserted -> completed
+        $this->markContactInserted($messageId);
+
+        // For non-TOR: send description as E2E encrypted follow-up now that we have recipient's public key
+        if (!$isTorAddress && $description !== null && $description !== '') {
+            $this->sendContactDescriptionE2E($address, $description);
+        }
+
+        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+        $contactData['pubkey'] = $senderPublicKey;
+        $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
+    }
+
+    /**
+     * STATUS_ACCEPTED branch: remote auto-accepted because they had us as
+     * pending (mutual request).
+     */
+    private function processNewContactMutualAccept(
+        string $address,
+        string $senderPublicKey,
+        string $senderPublicKeyHash,
+        string $name,
+        int $fee,
+        SplitAmount $credit,
+        string $currency,
+        ?string $description,
+        bool $isTorAddress,
+        string $messageId,
+        array $sendResult,
+        array $responseData,
+        array $transportIndexAssociative,
+        array $contactData,
+        CliOutputManager $output
+    ): void {
+        if (!$this->insertContactWithEvent($senderPublicKey, $name, $fee, $credit, $currency)) {
+            $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
+            return;
+        }
+
+        $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+        $this->applySenderAddresses($senderPublicKeyHash, $responseData);
+
+        // Accept the contact (sets status to 'accepted', inserts balances, creates credit, syncs balance)
+        $this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency);
+
+        // Insert contact transaction if one doesn't already exist
+        if (!$this->contactTransactionExists($senderPublicKey)) {
+            $txid = $responseData['txid'] ?? null;
+            $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid, $description);
+            $this->storeContactTxSigningData($txid, $sendResult['signing_data'] ?? null);
+        }
+
+        // Store recipient signature from remote's response on our sent contact TX
+        $this->storeRecipientSignatureFromResponse($senderPublicKey, $responseData);
+
+        // Save available credit from the remote's mutual acceptance response
+        $this->saveAvailableCreditFromResponse($senderPublicKey, $responseData);
+
+        $this->markContactInserted($messageId);
+
+        // For non-TOR: send description as E2E encrypted follow-up
+        if (!$isTorAddress && $description !== null && $description !== '') {
+            $this->sendContactDescriptionE2E($address, $description);
+        }
+
+        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+        $contactData['pubkey'] = $senderPublicKey;
+        $output->success("Contact mutually accepted with " . $address, $contactData, "Contact accepted (mutual request)");
+    }
+
+    /**
+     * STATUS_REJECTED branch.
+     */
+    private function processNewContactRejected(
+        string $address,
+        string $currency,
+        array $responseData,
+        array $contactData,
+        CliOutputManager $output
+    ): void {
+        // Defensive: a 'sent' contact tx for this currency may already exist
+        // if an earlier delivery attempt (retry / DLQ-resolution) inserted
+        // one before the rejection landed. Flip it to 'rejected' so the row
+        // doesn't sit on the single-check indicator forever. No-op when no
+        // matching row is present.
+        $rejectedPubkey = $responseData['senderPublicKey'] ?? null;
+        if ($rejectedPubkey !== null) {
+            $this->rejectSentContactTransaction($rejectedPubkey, $currency);
+        }
+
+        $output->error("Contact request rejected by " . $address . " : " . ($responseData['message'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
+            'contact' => $contactData,
+            'response' => $responseData,
+        ]);
+    }
+
+    /**
+     * No-immediate-response branch: either queued for background retry, or
+     * fully failed.
+     */
+    private function processNewContactNoResponse(
+        string $address,
+        array $sendResult,
+        array $contactData,
+        CliOutputManager $output
+    ): void {
+        // Message is being retried in the background by the message processor.
+        // Insert contact locally as pending so user can see it in their contact list.
+        if ($sendResult['queued_for_retry'] ?? false) {
+            $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+            $contactData['delivery_status'] = 'queued_for_retry';
+            $output->success(
+                "Contact request sent to " . $address . ". Awaiting response (message being delivered in background).",
+                $contactData,
+                "Contact request sent, delivery in progress"
+            );
+            return;
+        }
+
+        // Message delivery failed completely (not queued for retry).
+        // Tracking results are nested inside 'tracking' key from sendContactMessageInternal.
+        $trackingResult = $sendResult['tracking'] ?? [];
+        $attempts = $trackingResult['attempts'] ?? 'unknown';
+        $lastError = $trackingResult['error'] ?? 'No response received';
+
+        $output->error(
+            "Failed to reach contact address after " . $attempts . " attempts. " .
+            "Address " . $address . " may not exist or is offline.",
+            ErrorCodes::CONTACT_UNREACHABLE,
+            null,
+            [
+                'contact' => $contactData,
+                'attempts' => $attempts,
+                'last_error' => $lastError,
+                'moved_to_dlq' => $trackingResult['dlq'] ?? false,
+            ]
+        );
     }
 }
