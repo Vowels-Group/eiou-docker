@@ -296,7 +296,7 @@ class ApiAuthServiceTest extends TestCase
      */
     public function testGetClientIpReturnsString(): void
     {
-        $ip = ApiAuthService::getClientIp();
+        $ip = ApiAuthService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $this->assertIsString($ip);
     }
@@ -313,7 +313,7 @@ class ApiAuthServiceTest extends TestCase
         unset($_SERVER['HTTP_X_FORWARDED_FOR']);
         unset($_SERVER['REMOTE_ADDR']);
 
-        $ip = ApiAuthService::getClientIp();
+        $ip = ApiAuthService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $_SERVER = $backup;
 

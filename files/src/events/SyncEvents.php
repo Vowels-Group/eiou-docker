@@ -28,6 +28,23 @@ namespace Eiou\Events;
 class SyncEvents
 {
     /**
+     * Dispatched when a sync operation begins, before any peer
+     * communication. Companion to `SYNC_COMPLETED` — lets plugins log
+     * sync attempts, surface a UI spinner, or short-circuit a sync
+     * (by throwing) without having to wait for completion.
+     *
+     * Emitted by `SyncService::syncContactBalance()` and the per-contact
+     * sync entry points at the top of the method, so listeners run
+     * before the contact is locked into the active-syncs set.
+     *
+     * Event data:
+     *   - contact_pubkey: string - The public key of the contact about to be synced
+     *   - contact_address: string|null - The address of the contact (if known)
+     *   - sync_type: string - 'transactions' | 'balance' | 'contact'
+     */
+    public const SYNC_STARTED = 'sync.started';
+
+    /**
      * Dispatched when a sync operation completes successfully
      *
      * Event data:

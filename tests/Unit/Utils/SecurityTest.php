@@ -10,10 +10,21 @@ namespace Eiou\Tests\Utils;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Utils\Security;
+use Eiou\Core\AppConfig;
 
 #[CoversClass(Security::class)]
 class SecurityTest extends TestCase
 {
+    /**
+     * Build the AppConfig snapshot the way `getClientIp` consumers do —
+     * read from env so the existing `putenv('TRUSTED_PROXIES=...')` test
+     * setup keeps driving behaviour unchanged.
+     */
+    private function configFromEnv(): AppConfig
+    {
+        return AppConfig::fromEnvironment();
+    }
+
     /**
      * Test HTML encoding prevents XSS
      */
@@ -443,7 +454,7 @@ class SecurityTest extends TestCase
             $_SERVER['REMOTE_ADDR'] = '203.0.113.50';
             $_SERVER['HTTP_X_FORWARDED_FOR'] = '10.0.0.1';
 
-            $result = Security::getClientIp();
+            $result = Security::getClientIp($this->configFromEnv());
 
             $this->assertEquals('203.0.113.50', $result);
         } finally {
@@ -469,7 +480,7 @@ class SecurityTest extends TestCase
             $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
             $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.99';
 
-            $result = Security::getClientIp();
+            $result = Security::getClientIp($this->configFromEnv());
 
             $this->assertEquals('203.0.113.99', $result);
         } finally {
@@ -495,7 +506,7 @@ class SecurityTest extends TestCase
             $_SERVER['REMOTE_ADDR'] = '192.168.1.100'; // Not in trusted list
             $_SERVER['HTTP_X_FORWARDED_FOR'] = '1.2.3.4';
 
-            $result = Security::getClientIp();
+            $result = Security::getClientIp($this->configFromEnv());
 
             // Should return REMOTE_ADDR, not the spoofed header
             $this->assertEquals('192.168.1.100', $result);
@@ -523,7 +534,7 @@ class SecurityTest extends TestCase
             $_SERVER['HTTP_CF_CONNECTING_IP'] = '198.51.100.10';
             $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50';
 
-            $result = Security::getClientIp();
+            $result = Security::getClientIp($this->configFromEnv());
 
             $this->assertEquals('198.51.100.10', $result);
         } finally {
@@ -550,7 +561,7 @@ class SecurityTest extends TestCase
             unset($_SERVER['HTTP_CF_CONNECTING_IP']);
             $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50, 10.0.0.2, 10.0.0.3';
 
-            $result = Security::getClientIp();
+            $result = Security::getClientIp($this->configFromEnv());
 
             $this->assertEquals('203.0.113.50', $result);
         } finally {
@@ -575,7 +586,7 @@ class SecurityTest extends TestCase
             putenv('TRUSTED_PROXIES=');
             unset($_SERVER['REMOTE_ADDR']);
 
-            $result = Security::getClientIp();
+            $result = Security::getClientIp($this->configFromEnv());
 
             $this->assertEquals('0.0.0.0', $result);
         } finally {

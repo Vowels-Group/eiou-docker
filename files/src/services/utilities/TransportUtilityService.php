@@ -218,6 +218,33 @@ class TransportUtilityService implements TransportServiceInterface
         return $scheme . substr(hash('sha256', $recipient), 0, 12);
     }
 
+    /**
+     * Whether the EIOU_TEST_MODE bypass for SSL peer verification is
+     * active for this request. Mirrors the policy applied to
+     * `RateLimiterService` and `P2pService` in PR #893: only the
+     * `EIOU_TEST_MODE` PHP CONSTANT (`define()`d exclusively by
+     * `tests/bootstrap.php`) turns the bypass on. If the legacy env
+     * var is set on a non-test build the constant stays absent — we
+     * log a loud SECURITY error so the misconfiguration surfaces in
+     * operational logs but the bypass DOES NOT activate.
+     */
+    private static function isTestModeBypassActive(string $callsite): bool
+    {
+        $bypassActive = defined('EIOU_TEST_MODE') && EIOU_TEST_MODE === true;
+
+        if (!$bypassActive && getenv('EIOU_TEST_MODE') === 'true') {
+            Logger::getInstance()->error(
+                "SECURITY: EIOU_TEST_MODE env var set on a non-test build. " .
+                "SSL-verify bypass IGNORED. If this is unexpected, audit your " .
+                "container env config — the env var is no longer honored at " .
+                "runtime; only the PHPUnit bootstrap constant disables peer verification.",
+                ['callsite' => $callsite]
+            );
+        }
+
+        return $bypassActive;
+    }
+
     private static function assertSafeDeliveryUrl(string $url): void
     {
         // Reject embedded control characters / newlines first — these
@@ -505,14 +532,10 @@ class TransportUtilityService implements TransportServiceInterface
         //   - EIOU_TEST_MODE=true        → disables verification (test suites)
         if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
             $appConfig = $this->container->getAppConfig();
-            // EIOU_TEST_MODE bypass is read RAW here, not from AppConfig,
-            // pending the dedicated security remediation tracked in
-            // AUDIT_SECURITY finding #10 — that fix will gate the bypass
-            // on the bootstrap-only `define()` constant and add the
-            // loud-warning telemetry. AppConfig deliberately omits the
-            // flag so we don't bake a runtime env override into the
-            // typed config seam.
-            $testMode = getenv('EIOU_TEST_MODE') === 'true';
+            // The EIOU_TEST_MODE bypass is now gated on the bootstrap-only
+            // PHP constant, not the env var — see isTestModeBypassActive()
+            // for the rationale and the loud-warning telemetry.
+            $testMode = self::isTestModeBypassActive('sendByHttp');
             $verifySsl = !$testMode && $appConfig->p2pSslVerify;
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
@@ -693,9 +716,8 @@ class TransportUtilityService implements TransportServiceInterface
             // SSL options for HTTPS connections (see sendByHttp for full documentation)
             if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
                 $appConfig = $this->container->getAppConfig();
-                // EIOU_TEST_MODE read RAW here pending AUDIT_SECURITY
-                // finding #10 (see sendByHttp for the full reasoning).
-                $testMode = getenv('EIOU_TEST_MODE') === 'true';
+                // Same constant-only EIOU_TEST_MODE policy as sendByHttp.
+                $testMode = self::isTestModeBypassActive('createCurlHandle');
                 $verifySsl = !$testMode && $appConfig->p2pSslVerify;
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);

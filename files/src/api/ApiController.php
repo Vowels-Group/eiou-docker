@@ -3614,7 +3614,7 @@ class ApiController {
             $keyId,
             $path,
             $method,
-            ApiAuthService::getClientIp(),
+            ApiAuthService::getClientIp($this->container->getAppConfig()),
             $statusCode,
             $responseTimeMs
         );

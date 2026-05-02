@@ -179,7 +179,7 @@ if (!$secureSession->isAuthenticated()
     && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
     // Rate limit GUI login attempts
     $rateLimiter = $serviceContainer->getRateLimiterService();
-    $clientIp = \Eiou\Utils\Security::getClientIp();
+    $clientIp = \Eiou\Utils\Security::getClientIp($serviceContainer->getAppConfig());
     $rateResult = $rateLimiter->checkLimit($clientIp, 'gui_login');
 
     if (!$rateResult['allowed']) {

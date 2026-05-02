@@ -353,35 +353,28 @@ class Security {
     }
 
     /**
-     * Get client IP address, only trusting proxy headers from trusted proxies
+     * Get client IP address, only trusting proxy headers from trusted proxies.
      *
-     * If REMOTE_ADDR is in the trusted proxies list, checks proxy headers
-     * (CF-Connecting-IP, X-Forwarded-For). Otherwise returns REMOTE_ADDR directly.
+     * If REMOTE_ADDR is in the trusted-proxies allowlist, the configured
+     * proxy headers (CF-Connecting-IP, X-Forwarded-For) are honored.
+     * Otherwise returns REMOTE_ADDR verbatim.
      *
+     * @param \Eiou\Core\AppConfig $appConfig Typed config snapshot (the
+     *     callers in `ApiAuthService::getClientIp()` and
+     *     `RateLimiterService::getClientIp()` thread this through; early-
+     *     boot scripts that pre-date the service container can construct
+     *     one inline via `AppConfig::fromEnvironment()`).
      * @return string Client IP address
      */
-    public static function getClientIp(?\Eiou\Core\AppConfig $appConfig = null): string {
+    public static function getClientIp(\Eiou\Core\AppConfig $appConfig): string {
         $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        // Parse trusted proxies from: AppConfig (env var) > persisted config > constant.
-        //
-        // FOLLOW-UP. The `?AppConfig $appConfig = null` parameter is a
-        // transitional shape — the env-fallback branch should disappear
-        // once every caller in the chain threads the typed config:
-        //   ApiController:3617
-        //     -> ApiAuthService::getClientIp()  (also static, also no DI)
-        //     -> Security::getClientIp()        (here)
-        // plus the dead-code RateLimiterService::getClientIp wrapper.
-        // Removing the fallback means adding `?AppConfig` to both
-        // ApiAuthService::getClientIp() and the RateLimiter wrapper, and
-        // having ApiController pass `$this->container->getAppConfig()`
-        // at the call site. Out of scope for the current AppConfig
-        // introduction — leaving a focused follow-up rather than
-        // bundling 3+ files of unrelated rewiring with the env-read
-        // refactor.
-        $trustedProxiesStr = $appConfig !== null
-            ? $appConfig->trustedProxies
-            : (getenv('TRUSTED_PROXIES') ?: '');
+        // Trusted-proxy source priority: typed AppConfig → persisted
+        // user/operator config (UserContext) → empty list (= no proxy
+        // headers honored). The previous `getenv('TRUSTED_PROXIES')`
+        // fallback was removed once every caller in the chain threads
+        // AppConfig — see AUDIT_REFACTOR finding #6 for the rewiring.
+        $trustedProxiesStr = $appConfig->trustedProxies;
         if ($trustedProxiesStr === '') {
             $trustedProxiesStr = UserContext::getInstance()->getTrustedProxies();
         }

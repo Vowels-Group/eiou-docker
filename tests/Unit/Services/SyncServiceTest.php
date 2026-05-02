@@ -49,6 +49,7 @@ class SyncServiceTest extends TestCase
     private TransactionChainRepository $mockChainRepo;
     private TransactionContactRepository $mockTxContactRepo;
     private BalanceRepository $mockBalanceRepo;
+    private \Eiou\Database\HeldTransactionRepository $mockHeldRepo;
     private UtilityServiceContainer $mockUtilityContainer;
     private TransportUtilityService $mockTransportUtility;
     private UserContext $mockUserContext;
@@ -64,6 +65,7 @@ class SyncServiceTest extends TestCase
         $this->mockChainRepo = $this->createMock(TransactionChainRepository::class);
         $this->mockTxContactRepo = $this->createMock(TransactionContactRepository::class);
         $this->mockBalanceRepo = $this->createMock(BalanceRepository::class);
+        $this->mockHeldRepo = $this->createMock(\Eiou\Database\HeldTransactionRepository::class);
         $this->mockUtilityContainer = $this->createMock(UtilityServiceContainer::class);
         $this->mockTransportUtility = $this->createMock(TransportUtilityService::class);
         $this->mockUserContext = $this->createMock(UserContext::class);
@@ -93,6 +95,7 @@ class SyncServiceTest extends TestCase
             $this->mockChainRepo,
             $this->mockTxContactRepo,
             $this->mockBalanceRepo,
+            $this->mockHeldRepo,
             $this->mockUtilityContainer,
             $this->mockUserContext
         );
@@ -116,6 +119,7 @@ class SyncServiceTest extends TestCase
             $this->mockChainRepo,
             $this->mockTxContactRepo,
             $this->mockBalanceRepo,
+            $this->mockHeldRepo,
             $this->mockUtilityContainer,
             $this->mockUserContext
         );
@@ -1562,6 +1566,7 @@ class SyncServiceTest extends TestCase
                 $this->mockChainRepo,
                 $this->mockTxContactRepo,
                 $this->mockBalanceRepo,
+                $this->mockHeldRepo,
                 $this->mockUtilityContainer,
                 $this->mockUserContext
             ])

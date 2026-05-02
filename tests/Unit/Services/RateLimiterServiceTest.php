@@ -20,7 +20,7 @@ class RateLimiterServiceTest extends TestCase
      */
     public function testGetClientIpReturnsString(): void
     {
-        $ip = RateLimiterService::getClientIp();
+        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $this->assertIsString($ip);
     }
@@ -36,7 +36,7 @@ class RateLimiterServiceTest extends TestCase
         unset($_SERVER['HTTP_CLIENT_IP']);
         unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 
-        $ip = RateLimiterService::getClientIp();
+        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $_SERVER = $backup;
 
@@ -52,7 +52,7 @@ class RateLimiterServiceTest extends TestCase
         $_SERVER['HTTP_CF_CONNECTING_IP'] = '1.2.3.4';
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
 
-        $ip = RateLimiterService::getClientIp();
+        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $_SERVER = $backup;
 
@@ -70,7 +70,7 @@ class RateLimiterServiceTest extends TestCase
         unset($_SERVER['HTTP_CLIENT_IP']);
         unset($_SERVER['REMOTE_ADDR']);
 
-        $ip = RateLimiterService::getClientIp();
+        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $_SERVER = $backup;
 
@@ -89,7 +89,7 @@ class RateLimiterServiceTest extends TestCase
         unset($_SERVER['HTTP_X_FORWARDED_FOR']);
         unset($_SERVER['REMOTE_ADDR']);
 
-        $ip = RateLimiterService::getClientIp();
+        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $_SERVER = $backup;
 
@@ -107,7 +107,7 @@ class RateLimiterServiceTest extends TestCase
         unset($_SERVER['HTTP_CLIENT_IP']);
         unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 
-        $ip = RateLimiterService::getClientIp();
+        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
 
         $_SERVER = $backup;
 

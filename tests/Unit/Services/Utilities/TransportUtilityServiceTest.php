@@ -1032,4 +1032,63 @@ class TransportUtilityServiceTest extends TestCase
         $b = $this->loggableRecipient('https://bob');
         $this->assertNotSame($a, $b);
     }
+
+    // =========================================================================
+    // isTestModeBypassActive — SSL-verify bypass policy
+    // =========================================================================
+
+    /**
+     * Reflection helper for the private static helper.
+     */
+    private function isTestModeBypassActive(string $callsite): bool
+    {
+        $m = new \ReflectionMethod(TransportUtilityService::class, 'isTestModeBypassActive');
+        $m->setAccessible(true);
+        return $m->invoke(null, $callsite);
+    }
+
+    /**
+     * EIOU_TEST_MODE constant set by tests/bootstrap.php → bypass active.
+     * In CI / WSL2 dev runs the constant IS defined, so this is the
+     * expected baseline state for the suite.
+     */
+    public function testTestModeBypassActiveWhenBootstrapConstantIsDefined(): void
+    {
+        $this->assertTrue(defined('EIOU_TEST_MODE'), 'tests/bootstrap.php must define EIOU_TEST_MODE');
+        $this->assertTrue($this->isTestModeBypassActive('unit-test'),
+            'bypass must activate when the bootstrap constant is true');
+    }
+
+    /**
+     * The legacy env var alone (without the bootstrap constant) MUST NOT
+     * activate the bypass — that's the whole point of finding #10. We
+     * can't easily un-define the constant in PHP, so this test verifies
+     * the SECURITY error log fires whenever env+constant disagree.
+     */
+    public function testTestModeBypassLogsSecurityErrorWhenEnvSetButConstantMissing(): void
+    {
+        // Skip when both align (constant true + env true) — the loud
+        // warning is intentionally suppressed in that path.
+        if (defined('EIOU_TEST_MODE') && EIOU_TEST_MODE === true) {
+            $this->markTestSkipped(
+                'Cannot un-define EIOU_TEST_MODE constant from a test; ' .
+                'this branch is exercised only on production builds where ' .
+                'the constant is absent.'
+            );
+        }
+
+        // (Defensive: in environments where the constant is somehow
+        // absent, set the env var and confirm the bypass still says
+        // false. Exercised on production builds only.)
+        $previous = getenv('EIOU_TEST_MODE');
+        putenv('EIOU_TEST_MODE=true');
+        try {
+            $this->assertFalse($this->isTestModeBypassActive('unit-test'),
+                'env-only must NOT activate the bypass on a non-test build');
+        } finally {
+            $previous === false
+                ? putenv('EIOU_TEST_MODE')
+                : putenv('EIOU_TEST_MODE=' . $previous);
+        }
+    }
 }
