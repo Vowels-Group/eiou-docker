@@ -79,7 +79,10 @@ class ApiKeysControllerTest extends TestCase
 
         $this->assertSame(403, $result['status']);
         $this->assertFalse($result['payload']['success']);
-        $this->assertSame('csrf_error', $result['payload']['error']);
+        // Post-canonical-envelope: machine code lives at `code`; `error`
+        // carries the human-readable message. Note the code rename from
+        // legacy `csrf_error` to canonical `csrf_invalid` (matches DLQ).
+        $this->assertSame('csrf_invalid', $result['payload']['code']);
     }
 
     #[Test]
@@ -91,7 +94,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('unknown_action', $result['payload']['error']);
+        $this->assertSame('unknown_action', $result['payload']['code']);
     }
 
     #[Test]
@@ -143,7 +146,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(401, $result['status']);
-        $this->assertSame('sensitive_access_required', $result['payload']['error']);
+        $this->assertSame('sensitive_access_required', $result['payload']['code']);
     }
 
     #[Test]
@@ -196,7 +199,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('invalid_permission', $result['payload']['error']);
+        $this->assertSame('invalid_permission', $result['payload']['code']);
     }
 
     #[Test]
@@ -214,7 +217,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('invalid_name', $result['payload']['error']);
+        $this->assertSame('invalid_name', $result['payload']['code']);
     }
 
     #[Test]
@@ -233,7 +236,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('invalid_key_id', $result['payload']['error']);
+        $this->assertSame('invalid_key_id', $result['payload']['code']);
     }
 
     #[Test]

@@ -4,9 +4,45 @@
 namespace Eiou\Database;
 
 use Eiou\Utils\Logger;
+use InvalidArgumentException;
 use PDO;
 use PDOException;
 use RuntimeException;
+
+/**
+ * Defense-in-depth identifier guard for the SHOW / ALTER DDL string-concat
+ * sites in this file.
+ *
+ * Background. The migration runner can't use PDO placeholders for table /
+ * column / index names (MySQL forbids it for DDL), so it interpolates
+ * directly into the SQL. Today the interpolated values come exclusively
+ * from hardcoded migration arrays at the top of each function — operator-
+ * vetted code, never user input — and the AUDIT_SECURITY pass classified
+ * the apparent SQLi as informational-only for that reason.
+ *
+ * This guard makes the "no user input" property structural rather than
+ * a code-review-only invariant: every identifier must match
+ * `[A-Za-z_][A-Za-z0-9_]*` (MySQL's unquoted-identifier shape) and stay
+ * within MySQL's 64-char limit. If a future code change ever lets an
+ * external value reach one of those arrays, the migration aborts with
+ * a loud `InvalidArgumentException` instead of silently executing
+ * attacker-shaped DDL.
+ *
+ * @throws InvalidArgumentException when the identifier fails the shape check
+ */
+function assertSafeMigrationIdentifier(string $identifier, string $context): void
+{
+    if ($identifier === '' || strlen($identifier) > 64) {
+        throw new InvalidArgumentException(
+            "migration identifier ({$context}) length out of range: '{$identifier}'"
+        );
+    }
+    if (!preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/', $identifier)) {
+        throw new InvalidArgumentException(
+            "migration identifier ({$context}) contains disallowed characters: '{$identifier}'"
+        );
+    }
+}
 
 function freshInstall(){
     // Skip database setup in test mode
@@ -211,6 +247,7 @@ function runMigrations(PDO $pdo): array {
 
     foreach ($migrations as $tableName => $schemaFunction) {
         try {
+            assertSafeMigrationIdentifier($tableName, 'migrations.tableName');
             // Check if table exists
             $stmt = $pdo->query("SHOW TABLES LIKE '$tableName'");
             if ($stmt->rowCount() === 0) {
@@ -276,6 +313,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($columnsToAdd as $tableName => $columns) {
         foreach ($columns as $columnName => $columnDefinition) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'columnsToAdd.tableName');
+                assertSafeMigrationIdentifier($columnName, 'columnsToAdd.columnName');
                 // Use query() instead of prepare() - SHOW COLUMNS doesn't support placeholders in MariaDB
                 // Column names come from our own code, not user input, so direct interpolation is safe
                 $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
@@ -301,6 +340,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($columnsToDrop as $tableName => $columns) {
         foreach ($columns as $columnName) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'columnsToDrop.tableName');
+                assertSafeMigrationIdentifier($columnName, 'columnsToDrop.columnName');
                 // Use query() instead of prepare() - SHOW COLUMNS doesn't support placeholders in MariaDB
                 $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
 
@@ -337,6 +378,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($enumUpdates as $tableName => $columns) {
         foreach ($columns as $columnName => $newEnumDef) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'enumUpdates.tableName');
+                assertSafeMigrationIdentifier($columnName, 'enumUpdates.columnName');
                 // Check current ENUM values
                 $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
                 $columnInfo = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -397,6 +440,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($columnTypeChanges as $tableName => $columns) {
         foreach ($columns as $columnName => $spec) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'columnTypeChanges.tableName');
+                assertSafeMigrationIdentifier($columnName, 'columnTypeChanges.columnName');
                 $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
                 $columnInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -477,11 +522,16 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($indexesToAdd as $tableName => $indexes) {
         foreach ($indexes as $indexName => $columnSpec) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'indexesToAdd.tableName');
+                assertSafeMigrationIdentifier($indexName, 'indexesToAdd.indexName');
                 // Check if index exists
                 $stmt = $pdo->query("SHOW INDEX FROM `$tableName` WHERE Key_name = '$indexName'");
                 if ($stmt->rowCount() === 0) {
                     // Handle composite indexes (columns separated by comma)
                     $columns = array_map('trim', explode(',', $columnSpec));
+                    foreach ($columns as $col) {
+                        assertSafeMigrationIdentifier($col, 'indexesToAdd.columnSpec');
+                    }
                     $columnList = '`' . implode('`, `', $columns) . '`';
                     $pdo->exec("ALTER TABLE `$tableName` ADD INDEX `$indexName` ($columnList)");
                     $results["{$tableName}.{$indexName}"] = 'index_created';

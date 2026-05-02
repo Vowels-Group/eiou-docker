@@ -7021,7 +7021,7 @@ function retryDlqItem(dlqId, btn) {
             if (response.success) {
                 showToast('Delivered', 'Message successfully re-sent', 'success');
                 setTimeout(function() { window.location.reload(); }, 1500);
-            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+            } else if (response.code === 'csrf_invalid') {
                 showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
@@ -7170,7 +7170,7 @@ function abandonDlqItemConfirmed(dlqId, btn) {
             if (response.success) {
                 showToast('Abandoned', 'Message marked as abandoned', 'info');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
-            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+            } else if (response.code === 'csrf_invalid') {
                 showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
@@ -7245,7 +7245,7 @@ function retryAllDlqItemsConfirmed(btn) {
                     showToast('All failed', total + ' message' + (total !== 1 ? 's' : '') + ' could not be delivered', 'error');
                 }
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 2000);
-            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+            } else if (response.code === 'csrf_invalid') {
                 showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
@@ -9459,9 +9459,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function withSensitiveAccess(requestFn, onResponse, label) {
             var attempt = function() {
                 return requestFn().then(function(r) {
-                    if (r && r.status === 401 && r.data && r.data.error === 'sensitive_access_required') {
+                    if (r && r.status === 401 && r.data && r.data.code === 'sensitive_access_required') {
                         pendingAction = { fn: attempt, label: label };
-                        openVerifyModal(r.data.message);
+                        // Server now sends `error` as the human message and
+                        // the machine code as `code` (canonical envelope).
+                        // Pass the human-readable string to the verify modal.
+                        openVerifyModal(r.data.error);
                         return;
                     }
                     if (typeof onResponse === 'function') onResponse(r);
@@ -9521,7 +9524,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     }
                 } else {
                     if (err) {
-                        err.textContent = (r.data && r.data.error === 'invalid_authcode')
+                        err.textContent = (r.data && r.data.code === 'invalid_authcode')
                             ? 'Invalid auth code. Please try again.'
                             : 'Could not verify. Please try again.';
                         err.classList.remove('d-none');
@@ -10401,7 +10404,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 // unlock modal and retry after the user enters their code.
                 var loadForEdit = function () {
                     post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
-                        if (status === 403 && data.error === 'sensitive_access_required') {
+                        if (status === 403 && data.code === 'sensitive_access_required') {
                             if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
                                 // If the user cancels the unlock modal, don't
                                 // leave them staring at an infinite "Loading…"
@@ -10943,7 +10946,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             }
 
             post(action, payload, function (data, status) {
-                if (status === 403 && data.error === 'sensitive_access_required') {
+                if (status === 403 && data.code === 'sensitive_access_required') {
                     if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
                         window.apiKeys.openVerifyModal(function () { submit(); });
                     } else {
@@ -10998,7 +11001,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         function reveal(methodId) {
             post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
-                if (status === 403 && data.error === 'sensitive_access_required') {
+                if (status === 403 && data.code === 'sensitive_access_required') {
                     if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
                         window.apiKeys.openVerifyModal(function () { reveal(methodId); });
                     } else {
@@ -11024,7 +11027,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             }).then(function (ok) {
                 if (!ok) return;
                 post('paybackMethodsDelete', { method_id: methodId }, function (data, status) {
-                    if (status === 403 && data.error === 'sensitive_access_required') {
+                    if (status === 403 && data.code === 'sensitive_access_required') {
                         if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
                             window.apiKeys.openVerifyModal(function () { remove(methodId, label); });
                         } else {

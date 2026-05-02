@@ -21,6 +21,7 @@ require_once $filesRoot . '/src/database/DatabaseSchema.php';
 
 use function Eiou\Database\runMigrations;
 use function Eiou\Database\runColumnMigrations;
+use function Eiou\Database\assertSafeMigrationIdentifier;
 
 #[CoversFunction('Eiou\Database\runMigrations')]
 #[CoversFunction('Eiou\Database\runColumnMigrations')]
@@ -359,6 +360,58 @@ class DatabaseSetupTest extends TestCase
             fn (string $s) => strpos($s, 'MODIFY COLUMN `pubkey_hash`') !== false,
         );
         $this->assertEmpty($modifyHits, 'must not ALTER when truncation would occur');
+    }
+
+    // =========================================================================
+    // assertSafeMigrationIdentifier — defense-in-depth guard
+    // =========================================================================
+
+    public function testAssertSafeMigrationIdentifierAcceptsValidNames(): void
+    {
+        // Common shapes: simple, snake_case, leading underscore, mixed case.
+        foreach (['contacts', 'payment_requests', '_tmp', 'IdxFoo123'] as $ok) {
+            assertSafeMigrationIdentifier($ok, 'unit-test');
+            $this->assertTrue(true);
+        }
+    }
+
+    public function testAssertSafeMigrationIdentifierRejectsEmpty(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        assertSafeMigrationIdentifier('', 'unit-test');
+    }
+
+    public function testAssertSafeMigrationIdentifierRejectsTooLong(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        assertSafeMigrationIdentifier(str_repeat('a', 65), 'unit-test');
+    }
+
+    public function testAssertSafeMigrationIdentifierRejectsLeadingDigit(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        assertSafeMigrationIdentifier('1bad', 'unit-test');
+    }
+
+    public function testAssertSafeMigrationIdentifierRejectsBackticks(): void
+    {
+        // Backticks are MySQL's identifier delimiter — letting them through
+        // would let the input close the surrounding `\`$tableName\`` and
+        // start arbitrary DDL.
+        $this->expectException(\InvalidArgumentException::class);
+        assertSafeMigrationIdentifier('foo`; DROP TABLE x;--', 'unit-test');
+    }
+
+    public function testAssertSafeMigrationIdentifierRejectsQuotesAndWhitespace(): void
+    {
+        foreach (["foo'", 'foo"', 'foo bar', "foo\nbar"] as $bad) {
+            try {
+                assertSafeMigrationIdentifier($bad, 'unit-test');
+                $this->fail("expected rejection for '" . addslashes($bad) . "'");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('disallowed characters', $e->getMessage());
+            }
+        }
     }
 
     /**

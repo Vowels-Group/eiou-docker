@@ -2,6 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 use Eiou\Gui\Helpers\ContactDataBuilder;
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\SessionKeys;
 
 /**
@@ -73,17 +74,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($actionRegistry->has($action)) {
         if ($actionRegistry->requiresCsrf($action)) {
             if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
-                header('Content-Type: application/json');
-                http_response_code(403);
-                echo json_encode(['success' => false, 'error' => 'csrf_error', 'message' => 'Invalid CSRF token']);
-                exit;
+                GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token', 403);
             }
         }
         if ($actionRegistry->requiresSensitiveAccess($action) && !$secureSession->hasSensitiveAccess()) {
-            header('Content-Type: application/json');
-            http_response_code(403);
-            echo json_encode(['success' => false, 'error' => 'sensitive_access_required', 'message' => 'Sensitive access required']);
-            exit;
+            GuiErrorResponse::send(
+                'sensitive_access_required',
+                'Please re-enter your auth code to continue.',
+                403
+            );
         }
         try {
             ($actionRegistry->getHandler($action))($_POST);
@@ -93,11 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'action'  => $action,
                 'plugin'  => $actionRegistry->getPluginId($action),
             ]);
-            if (!headers_sent()) {
-                header('Content-Type: application/json');
-                http_response_code(500);
-            }
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
+            // GuiErrorResponse::send sets headers + status (idempotent if
+            // a handler already sent them) and emits the canonical envelope
+            // before exiting.
+            GuiErrorResponse::send('server_error', $e->getMessage(), 500);
         }
         exit;
     }

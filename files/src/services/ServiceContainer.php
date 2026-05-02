@@ -600,7 +600,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRepositoryFactory()->get(BalanceRepository::class),
                 $this->getRepositoryFactory()->get(HeldTransactionRepository::class),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getEventDispatcher()
             );
         }
         return $this->services['SyncService'];

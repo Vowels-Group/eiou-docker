@@ -3,6 +3,7 @@
 
 namespace Eiou\Gui\Controllers;
 
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactService;
 use Eiou\Services\GuiActionRegistry;
@@ -341,14 +342,12 @@ class TransactionController
         $this->session->verifyCSRFToken(false);
 
         if ($this->approvalService === null) {
-            echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
-            return;
+            GuiErrorResponse::send('missing_dependencies', 'P2P approval not configured', 500);
         }
 
         $hash = Security::sanitizeInput($_POST['hash'] ?? '');
         if (empty($hash)) {
-            echo json_encode(['success' => false, 'error' => 'missing_hash', 'message' => 'Transaction hash is required']);
-            return;
+            GuiErrorResponse::send('missing_hash', 'Transaction hash is required', 400);
         }
 
         $candidateId = isset($_POST['candidate_id']) ? (int) $_POST['candidate_id'] : null;
@@ -360,12 +359,7 @@ class TransactionController
                 'candidate_id' => $candidateId,
                 'code' => $result['code'],
             ]);
-            echo json_encode([
-                'success' => false,
-                'error' => $result['code'],
-                'message' => $result['message'],
-            ]);
-            return;
+            GuiErrorResponse::send($result['code'], $result['message'], 400);
         }
 
         Logger::getInstance()->info('P2P transaction approved by user', [
@@ -388,24 +382,17 @@ class TransactionController
         $this->session->verifyCSRFToken(false);
 
         if ($this->approvalService === null) {
-            echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'P2P approval not configured']);
-            return;
+            GuiErrorResponse::send('missing_dependencies', 'P2P approval not configured', 500);
         }
 
         $hash = Security::sanitizeInput($_POST['hash'] ?? '');
         if (empty($hash)) {
-            echo json_encode(['success' => false, 'error' => 'missing_hash', 'message' => 'Transaction hash is required']);
-            return;
+            GuiErrorResponse::send('missing_hash', 'Transaction hash is required', 400);
         }
 
         $result = $this->approvalService->reject($hash);
         if (!$result['success']) {
-            echo json_encode([
-                'success' => false,
-                'error' => $result['code'],
-                'message' => $result['message'],
-            ]);
-            return;
+            GuiErrorResponse::send($result['code'], $result['message'], 400);
         }
 
         Logger::getInstance()->info('P2P transaction rejected by user', ['hash' => $hash]);
@@ -424,25 +411,21 @@ class TransactionController
         $this->session->verifyCSRFToken(false);
 
         if ($this->p2pRepository === null || $this->rp2pCandidateRepository === null) {
-            echo json_encode(['success' => false, 'error' => 'missing_dependencies', 'message' => 'Candidate lookup not configured']);
-            return;
+            GuiErrorResponse::send('missing_dependencies', 'Candidate lookup not configured', 500);
         }
 
         $hash = Security::sanitizeInput($_POST['hash'] ?? '');
         if (empty($hash)) {
-            echo json_encode(['success' => false, 'error' => 'missing_hash', 'message' => 'Transaction hash is required']);
-            return;
+            GuiErrorResponse::send('missing_hash', 'Transaction hash is required', 400);
         }
 
         $p2p = $this->p2pRepository->getAwaitingApproval($hash);
         if (!$p2p) {
-            echo json_encode(['success' => false, 'error' => 'not_found', 'message' => 'Transaction not found or not awaiting approval']);
-            return;
+            GuiErrorResponse::send('not_found', 'Transaction not found or not awaiting approval', 404);
         }
 
         if (empty($p2p['destination_address'])) {
-            echo json_encode(['success' => false, 'error' => 'not_originator', 'message' => 'Only the transaction originator can view candidates']);
-            return;
+            GuiErrorResponse::send('not_originator', 'Only the transaction originator can view candidates', 403);
         }
 
         $candidates = $this->rp2pCandidateRepository->getCandidatesByHash($hash);
@@ -516,22 +499,19 @@ class TransactionController
 
         $csrfToken = $_POST['csrf_token'] ?? '';
         if (!$this->session->validateCSRFToken($csrfToken, false)) {
-            echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
-            return;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token', 403);
         }
 
         $txid = trim($_POST['txid'] ?? '');
         if (empty($txid)) {
-            echo json_encode(['success' => false, 'error' => 'Missing txid']);
-            return;
+            GuiErrorResponse::send('missing_txid', 'Missing txid', 400);
         }
 
         $rows = $this->transactionService->getByTxid($txid);
         $tx   = is_array($rows) ? ($rows[0] ?? null) : null;
 
         if (!$tx) {
-            echo json_encode(['success' => false, 'error' => 'Transaction not found']);
-            return;
+            GuiErrorResponse::send('not_found', 'Transaction not found', 404);
         }
 
         $userContext   = UserContext::getInstance();

@@ -1,6 +1,9 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Gui\Helpers\GuiErrorResponse;
+use Eiou\Utils\PaginationCursor;
+
 /**
  * Core "inline" GUI actions — POST handlers that historically lived
  * as raw `if ($action === ...)` branches in Functions.php and have no
@@ -34,10 +37,10 @@ $registry->register('whatsNewDismiss', function (): void {
     try {
         \Eiou\Services\UpdateCheckService::dismissWhatsNew();
         echo json_encode(['success' => true]);
+        exit;
     } catch (Exception $e) {
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        GuiErrorResponse::send('whats_new_dismiss_failed', $e->getMessage(), 500);
     }
-    exit;
 }, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
 
 $registry->register('whatsNewNotes', function (): void {
@@ -47,13 +50,12 @@ $registry->register('whatsNewNotes', function (): void {
         $notes = \Eiou\Services\UpdateCheckService::getReleaseNotes($version);
         if ($notes !== null) {
             echo json_encode(['success' => true, 'data' => $notes]);
-        } else {
-            echo json_encode(['success' => false, 'error' => 'Release notes not available']);
+            exit;
         }
+        GuiErrorResponse::send('release_notes_unavailable', 'Release notes not available', 404);
     } catch (Exception $e) {
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        GuiErrorResponse::send('whats_new_notes_failed', $e->getMessage(), 500);
     }
-    exit;
 }, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
 
 // =============================================================================
@@ -66,8 +68,7 @@ $rememberSessionHandler = function (array $request) use ($serviceContainer, $sec
     try {
         // CSRF is required — this is a state-changing action.
         if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
-            echo json_encode(['success' => false, 'error' => 'csrf_error', 'message' => 'Invalid CSRF token']);
-            exit;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token', 403);
         }
 
         $pubkeyHashForAction = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
@@ -76,8 +77,7 @@ $rememberSessionHandler = function (array $request) use ($serviceContainer, $sec
         if ($action === 'revokeRememberSession') {
             $id = (int) ($_POST['session_id'] ?? 0);
             if ($id <= 0) {
-                echo json_encode(['success' => false, 'error' => 'invalid_id']);
-                exit;
+                GuiErrorResponse::send('invalid_id', 'Session id is required', 400);
             }
 
             // Detect "am I revoking my OWN row?" BEFORE the revoke so
@@ -124,8 +124,7 @@ $rememberSessionHandler = function (array $request) use ($serviceContainer, $sec
             'context' => 'remember_session_action',
             'action'  => $action,
         ]);
-        echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
-        exit;
+        GuiErrorResponse::send('server_error', $e->getMessage(), 500);
     }
 };
 $registry->register('revokeRememberSession',     $rememberSessionHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
@@ -146,13 +145,11 @@ $searchHandler = function (array $request) use ($serviceContainer, $secureSessio
     $action = $request['action'] ?? '';
     try {
         if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
-            echo json_encode(['success' => false, 'error' => 'csrf_error']);
-            exit;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token', 403);
         }
         $term = isset($_POST['q']) ? (string)$_POST['q'] : '';
         if (trim($term) === '') {
-            echo json_encode(['success' => false, 'error' => 'empty_term', 'message' => 'Enter a search term first.']);
-            exit;
+            GuiErrorResponse::send('empty_term', 'Enter a search term first.', 400);
         }
 
         $dirFilter    = isset($_POST['direction']) ? trim((string)$_POST['direction']) : '';
@@ -213,8 +210,7 @@ $searchHandler = function (array $request) use ($serviceContainer, $secureSessio
             'context' => 'search_handler',
             'action'  => $action,
         ]);
-        echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
-        exit;
+        GuiErrorResponse::send('server_error', $e->getMessage(), 500);
     }
 };
 $registry->register('searchTransactions',    $searchHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
@@ -232,8 +228,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
     $action = $request['action'] ?? '';
     try {
         if (empty($_POST['csrf_token']) || !$secureSession->validateCSRFToken($_POST['csrf_token'], false)) {
-            echo json_encode(['success' => false, 'error' => 'csrf_error']);
-            exit;
+            GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token', 403);
         }
         $offset = max(0, (int) ($_POST['offset'] ?? 0));
         $limit  = (int) $user->getDisplayRecentTransactionsLimit();
@@ -242,7 +237,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
         // first-page sentinel 0). Decoded once here so each branch below
         // can pass it down without re-parsing. A malformed cursor decodes
         // to null — the safe fallback is page one.
-        $cursor = \Eiou\Utils\PaginationCursor::decode($_POST['cursor'] ?? null);
+        $cursor = PaginationCursor::decode($_POST['cursor'] ?? null);
 
         if ($action === 'loadMoreTransactions') {
             $transactions = $transactionService->getTransactionHistory($limit, $offset, $cursor);
@@ -257,7 +252,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             $nextCursor = null;
             if (!empty($transactions) && count($transactions) >= $limit) {
                 $last = end($transactions);
-                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                $nextCursor = PaginationCursor::encode([
                     'time'      => (int) ($last['time'] ?? 0),
                     'timestamp' => (string) ($last['timestamp'] ?? ''),
                     'txid'      => (string) ($last['txid'] ?? ''),
@@ -285,7 +280,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             $nextCursor = null;
             if (!empty($more) && count($more) >= $limit) {
                 $last = end($more);
-                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                $nextCursor = PaginationCursor::encode([
                     'ts' => (string) ($last['responded_at'] ?? $last['created_at'] ?? ''),
                     'id' => (int) ($last['id'] ?? 0),
                 ]);
@@ -405,7 +400,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             $nextCursor = null;
             if (!empty($rawAccepted) && count($rawAccepted) >= $limit) {
                 $last = end($rawAccepted);
-                $nextCursor = \Eiou\Utils\PaginationCursor::encode([
+                $nextCursor = PaginationCursor::encode([
                     'name' => (string) ($last['name'] ?? ''),
                     'id'   => (int) ($last['id'] ?? 0),
                 ]);
@@ -423,8 +418,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             'context' => 'load_more_handler',
             'action'  => $action,
         ]);
-        echo json_encode(['success' => false, 'error' => 'server_error', 'message' => $e->getMessage()]);
-        exit;
+        GuiErrorResponse::send('server_error', $e->getMessage(), 500);
     }
 };
 $registry->register('loadMoreTransactions',    $loadMoreHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
