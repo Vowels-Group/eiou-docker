@@ -291,9 +291,20 @@ class TransactionValidationService implements TransactionValidationServiceInterf
      * Performs comprehensive validation and processes the transaction if valid.
      * This method contains proactive sync logic to handle chain mismatches.
      *
+     * Canonical example for the `@throws` convention documented in
+     * `docs/EXCEPTIONS.md` — every typed ServiceException subclass this
+     * method may emit OR let propagate is declared. Routine
+     * "transaction not possible" outcomes return false rather than
+     * throwing; the throws below are reserved for genuine error paths.
+     *
      * @param array $request Request data
-     * @param bool $echo Whether to echo responses (default: true)
+     * @param bool  $echo    Whether to echo responses (default: true)
      * @return bool True if Transaction possible, False otherwise.
+     *
+     * @throws \RuntimeException Plugin listener vetoed via the
+     *     `TransactionEvents::PRE_VALIDATE` hook. The throw propagates
+     *     so the caller surfaces the abort reason instead of silently
+     *     swallowing it.
      */
     public function checkTransactionPossible(array $request, $echo = true): bool
     {

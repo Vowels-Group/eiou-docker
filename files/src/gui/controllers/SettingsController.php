@@ -14,6 +14,7 @@ use Eiou\Services\DebugReportService;
 use Eiou\Services\GuiActionRegistry;
 use PDO;
 use Exception;
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Helpers\MessageHelper;
 
 /**
@@ -95,13 +96,15 @@ class SettingsController
         // which is fine for plugin handlers but a UX regression for
         // these long-standing core endpoints.
         $registry->register('analyticsConsent', function (array $request): void {
-            header('Content-Type: application/json');
             try {
                 $this->handleAnalyticsConsent();
+                exit;
             } catch (Exception $e) {
-                echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
+                // GuiErrorResponse keeps `error` as the human-readable
+                // string the legacy JS reader expects AND adds a `code`
+                // field for forward dispatch.
+                GuiErrorResponse::send('analytics_consent_failed', 'Server error: ' . $e->getMessage(), 500);
             }
-            exit;
         }, GuiActionRegistry::TIER_CSRF, 'core');
 
         $registry->register('getDebugReportJson', function (array $request): void {
@@ -812,7 +815,12 @@ class SettingsController
 
         } catch (Exception $e) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'key' => null, 'error' => $e->getMessage()]);
+            // Emits the canonical envelope plus the legacy `key => null`
+            // field that the debug-report submit JS still reads.
+            echo json_encode(array_merge(
+                GuiErrorResponse::make('debug_report_submit_failed', $e->getMessage()),
+                ['key' => null]
+            ));
             exit;
         }
     }
@@ -885,7 +893,10 @@ class SettingsController
         header('Content-Type: application/json');
 
         if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
-            echo json_encode(['success' => false, 'error' => 'Failed to save preference']);
+            echo json_encode(GuiErrorResponse::make(
+                'analytics_consent_save_failed',
+                'Failed to save preference'
+            ));
             return;
         }
 
