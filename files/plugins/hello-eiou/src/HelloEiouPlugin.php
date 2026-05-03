@@ -118,12 +118,13 @@ class HelloEiouPlugin implements PluginInterface
         $tabs    = $container->getTabRegistry();
         $actions = $container->getActionRegistry();
 
-        // Phase 2 — own CSS for the dashboard widget. Lives next to the
-        // plugin's PHP under assets/. Inline-rendered with the page CSP
-        // nonce because it's smaller than the URL-mode threshold.
+        // Asset registry — enqueue the plugin's own CSS for the
+        // dashboard widget. Lives next to the plugin's PHP under
+        // assets/. Inline-rendered with the page CSP nonce because
+        // it's smaller than the URL-mode threshold.
         $assets->enqueueStyle('hello-eiou', 'assets/styles.css');
 
-        // Phase 1 — render a fortune widget on the dashboard. Uses
+        // Render hook — fortune widget on the dashboard via
         // `gui.dashboard.after` (pure render hook). Each request picks
         // a fresh fortune so reloads change the line.
         $hooks->onRender('gui.dashboard.after', function (): string {
@@ -134,9 +135,9 @@ class HelloEiouPlugin implements PluginInterface
                  . '</section>';
         });
 
-        // Phase 3 — register a top-level "Fortunes" tab. Uses a render
-        // callable instead of an include path so the plugin doesn't
-        // need a separate template file. The tab slots between
+        // Tab registry — register a top-level "Fortunes" tab. Uses a
+        // render callable instead of an include path so the plugin
+        // doesn't need a separate template file. The tab slots between
         // Activity (40) and Settings (50).
         //
         // The render callback wraps its body in renderSection() so
@@ -174,9 +175,9 @@ class HelloEiouPlugin implements PluginInterface
             },
         ]);
 
-        // Phase 4 — register a POST action plugins / GUI buttons can
-        // hit. Returns JSON; tier is `csrf` so Functions.php enforces
-        // a valid CSRF token before invoking the handler.
+        // Action registry — register a POST action plugins / GUI
+        // buttons can hit. Returns JSON; tier is `csrf` so Functions.php
+        // enforces a valid CSRF token before invoking the handler.
         $actions->register('helloEiouFortune', function (array $request): void {
             header('Content-Type: application/json');
             echo json_encode([
@@ -185,7 +186,7 @@ class HelloEiouPlugin implements PluginInterface
             ]);
         }, GuiActionRegistry::TIER_CSRF, 'hello-eiou');
 
-        // Phase 5 — contribute to two filter slots:
+        // Filter hooks — contribute to two filter slots:
         //   * gui.dashboard.widgets — adds an extra widget after the
         //     core widgets, sorted by order.
         //   * gui.contact.actions   — adds a "Fortune" button to the

@@ -487,8 +487,8 @@ pass:
 
 | Layer | Path | Source | When to use |
 |-------|------|--------|-------------|
-| Baked-in | `/app/eiou/config/trusted-plugin-keys/` | Image (read-only) | First-party / eIOU-official keys that ship with every node |
-| Operator | `/etc/eiou/config/trusted-plugin-keys/` | Config volume | Third-party publishers you've vetted and decided to trust |
+| Baked-in | `/app/eiou/plugins/trusted-keys/` | Image (read-only) | First-party / eIOU-official keys that ship with every node |
+| Operator | `/etc/eiou/plugins/trusted-keys/` | Config volume | Third-party publishers you've vetted and decided to trust |
 
 Both directories accept `*.pub` files — plain text, one or more base64
 Ed25519 public keys per file, `#` lines are comments. Multiple keys per
@@ -584,7 +584,7 @@ available. The `.pub` is safe to share.
 **2. Install the public key into the operator trust store**:
 
 ```bash
-docker cp ./my-plugins.pub <node>:/etc/eiou/config/trusted-plugin-keys/my-plugins.pub
+docker cp ./my-plugins.pub <node>:/etc/eiou/plugins/trusted-keys/my-plugins.pub
 ```
 
 From this moment, any plugin signed with the corresponding private key
@@ -620,7 +620,7 @@ docker exec <node> php /app/eiou/scripts/plugin-sign.php verify \
 - An attacker with your private key **cannot** reach into nodes where
   your public key isn't in the trust directory.
 - If you suspect a key is compromised: remove the `.pub` from every
-  node's `/etc/eiou/config/trusted-plugin-keys/` immediately. On next
+  node's `/etc/eiou/plugins/trusted-keys/` immediately. On next
   boot every plugin signed by that key becomes `untrusted_key`. Generate
   a new keypair, distribute the new public key, re-sign your plugins.
 

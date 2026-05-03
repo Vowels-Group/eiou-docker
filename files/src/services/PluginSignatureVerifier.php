@@ -17,14 +17,15 @@ use RuntimeException;
  *
  * Trust model — two layers, both scanned:
  *
- *   1. Baked-in first-party keys at /app/eiou/config/trusted-plugin-keys/
+ *   1. Baked-in first-party keys at /app/eiou/plugins/trusted-keys/
  *      (read-only, shipped inside the Docker image). This is where the
  *      eIOU release signer's key lives, so bundled and official plugins
  *      load without operator action.
  *
- *   2. Operator-added third-party keys at /etc/eiou/config/trusted-plugin-keys/
- *      (on the config volume). Operators drop in `.pub` files they
- *      explicitly trust — same protection model as wallet keys.
+ *   2. Operator-added third-party keys at /etc/eiou/plugins/trusted-keys/
+ *      (on the plugins volume, alongside operator-installed plugins).
+ *      Operators drop in `.pub` files they explicitly trust — same
+ *      protection model as wallet keys.
  *
  * Adding a trusted key is a deliberate operator action that says "I trust
  * whoever holds the corresponding private key to publish plugins on my
@@ -55,10 +56,10 @@ use RuntimeException;
 class PluginSignatureVerifier
 {
     /** Baked into the Docker image — first-party / bundled trust. */
-    public const BUILTIN_KEYS_DIR = '/app/eiou/config/trusted-plugin-keys';
+    public const BUILTIN_KEYS_DIR = '/app/eiou/plugins/trusted-keys';
 
-    /** Operator-added keys on the config volume. */
-    public const OPERATOR_KEYS_DIR = '/etc/eiou/config/trusted-plugin-keys';
+    /** Operator-added keys on the plugins volume. */
+    public const OPERATOR_KEYS_DIR = '/etc/eiou/plugins/trusted-keys';
 
     /**
      * Enforcement modes:

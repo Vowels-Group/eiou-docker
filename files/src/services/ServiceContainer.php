@@ -1034,8 +1034,8 @@ class ServiceContainer implements ContainerInterface {
      * Get PluginSignatureVerifier instance.
      *
      * Verifies Ed25519 signatures on plugins against trusted public keys
-     * at /app/eiou/config/trusted-plugin-keys/ (baked-in, first-party)
-     * and /etc/eiou/config/trusted-plugin-keys/ (operator-added). See
+     * at /app/eiou/plugins/trusted-keys/ (baked-in, first-party) and
+     * /etc/eiou/plugins/trusted-keys/ (operator-added). See
      * docs/PLUGINS.md (Plugin Signatures) for the trust model.
      */
     public function getPluginSignatureVerifier(): \Eiou\Services\PluginSignatureVerifier {
