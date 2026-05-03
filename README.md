@@ -20,6 +20,8 @@ Run an eIOU node with a single `docker compose` command. The container includes 
 - **Multi-Transport** — HTTP, HTTPS, and Tor (.onion) with automatic failover and Tor circuit health tracking
 - **REST API** — full API with HMAC-SHA256 authentication
 - **CLI Interface** — complete command-line management via `eiou` commands
+- **Plugin System** — extend the wallet with optional add-ons that contribute GUI sections, CLI subcommands, REST endpoints, payback-method rail types, and event subscribers. Per-plugin MySQL user with manifest-declared owned tables; Ed25519 signature verification with a two-layer trusted-keys model; plugins are disabled by default. See [docs/PLUGINS.md](docs/PLUGINS.md)
+- **Payback Methods** — declare the settlement rails you accept for debts owed to you. Core ships `bank_wire` (SEPA / Faster Payments / ACH / FedNow / SWIFT with checksum validation) and `custom` free-text instructions; plugins add Bitcoin, PayPal, Lightning, etc. Per-row AES-256-GCM encrypted; reveal requires authcode re-prompt
 - **Data-at-Rest Encryption** — MariaDB Transparent Data Encryption (TDE) encrypts all database files automatically. Optional volume passphrase (`EIOU_VOLUME_KEY_FILE`) encrypts the master key itself so the host cannot read it
 - **Encrypted Backups** — automatic daily database backups encrypted with AES-256-GCM
 - **Deterministic Key Recovery** — all cryptographic material (wallet keys, Tor identity, encryption master key) derived from BIP39 seed phrase
@@ -197,7 +199,7 @@ Increase these for WSL2 or resource-constrained environments.
 | `EIOU_TOR_FORCE_FAST` | `true` | Force fast mode (first response wins) for Tor routes. Set to `false` to allow best-fee mode over Tor |
 | `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | Randomize P2P hop budget with geometric distribution. Set to `false` for deterministic routing depth |
 | `EIOU_UPDATE_CHECK_ENABLED` | `true` | Check Docker Hub daily for newer image versions. Set to `false` to disable |
-| `EIOU_ANALYTICS_ENABLED` | `false` | Opt-in anonymous usage statistics sent weekly. See [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) |
+| `EIOU_ANALYTICS_ENABLED` | `false` | Opt-in anonymous usage statistics, rolled up daily by a cron job (not real-time, not per-event). See [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) |
 | `EIOU_AUTO_ACCEPT_RESTORED_CONTACT` | `true` | Auto-accept restored contacts when transaction history proves prior relationship |
 | `EIOU_VOLUME_KEY_FILE` | *(none)* | Path to file containing volume encryption passphrase. Encrypts the master key at rest so the host cannot read it from the Docker volume |
 | `APP_DEBUG` | `true` | Enable debug logging to database (visible in GUI Debug panel). Set to `false` for production |
@@ -214,6 +216,7 @@ These named volumes persist your data across container restarts and rebuilds. Vo
 | `{NODE_NAME}-mysql-data` | `/var/lib/mysql` | Transaction history, contacts, balances | **Critical** |
 | `{NODE_NAME}-config` | `/etc/eiou/config` | Wallet private keys, encryption keys, configuration | **Critical** |
 | `{NODE_NAME}-backups` | `/var/lib/eiou/backups` | Encrypted database backups (AES-256-GCM) | **Critical** |
+| `{NODE_NAME}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins are seeded from the image on first boot; operator-installed ones live only here | Important |
 | `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if you will never use Let's Encrypt | Low |
 
 To completely reset and start fresh: `docker compose down -v`
@@ -234,8 +237,8 @@ The default configuration allocates:
 
 | Resource | Limit | Reservation |
 |----------|-------|-------------|
-| CPU | 1.0 core | — |
-| Memory | 512 MB | 256 MB |
+| CPU | 2.0 cores | — |
+| Memory | 1024 MB | 512 MB |
 
 Adjust in the `deploy.resources` section of `docker-compose.yml` if needed.
 
