@@ -838,9 +838,21 @@ class ServiceContainer implements ContainerInterface {
      */
     public function getRateLimiterService(): RateLimiterServiceInterface {
         if (!isset($this->services['RateLimiterService'])) {
-            $this->services['RateLimiterService'] = new RateLimiterService(
+            $svc = new RateLimiterService(
                 $this->getRepositoryFactory()->get(RateLimiterRepository::class)
             );
+            // Inject the current UserContext so the limiter can honor the
+            // operator-toggleable `rateLimitEnabled` setting plus the
+            // window/attempts/block overrides. Without this wire-up the
+            // limiter falls back to Constants::RATE_LIMIT_* defaults
+            // forever — the user setting was a no-op for the entire
+            // history of the codebase until this fix. See
+            // RateLimiterService::checkLimit() line 81 for where the
+            // userContext is consulted.
+            if (isset($this->currentUser)) {
+                $svc->setUserContext($this->currentUser);
+            }
+            $this->services['RateLimiterService'] = $svc;
         }
         return $this->services['RateLimiterService'];
     }

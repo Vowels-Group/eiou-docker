@@ -3445,14 +3445,33 @@ class ApiController {
     /**
      * Handle /api/v1/requests endpoints
      *
-     * GET    /api/v1/requests              → list all requests
-     * POST   /api/v1/requests              → create a payment request
-     * POST   /api/v1/requests/approve      → approve an incoming request
-     * POST   /api/v1/requests/decline      → decline an incoming request
-     * DELETE /api/v1/requests/{id}         → cancel an outgoing request
+     * GET    /api/v1/requests              → list all requests          (wallet:read)
+     * POST   /api/v1/requests              → create a payment request   (wallet:read)
+     *                                        — non-destructive on this node; the recipient
+     *                                          must approve before any value moves.
+     * POST   /api/v1/requests/approve      → approve incoming request   (wallet:send)
+     *                                        — fires sendEiou internally; moves real value.
+     * POST   /api/v1/requests/decline      → decline an incoming request (wallet:read)
+     * DELETE /api/v1/requests/{id}         → cancel an outgoing request (wallet:read)
+     *
+     * NOTE: until v0.1.14 these endpoints had no permission gate at all
+     * — any valid API key (even one with no scopes) could approve a
+     * pending request and trigger an outbound transaction. The matrix
+     * above mirrors how the CLI cliRateLimits buckets the same
+     * operations and how the corresponding `eiou request …` paths are
+     * gated when callers go through the request path.
      */
     private function handleRequests(string $method, ?string $action, ?string $id, array $params, string $body): array
     {
+        // Determine the required scope for this (method, action) pair so
+        // the gate denial maps to the right scope name. Reads gate on
+        // wallet:read; the only value-moving endpoint (approve) gates on
+        // wallet:send.
+        $requiredScope = ($method === 'POST' && $action === 'approve') ? 'wallet:send' : 'wallet:read';
+        if (!$this->hasPermission($requiredScope)) {
+            return $this->permissionDenied($requiredScope);
+        }
+
         $prService = $this->services->getPaymentRequestService();
 
         return match (true) {
