@@ -522,6 +522,7 @@ class UpdateCheckService
         $listType = '';
         $inCodeBlock = false;
         $codeContent = '';
+        $inParagraph = false;
 
         foreach ($lines as $line) {
             // Fenced code blocks
@@ -531,6 +532,7 @@ class UpdateCheckService
                     $codeContent = '';
                     $inCodeBlock = false;
                 } else {
+                    if ($inParagraph) { $html .= '</p>'; $inParagraph = false; }
                     if ($inList) {
                         $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
                         $inList = false;
@@ -547,8 +549,9 @@ class UpdateCheckService
 
             $trimmed = trim($line);
 
-            // Empty line — close list if open
+            // Empty line — close paragraph and list if open
             if ($trimmed === '') {
+                if ($inParagraph) { $html .= '</p>'; $inParagraph = false; }
                 if ($inList) {
                     $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
                     $inList = false;
@@ -558,6 +561,7 @@ class UpdateCheckService
 
             // Horizontal rule
             if (preg_match('/^[-*_]{3,}$/', $trimmed)) {
+                if ($inParagraph) { $html .= '</p>'; $inParagraph = false; }
                 if ($inList) {
                     $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
                     $inList = false;
@@ -568,6 +572,7 @@ class UpdateCheckService
 
             // Headings
             if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmed, $m)) {
+                if ($inParagraph) { $html .= '</p>'; $inParagraph = false; }
                 if ($inList) {
                     $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
                     $inList = false;
@@ -579,6 +584,7 @@ class UpdateCheckService
 
             // Unordered list item
             if (preg_match('/^[-*+]\s+(.+)$/', $trimmed, $m)) {
+                if ($inParagraph) { $html .= '</p>'; $inParagraph = false; }
                 if (!$inList || $listType !== 'ul') {
                     if ($inList) {
                         $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
@@ -593,6 +599,7 @@ class UpdateCheckService
 
             // Ordered list item
             if (preg_match('/^\d+\.\s+(.+)$/', $trimmed, $m)) {
+                if ($inParagraph) { $html .= '</p>'; $inParagraph = false; }
                 if (!$inList || $listType !== 'ol') {
                     if ($inList) {
                         $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
@@ -618,12 +625,25 @@ class UpdateCheckService
                 continue;
             }
 
-            // Paragraph
+            // Paragraph — soft line breaks join into the same <p> until a blank
+            // line or a block element ends it. Without this, a hard-wrapped
+            // intro paragraph (common in GitHub release bodies) renders as a
+            // stack of one-line <p>s.
             if ($inList) {
                 $html .= ($listType === 'ul') ? '</ul>' : '</ol>';
                 $inList = false;
             }
-            $html .= '<p>' . self::inlineMarkdown(htmlspecialchars($trimmed)) . '</p>';
+            if ($inParagraph) {
+                $html .= ' ' . self::inlineMarkdown(htmlspecialchars($trimmed));
+            } else {
+                $html .= '<p>' . self::inlineMarkdown(htmlspecialchars($trimmed));
+                $inParagraph = true;
+            }
+        }
+
+        // Close any open paragraph
+        if ($inParagraph) {
+            $html .= '</p>';
         }
 
         // Close any open list
