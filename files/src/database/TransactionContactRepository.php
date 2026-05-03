@@ -466,7 +466,10 @@ class TransactionContactRepository extends AbstractRepository {
         $result = [];
         while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $desc = $row['description'] ?? null;
-            if ($desc !== null && $desc !== 'Contact request' && $desc !== 'Contact request transaction') {
+            if ($desc !== null
+                && $desc !== 'Contact request'
+                && $desc !== 'Contact request transaction'
+                && preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) !== 1) {
                 $result[$row['currency']] = $desc;
             }
         }
@@ -512,10 +515,17 @@ class TransactionContactRepository extends AbstractRepository {
      * Called when receiving an 'accepted' status in handleContactMessageRequest.
      * Updates the contact transaction from 'sent' to 'completed'.
      *
+     * Supplying $currency narrows the update to that single per-currency tx
+     * row, which matters once a contact has multiple in-flight currencies —
+     * an ack for USD must not drag a still-pending EUR row along. Omitting
+     * it keeps the legacy bulk behaviour for paths that don't carry
+     * per-currency context.
+     *
      * @param string $contactPublicKey The public key of the contact who accepted
+     * @param string|null $currency Optional currency filter
      * @return bool True if update was successful
      */
-    public function completeContactTransaction(string $contactPublicKey): bool {
+    public function completeContactTransaction(string $contactPublicKey, ?string $currency = null): bool {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
@@ -526,10 +536,17 @@ class TransactionContactRepository extends AbstractRepository {
                   AND receiver_public_key_hash = :receiver_public_key_hash
                   AND status = 'sent'";
 
-        $stmt = $this->execute($query, [
+        $params = [
             ':sender_public_key_hash' => $senderPublicKeyHash,
             ':receiver_public_key_hash' => $receiverPublicKeyHash
-        ]);
+        ];
+
+        if ($currency !== null && $currency !== '') {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
+
+        $stmt = $this->execute($query, $params);
 
         return $stmt->rowCount() > 0;
     }
@@ -542,10 +559,16 @@ class TransactionContactRepository extends AbstractRepository {
      * The sender (contact who sent the request) is the sender_public_key_hash,
      * and the current user (receiver) is the receiver_public_key_hash.
      *
+     * Supplying $currency narrows the update to that single per-currency tx
+     * row. Omitting it keeps the legacy bulk behaviour (every 'accepted' row
+     * for the pair flips), used for paths that don't carry per-currency
+     * context (e.g. ping-driven late acceptance).
+     *
      * @param string $senderPublicKey The public key of the contact who sent the request
+     * @param string|null $currency Optional currency filter
      * @return bool True if update was successful
      */
-    public function completeReceivedContactTransaction(string $senderPublicKey): bool {
+    public function completeReceivedContactTransaction(string $senderPublicKey, ?string $currency = null): bool {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
 
@@ -556,9 +579,92 @@ class TransactionContactRepository extends AbstractRepository {
                   AND receiver_public_key_hash = :receiver_public_key_hash
                   AND status = 'accepted'";
 
-        $stmt = $this->execute($query, [
+        $params = [
             ':sender_public_key_hash' => $senderPublicKeyHash,
             ':receiver_public_key_hash' => $receiverPublicKeyHash
+        ];
+
+        if ($currency !== null && $currency !== '') {
+            $query .= " AND currency = :currency";
+            $params[':currency'] = $currency;
+        }
+
+        $stmt = $this->execute($query, $params);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Update received contact transaction status to rejected when user declines a request.
+     *
+     * Receiver-side mirror of completeReceivedContactTransaction(). Flips the
+     * per-currency contact-request row from 'accepted' to 'rejected' so the
+     * row doesn't sit indefinitely on the accepted indicator after the user
+     * declines.
+     *
+     * Per-currency by design: declines are always single-currency (the
+     * batched-apply modal partitions accept/decline lists per currency), and
+     * we don't want a decline of EUR to drag a still-accepted USD row along.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @param string $currency Currency of the rejected request
+     * @return bool True if a row was updated
+     */
+    public function rejectReceivedContactTransaction(string $senderPublicKey, string $currency): bool {
+        if ($currency === '') {
+            return false;
+        }
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+
+        $query = "UPDATE {$this->tableName}
+                  SET status = 'rejected'
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  AND currency = :currency
+                  AND status = 'accepted'";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash,
+            ':currency' => $currency,
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Update sent contact transaction status to rejected when peer refuses our request.
+     *
+     * Sender-side mirror — used when the peer responds with STATUS_REJECTED
+     * during the contact-request handshake. Without this the local 'sent'
+     * row sits forever on the single-check indicator even though the peer
+     * never accepted.
+     *
+     * @param string $contactPublicKey The public key of the peer that refused
+     * @param string $currency Currency of the rejected request
+     * @return bool True if a row was updated
+     */
+    public function rejectSentContactTransaction(string $contactPublicKey, string $currency): bool {
+        if ($currency === '') {
+            return false;
+        }
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+
+        $query = "UPDATE {$this->tableName}
+                  SET status = 'rejected'
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  AND currency = :currency
+                  AND status = 'sent'";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash,
+            ':currency' => $currency,
         ]);
 
         return $stmt->rowCount() > 0;

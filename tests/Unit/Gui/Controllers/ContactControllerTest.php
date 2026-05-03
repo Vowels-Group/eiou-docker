@@ -262,6 +262,90 @@ class ContactControllerTest extends TestCase
     }
 
     #[Test]
+    public function routeActionHandlesApplyContactDecisionsAction(): void
+    {
+        // Verifies the new batched-decisions action dispatches via
+        // routeAction with CSRF protection.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'action' => 'applyContactDecisions',
+            'pubkey_hash' => 'abc123',
+            'decisions' => json_encode([
+                ['currency' => 'USD', 'action' => 'accept', 'fee' => '0.01', 'credit' => '1000'],
+            ]),
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            ob_start();
+            $this->controller->routeAction();
+            ob_end_clean();
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) { ob_end_clean(); }
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function routeActionHandlesDeclineContactAction(): void
+    {
+        // The new bulk-decline GUI action mirrors `eiou contact decline` and
+        // POST /api/v1/contacts/:hash/decline. routeAction must dispatch
+        // through CSRF validation just like every other contact action.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'action' => 'declineContact',
+            'pubkey_hash' => 'abc123',
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            ob_start();
+            $this->controller->routeAction();
+            ob_end_clean();
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) ob_end_clean();
+            // Expected — handler will redirect via MessageHelper.
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleDeclineContactRequiresPubkeyHash(): void
+    {
+        // Bulk-decline guard: empty pubkey_hash must short-circuit before
+        // touching the repository.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['pubkey_hash' => ''];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            $this->controller->handleDeclineContact();
+        } catch (\Throwable $e) {
+            // Expected — MessageHelper redirect
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
+    public function handleApplyContactDecisionsShortCircuitsForInvalidInput(): void
+    {
+        // Empty/missing/non-array decisions short-circuit before the
+        // ContactDecisionService is asked to do any work. Detailed apply()
+        // behaviour lives in ContactDecisionServiceTest — this is a smoke
+        // assertion that the controller does its own argument guard.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            'pubkey_hash' => '',
+            'decisions' => '[]',
+        ];
+        $this->mockSession->expects($this->once())->method('verifyCSRFToken');
+        try {
+            $this->controller->handleApplyContactDecisions();
+        } catch (\Throwable $e) {
+            // Expected — MessageHelper redirect
+        }
+        $this->assertTrue(true);
+    }
+
+    #[Test]
     public function routeActionHandlesPingContactAction(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';
@@ -517,6 +601,32 @@ class ContactControllerTest extends TestCase
         }
 
         $this->assertTrue(true);
+    }
+
+    /**
+     * registerActions populates the shared registry with every owned
+     * action at TIER_AUTH so the dispatcher's CSRF gate doesn't fire —
+     * each handler does its own verifyCSRFToken() (rotating, mirroring
+     * the rest of the controller's pattern) and emits the legacy
+     * envelope shape on failure.
+     */
+    public function testRegisterActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        foreach ([
+            'addContact', 'acceptContact', 'addCurrency', 'acceptCurrency',
+            'acceptAllCurrencies', 'applyContactDecisions', 'declineCurrency',
+            'declineContact', 'deleteContact', 'blockContact', 'unblockContact',
+            'editContact', 'pingContact', 'proposeChainDrop', 'acceptChainDrop',
+            'rejectChainDrop',
+        ] as $a) {
+            $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
     }
 
     protected function tearDown(): void

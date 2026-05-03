@@ -13,13 +13,16 @@ Complete command-line interface documentation for the eIOU Docker node.
 7. [Settings Commands](#settings-commands)
 8. [System Commands](#system-commands)
 9. [API Key Management](#api-key-management)
-10. [Payment Request Commands](#payment-request-commands)
-11. [Tx Drop Commands](#tx-drop-commands)
-11. [Backup Commands](#backup-commands)
-12. [Report Commands](#report-commands)
-13. [Test Mode Commands](#test-mode-commands)
-14. [Exit Codes](#exit-codes)
-15. [Rate Limiting](#rate-limiting)
+10. [Payback Methods](#payback-methods)
+11. [Payment Request Commands](#payment-request-commands)
+12. [Tx Drop Commands](#tx-drop-commands)
+13. [Backup Commands](#backup-commands)
+14. [Chain Integrity Audit](#chain-integrity-audit)
+15. [Plugin Management](#plugin-management)
+16. [Report Commands](#report-commands)
+17. [Test Mode Commands](#test-mode-commands)
+18. [Exit Codes](#exit-codes)
+19. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -114,7 +117,7 @@ Wallet generation and restoration are handled automatically by `startup.sh` duri
 | `RESTORE_FILE` | Path to file containing seed phrase (recommended — more secure) |
 
 **Restoring contacts from a prior wallet:**
-After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou pending`) that you can re-accept with the `add` command.
+After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou contact pending`) that you can re-accept with `eiou contact accept <pubkey-hash> --currency CCY --fee F --credit C` (or `eiou contact apply` for multi-currency). If `autoAcceptRestoredContact` is enabled, the original per-currency settings are auto-restored and no manual accept is needed.
 
 ---
 
@@ -228,356 +231,208 @@ eiou overview --json
 
 ## Contact Commands
 
-### add
+All contact operations are namespaced under `eiou contact …`. Identifiers (`<contact>`) accept a name, an address, or a pubkey-hash — pipe scripted values from `eiou contact pending --json` for stable identifiers across runs. Top-level verbs (`eiou add`, `eiou pending`, `eiou block`, …) were dropped in v0.1.14 in favour of subcommands so the apply / decline / per-currency surfaces have a home and identifier parsing is consistent.
 
-Add a new contact or accept an incoming contact request.
+Rate limit: 20 contact ops per minute (`contact` rate-limit bucket).
 
-**Syntax:**
+### contact add
+
+Initiate an outbound contact request. Outbound-only — for an existing accepted contact use `contact currency add` to propose a new currency, or `contact update` to change settings.
+
 ```bash
-eiou add <address> <name> <fee> <credit> <currency> [requested_credit] [message]
+eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
 ```
 
-**Arguments:**
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--fee` | `0` | Fee percentage you'll charge to relay transactions in this currency. |
+| `--credit` | `0` | Credit limit you extend to this contact in this currency. `0` means contact-only (no transactions can route through you). |
+| `--currency` | `USD` | Currency code (3-9 uppercase alphanumeric, e.g. USD, EIOU). |
+| `--requested-credit` | — | Credit limit you'd like the **receiver** to extend to *you* in this currency. Sent on the wire as `requested_credit_limit` in the contact payload — the receiver sees it as a suggestion when they accept (mirrors what the GUI's "Requested Credit" field and the `POST /api/v1/contacts` endpoint expose). They choose what to actually grant. Omit to send no suggestion. |
+| `--message` | — | Optional short message (≤ 255 chars, E2E or transport-encrypted). |
 
-| Argument | Type | Description |
-|----------|------|-------------|
-| `address` | required | Contact's node address (HTTP, HTTPS, or Tor) |
-| `name` | required | Display name for the contact (use quotes for multi-word names, e.g., `"Jane Doe"`) |
-| `fee` | required | Fee percentage for transactions (e.g., 1.0) |
-| `credit` | required | Credit limit you extend to this contact (the maximum balance they can accumulate with you). Setting this to `0` means you can be contacts but they cannot send transactions through you |
-| `currency` | required | Currency code, 3-9 uppercase alphanumeric characters (e.g., USD, EIOU) |
-| `requested_credit` | optional | The credit limit you would like this contact to set for you. Sent as a suggestion — the recipient sees it pre-filled when accepting. Use `NULL` or omit to skip |
-| `message` | optional | A short message sent with the contact request (max 255 chars, E2E encrypted for non-Tor, transport-encrypted for Tor). If providing a message without a requested credit limit, pass `NULL` as the requested_credit placeholder |
+Flags can appear in any order, and in any position relative to the positional `<address> <name>`.
 
-**Examples:**
 ```bash
-# Add a new contact
-eiou add http://bob:8080 Bob 1.0 100 USD
+# Contact request with all defaults
+eiou contact add http://bob:8080 Bob
 
-# Add with a requested credit limit
-eiou add http://bob:8080 Bob 1.0 100 USD 500
+# With explicit per-currency settings + a message
+eiou contact add http://bob:8080 Bob --fee 1.0 --credit 100 --currency USD --message "Hey, it's Dave!"
 
-# Add with both requested credit and a message
-eiou add http://bob:8080 Bob 1.0 100 USD 500 "Hey, it's Dave!"
+# Suggest that Bob extend you a 500 USD credit limit when he accepts
+eiou contact add http://bob:8080 Bob --fee 1.0 --credit 100 --currency USD --requested-credit 500
 
-# Add with a message but no requested credit (use NULL placeholder)
-eiou add http://bob:8080 Bob 1.0 100 USD NULL "Hey, it's Dave!"
-
-# Add with a multi-word name
-eiou add http://bob:8080 "Jane Doe" 1.0 100 USD
-
-# Add as contact-only (0 credit = no transactions through you)
-eiou add http://bob:8080 Bob 1.0 0 USD
-
-# Add via Tor address
-eiou add abc123...onion Alice 0.5 500 USD
-
-# JSON output
-eiou add http://charlie:8080 Charlie 1 200 USD --json
+# Multi-word names need quoting in your shell — there's no special placeholder
+eiou contact add http://bob:8080 "Jane Doe" --fee 1.0 --credit 100 --currency USD
 ```
 
-**Notes:**
-- Creates a pending contact request that the recipient must accept
-- To accept an incoming request, use `add` with the sender's address
-- A credit limit of `0` establishes the contact relationship without extending any credit — the contact exists but cannot route transactions through you. This is useful for maintaining a relationship without financial exposure
-- The `requested_credit` is a suggestion only — the recipient can accept, modify, or ignore it when accepting the request
-- Arguments are strictly positional: `requested_credit` is always at position 7, `message` at position 8. Use `NULL` as a placeholder if you need to provide a message without a requested credit limit
-- Each currency request is tracked independently with a direction (`incoming`/`outgoing`) in the `contact_currencies` table
-- Cross-currency requests are supported: Alice can request USD from Bob while Bob requests GBY from Alice — each side accepts independently
-- Re-running `add` with a different currency for an existing pending contact updates the outgoing currency request
-- Rate limited: 20 additions per minute
+### contact accept
+
+Accept an incoming contact request from the receiving side. Single- or multi-currency in one shot — repeat the `--currency / --fee / --credit` triplet per currency.
+
+```bash
+eiou contact accept <pubkey-hash|address|name> --currency CCY --fee F --credit C \
+                                               [--currency CCY --fee F --credit C ...]
+```
+
+```bash
+# Single-currency accept
+eiou contact accept abc123...hash --currency USD --fee 1.0 --credit 100
+
+# Multi-currency accept in one call
+eiou contact accept abc123...hash \
+    --currency USD --fee 1.0 --credit 100 \
+    --currency EUR --fee 0.5 --credit 50
+```
+
+For new (pending) contacts, the first accepted currency establishes the contact via the same path as `contact add`; subsequent accepts use the standard currency-acceptance path. This mirrors what the GUI batched-apply modal does and is implemented by the shared `ContactDecisionService::apply()`.
+
+### contact apply
+
+Apply a batched mix of accept / decline / defer decisions in one call — the CLI mirror of the GUI batched-apply modal. Two payload forms:
+
+```bash
+# Per-decision flags (repeatable)
+eiou contact apply <pubkey-hash|address|name> [--accept CCY:fee:credit ...] \
+                                              [--decline CCY ...] [--defer CCY ...]
+
+# Or pipe a JSON array (modal payload shape: [{currency, action, fee?, credit?}, ...])
+eiou contact apply <pubkey-hash|address|name> --from <file.json|->
+```
+
+```bash
+# Accept USD, decline EUR, defer XRP
+eiou contact apply abc123...hash --accept USD:0.01:1000 --decline EUR --defer XRP
+
+# Pipe modal output through a script
+cat decisions.json | eiou contact apply abc123...hash --from -
+```
+
+Declines run before accepts so a `decline EUR + accept USD` payload can't accidentally re-add the just-declined row via the new-contact bridge. Defer rows are intentional no-ops.
+
+### contact decline
+
+Decline every pending currency on a contact request in one shot.
+
+```bash
+eiou contact decline <pubkey-hash|address|name>
+```
+
+Each declined currency triggers a `contact_currency_declined` notification to the requester so their outgoing-pending row is dropped on the spot — without it the requester's view of the request hangs forever and a retry trips the legacy `CONTACT_EXISTS` path. After all per-currency declines, a single `contact_declined` notification is sent so the requester's contact transaction itself is rejected. Both message types are async-best-effort and fall back to DLQ retries on transport failure; the next ping/pong cycle reconciles any drift via `peerKnownCurrencies` (see `eiou contact ping` below).
+
+### contact list
+
+List contacts grouped by status.
+
+```bash
+eiou contact list [--status accepted|pending|blocked]
+```
+
+### contact pending
+
+View pending contact requests (incoming + outgoing). The hint text printed for each incoming request points at `eiou contact accept <pubkey-hash> …` and `eiou contact decline <pubkey-hash>` so the printed command is paste-ready.
+
+```bash
+eiou contact pending [--json]
+```
+
+After a wallet restore, prior contacts that ping your node are auto-created as pending requests by `ContactStatusService` and appear here. They can be re-accepted via `contact accept` (or `contact apply` for multi-currency).
+
+### contact view
+
+View detailed information about a contact.
+
+```bash
+eiou contact view <name|address|pubkey-hash>
+```
+
+Output includes name, status, addresses, per-currency balances, fee/credit-limit settings, and your / their available credit per currency (refreshed via the ping/pong cycle, ~5 min).
+
+### contact update
+
+Update contact settings via flags — same shape as `contact add`, mirrors the API's `PUT /api/v1/contacts/:address` payload. All field flags are optional; provide whichever subset you want to change.
+
+```bash
+eiou contact update <name|address> [--name N] [--fee F] [--credit C] [--currency CCY]
+```
+
+| Flag | Required when | Description |
+|------|---------------|-------------|
+| `--name` | — | New display name (currency-independent). |
+| `--fee` | always paired with `--currency` | New fee percentage in the given currency. |
+| `--credit` | always paired with `--currency` | New credit limit in the given currency. |
+| `--currency` | when `--fee` or `--credit` is set | Currency code for the per-currency row being updated. |
+
+```bash
+# Rename
+eiou contact update Bob --name Robert
+
+# Change fee on an existing currency
+eiou contact update Bob --fee 1.5 --currency USD
+
+# Change credit limit
+eiou contact update Bob --credit 500 --currency EUR
+
+# Multi-field — name + fee + credit in one command
+eiou contact update Bob --name Robert --fee 2.0 --credit 1500 --currency USD
+
+# By address
+eiou contact update http://bob --fee 2.0 --currency USD --json
+```
+
+> **Atomicity:** the CLI fans out into one service call per touched field (`name`, `fee`, `credit`), so a multi-field update is **not atomic** across the name/per-currency boundary. The API equivalent (`PUT /api/v1/contacts/:address`) is atomic per request — use it if you need transactional semantics. Updates are **local-only** either way (the contact is not notified).
+
+> **Breaking change (v0.1.14):** the legacy positional form (`eiou contact update Bob name Robert` / `… fee 1.5 USD` / `… all Robert 1.5 1500 USD`) was removed in favour of this flag form. Scripts using the old grammar will fail with a "No fields to update" or "Usage" error.
+
+### contact delete / block / unblock / ping / search
+
+```bash
+eiou contact delete <name|address>             # Permanent removal
+eiou contact block <name|address>              # Reject incoming traffic from this contact
+eiou contact unblock <name|address>            # Reverse a prior block
+eiou contact ping <name|address>               # Check online status + per-currency chain heads
+eiou contact search <query>                    # Substring search by name
+```
+
+`contact ping` compares per-currency chain heads with the remote contact and verifies local chain integrity (gap detection). Mismatches trigger an automatic sync; if the sync can't repair the gap, a tx drop is auto-proposed (see [Tx Drop Commands](#tx-drop-commands)). All gap detection is local — no transaction lists go over the wire.
 
 ---
 
-### viewcontact
+### contact currency add
 
-View detailed information about a specific contact.
+Propose a new currency on an already-accepted contact. Sends a P2P request so the remote side can accept the new currency.
 
-**Syntax:**
 ```bash
-eiou viewcontact <address|name>
+eiou contact currency add <contact> <currency> --fee F --credit C
 ```
 
-**Arguments:**
+### contact currency accept / decline
 
-| Argument | Type | Description |
-|----------|------|-------------|
-| `address\|name` | required | Contact's address or display name |
+Accept or decline a single per-currency request that's pending on an existing contact. The `accept` path runs through `ContactDecisionService` so it shares the new-contact-first-accept-via-add semantics with the GUI modal.
 
-**Examples:**
 ```bash
-eiou viewcontact Bob
-eiou viewcontact http://bob:8080
-eiou viewcontact --json Bob
+eiou contact currency accept <contact> <currency> --fee F --credit C
+eiou contact currency decline <contact> <currency>
 ```
 
-**Output includes:**
-- Contact name, status, addresses
-- Balance (received, sent, net)
-- Fee percentage and credit limit
-- Your available credit with them per currency (received via ping/pong, stored in `contact_credit`, ~5 min refresh)
-- Their available credit with you per currency (calculated: credit_limit - balance)
+`decline` sends a `contact_currency_declined` notification to the requester (best-effort, async). The remote drops their stale outgoing-pending row immediately on receipt; if the message is lost in flight, the next ping/pong call reconciles it via the `peerKnownCurrencies` payload field. A retry by the requester (`contact currency add`) succeeds in either case — the dispatcher detects a stale outgoing-pending row and routes it through `addCurrencyToExisting` instead of bailing with `CONTACT_EXISTS`.
 
-**On Failure (JSON):**
-```json
-{
-    "success": false,
-    "error": {
-        "code": "CONTACT_NOT_FOUND",
-        "title": "Contact Not Found",
-        "status": 404,
-        "detail": "Contact not found",
-        "query": "NonExistentContact"
-    }
-}
-```
+### contact currency list
 
----
+Show every currency configured for a contact, with status (`pending` / `accepted` / `declined`) and direction (`incoming` / `outgoing`).
 
-### update
-
-Update contact information. Fee and credit updates require a currency parameter to specify which currency's settings to modify. Updates are applied to both the `contacts` table and the `contact_currencies` table.
-
-**Syntax:**
 ```bash
-eiou update <address|name> name <name>
-eiou update <address|name> fee <value> <currency>
-eiou update <address|name> credit <value> <currency>
-eiou update <address|name> all <name> <fee> <credit> [currency]
+eiou contact currency list <contact>
 ```
 
-**Arguments:**
+### contact currency remove
 
-| Argument | Type | Description |
-|----------|------|-------------|
-| `address\|name` | required | Contact's address or display name |
-| `field` | required | Field to update: `all`, `name`, `fee`, or `credit` |
-| `values` | varies | New value(s) for the specified field(s) |
-| `currency` | required for fee/credit | Currency code (e.g., USD, EUR). Optional for `all` (defaults to contact's current currency) |
+Remove a currency configuration locally. Local-only — the remote side is not notified. Use this to clean up a stale outgoing pending request, not to reject one (use `currency decline` for that).
 
-**Examples:**
 ```bash
-# Update contact name
-eiou update Bob name Robert
-
-# Update fee percentage for USD
-eiou update Bob fee 1.5 USD
-
-# Update credit limit for EUR
-eiou update Bob credit 500 EUR
-
-# Update all fields at once for GBY
-eiou update Bob all NewName 2.0 1000 GBY
+eiou contact currency remove <contact> <currency>
 ```
-
----
-
-### search
-
-Search for contacts by name.
-
-**Syntax:**
-```bash
-eiou search [name]
-```
-
-**Arguments:**
-
-| Argument | Type | Description |
-|----------|------|-------------|
-| `name` | optional | Search term (partial name match) |
-
-**Output per contact:**
-- Name, address(es), status
-- Fee percentage, credit limit, currency
-- Your Available Credit (from pong, how much credit they extend to you)
-- Their Available Credit (calculated: how much credit you extend to them)
-
-**Examples:**
-```bash
-# Search for contacts containing "bob"
-eiou search bob
-
-# List all contacts (no filter)
-eiou search
-
-# JSON output
-eiou search alice --json
-```
-
----
-
-### ping
-
-Check if a contact is online, verify chain validity, and retrieve available credit.
-
-Ping compares per-currency chain heads (`prevTxidsByCurrency`) with the remote contact and also verifies local chain integrity to detect internal gaps (e.g., deleted transactions in the middle of the chain). Each currency has its own independent transaction chain. All gap detection is performed locally — no transaction lists are exchanged over the wire. The pong response includes per-currency available credit (`availableCreditByCurrency`) and per-currency chain validity (`chainStatusByCurrency`), stored locally for use by `viewcontact`, `search`, and `info`.
-
-**Syntax:**
-```bash
-eiou ping <address|name>
-```
-
-**Arguments:**
-
-| Argument | Type | Description |
-|----------|------|-------------|
-| `address\|name` | required | Contact's address or display name |
-
-**Examples:**
-```bash
-eiou ping Bob
-eiou ping http://bob:8080
-eiou ping --json Alice
-```
-
-**Output includes:**
-- Online status (`online`, `partial`, or `offline` — `partial` means the contact responded but not all processors are running)
-- Chain validity status (includes internal gap detection)
-- Response message
-
-**Available credit exchange:**
-The pong response includes per-currency available credit (`availableCreditByCurrency`). For each currency, the available credit is calculated as: what they sent you − what you sent them + their credit limit for you in that currency. These values are stored per-currency in the `contact_credit` table and visible via `viewcontact`, `search`, and `info`. The automatic ContactStatusProcessor also performs this exchange every ~5 minutes.
-
-**Chain mismatch behavior:**
-If any currency's local and remote chain heads don't match, or if internal gaps are detected, ping automatically triggers a sync (including backup recovery on both sides). If the sync fails to resolve the gap, a tx drop is auto-proposed. See [Tx Drop Commands](#tx-drop-commands) for details.
-
-**Wallet restore behavior:**
-When a ping is received by a node that was restored from a seed phrase, the ContactStatusService detects the incoming ping from a previously unknown address, auto-creates a pending contact, and triggers a sync to restore the shared transaction chain. The prior contact then appears as a pending request that the restored wallet owner can review via `eiou pending` and re-accept via `eiou add`. This allows prior contacts to re-establish their relationship with a restored wallet simply by pinging it.
-
----
-
-### block
-
-Block a contact from sending transactions to you. Blocked contacts cannot send you transactions or P2P requests — incoming messages from blocked contacts are rejected.
-
-**Syntax:**
-```bash
-eiou block <address|name>
-```
-
-**Arguments:**
-
-| Argument | Type | Description |
-|----------|------|-------------|
-| `address\|name` | required | Contact's address or display name to block |
-
-**Examples:**
-```bash
-eiou block SpamUser
-eiou block http://badactor:8080
-eiou block http://badactor:8080 --json
-```
-
-**On Failure (JSON):**
-```json
-{
-    "success": false,
-    "error": {
-        "code": "CONTACT_NOT_FOUND",
-        "title": "Contact Not Found",
-        "status": 404,
-        "detail": "Contact not found for address: http://badactor:8080"
-    }
-}
-```
-
----
-
-### unblock
-
-Unblock a previously blocked contact, allowing them to send transactions and P2P requests again.
-
-**Syntax:**
-```bash
-eiou unblock <address|name>
-```
-
-**Arguments:**
-
-| Argument | Type | Description |
-|----------|------|-------------|
-| `address\|name` | required | Contact's address or display name to unblock |
-
-**Examples:**
-```bash
-eiou unblock SpamUser
-eiou unblock http://user:8080 --json
-```
-
-**On Failure (JSON):**
-```json
-{
-    "success": false,
-    "error": {
-        "code": "CONTACT_NOT_FOUND",
-        "title": "Contact Not Found",
-        "status": 404,
-        "detail": "Contact not found for address: http://user:8080"
-    }
-}
-```
-
----
-
-### delete
-
-Delete a contact permanently.
-
-**Syntax:**
-```bash
-eiou delete <address|name>
-```
-
-**Arguments:**
-
-| Argument | Type | Description |
-|----------|------|-------------|
-| `address\|name` | required | Contact's address or display name to delete |
-
-**Examples:**
-```bash
-eiou delete OldContact
-eiou delete http://old:8080
-eiou delete OldContact --json
-```
-
-**On Failure (JSON):**
-```json
-{
-    "success": false,
-    "error": {
-        "code": "CONTACT_NOT_FOUND",
-        "title": "Contact Not Found",
-        "status": 404,
-        "detail": "Contact not found with name: OldContact"
-    }
-}
-```
-
----
-
-### pending
-
-View all pending contact requests (incoming and outgoing).
-
-**Syntax:**
-```bash
-eiou pending
-```
-
-**Examples:**
-```bash
-eiou pending
-eiou pending --json
-```
-
-**Output includes:**
-- Incoming requests (from others awaiting your acceptance)
-- Outgoing requests (your requests awaiting others' acceptance)
-- Count of pending requests
-
-**Note:** After a wallet restore, prior contacts that ping your node are auto-created as pending contacts by the ContactStatusService. These appear as incoming requests in the pending list. Contacts with existing transaction history (visible after sync) are prior contacts from the previous wallet and can be re-accepted with `eiou add`.
 
 ---
 
@@ -1143,7 +998,7 @@ eiou sync balances
 
 ### help
 
-Display help information.
+Display help information for top-level commands.
 
 **Syntax:**
 ```bash
@@ -1154,20 +1009,37 @@ eiou help [command]
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `command` | optional | Specific command to get detailed help for |
+| `command` | optional | Specific top-level command to get detailed help for |
 
 **Examples:**
 ```bash
 # General help
 eiou help
 
-# Help for specific command
+# Help for specific top-level command
 eiou help send
 eiou help apikey
 
 # JSON format
 eiou help --json
 ```
+
+**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to `ContactCliHandler::showHelp()` — so `eiou help contact` and `eiou contact` print the **exact same** subcommand tree (single source of truth, no drift). `eiou help contact currency` likewise delegates to the per-currency help.
+
+```bash
+eiou contact            # full contact subcommand tree (same as `eiou contact help`)
+eiou help contact       # ← identical output, delegated to the contact handler
+eiou contact currency   # per-currency subcommand tree
+eiou help contact currency  # ← identical output
+
+# Other namespaces are still reached via the namespace itself:
+eiou backup help
+eiou apikey help
+eiou payback help
+eiou chaindrop help
+```
+
+There is no `eiou help contact add` form — drill down by running the namespace's own help (`eiou contact` for the full tree) and read the subcommand line you want.
 
 ---
 
@@ -1232,6 +1104,23 @@ eiou start
 
 ---
 
+### restart
+
+Full in-place node restart: respawn processors **and** PHP-FPM workers so freshly-enabled plugins (or any other startup-bound state) take effect without a container reboot.
+
+**Syntax:**
+```bash
+eiou restart
+```
+
+**Behavior:**
+- Sends SIGTERM to all running processors (the watchdog respawns them within ~30s)
+- Sends SIGUSR2 to the PHP-FPM master so all workers gracefully recycle (in-flight HTTP requests finish before the worker exits)
+- Required when toggling plugins, since event subscriptions bind during boot
+- Must run as root inside the container — the CLI process does, calling from a PHP-FPM worker (GUI) does not. The REST equivalent (`POST /api/v1/system/restart`) sidesteps this by writing a request marker that the root-side poller in `startup.sh` picks up.
+
+---
+
 ## API Key Management
 
 ### apikey
@@ -1289,6 +1178,82 @@ eiou apikey enable eiou_abc123
 
 ---
 
+## Payback Methods
+
+### payback
+
+Manage your own payback methods — the settlement rails (bank wire, PayPal, Bitcoin, custom free-text, etc.) you offer contacts so they can settle debts they owe you. Each method is encrypted at rest per-row; sensitive fields only leave the node when you explicitly reveal them (via `show`) or a contact fetches them over E2E.
+
+**Syntax:**
+```bash
+eiou payback <action> [args...]
+```
+
+**Actions:**
+
+| Action | Syntax | Description |
+|--------|--------|-------------|
+| `list` | `payback list [--currency <c>] [--all]` | List all enabled methods. `--currency` filters to one code; `--all` also includes disabled rows. |
+| `add` | `payback add <type> <label> <currency> [--share auto\|never] [--priority N]` | Create a new method. Type-specific fields are prompted interactively (sensitive inputs use `stty -echo` when stdin is a TTY). |
+| `show` | `payback show <method_id>` | Display a single method with **all fields decrypted** to plaintext. |
+| `edit` | `payback edit <method_id>` | Re-enter the type-specific fields. Label, priority, and share policy have their own subcommands. |
+| `remove` | `payback remove <method_id>` | Permanently delete a method. |
+| `share-policy` | `payback share-policy <method_id> auto\|never` | Update only the share policy on an existing method. |
+| `help` | `payback help` | Show detailed help. |
+
+**Supported Types (core):**
+
+| Type | Description |
+|------|-------------|
+| `bank_wire` | Bank wire with sub-rails: `sepa`, `faster_payments`, `ach`, `fednow`, `swift`. Validates IBAN mod-97 and ABA-routing checksum. |
+| `custom` | Free-text instructions (≤ 1024 chars). For anything without a dedicated rail type. |
+
+Additional rail types (`btc`, `paypal`, `bizum`, `pix`, `upi`, `lightning`, etc.) arrive via plugins that register a `PaybackMethodTypeContract` — see `docs/PLUGINS.md` for authoring.
+
+**Share Policies:**
+
+| Policy | Behaviour when a contact's node fetches your methods |
+|--------|------------------------------------------------------|
+| `auto` | Any accepted contact can fetch without owner approval (default) |
+| `prompt` | Fetches trigger an approval notification on the owner |
+| `never` | Method is never shared via the E2E fetch flow |
+
+**Priority:** Integer 0–9999, lower = preferred. Used as a tiebreaker when several methods of yours match the same currency (defaults to 100).
+
+**Examples:**
+```bash
+# List all enabled methods
+eiou payback list
+
+# List only USD methods, including disabled ones
+eiou payback list --currency USD --all
+
+# JSON output for scripting
+eiou payback list --json
+
+# Add a SEPA bank-wire method (prompts for rail, name, IBAN)
+eiou payback add bank_wire "My Revolut" EUR
+
+# Add a custom free-text method, never auto-shared with contacts, top priority
+eiou payback add custom "Monzo – DM me" GBP --share never --priority 10
+
+# Reveal a method's plaintext fields (does not re-prompt for auth — CLI is trusted)
+eiou payback show pbm_abc123
+
+# Update the share policy on an existing method
+eiou payback share-policy pbm_abc123 never
+
+# Remove a method
+eiou payback remove pbm_abc123
+```
+
+**Notes:**
+- `show` prints **fully-decrypted plaintext**. The GUI and REST API gate plaintext reveal behind a sensitive-action authcode prompt, but the CLI is considered already-authenticated by virtue of having shell/container access.
+- `edit` only re-enters the type-specific fields (re-encrypts the whole blob atomically). To change just the label or priority, use the REST API or GUI.
+- Method IDs are UUIDs returned in the `add` response and visible in `list` output.
+
+---
+
 ## Payment Request Commands
 
 ### request
@@ -1306,7 +1271,7 @@ eiou request [subcommand] [args...]
 |------------|--------|-------------|
 | *(none/list)* | `eiou request` | List all incoming and outgoing payment requests |
 | `create` | `eiou request create <contact> <amount> <currency> [description]` | Create and send a payment request to a contact |
-| `approve` | `eiou request approve <request_id>` | Approve an incoming request (sends eIOU automatically) |
+| `approve` | `eiou request approve <request_id> [note]` | Approve an incoming request (sends eIOU automatically). Optional `[note]` is appended to the on-chain description with `" \| "` (e.g. `"paid via coinbase txid abc"`). |
 | `decline` | `eiou request decline <request_id>` | Decline an incoming payment request |
 | `cancel` | `eiou request cancel <request_id>` | Cancel an outgoing request you created |
 
@@ -1325,6 +1290,12 @@ eiou request create "http://alice-node.example.com" 50.00 USD
 
 # Approve an incoming request (pays the requester)
 eiou request approve req_abc123def456
+
+# Approve and append a payer note to the on-chain description.
+# Final description becomes "payment: <requester desc> | <your note>" —
+# the note is capped against whatever space is left under the 255-char
+# ceiling and rejected with a clear error if it doesn't fit.
+eiou request approve req_abc123def456 "paid via coinbase txid abc"
 
 # Decline a request
 eiou request decline req_abc123def456
@@ -1625,6 +1596,53 @@ This command is intentionally NOT on any cron — it's O(all history) per pair, 
 
 ---
 
+## Plugin Management
+
+### plugin
+
+List installed plugins and toggle their enabled flag. Persistence-only — does **not** restart the node; you must follow up with `eiou restart` (or `POST /api/v1/system/restart`, or the GUI restart button) for an `enable`/`disable` to take effect, since event subscriptions bind during boot.
+
+**Syntax:**
+```bash
+eiou plugin [list|enable|disable|uninstall] [name]
+```
+
+**Subcommands:**
+
+| Subcommand | Syntax | Description |
+|------------|--------|-------------|
+| *(none / `list`)* | `eiou plugin` | List every installed plugin with version, enabled flag, status, license. |
+| `enable` | `eiou plugin enable <name>` | Persist the enabled flag as `true`. |
+| `disable` | `eiou plugin disable <name>` | Persist the enabled flag as `false`. |
+| `uninstall` | `eiou plugin uninstall <name>` | Run the full uninstall sequence (onUninstall hook, drop tables, drop user, delete credentials, remove files). The plugin must be disabled first. |
+
+**Examples:**
+```bash
+# List all plugins (table)
+eiou plugin
+
+# List as JSON (full metadata)
+eiou plugin list --json
+
+# Enable / disable
+eiou plugin enable hello-eiou
+eiou plugin disable hello-eiou
+
+# Uninstall a disabled plugin
+eiou plugin uninstall hello-eiou
+
+# Apply the change
+eiou restart
+```
+
+**Notes:**
+- Persists to `/etc/eiou/config/plugins.json` immediately.
+- Plugin names are validated against `^[a-z0-9][a-z0-9-_]{0,63}$` (kebab-case alphanumerics).
+- Plugins disabled by default at install time — see [PLUGINS.md](PLUGINS.md) for the safety stance.
+- Plugin-owned CLI verbs are dispatched via `PluginCliRegistry`; if a plugin registers a top-level verb, it falls through after core's `else` branch in `Eiou.php`. See [PLUGINS.md](PLUGINS.md) for plugin authoring.
+
+---
+
 ## Report Commands
 
 ### report
@@ -1737,11 +1755,15 @@ eiou in
 
 CLI commands are rate-limited per wallet to prevent abuse:
 
-| Command | Limit | Window | Block Duration |
-|---------|-------|--------|----------------|
+| Command bucket | Limit | Window | Block Duration |
+|----------------|-------|--------|----------------|
 | `send` | 30 | 60 seconds | 5 minutes |
-| `add` | 20 | 60 seconds | 5 minutes |
+| `contact` (every `eiou contact …` subcommand) | 20 | 60 seconds | 5 minutes |
+| `generate` | 5 | 5 minutes | 15 minutes |
 | `backup` | 10 | 60 seconds | 5 minutes |
+| `chaindrop` | 10 | 60 seconds | 5 minutes |
+| `report` | 10 | 60 seconds | 5 minutes |
+| `p2p` | 30 | 60 seconds | 5 minutes |
 | `request` | 20 | 60 seconds | 5 minutes |
 | All others | 100 | 60 seconds | 5 minutes |
 

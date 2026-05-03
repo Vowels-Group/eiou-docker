@@ -429,6 +429,220 @@ class PaymentRequestServiceTest extends TestCase
         $this->assertEquals($longDescription, $capturedArgv[5]);
     }
 
+    public function testApproveAppendsPayerNoteToDescription(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => 'payment for dinner',
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID, 'paid via coinbase txid abc123');
+
+        // Joined with " | " under the "payment: " prefix
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals('payment: payment for dinner | paid via coinbase txid abc123', $capturedArgv[5]);
+    }
+
+    public function testApproveTrimsAndIgnoresWhitespaceOnlyPayerNote(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => 'lunch',
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID, "   \n\t  ");
+
+        // Whitespace-only note collapses to "no note" — same shape as
+        // the existing prefix-only path, no separator appended.
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals('payment: lunch', $capturedArgv[5]);
+    }
+
+    public function testApproveDropsPrefixWhenCombinedExceedsButFitsWithoutPrefix(): void
+    {
+        // 240 char requester desc + ' | ' (3) + 'note here' (9) = 252 with 'payment: ' prefix would be 261 → drops prefix.
+        $req = str_repeat('a', 240);
+        $note = 'note here';
+
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => $req,
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID, $note);
+
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals($req . ' | ' . $note, $capturedArgv[5]);
+        $this->assertLessThanOrEqual(255, strlen($capturedArgv[5]));
+    }
+
+    public function testApproveTruncatesNoteWhenRequesterDescLeavesLittleRoom(): void
+    {
+        // 250 char requester desc → max note is 255 - 250 - 3 = 2 chars.
+        $req = str_repeat('b', 250);
+        $note = 'this is a much longer note than fits';
+
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => $req,
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID, $note);
+
+        // Defensive truncation: req + ' | ' + first 2 chars of note = 255.
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals($req . ' | ' . substr($note, 0, 2), $capturedArgv[5]);
+        $this->assertEquals(255, strlen($capturedArgv[5]));
+    }
+
+    public function testApproveDropsNoteWhenRequesterDescAlreadyAtCeiling(): void
+    {
+        // 255 char requester desc → no room for note at all. Service falls
+        // back to the existing no-note path (drops prefix since prefixed
+        // would be 264).
+        $req = str_repeat('c', 255);
+
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => $req,
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID, 'note that cannot fit');
+
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals($req, $capturedArgv[5]);
+        $this->assertEquals(255, strlen($capturedArgv[5]));
+    }
+
+    public function testApproveAppliesPrefixToNoteOnlyWhenRequesterDescEmpty(): void
+    {
+        $this->paymentRequestRepository->method('getByRequestId')
+            ->willReturn([
+                'request_id'        => self::TEST_REQUEST_ID,
+                'direction'         => 'incoming',
+                'status'            => 'pending',
+                'requester_address' => self::TEST_CONTACT_ADDRESS,
+                'amount_whole'      => 10,
+                'amount_frac'       => 0,
+                'amount'            => null,
+                'currency'          => 'USD',
+                'description'       => null,
+            ]);
+        $capturedArgv = null;
+        $this->transactionService->method('sendEiou')
+            ->willReturnCallback(function (array $argv) use (&$capturedArgv) {
+                $capturedArgv = $argv;
+                echo json_encode(['success' => true, 'message' => 'ok', 'data' => ['txid' => 'tx-1']]);
+            });
+
+        $this->service->approve(self::TEST_REQUEST_ID, 'paid via venmo');
+
+        // No requester desc + payer note → "payment: <note>"
+        $this->assertNotNull($capturedArgv);
+        $this->assertEquals('payment: paid via venmo', $capturedArgv[5]);
+    }
+
+    public function testMaxPayerNoteLengthHelper(): void
+    {
+        // Empty / null description → full budget minus the separator.
+        $this->assertEquals(252, PaymentRequestService::maxPayerNoteLength(null));
+        $this->assertEquals(252, PaymentRequestService::maxPayerNoteLength(''));
+
+        // Some headroom.
+        $this->assertEquals(247, PaymentRequestService::maxPayerNoteLength('hello'));
+
+        // Description right at the ceiling — no room for a note.
+        $this->assertEquals(0, PaymentRequestService::maxPayerNoteLength(str_repeat('x', 252)));
+        $this->assertEquals(0, PaymentRequestService::maxPayerNoteLength(str_repeat('x', 255)));
+    }
+
+    public function testComposeApprovalDescriptionCascadeFallsBackThroughEachStage(): void
+    {
+        // 1) Both empty → null
+        $this->assertNull(PaymentRequestService::composeApprovalDescription(null, null));
+        $this->assertNull(PaymentRequestService::composeApprovalDescription('', ''));
+
+        // 2) Only requester desc, fits with prefix
+        $this->assertEquals('payment: foo', PaymentRequestService::composeApprovalDescription('foo', null));
+
+        // 3) Both present, all three pieces fit with prefix
+        $this->assertEquals('payment: dinner | tip', PaymentRequestService::composeApprovalDescription('dinner', 'tip'));
+
+        // 4) Both present, fits only when prefix is dropped
+        $req = str_repeat('a', 250);
+        $this->assertEquals($req . ' | xx', PaymentRequestService::composeApprovalDescription($req, 'xx'));
+    }
+
     // =========================================================================
     // decline()
     // =========================================================================

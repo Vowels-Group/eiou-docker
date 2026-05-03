@@ -23,6 +23,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
@@ -972,6 +973,126 @@ class MessageServiceTest extends TestCase
         $this->expectOutputRegex('/Contact description received/');
 
         $this->service->handleMessageRequest($request);
+    }
+
+    // =========================================================================
+    // handleContactMessageRequest() — `status === 'declined'` branch
+    //
+    // Covers the decline-notification handler added to support
+    // contact_currency_declined / contact_declined messages. Without
+    // these, the requester's outgoing-pending row hangs forever after
+    // the peer declines and any retry trips CONTACT_EXISTS.
+    // =========================================================================
+
+    /**
+     * Currency-scoped decline arrives → drop the requester's stale
+     * outgoing-pending row + reject the contact transaction. Use
+     * reflection to inject the (otherwise factory-only)
+     * contactCurrencyRepository — production wires it via
+     * RepositoryFactory at construction time, but the unit-test
+     * scaffold passes neither.
+     */
+    public function testHandleContactMessageRequestDeclinedWithCurrencyDropsOutgoingPending(): void
+    {
+        $currencyRepo = $this->createMock(ContactCurrencyRepository::class);
+        $ref = new \ReflectionClass($this->service);
+        $prop = $ref->getProperty('contactCurrencyRepository');
+        $prop->setAccessible(true);
+        $prop->setValue($this->service, $currencyRepo);
+
+        // checkMessageValidity gates the typed handler; the simplest
+        // way past it for this test is for the sender to be a known
+        // contact (which mirrors the "Bob is already accepted" case
+        // that the per-currency decline addresses).
+        $this->contactRepository->method('contactExistsPubkey')->willReturn(true);
+
+        $senderPubkey = self::TEST_PUBLIC_KEY;
+        $expectedHash = hash('sha256', $senderPubkey);
+
+        // Per-currency: only the named currency is dropped on the
+        // requester's side. Whole-DB scan path must NOT fire.
+        $currencyRepo->expects($this->once())
+            ->method('deletePendingOutgoingCurrency')
+            ->with($expectedHash, 'EUR')
+            ->willReturn(true);
+        $currencyRepo->expects($this->never())
+            ->method('getPendingCurrencies');
+
+        $this->transactionContactRepository->expects($this->once())
+            ->method('rejectSentContactTransaction')
+            ->with($senderPubkey, 'EUR')
+            ->willReturn(true);
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://us.example.com');
+
+        $request = [
+            'typeMessage' => 'contact',
+            'status' => 'declined',
+            'currency' => 'EUR',
+            'senderAddress' => 'http://them.example.com',
+            'senderPublicKey' => $senderPubkey,
+        ];
+
+        ob_start();
+        $this->service->handleMessageRequest($request);
+        $output = ob_get_clean();
+
+        $body = json_decode($output, true);
+        $this->assertIsArray($body);
+        $this->assertEquals(Constants::DELIVERY_RECEIVED, $body['status']);
+    }
+
+    /**
+     * Whole-contact decline (no currency field) → fan out across every
+     * currently-outgoing-pending currency for the peer; reject each
+     * contact transaction. The currency-scoped DELETE branch must NOT
+     * fire.
+     */
+    public function testHandleContactMessageRequestDeclinedWithoutCurrencyClearsAllOutgoingPending(): void
+    {
+        $currencyRepo = $this->createMock(ContactCurrencyRepository::class);
+        $ref = new \ReflectionClass($this->service);
+        $prop = $ref->getProperty('contactCurrencyRepository');
+        $prop->setAccessible(true);
+        $prop->setValue($this->service, $currencyRepo);
+
+        $this->contactRepository->method('contactExistsPubkey')->willReturn(true);
+
+        $senderPubkey = self::TEST_PUBLIC_KEY;
+        $expectedHash = hash('sha256', $senderPubkey);
+
+        $currencyRepo->expects($this->once())
+            ->method('getPendingCurrencies')
+            ->with($expectedHash, 'outgoing')
+            ->willReturn([
+                ['currency' => 'EUR'],
+                ['currency' => 'USD'],
+            ]);
+
+        $currencyRepo->expects($this->exactly(2))
+            ->method('deletePendingOutgoingCurrency');
+
+        $this->transactionContactRepository->expects($this->exactly(2))
+            ->method('rejectSentContactTransaction');
+
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://us.example.com');
+
+        $request = [
+            'typeMessage' => 'contact',
+            'status' => 'declined',
+            // currency intentionally omitted — whole-contact decline
+            'senderAddress' => 'http://them.example.com',
+            'senderPublicKey' => $senderPubkey,
+        ];
+
+        ob_start();
+        $this->service->handleMessageRequest($request);
+        $output = ob_get_clean();
+
+        $body = json_decode($output, true);
+        $this->assertEquals(Constants::DELIVERY_RECEIVED, $body['status']);
     }
 
 }

@@ -21,12 +21,23 @@ class FunctionsTest extends TestCase
 
     /**
      * Test contact actions are correctly identified
+     *
+     * Smoke list of the contact-controller routes that Functions.php
+     * dispatches. Update this list whenever a new contact action is added
+     * to the whitelist so a quick `grep` of the test reflects the real
+     * surface. The new bulk-decline action `declineContact` mirrors
+     * `eiou contact decline <hash>` and `POST /api/v1/contacts/:hash/decline`.
      */
     public function testContactActionsAreCorrectlyIdentified(): void
     {
         $contactActions = [
             'addContact',
             'acceptContact',
+            'acceptCurrency',
+            'acceptAllCurrencies',
+            'applyContactDecisions',
+            'declineCurrency',
+            'declineContact',
             'deleteContact',
             'blockContact',
             'unblockContact',
@@ -34,8 +45,11 @@ class FunctionsTest extends TestCase
         ];
 
         $testAction = 'addContact';
-
         $this->assertContains($testAction, $contactActions);
+        // Pin the new bulk-decline action so the rework doesn't silently
+        // regress this list.
+        $this->assertContains('declineContact', $contactActions);
+        $this->assertContains('applyContactDecisions', $contactActions);
     }
 
     /**

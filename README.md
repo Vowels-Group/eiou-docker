@@ -20,6 +20,8 @@ Run an eIOU node with a single `docker compose` command. The container includes 
 - **Multi-Transport** — HTTP, HTTPS, and Tor (.onion) with automatic failover and Tor circuit health tracking
 - **REST API** — full API with HMAC-SHA256 authentication
 - **CLI Interface** — complete command-line management via `eiou` commands
+- **Plugin System** — extend the wallet with optional add-ons that contribute GUI sections, CLI subcommands, REST endpoints, payback-method rail types, and event subscribers. Per-plugin MySQL user with manifest-declared owned tables; Ed25519 signature verification with a two-layer trusted-keys model; plugins are disabled by default. See [docs/PLUGINS.md](docs/PLUGINS.md)
+- **Payback Methods** — declare the settlement rails you accept for debts owed to you. Core ships `bank_wire` (SEPA / Faster Payments / ACH / FedNow / SWIFT with checksum validation) and `custom` free-text instructions; plugins add Bitcoin, PayPal, Lightning, etc. Per-row AES-256-GCM encrypted; reveal requires authcode re-prompt
 - **Data-at-Rest Encryption** — MariaDB Transparent Data Encryption (TDE) encrypts all database files automatically. Optional volume passphrase (`EIOU_VOLUME_KEY_FILE`) encrypts the master key itself so the host cannot read it
 - **Encrypted Backups** — automatic daily database backups encrypted with AES-256-GCM
 - **Deterministic Key Recovery** — all cryptographic material (wallet keys, Tor identity, encryption master key) derived from BIP39 seed phrase
@@ -66,10 +68,10 @@ docker compose logs -f
 # Execute CLI commands inside the container
 docker exec eiou-node eiou info              # Node address, Tor address, public key
 docker exec eiou-node eiou info detail       # Detailed info including balances
-docker exec eiou-node eiou search             # List contacts
+docker exec eiou-node eiou contact search    # List contacts
 
 # Add a contact (address is the other node's HTTP/HTTPS/Tor URL)
-docker exec eiou-node eiou add <address> <name> <fee> <credit> <currency>
+docker exec eiou-node eiou contact add <address> <name> --fee <fee> --credit <credit> --currency <currency>
 
 # Send a transaction (by contact name or address)
 docker exec eiou-node eiou send <contact-name-or-address> <amount> <currency>
@@ -197,7 +199,7 @@ Increase these for WSL2 or resource-constrained environments.
 | `EIOU_TOR_FORCE_FAST` | `true` | Force fast mode (first response wins) for Tor routes. Set to `false` to allow best-fee mode over Tor |
 | `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | Randomize P2P hop budget with geometric distribution. Set to `false` for deterministic routing depth |
 | `EIOU_UPDATE_CHECK_ENABLED` | `true` | Check Docker Hub daily for newer image versions. Set to `false` to disable |
-| `EIOU_ANALYTICS_ENABLED` | `false` | Opt-in anonymous usage statistics sent weekly. See [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) |
+| `EIOU_ANALYTICS_ENABLED` | `false` | Opt-in anonymous usage statistics, rolled up daily by a cron job (not real-time, not per-event). See [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) |
 | `EIOU_AUTO_ACCEPT_RESTORED_CONTACT` | `true` | Auto-accept restored contacts when transaction history proves prior relationship |
 | `EIOU_VOLUME_KEY_FILE` | *(none)* | Path to file containing volume encryption passphrase. Encrypts the master key at rest so the host cannot read it from the Docker volume |
 | `APP_DEBUG` | `true` | Enable debug logging to database (visible in GUI Debug panel). Set to `false` for production |
@@ -214,6 +216,7 @@ These named volumes persist your data across container restarts and rebuilds. Vo
 | `{NODE_NAME}-mysql-data` | `/var/lib/mysql` | Transaction history, contacts, balances | **Critical** |
 | `{NODE_NAME}-config` | `/etc/eiou/config` | Wallet private keys, encryption keys, configuration | **Critical** |
 | `{NODE_NAME}-backups` | `/var/lib/eiou/backups` | Encrypted database backups (AES-256-GCM) | **Critical** |
+| `{NODE_NAME}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins are seeded from the image on first boot; operator-installed ones live only here | Important |
 | `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if you will never use Let's Encrypt | Low |
 
 To completely reset and start fresh: `docker compose down -v`
@@ -234,8 +237,8 @@ The default configuration allocates:
 
 | Resource | Limit | Reservation |
 |----------|-------|-------------|
-| CPU | 1.0 core | — |
-| Memory | 512 MB | 256 MB |
+| CPU | 2.0 cores | — |
+| Memory | 1024 MB | 512 MB |
 
 Adjust in the `deploy.resources` section of `docker-compose.yml` if needed.
 
@@ -377,9 +380,17 @@ To run multiple nodes, duplicate the service block in `docker-compose.yml` with 
 # Unit tests (PHPUnit)
 cd files && composer test
 
-# Integration tests
-cd tests && ./run-all-tests.sh http4
+# Integration tests — usage: ./run-all-tests.sh <build_name> [mode] [subset]
+cd tests && ./run-all-tests.sh http4              # 4-node line over HTTP, all tests
+cd tests && ./run-all-tests.sh http4 https        # same topology over HTTPS
+cd tests && ./run-all-tests.sh http4 tor          # same topology over Tor (.onion)
+cd tests && ./run-all-tests.sh http4 http quick   # quick subset only
+cd tests && ./run-all-tests.sh collisions http bestfee  # best-fee routing on collisions topology
 ```
+
+Builds: `http4`, `http10`, `http13`, `collisions`, `collisionscluster`.
+Modes: `http` (default), `https`, `tor`.
+Subsets: `all` (default), `quick`, `contacts`, `transactions`, `messaging`, `api`, `sync`, `connections`, `system`, `performance`, `mutual`, `bestfee`.
 
 See [Testing Guide](docs/TESTING.md) for details.
 
@@ -399,6 +410,7 @@ See [Testing Guide](docs/TESTING.md) for details.
 | [CLI Demo Guide](docs/CLI_DEMO_GUIDE.md) | Step-by-step CLI command walkthrough |
 | [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
 | [Testing Guide](docs/TESTING.md) | Unit and integration testing documentation |
+| [Plugins](docs/PLUGINS.md) | Authoring plugins, manifest schema, lifecycle, GUI management |
 | [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
 | [Anonymous Analytics](docs/ANONYMOUS_ANALYTICS.md) | What data is sent, privacy guarantees, how to toggle |
 | [Security Policy](SECURITY.md) | Security architecture, vulnerability reporting, and best practices |

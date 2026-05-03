@@ -354,6 +354,16 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
             $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
         }
 
+        // Lock the delivery record against processRetryQueue for the duration of the
+        // single-shot attempt. createDelivery() leaves next_retry_at = NULL, which
+        // processRetryQueue immediately treats as eligible — so without this lock a
+        // concurrent cleanup worker can claim the record, re-sign with a fresh nonce,
+        // and deliver in parallel with the caller's send. Observed in contact-create:
+        // produced two distinct signed envelopes at the receiver and a chained tx pair
+        // on the receiver side where the sender only has one local tx.
+        // Mirrors the lock call in sendWithTracking() which had this fix first.
+        $this->deliveryRepository->lockForProcessing($messageType, $messageId);
+
         // Perform single delivery attempt (non-blocking)
         return $this->attemptSingleDelivery(
             $messageType,

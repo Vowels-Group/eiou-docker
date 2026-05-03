@@ -11,6 +11,7 @@ namespace Eiou\Tests\Services;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Eiou\Core\AppConfig;
 use Eiou\Services\CliSettingsService;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\UserContext;
@@ -26,7 +27,7 @@ class CliSettingsServiceResetTest extends TestCase
         // via UserContext::getInstance(), not via the constructor-injected
         // one, so the specific mock here doesn't matter for these tests.
         $userContext = $this->createMock(UserContext::class);
-        $this->service = new CliSettingsService($userContext);
+        $this->service = new CliSettingsService($userContext, AppConfig::fromEnvironment());
     }
 
     /**

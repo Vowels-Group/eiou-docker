@@ -1,31 +1,9 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!-- Contacts Section -->
-<div id="contacts" class="contacts-section fade-in-up">
-    <div class="section-header">
-        <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
-        <button type="button" class="btn btn-success btn-nowrap" data-action="openAddContactModal"><i class="fas fa-user-plus"></i> New Contact</button>
-    </div>
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>About Your Contacts</span>
-        </summary>
-        <div class="section-intro-body">
-            Every peer this wallet knows about — accepted contacts you can transact
-            with, pending requests in either direction, and blocked parties. Search
-            by name or address, filter by status, chain state, or online state, or
-            click any row to open the contact detail.
-            <br><br>
-            <small>
-                <strong>Subnote on restored contacts.</strong>
-                <code>RestoredContact&lt;N&gt;</code> names are auto-assigned when a
-                contact reappears after deletion or when this node is re-seeded (the
-                number is just restore order, not an ID). Rename them anytime by
-                opening the contact and editing the Name field.
-            </small>
-        </div>
-    </details>
+<?php
+ob_start();
+?>
     <?php if (!empty($allContacts)): ?>
     <div class="contacts-search-bar mb-lg">
         <div class="search-icon-wrapper">
@@ -163,7 +141,35 @@
     <!-- Paginator controls — populated by Paginator.create('contacts', …) -->
     <div id="contacts-paginator" class="paginator-container"></div>
     <?php endif; ?>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'contacts',
+    'class' => 'contacts-section fade-in-up',
+    'icon'  => 'fas fa-address-book',
+    'title' => 'Your Contacts',
+    'headerExtras' =>
+          '<button type="button" class="btn btn-success btn-nowrap" data-action="openAddContactModal">'
+        . '<i class="fas fa-user-plus"></i> New Contact'
+        . '</button>',
+    'introTitle' => 'About Your Contacts',
+    'intro' =>
+          'Every peer this wallet knows about — accepted contacts you can transact '
+        . 'with, pending requests in either direction, and blocked parties. Search '
+        . 'by name or address, filter by status, chain state, or online state, or '
+        . 'click any row to open the contact detail.'
+        . '<br><br>'
+        . '<small>'
+        . '<strong>Subnote on restored contacts.</strong> '
+        . '<code>RestoredContact&lt;N&gt;</code> names are auto-assigned when a '
+        . 'contact reappears after deletion or when this node is re-seeded (the '
+        . 'number is just restore order, not an ID). Rename them anytime by '
+        . 'opening the contact and editing the Name field.'
+        . '</small>',
+    'body' => $body,
+]);
+?>
 
 <!-- Contact Modal (Tabbed Interface) -->
 <div id="contactModal" class="modal d-none">
@@ -184,16 +190,65 @@
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="transactions-tab">
                 <i class="fas fa-exchange-alt"></i> Transactions
             </button>
+            <button type="button" class="modal-tab" id="modal-tab-payback" data-action="showContactPaybackTab" data-tab="payback-tab">
+                <i class="fas fa-hand-holding-usd"></i> Payback
+            </button>
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="status-tab">
                 <i class="fas fa-signal"></i> Status
             </button>
             <button type="button" class="modal-tab" data-action="showModalTab" data-tab="settings-tab">
                 <i class="fas fa-cog"></i> Settings
             </button>
+            <?php
+            // gui.contact_modal.tabs — plugins return an array of
+            // {id, label, icon} entries that render as additional
+            // modal-tab buttons. The corresponding tab content is
+            // emitted via gui.contact_modal.body below; pairing the
+            // two on a shared id is the plugin author's contract.
+            // See docs/PLUGIN_GUI_HOOKS.md.
+            $contactModalTabs = $hooks->applyFilter('gui.contact_modal.tabs', [], ['user' => $user]);
+            if (is_array($contactModalTabs)) {
+                foreach ($contactModalTabs as $mt) {
+                    if (!is_array($mt) || empty($mt['id']) || empty($mt['label'])) continue;
+                    $mtId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$mt['id']);
+                    if ($mtId === '') continue;
+                    $mtIcon = isset($mt['icon']) && is_string($mt['icon']) ? $mt['icon'] : 'fas fa-puzzle-piece';
+                    ?>
+                    <button type="button" class="modal-tab" data-action="showModalTab" data-tab="<?= htmlspecialchars($mtId) ?>-tab">
+                        <i class="<?= htmlspecialchars($mtIcon) ?>"></i> <?= htmlspecialchars((string)$mt['label']) ?>
+                    </button>
+                    <?php
+                }
+            }
+            ?>
         </div>
 
         <!-- Info Tab -->
         <div id="info-tab" class="modal-tab-content active">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About this contact's Info</span>
+                </summary>
+                <div class="section-intro-body">
+                    <strong>Balance</strong> is the net of every completed transaction with this contact
+                    in the selected currency. Positive means they owe you; negative means you owe them.
+                    <br><br>
+                    <strong>Your / Their Available Credit</strong> show how much either of you can still
+                    spend with the other before bumping into the credit limit. These update on every
+                    transaction plus a periodic background refresh.
+                    <br><br>
+                    <strong>Their Credit Limit</strong> is the maximum you're willing to let this
+                    contact owe you &mdash; set it from the Settings tab of this modal. Their Relay Fee
+                    is the percentage this contact charges you when routing your transactions through
+                    their node in a multi-hop payment.
+                    <br><br>
+                    <strong>Address</strong> shows how your wallet reaches theirs &mdash; a Tor .onion
+                    (private), an HTTPS host, or an HTTP host. A contact can have more than one; your
+                    wallet tries the most secure first.
+                </div>
+            </details>
+
             <!-- Currency Slider (shown for multi-currency contacts) -->
             <div id="currency-selector-section" class="contact-info-section" style="display: none;">
                 <h4><i class="fas fa-coins"></i> Currency</h4>
@@ -286,6 +341,25 @@
         <!-- Transactions Tab -->
         <div id="transactions-tab" class="modal-tab-content">
             <div class="modal-tab-scroll">
+                <details class="section-intro text-muted">
+                    <summary>
+                        <i class="fas fa-info-circle"></i>
+                        <span>About Transactions</span>
+                    </summary>
+                    <div class="section-intro-body">
+                        Every money-movement between your node and this contact, in reverse
+                        chronological order &mdash; sent, received, and any relayed transactions
+                        that hopped through either side. The status icon on the left shows whether
+                        a transaction is pending, in-flight, completed, or failed; click any row
+                        to open the full transaction-details modal (txid, signatures, previous-txid
+                        chain link, and so on).
+                        <br><br>
+                        Only the <strong>last <?php echo $maxDisplayLines; ?></strong> transactions
+                        load by default to keep the modal snappy. Refresh pulls the latest from the
+                        database &mdash; helpful right after you've sent or received, or after a
+                        chain sync finished in the background.
+                    </div>
+                </details>
                 <div class="tx-tab-header">
                     <p>
                         <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
@@ -300,10 +374,69 @@
             </div>
         </div>
 
+        <!-- Payback Tab -->
+        <div id="payback-tab" class="modal-tab-content">
+            <div class="modal-tab-scroll">
+                <details class="section-intro text-muted">
+                    <summary>
+                        <i class="fas fa-info-circle"></i>
+                        <span>About the Payback tab</span>
+                    </summary>
+                    <div class="section-intro-body">
+                        This tab lists the ways <strong id="payback-contact-name-info">this contact</strong>
+                        will accept settlement of debts you owe them &mdash; bank account, PayPal,
+                        Bitcoin address, and so on. The list is <strong>fetched live</strong> from their
+                        node every time you open the tab; nothing is cached or stored on this device,
+                        so the information is always as fresh as what they're currently sharing.
+                        <br><br>
+                        Tap any row to see the full details with copy-to-clipboard buttons for each
+                        field. Use the currency selector to filter to a specific currency when the
+                        contact shares methods in more than one &mdash; changing the filter refetches
+                        automatically. To pull a completely fresh copy at any time, close and reopen
+                        this tab.
+                        <br><br>
+                        If the tab says the contact is not sharing anything, it means either they
+                        haven't added any payback methods yet or they've chosen not to share them
+                        with you &mdash; each method has a share policy (share automatically or
+                        never share).
+                    </div>
+                </details>
+                <div class="payback-options-controls">
+                    <select id="payback-options-currency" class="form-control form-control-sm"></select>
+                </div>
+                <div id="payback-options-state" class="text-muted" style="padding: 0.25rem 0 0.5rem; font-size: 0.85rem;"></div>
+                <div id="payback-options-list">
+                    <p class="no-transactions">Opening this tab fetches methods live from the contact. This might take a moment&hellip;</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Settings Tab -->
 
         <!-- Status Tab -->
         <div id="status-tab" class="modal-tab-content">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About Status</span>
+                </summary>
+                <div class="section-intro-body">
+                    <strong>Online</strong> means your wallet successfully pinged theirs within the
+                    last few minutes. <strong>Offline</strong> usually just means their node isn't
+                    reachable right now (asleep, offline, Tor circuit issue) &mdash; it does not
+                    mean the contact is deleted or blocked, just unreachable.
+                    <br><br>
+                    <strong>Chain</strong> reports the integrity of your shared transaction history.
+                    A checkmark means your two chains agree &mdash; every transaction your side has
+                    links correctly to theirs. A warning means there's a gap or mismatch that needs
+                    to be reconciled.
+                    <br><br>
+                    <strong>Check Status</strong> forces a fresh ping and a chain sanity check. If
+                    the chain shows a gap, try this first &mdash; it often clears up stale state from
+                    a dropped connection. If the gap persists, the contact is out of sync and the
+                    chain-drop workflow below guides you through resolving it.
+                </div>
+            </details>
             <div class="contact-info-section">
                 <h4><i class="fas fa-signal"></i> Connection Status</h4>
                 <!-- Online + Chain badges and the Check Status button share
@@ -426,6 +559,37 @@
         </div>
 
         <div id="settings-tab" class="modal-tab-content">
+                <details class="section-intro text-muted">
+                    <summary>
+                        <i class="fas fa-info-circle"></i>
+                        <span>About Settings</span>
+                    </summary>
+                    <div class="section-intro-body">
+                        <strong>Name</strong> is how this contact appears in your wallet &mdash; only
+                        you see it, changing it doesn't notify the other side.
+                        <br><br>
+                        <strong>Credit limit</strong> is the maximum amount you're willing to let
+                        this contact owe you in the selected currency. Lowering it below what they
+                        currently owe is allowed &mdash; it just means they can't accrue more until
+                        they've paid back below the new ceiling.
+                        <br><br>
+                        <strong>Fee</strong> is the percentage you charge them when routing their
+                        multi-hop transactions through your node. Keep it small or zero for trusted
+                        contacts; raise it if you're a busy relay node.
+                        <br><br>
+                        <strong>Block</strong> stops all new transactions with this contact, hides
+                        them from your contact list, and rejects any future contact requests
+                        from them. Existing transactions are not touched.
+                        <br><br>
+                        <strong>Delete</strong> removes the contact's local row. If you've ever
+                        transacted with them, the other side's contact-status ping will detect
+                        the mismatch and re-add them as a pending contact request the next
+                        cycle &mdash; so for an established contact, delete on its own doesn't
+                        really keep them out. If your goal is to actually keep them away, use
+                        <strong>Block</strong> instead. Existing transactions on both chains
+                        stay either way.
+                    </div>
+                </details>
                 <form method="POST" id="editContactForm">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="editContact">
@@ -483,8 +647,53 @@
                     <button type="submit" form="editContactForm" class="btn btn-primary">
                         <i class="fas fa-save"></i> Save
                     </button>
+                    <?php
+                    // gui.contact.actions — plugins return an array of
+                    // {label, icon, action} entries that render as
+                    // additional buttons in the contact settings tab.
+                    // The `action` value is posted as the form's
+                    // action= field, so it must be a name that the
+                    // GuiActionRegistry has registered (Phase 4).
+                    // See docs/PLUGIN_GUI_HOOKS.md.
+                    $contactActions = $hooks->applyFilter('gui.contact.actions', [], ['user' => $user]);
+                    if (is_array($contactActions)) {
+                        foreach ($contactActions as $a) {
+                            if (!is_array($a) || empty($a['label']) || empty($a['action'])) continue;
+                            $aIcon = isset($a['icon']) && is_string($a['icon']) ? $a['icon'] : 'fas fa-bolt';
+                            ?>
+                            <form method="POST" class="plugin-contact-action">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                                <input type="hidden" name="action" value="<?= htmlspecialchars((string)$a['action']) ?>">
+                                <input type="hidden" name="contact_address" class="plugin-contact-action-address">
+                                <button type="submit" class="btn btn-secondary">
+                                    <i class="<?= htmlspecialchars($aIcon) ?>"></i> <?= htmlspecialchars((string)$a['label']) ?>
+                                </button>
+                            </form>
+                            <?php
+                        }
+                    }
+                    ?>
                 </div>
         </div>
+        <?php
+        // gui.contact_modal.body — plugins render the panel body
+        // matching each tab they declared in gui.contact_modal.tabs.
+        // Each entry is {id, html}; the panel id must match the
+        // tab id (with `-tab` suffix added by showModalTab).
+        $contactModalBodies = $hooks->applyFilter('gui.contact_modal.body', [], ['user' => $user]);
+        if (is_array($contactModalBodies)) {
+            foreach ($contactModalBodies as $body) {
+                if (!is_array($body) || empty($body['id']) || empty($body['html'])) continue;
+                $bId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$body['id']);
+                if ($bId === '') continue;
+                ?>
+                <div id="<?= htmlspecialchars($bId) ?>-tab" class="modal-tab-content">
+                    <?= (string)$body['html'] ?>
+                </div>
+                <?php
+            }
+        }
+        ?>
     </div>
 </div>
 
@@ -497,34 +706,9 @@
      in Settings → Advanced → Display and the section hides when
      there's nothing pending. -->
 <?php if (!$user->getHideEmptyGuiSections() || !empty($pendingContacts)): ?>
-<div id="pending-contacts" class="contacts-section fade-in-up">
-    <div class="section-header">
-        <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
-    </div>
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>About Pending Contact Requests</span>
-        </summary>
-        <div class="section-intro-body">
-            Incoming requests from other wallets that want to connect with you.
-            Accepting creates a bilateral contact record (and adds any currencies
-            they use if they aren't already in your <strong>Allowed Currencies</strong>
-            list). Rejecting silently drops the request — the other side isn't told.
-            Outgoing requests you've sent that are still waiting on the other party
-            also live here until they respond.
-            <br><br>
-            <small>
-                <strong>Subnote on currencies.</strong>
-                If a request carries a currency outside your Allowed Currencies list,
-                you'll see an explicit per-currency accept toggle so you can pick
-                which to allow rather than accepting everything blindly. The default
-                behaviour (accept what the contact offers) can be changed under
-                Settings → Feature Toggles → Contacts → <em>Auto-reject Unknown
-                Currency</em>.
-            </small>
-        </div>
-    </details>
+<?php
+ob_start();
+?>
 <?php if (empty($pendingContacts)): ?>
     <!-- Big empty-state panel matching the Payment Requests / Your
          Contacts / Recent Transactions style, so empty states feel
@@ -654,7 +838,7 @@
             // line-1233 re-add in Functions.php).
             $isExistingHeader = ($contact['status'] ?? '') === 'accepted' || !empty($contact['is_existing_contact']);
         ?>
-        <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal>
+        <div id="pending-contact-modal-<?php echo $index; ?>" class="modal d-none" data-pending-contact-modal data-pubkey-hash="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
             <div class="modal-content modal-content-md">
                 <div class="modal-header">
                     <div class="modal-header-content">
@@ -689,72 +873,52 @@
                 </div>
                 <div class="modal-body modal-body-padded">
 
-            <!-- Inline help — collapsed by default; mirrors the
-                 "About …" disclosures used on the contacts & pending
-                 list sections. Explains the flow for first-timers
-                 without eating vertical space for returning users. -->
+            <!-- Inline help — collapsed by default; first-timers can
+                 expand it without eating vertical space for returning
+                 users. Lives at the top so the explanation precedes
+                 the action area. -->
             <details class="section-intro text-muted mb-lg">
                 <summary>
                     <i class="fas fa-info-circle"></i>
                     <span>How to handle this request</span>
                 </summary>
                 <div class="section-intro-body">
-                    <strong>Their addresses</strong> — the three pills up top
-                    (<em>Tor</em>, <em>HTTPS</em>, <em>HTTP</em>) are how your
-                    wallet reaches theirs. Click a pill to view the full address.
-                    Whichever of the three you've configured your wallet to prefer
-                    (Settings → Network → <em>Default Transport Mode</em>) is the
-                    one that'll be used for outgoing traffic.
+                    <strong>Their addresses</strong> — the three pills in the
+                    "About this contact" section below (<em>Tor</em>,
+                    <em>HTTPS</em>, <em>HTTP</em>) are how your wallet reaches
+                    theirs. Click a pill to view the full address. Whichever
+                    of the three you've configured your wallet to prefer
+                    (Settings → Network → <em>Default Transport Mode</em>) is
+                    the one that'll be used for outgoing traffic.
                     <br><br>
                     <strong>Contact name</strong> — a local-only nickname for your
                     wallet. The other side never sees it. Rename them anytime from
                     the contact detail modal.
                     <br><br>
                     <strong>Each currency is a separate line of credit.</strong>
-                    Click the row to set the <em>Fee %</em> (what you charge to
-                    relay their transactions in that currency) and <em>Credit
-                    Limit</em> (the maximum you're willing to let them owe you in
-                    that currency). If you don't touch them, your wallet defaults
-                    apply (Settings → Payments → <em>Default Fee</em> and
-                    <em>Default Credit Limit</em>). A currency marked
+                    For each one, choose <em>Accept</em>, <em>Decline</em>, or
+                    <em>Defer</em>. <em>Accept</em> opens the line at the fee +
+                    credit you set (your wallet defaults are pre-filled). The
+                    <em>Fee %</em> is what you charge to relay their transactions
+                    in that currency; the <em>Credit Limit</em> is the maximum
+                    you're willing to let them owe you. <em>Decline</em>
+                    silently removes that currency from the pending list — they
+                    can re-request later. <em>Defer</em> leaves it pending so
+                    you can decide later. A currency marked
                     <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> new</span>
                     is not in your <em>Allowed Currencies</em> yet — accepting
                     will add it.
                     <br><br>
-                    <strong>Accept All</strong> takes every currency at once with
-                    whatever fee + credit you've set (or the defaults). If any are
-                    still at defaults you'll get a confirmation first.
-                    <strong>Delete Request</strong> silently drops the request —
-                    the other side isn't told. <strong>Block Contact</strong>
-                    prevents future requests from them.
+                    <strong>Apply</strong> commits all your decisions in one go.
+                    <strong>Delete Request</strong> silently drops the local
+                    record (the other side isn't told). For a brand-new request
+                    with no prior tx history this is enough; for an established
+                    contact you've previously transacted with, their contact-
+                    status ping will detect the mismatch and re-add the row as
+                    a pending request next cycle. <strong>Block Contact</strong>
+                    is the durable choice: it rejects future requests from them
+                    and prevents the ping from re-creating the row.
                 </div>
-            </details>
-
-            <!-- Addresses compacted to an icon row. Click opens a small
-                 info modal with the full address (see showInfoModal in
-                 script.js) — so touch users and anyone who wants to read
-                 it first get the full value, rather than the old click-
-                 to-copy that happened before they could verify what they
-                 were about to paste. -->
-            <div class="pending-addresses-compact mb-lg">
-                <?php foreach (getOrderedAddressSchemaTypes() as $_pillType):
-                    if (empty($contact[$_pillType])) continue;
-                    $_pillDisplay = \Eiou\Core\Constants::getAddressTypeDisplay($_pillType);
-                ?>
-                    <button type="button" class="pending-addr-icon address-<?php echo htmlspecialchars($_pillType); ?>"
-                            data-action="showInfoModal"
-                            title="<?php echo htmlspecialchars($_pillDisplay['label']); ?> address: <?php echo htmlspecialchars($contact[$_pillType]); ?>">
-                        <i class="fas <?php echo htmlspecialchars($_pillDisplay['icon']); ?>"></i>
-                        <span class="pending-addr-label"><?php echo htmlspecialchars($_pillDisplay['label']); ?></span>
-                    </button>
-                <?php endforeach; ?>
-            </div>
-
-            <!-- Public key collapsed — users rarely verify it at
-                 accept-time; keeping it inline blew out the modal. -->
-            <details class="pending-pubkey-disclosure mb-lg">
-                <summary><i class="fas fa-key"></i> Public key</summary>
-                <div class="pubkey-display monospace"><?php echo htmlspecialchars(trim($contact['pubkey'])); ?></div>
             </details>
 
             <!-- Outgoing currency requests (we sent, waiting for their acceptance) -->
@@ -799,130 +963,127 @@
                                    role="button"
                                    aria-label="About contact name"></i>
                             </label>
-                            <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter a nickname only you will see" required class="shared-name-input">
+                            <input type="text" id="contact_name_shared_<?php echo $index; ?>" placeholder="Enter a nickname" required class="shared-name-input">
                         </div>
                     </div>
                     <?php endif; ?>
 
-                    <!-- Per-currency accept forms — each in its own
-                         <details> accordion so the modal stays compact
-                         when there are many currencies. Summary row shows
-                         the currency code + optional unknown-currency
-                         flag; expanding reveals fee / credit / message /
-                         Accept. All start collapsed — user picks what to
-                         review. Accept-All is the single-click path for
-                         defaults; individual review expands on demand. -->
-                    <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
-                    <?php
-                        $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
-                        $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
-                        $curUnknownModal = !in_array($pc['currency'], $user->getAllowedCurrencies());
-                    ?>
-                    <details class="pending-currency-accordion">
-                        <summary class="pending-currency-summary">
-                            <span class="pending-currency-code"><?php echo htmlspecialchars($pc['currency']); ?></span>
-                            <?php if ($curUnknownModal): ?>
-                                <span class="badge badge-warning" title="Not in your allowed currencies — accepting will add it">
-                                    <i class="fas fa-exclamation-triangle"></i> new
-                                </span>
-                            <?php endif; ?>
-                            <?php if (!empty($pc['description'])): ?>
-                                <span class="pending-currency-summary-msg text-muted">
-                                    — <?php echo htmlspecialchars(mb_strlen($pc['description']) > 50 ? mb_substr($pc['description'], 0, 47) . '…' : $pc['description']); ?>
-                                </span>
-                            <?php endif; ?>
-                        </summary>
-                        <div class="pending-currency-body">
-                            <?php if ($curUnknownModal): ?>
-                            <div class="alert alert-warning mb-sm">
-                                <i class="fas fa-exclamation-triangle"></i> <strong><?php echo htmlspecialchars($pc['currency']); ?></strong> is not in your allowed currencies. Accepting will automatically add it.
-                            </div>
-                            <?php endif; ?>
-                            <form method="POST" class="mb-sm currency-accept-form" data-shared-name-id="contact_name_shared_<?php echo $index; ?>">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                                <?php if ($isExisting): ?>
-                                    <input type="hidden" name="action" value="acceptCurrency">
-                                    <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
-                                    <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                                <?php else: ?>
-                                    <input type="hidden" name="action" value="acceptContact">
-                                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                                    <?php if ($hasName): ?>
-                                        <input type="hidden" name="contact_name" value="<?php echo htmlspecialchars($contact['name']); ?>">
-                                    <?php endif; ?>
-                                    <?php if (!$hasName): ?>
-                                        <input type="hidden" name="contact_name" class="shared-name-target" value="">
-                                    <?php endif; ?>
-                                    <input type="hidden" name="contact_currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                                <?php endif; ?>
+                    <!-- Batched-decision form. Each currency row is a
+                         segmented control (Accept / Decline / Defer) +
+                         hidden fee/credit fields. A single Apply button
+                         at the bottom serializes every row's decision
+                         into the `decisions` JSON payload and submits
+                         to applyContactDecisions. Defer rows are
+                         intentionally omitted from the payload — they
+                         stay pending. -->
+                    <form method="POST" class="apply-decisions-form"
+                          data-contact-index="<?php echo $index; ?>"
+                          data-default-fee="<?php echo htmlspecialchars($user->getDefaultFee()); ?>"
+                          data-default-credit="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>"
+                          data-shared-name-id="contact_name_shared_<?php echo $index; ?>"
+                          data-is-new-contact="<?php echo $isExisting ? '0' : '1'; ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                        <input type="hidden" name="action" value="applyContactDecisions">
+                        <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
+                        <?php if (!$isExisting): ?>
+                            <input type="hidden" name="is_new_contact" value="1">
+                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
+                            <input type="hidden" name="contact_name" class="apply-decisions-name-target" value="<?php echo htmlspecialchars($contact['name'] ?? ''); ?>">
+                        <?php endif; ?>
+                        <input type="hidden" name="decisions" class="apply-decisions-data" value="">
 
-                                <div class="form-row currency-form-row">
-                                    <div class="form-group">
-                                        <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">Fee (%):</label>
-                                        <input type="number" id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'fee' : 'contact_fee'; ?>" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" required class="default-value">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>"><?php echo $hasRequestedCredit ? 'Requested Credit Limit:' : 'Credit Limit:'; ?></label>
-                                        <input type="number" id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>" name="<?php echo $isExisting ? 'credit' : 'contact_credit'; ?>" value="<?php echo htmlspecialchars($creditValue); ?>" min="0" required class="<?php echo $hasRequestedCredit ? '' : 'default-value'; ?>">
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="currency-accept-spacer">&nbsp;</label>
-                                        <button type="submit" class="btn btn-success btn-compact currency-accept-btn">
-                                            <i class="fas fa-check"></i> Accept
-                                        </button>
-                                    </div>
-                                </div>
+                        <?php foreach ($pendingCurrencies as $pcIdx => $pc): ?>
+                        <?php
+                            $hasRequestedCredit = ($pc['credit_limit'] !== null && isSplitAmount($pc['credit_limit']));
+                            $creditValue = $hasRequestedCredit ? $pc['credit_limit']->toMajorUnits() : $user->getDefaultCreditLimit();
+                            $curUnknownModal = !in_array($pc['currency'], $user->getAllowedCurrencies());
+                            // Smart default: Accept for known currencies,
+                            // Defer for unknown — protects against silently
+                            // onboarding currencies the user has never used.
+                            $defaultDecision = $curUnknownModal ? 'defer' : 'accept';
+                        ?>
+                        <details class="pending-currency-accordion"
+                                 data-currency="<?php echo htmlspecialchars($pc['currency']); ?>"
+                                 data-decision="<?php echo $defaultDecision; ?>"
+                                 open>
+                            <summary class="pending-currency-summary">
+                                <span class="pending-currency-code"><?php echo htmlspecialchars($pc['currency']); ?></span>
+                                <?php if ($curUnknownModal): ?>
+                                    <span class="badge badge-warning" title="Not in your allowed currencies — accepting will add it">
+                                        <i class="fas fa-exclamation-triangle"></i> new
+                                    </span>
+                                <?php endif; ?>
+                                <span class="pending-currency-state-badge" aria-live="polite"></span>
+                            </summary>
+                            <div class="pending-currency-body">
                                 <?php if (!empty($pc['description'])): ?>
                                 <div class="pending-contact-currency-message">
                                     <label><i class="fas fa-comment"></i> Message:</label>
                                     <div class="pending-message-text"><?php echo htmlspecialchars($pc['description']); ?></div>
                                 </div>
                                 <?php endif; ?>
-                            </form>
 
-                            <!-- Decline this specific currency. Separate form so
-                                 it doesn't submit the Accept's fee/credit fields.
-                                 Silent delete of the pending contact_currencies
-                                 row — matches the protocol-level behaviour of
-                                 deleteContact (sender isn't notified). -->
-                            <?php if (!empty($contact['pubkey_hash'])): ?>
-                            <form method="POST" class="currency-decline-form">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                                <input type="hidden" name="action" value="declineCurrency">
-                                <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash']); ?>">
-                                <input type="hidden" name="currency" value="<?php echo htmlspecialchars($pc['currency']); ?>">
-                                <button type="submit" class="btn btn-secondary btn-sm currency-decline-btn"
-                                        data-confirm="Decline <?php echo htmlspecialchars($pc['currency']); ?> request from this contact? The request will be removed from your pending list. They can re-request later.">
-                                    <i class="fas fa-times"></i> Decline <?php echo htmlspecialchars($pc['currency']); ?>
-                                </button>
-                            </form>
-                            <?php endif; ?>
-                        </div>
-                    </details>
-                    <?php endforeach; ?>
+                                <!-- Segmented decision control. role="radiogroup"
+                                     for a11y; each button updates the parent
+                                     accordion's data-decision attribute via JS. -->
+                                <div class="currency-decision-control" role="radiogroup" aria-label="Decision for <?php echo htmlspecialchars($pc['currency']); ?>">
+                                    <button type="button" class="currency-decision-btn currency-decision-accept" data-decision-value="accept" role="radio">
+                                        <i class="fas fa-check"></i> Accept
+                                    </button>
+                                    <button type="button" class="currency-decision-btn currency-decision-decline" data-decision-value="decline" role="radio">
+                                        <i class="fas fa-times"></i> Decline
+                                    </button>
+                                    <button type="button" class="currency-decision-btn currency-decision-defer" data-decision-value="defer" role="radio">
+                                        <i class="fas fa-clock"></i> Defer
+                                    </button>
+                                </div>
 
-                    <!-- Accept All button (when multiple currencies) -->
-                    <?php if (count($pendingCurrencies) > 1): ?>
-                    <hr class="currency-separator-double">
-                    <div class="mb-lg">
-                        <form method="POST" class="accept-all-form" data-contact-index="<?php echo $index; ?>"
-                              data-default-fee="<?php echo htmlspecialchars($user->getDefaultFee()); ?>"
-                              data-default-credit="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                            <input type="hidden" name="action" value="acceptAllCurrencies">
-                            <input type="hidden" name="pubkey_hash" value="<?php echo htmlspecialchars($contact['pubkey_hash'] ?? ''); ?>">
-                            <?php if (!$isExisting): ?>
-                                <input type="hidden" name="is_new_contact" value="1">
-                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                                <input type="hidden" name="contact_name" class="accept-all-name-target" value="<?php echo htmlspecialchars($contact['name'] ?? ''); ?>">
-                            <?php endif; ?>
-                            <input type="hidden" name="currencies" class="accept-all-currencies-data" value="">
-                            <button type="submit" class="btn btn-success w-100 accept-all-btn" data-contact-index="<?php echo $index; ?>">
-                                <i class="fas fa-check-double"></i> Accept All <?php echo count($pendingCurrencies); ?> Currencies
+                                <!-- Fee/Credit only matters when accepting. JS
+                                     hides this when decision != accept. -->
+                                <div class="currency-accept-fields">
+                                    <div class="form-row currency-form-row">
+                                        <div class="form-group">
+                                            <label for="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>">
+                                                Fee (%):
+                                                <i class="fas fa-info-circle info-tooltip-icon"
+                                                   title="The percentage you charge to relay this contact's transactions in <?php echo htmlspecialchars($pc['currency']); ?>. Applied to outgoing P2P routes. Your wallet default is <?php echo htmlspecialchars($user->getDefaultFee()); ?>%."
+                                                   data-action="showInfoModal"
+                                                   role="button"
+                                                   aria-label="About fee"></i>
+                                            </label>
+                                            <input type="number"
+                                                   id="contact_fee_<?php echo $index; ?>_<?php echo $pcIdx; ?>"
+                                                   class="currency-fee-input default-value"
+                                                   value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>"
+                                                   step="0.01" min="0">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>">
+                                                <?php echo $hasRequestedCredit ? 'Requested Credit Limit:' : 'Credit Limit:'; ?>
+                                                <i class="fas fa-info-circle info-tooltip-icon"
+                                                   title="The maximum amount you're willing to let this contact owe you in <?php echo htmlspecialchars($pc['currency']); ?>. Acts as a ceiling on the credit line; once reached, they can't run up more debt with you until they pay some back. Your wallet default is <?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>.<?php echo $hasRequestedCredit ? ' This is the value they requested — you can change it before accepting.' : ''; ?>"
+                                                   data-action="showInfoModal"
+                                                   role="button"
+                                                   aria-label="About credit limit"></i>
+                                            </label>
+                                            <input type="number"
+                                                   id="contact_credit_<?php echo $index; ?>_<?php echo $pcIdx; ?>"
+                                                   class="currency-credit-input <?php echo $hasRequestedCredit ? '' : 'default-value'; ?>"
+                                                   value="<?php echo htmlspecialchars($creditValue); ?>"
+                                                   min="0">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                        <?php endforeach; ?>
+
+                        <div class="apply-decisions-row">
+                            <button type="submit" class="btn btn-success btn-lg w-100 apply-decisions-btn">
+                                <i class="fas fa-check"></i> <span class="apply-decisions-label">Apply</span>
                             </button>
-                        </form>
-                    </div>
-                    <?php endif; ?>
+                        </div>
+                    </form>
                 <?php else: ?>
                     <!-- Fallback: single form for legacy contacts with no pending_currencies data -->
                     <?php
@@ -1011,8 +1172,18 @@
                     active currency line with them. Accept any of the additional
                     currencies above to open more lines, or ignore them — they'll
                     stay pending on your side until you act. To end the
-                    relationship entirely, open the contact from Your Contacts
-                    and use Delete or Block there.
+                    relationship entirely, open the contact details and use
+                    Delete or Block there.
+                    <?php if (!empty($contact['contact_id'])): ?>
+                        <div class="mt-sm">
+                            <a href="#" class="text-link"
+                               data-action="jumpToContactFromPendingModal"
+                               data-contact-id="<?php echo htmlspecialchars($contact['contact_id']); ?>"
+                               title="Open this contact's detail modal">
+                                <i class="fas fa-external-link-alt"></i> View contact details
+                            </a>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
             <?php else: ?>
@@ -1021,7 +1192,7 @@
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="deleteContact">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                    <button type="submit" class="btn btn-secondary w-100" data-confirm="Are you sure you want to delete this contact request?">
+                    <button type="submit" class="btn btn-secondary btn-lg w-100" data-confirm="Are you sure you want to delete this contact request?">
                         <i class="fas fa-trash"></i> Delete Request
                     </button>
                 </form>
@@ -1030,19 +1201,83 @@
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="blockContact">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? ''); ?>">
-                    <button type="submit" class="btn btn-danger w-100" data-confirm="Are you sure you want to block this contact?">
+                    <button type="submit" class="btn btn-danger btn-lg w-100" data-confirm="Are you sure you want to block this contact?">
                         <i class="fas fa-ban"></i> Block Contact
                     </button>
                 </form>
             </div>
             <?php endif; ?>
 
+            <!-- "About this contact" — reference info (addresses, public key,
+                 inline help) tucked below the action area. Action above the
+                 fold; reference one click away. Renders for both new and
+                 existing-contact flows. -->
+            <section class="pending-about-section">
+                <h4 class="pending-about-title">
+                    <i class="fas fa-id-card"></i> About this contact
+                </h4>
+
+                <!-- Addresses compacted to an icon row. Click opens a small
+                     info modal with the full address (see showInfoModal in
+                     script.js) — so touch users and anyone who wants to read
+                     it first get the full value, rather than click-to-copy
+                     that happened before they could verify the value. -->
+                <div class="pending-addresses-compact mb-sm">
+                    <?php foreach (getOrderedAddressSchemaTypes() as $_pillType):
+                        if (empty($contact[$_pillType])) continue;
+                        $_pillDisplay = \Eiou\Core\Constants::getAddressTypeDisplay($_pillType);
+                    ?>
+                        <button type="button" class="pending-addr-icon address-<?php echo htmlspecialchars($_pillType); ?>"
+                                data-action="showInfoModal"
+                                title="<?php echo htmlspecialchars($_pillDisplay['label']); ?> address: <?php echo htmlspecialchars($contact[$_pillType]); ?>">
+                            <i class="fas <?php echo htmlspecialchars($_pillDisplay['icon']); ?>"></i>
+                            <span class="pending-addr-label"><?php echo htmlspecialchars($_pillDisplay['label']); ?></span>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+
+                <!-- Public key collapsed — users rarely verify it at
+                     accept-time; keeping it inline blew out the modal. -->
+                <details class="pending-pubkey-disclosure">
+                    <summary><i class="fas fa-key"></i> Public key</summary>
+                    <div class="pubkey-display monospace"><?php echo htmlspecialchars(trim($contact['pubkey'])); ?></div>
+                </details>
+            </section>
+
                 </div><!-- /modal-body -->
             </div><!-- /modal-content -->
         </div><!-- /pending-contact-modal-<?php echo $index; ?> -->
     <?php endforeach; ?>
 <?php endif; ?>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'pending-contacts',
+    'class' => 'contacts-section fade-in-up',
+    'icon'  => 'fas fa-user-clock',
+    'title' => 'Pending Contact Requests',
+    'introTitle' => 'About Pending Contact Requests',
+    'intro' =>
+          'Incoming requests from other wallets that want to connect with you. '
+        . 'Accepting creates a bilateral contact record (and adds any currencies '
+        . 'they use if they aren\'t already in your <strong>Allowed Currencies</strong> '
+        . 'list). Rejecting silently drops the request — the other side isn\'t told. '
+        . 'Outgoing requests you\'ve sent that are still waiting on the other party '
+        . 'also live here until they respond.'
+        . '<br><br>'
+        . '<small>'
+        . '<strong>Subnote on currencies.</strong> '
+        . 'If a request carries a currency outside your Allowed Currencies list, '
+        . 'you\'ll see an explicit per-currency accept toggle so you can pick '
+        . 'which to allow rather than accepting everything blindly. The default '
+        . 'behaviour (accept what the contact offers) can be changed under '
+        . 'Settings → Feature Toggles → Contacts → <em>Auto-reject Unknown '
+        . 'Currency</em>.'
+        . '</small>',
+    'body' => $body,
+]);
+?>
 <?php endif; ?>
 
 <!-- Add Contact Modal -->

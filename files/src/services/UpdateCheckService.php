@@ -605,6 +605,19 @@ class UpdateCheckService
                 continue;
             }
 
+            // Lazy continuation: a non-blank line inside a list that doesn't
+            // match any block rule belongs to the previous list item. GitHub
+            // release bodies routinely wrap long bullets across multiple lines
+            // with the continuation indented under the marker — without this,
+            // the first line renders as a bullet and each wrapped line breaks
+            // off into its own <p>, closing the list prematurely.
+            if ($inList && substr($html, -5) === '</li>') {
+                $html = substr($html, 0, -5)
+                    . ' ' . self::inlineMarkdown(htmlspecialchars($trimmed))
+                    . '</li>';
+                continue;
+            }
+
             // Paragraph
             if ($inList) {
                 $html .= ($listType === 'ul') ? '</ul>' : '</ol>';

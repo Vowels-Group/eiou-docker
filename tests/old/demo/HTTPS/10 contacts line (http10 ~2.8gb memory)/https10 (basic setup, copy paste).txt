@@ -21,34 +21,34 @@ docker volume rm httpsJ-mysql-data httpsJ-config httpsJ-backups httpsJ-letsencry
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped  --network=demo-net --name httpsA -v "httpsA-mysql-data:/var/lib/mysql" -v "httpsA-config:/etc/eiou/config" -v "httpsA-backups:/var/lib/eiou/backups" -v "httpsA-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsA eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsB -v "httpsB-mysql-data:/var/lib/mysql" -v "httpsB-config:/etc/eiou/config" -v "httpsB-backups:/var/lib/eiou/backups" -v "httpsB-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsB eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsC -v "httpsC-mysql-data:/var/lib/mysql" -v "httpsC-config:/etc/eiou/config" -v "httpsC-backups:/var/lib/eiou/backups" -v "httpsC-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsC eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsD -v "httpsD-mysql-data:/var/lib/mysql" -v "httpsD-config:/etc/eiou/config" -v "httpsD-backups:/var/lib/eiou/backups" -v "httpsD-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsD eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsE -v "httpsE-mysql-data:/var/lib/mysql" -v "httpsE-config:/etc/eiou/config" -v "httpsE-backups:/var/lib/eiou/backups" -v "httpsE-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsE eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsF -v "httpsF-mysql-data:/var/lib/mysql" -v "httpsF-config:/etc/eiou/config" -v "httpsF-backups:/var/lib/eiou/backups" -v "httpsF-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsF eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsG -v "httpsG-mysql-data:/var/lib/mysql" -v "httpsG-config:/etc/eiou/config" -v "httpsG-backups:/var/lib/eiou/backups" -v "httpsG-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsG eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsH -v "httpsH-mysql-data:/var/lib/mysql" -v "httpsH-config:/etc/eiou/config" -v "httpsH-backups:/var/lib/eiou/backups" -v "httpsH-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsH eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsI -v "httpsI-mysql-data:/var/lib/mysql" -v "httpsI-config:/etc/eiou/config" -v "httpsI-backups:/var/lib/eiou/backups" -v "httpsI-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsI eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpsJ -v "httpsJ-mysql-data:/var/lib/mysql" -v "httpsJ-config:/etc/eiou/config" -v "httpsJ-backups:/var/lib/eiou/backups" -v "httpsJ-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsJ eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsA -v "httpsA-mysql-data:/var/lib/mysql" -v "httpsA-config:/etc/eiou/config" -v "httpsA-plugins:/etc/eiou/plugins" -v "httpsA-backups:/var/lib/eiou/backups" -v "httpsA-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsA eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsB -v "httpsB-mysql-data:/var/lib/mysql" -v "httpsB-config:/etc/eiou/config" -v "httpsB-plugins:/etc/eiou/plugins" -v "httpsB-backups:/var/lib/eiou/backups" -v "httpsB-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsB eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsC -v "httpsC-mysql-data:/var/lib/mysql" -v "httpsC-config:/etc/eiou/config" -v "httpsC-plugins:/etc/eiou/plugins" -v "httpsC-backups:/var/lib/eiou/backups" -v "httpsC-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsC eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsD -v "httpsD-mysql-data:/var/lib/mysql" -v "httpsD-config:/etc/eiou/config" -v "httpsD-plugins:/etc/eiou/plugins" -v "httpsD-backups:/var/lib/eiou/backups" -v "httpsD-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsD eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsE -v "httpsE-mysql-data:/var/lib/mysql" -v "httpsE-config:/etc/eiou/config" -v "httpsE-plugins:/etc/eiou/plugins" -v "httpsE-backups:/var/lib/eiou/backups" -v "httpsE-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsE eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsF -v "httpsF-mysql-data:/var/lib/mysql" -v "httpsF-config:/etc/eiou/config" -v "httpsF-plugins:/etc/eiou/plugins" -v "httpsF-backups:/var/lib/eiou/backups" -v "httpsF-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsF eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsG -v "httpsG-mysql-data:/var/lib/mysql" -v "httpsG-config:/etc/eiou/config" -v "httpsG-plugins:/etc/eiou/plugins" -v "httpsG-backups:/var/lib/eiou/backups" -v "httpsG-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsG eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsH -v "httpsH-mysql-data:/var/lib/mysql" -v "httpsH-config:/etc/eiou/config" -v "httpsH-plugins:/etc/eiou/plugins" -v "httpsH-backups:/var/lib/eiou/backups" -v "httpsH-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsH eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsI -v "httpsI-mysql-data:/var/lib/mysql" -v "httpsI-config:/etc/eiou/config" -v "httpsI-plugins:/etc/eiou/plugins" -v "httpsI-backups:/var/lib/eiou/backups" -v "httpsI-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsI eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpsJ -v "httpsJ-mysql-data:/var/lib/mysql" -v "httpsJ-config:/etc/eiou/config" -v "httpsJ-plugins:/etc/eiou/plugins" -v "httpsJ-backups:/var/lib/eiou/backups" -v "httpsJ-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpsJ eiou/eiou
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
-docker exec httpsA eiou add https://httpsB httpsB 0.1 1000 USD
-docker exec httpsB eiou add https://httpsA httpsA 0.1 1000 USD
-docker exec httpsB eiou add https://httpsC httpsC 0.1 1000 USD
-docker exec httpsC eiou add https://httpsB httpsB 0.1 1000 USD
-docker exec httpsC eiou add https://httpsD httpsD 0.1 1000 USD
-docker exec httpsD eiou add https://httpsC httpsC 0.1 1000 USD
-docker exec httpsD eiou add https://httpsE httpsE 0.1 1000 USD
-docker exec httpsE eiou add https://httpsD httpsD 0.1 1000 USD
-docker exec httpsE eiou add https://httpsF httpsF 0.1 1000 USD
-docker exec httpsF eiou add https://httpsE httpsE 0.1 1000 USD
-docker exec httpsF eiou add https://httpsG httpsG 0.1 1000 USD
-docker exec httpsG eiou add https://httpsF httpsF 0.1 1000 USD
-docker exec httpsG eiou add https://httpsH httpsH 0.1 1000 USD
-docker exec httpsH eiou add https://httpsG httpsG 0.1 1000 USD
-docker exec httpsH eiou add https://httpsI httpsI 0.1 1000 USD
-docker exec httpsI eiou add https://httpsH httpsH 0.1 1000 USD
-docker exec httpsI eiou add https://httpsJ httpsJ 0.1 1000 USD
-docker exec httpsJ eiou add https://httpsI httpsI 0.1 1000 USD
+docker exec httpsA eiou contact add https://httpsB httpsB --fee 0.1 --credit 1000 --currency USD
+docker exec httpsB eiou contact add https://httpsA httpsA --fee 0.1 --credit 1000 --currency USD
+docker exec httpsB eiou contact add https://httpsC httpsC --fee 0.1 --credit 1000 --currency USD
+docker exec httpsC eiou contact add https://httpsB httpsB --fee 0.1 --credit 1000 --currency USD
+docker exec httpsC eiou contact add https://httpsD httpsD --fee 0.1 --credit 1000 --currency USD
+docker exec httpsD eiou contact add https://httpsC httpsC --fee 0.1 --credit 1000 --currency USD
+docker exec httpsD eiou contact add https://httpsE httpsE --fee 0.1 --credit 1000 --currency USD
+docker exec httpsE eiou contact add https://httpsD httpsD --fee 0.1 --credit 1000 --currency USD
+docker exec httpsE eiou contact add https://httpsF httpsF --fee 0.1 --credit 1000 --currency USD
+docker exec httpsF eiou contact add https://httpsE httpsE --fee 0.1 --credit 1000 --currency USD
+docker exec httpsF eiou contact add https://httpsG httpsG --fee 0.1 --credit 1000 --currency USD
+docker exec httpsG eiou contact add https://httpsF httpsF --fee 0.1 --credit 1000 --currency USD
+docker exec httpsG eiou contact add https://httpsH httpsH --fee 0.1 --credit 1000 --currency USD
+docker exec httpsH eiou contact add https://httpsG httpsG --fee 0.1 --credit 1000 --currency USD
+docker exec httpsH eiou contact add https://httpsI httpsI --fee 0.1 --credit 1000 --currency USD
+docker exec httpsI eiou contact add https://httpsH httpsH --fee 0.1 --credit 1000 --currency USD
+docker exec httpsI eiou contact add https://httpsJ httpsJ --fee 0.1 --credit 1000 --currency USD
+docker exec httpsJ eiou contact add https://httpsI httpsI --fee 0.1 --credit 1000 --currency USD

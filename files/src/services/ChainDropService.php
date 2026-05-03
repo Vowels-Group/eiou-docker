@@ -111,16 +111,11 @@ class ChainDropService implements ChainDropServiceInterface
         $result = ['success' => false, 'proposal_id' => null, 'missing_txid' => null, 'broken_txid' => null, 'error' => null];
 
         try {
-            // Look up contact to get pubkey and address
-            $contact = $this->contactRepository->lookupByPubkeyHash($contactPubkeyHash);
-            if (!$contact) {
+            // We only need the contact's pubkey for chain verification —
+            // skip the addresses JOIN by using the hash→pubkey lookup.
+            $contactPubkey = $this->contactRepository->findPubkeyByPubkeyHash($contactPubkeyHash);
+            if ($contactPubkey === null) {
                 $result['error'] = 'Contact not found';
-                return $result;
-            }
-
-            $contactPubkey = $contact['pubkey'] ?? null;
-            if (!$contactPubkey) {
-                $result['error'] = 'Contact public key not available';
                 return $result;
             }
 
@@ -1149,17 +1144,17 @@ class ChainDropService implements ChainDropServiceInterface
     private function updateChainStatusAfterDrop(string $contactPubkeyHash): void
     {
         try {
-            $contact = $this->contactRepository->lookupByPubkeyHash($contactPubkeyHash);
-            if (!$contact || empty($contact['pubkey'])) {
+            $contactPubkey = $this->contactRepository->findPubkeyByPubkeyHash($contactPubkeyHash);
+            if ($contactPubkey === null) {
                 return;
             }
 
             $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
                 $this->currentUser->getPublicKey(),
-                $contact['pubkey']
+                $contactPubkey
             );
 
-            $this->contactRepository->updateContactFields($contact['pubkey'], [
+            $this->contactRepository->updateContactFields($contactPubkey, [
                 'valid_chain' => $chainStatus['valid'] ? 1 : 0
             ]);
 
@@ -1192,9 +1187,9 @@ class ChainDropService implements ChainDropServiceInterface
         }
 
         try {
-            $contact = $this->contactRepository->lookupByPubkeyHash($contactPubkeyHash);
-            if ($contact && !empty($contact['pubkey'])) {
-                $syncResult = $this->syncTrigger->syncContactBalance($contact['pubkey']);
+            $contactPubkey = $this->contactRepository->findPubkeyByPubkeyHash($contactPubkeyHash);
+            if ($contactPubkey !== null) {
+                $syncResult = $this->syncTrigger->syncContactBalance($contactPubkey);
                 Logger::getInstance()->info("Balance recalculated after chain drop", [
                     'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...',
                     'success' => $syncResult['success'] ?? false,

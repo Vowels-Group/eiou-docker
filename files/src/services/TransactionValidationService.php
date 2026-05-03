@@ -17,6 +17,8 @@ use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Schemas\Payloads\TransactionPayload;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\TransactionEvents;
 use RuntimeException;
 use PDOException;
 use Exception;
@@ -101,15 +103,18 @@ class TransactionValidationService implements TransactionValidationServiceInterf
      * Constructor
      *
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
      * @param ContactServiceInterface $contactService Contact service
      * @param ValidationUtilityService $validationUtility Validation utility service
      * @param InputValidator $inputValidator Input validator
      * @param TransactionPayload $transactionPayload Transaction payload builder
      * @param UserContext $currentUser Current user context
      * @param Logger $secureLogger Logger
+     * @param SyncTriggerInterface $syncTrigger Sync trigger
      */
     public function __construct(
         TransactionRepository $transactionRepository,
+        TransactionChainRepository $transactionChainRepository,
         ContactServiceInterface $contactService,
         ValidationUtilityService $validationUtility,
         InputValidator $inputValidator,
@@ -119,6 +124,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         SyncTriggerInterface $syncTrigger
     ) {
         $this->transactionRepository = $transactionRepository;
+        $this->transactionChainRepository = $transactionChainRepository;
         $this->contactService = $contactService;
         $this->validationUtility = $validationUtility;
         $this->inputValidator = $inputValidator;
@@ -126,9 +132,6 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         $this->currentUser = $currentUser;
         $this->secureLogger = $secureLogger;
         $this->syncTrigger = $syncTrigger;
-
-        // Initialize TransactionChainRepository
-        $this->transactionChainRepository = new TransactionChainRepository();
     }
 
     /**
@@ -288,12 +291,32 @@ class TransactionValidationService implements TransactionValidationServiceInterf
      * Performs comprehensive validation and processes the transaction if valid.
      * This method contains proactive sync logic to handle chain mismatches.
      *
+     * Canonical example for the `@throws` convention documented in
+     * `docs/EXCEPTIONS.md` — every typed ServiceException subclass this
+     * method may emit OR let propagate is declared. Routine
+     * "transaction not possible" outcomes return false rather than
+     * throwing; the throws below are reserved for genuine error paths.
+     *
      * @param array $request Request data
-     * @param bool $echo Whether to echo responses (default: true)
+     * @param bool  $echo    Whether to echo responses (default: true)
      * @return bool True if Transaction possible, False otherwise.
+     *
+     * @throws \RuntimeException Plugin listener vetoed via the
+     *     `TransactionEvents::PRE_VALIDATE` hook. The throw propagates
+     *     so the caller surfaces the abort reason instead of silently
+     *     swallowing it.
      */
     public function checkTransactionPossible(array $request, $echo = true): bool
     {
+        // Plugin veto point — listeners may throw to abort the validation
+        // before any DB work happens. See TransactionEvents::PRE_VALIDATE
+        // for the contract; we deliberately let the throw propagate so
+        // the caller (SendOperationService / TransactionProcessingService)
+        // surfaces the abort reason instead of silently swallowing it.
+        EventDispatcher::getInstance()->dispatch(TransactionEvents::PRE_VALIDATE, [
+            'request' => $request,
+        ]);
+
         $senderAddress = $request['senderAddress'];
         $pubkey = $request['senderPublicKey'];
 

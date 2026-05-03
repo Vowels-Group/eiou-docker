@@ -28,6 +28,51 @@ class ContactRepository extends AbstractRepository {
     ];
 
     /**
+     * Column list for the recurring `addresses a JOIN contacts c
+     * ON a.pubkey_hash = c.pubkey_hash` shape used by every contact-list
+     * read in this class. Replaces the previous `SELECT *` because both
+     * tables share `id` and `pubkey_hash`, and PDO::FETCH_ASSOC's
+     * last-write-wins behaviour made which side won implementation-defined.
+     *
+     * The contacts side is enumerated explicitly so adding a new column
+     * to `contacts` is a deliberate decision (the new field has to be
+     * propagated here AND read out by callers). The `addresses` side
+     * stays as `a.*` on purpose — adding a new transport (e.g. a future
+     * `i2p` or `nostr` column on the addresses table) should automatically
+     * surface in every contact-row consumer without having to walk every
+     * call site here. The transport-fallback consumers (`$contact['tor']
+     * ?? $contact['https'] ?? $contact['http']`) only need transports
+     * they know about, so unknown new columns are harmlessly ignored.
+     */
+    private const SELECT_CONTACT_WITH_ADDRESS = "
+        a.*,
+        c.id, c.contact_id, c.pubkey, c.pubkey_hash, c.name, c.status,
+        c.online_status, c.valid_chain, c.remote_version, c.created_at, c.last_ping_at";
+
+    /**
+     * Request-scoped cache for `getContactsGroupedByStatus()`.
+     *
+     * The method is fired ≥3× per typical wallet render — once by the
+     * initial template (`Functions.php`), once by the AJAX row helper for
+     * the contacts table (`TemplateHelpers.php` line ~183), and once by
+     * the pending-contacts modal helper (`TemplateHelpers.php` line ~267)
+     * — all reading the same data. Cache lives for one PHP request so a
+     * mutation in a *later* request always re-queries on first read.
+     *
+     * In-process invalidation: every method on this repository that
+     * mutates the `contacts` table must clear this cache (see overrides
+     * of `insert` / `update` / `delete` below + the manual call in
+     * `updateContactStatus`, the only writer that bypasses the parent
+     * helpers via raw `execute()`). New mutating methods that route
+     * through `insert` / `update` / `delete` are automatically covered;
+     * any new method that does its own `execute("UPDATE …")` MUST call
+     * `invalidateGroupedByStatusCache()` explicitly.
+     *
+     * @var array{accepted: array, user_pending: array, blocked: array}|null
+     */
+    private ?array $groupedByStatusCache = null;
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
@@ -36,6 +81,39 @@ class ContactRepository extends AbstractRepository {
         parent::__construct($pdo);
         $this->tableName = 'contacts';
         $this->primaryKey = 'pubkey';
+    }
+
+    /**
+     * Drop any cached `getContactsGroupedByStatus()` result. Called from
+     * every mutating path on this repository so the next read sees the
+     * write. See the cache field's docblock for the contract.
+     */
+    private function invalidateGroupedByStatusCache(): void
+    {
+        $this->groupedByStatusCache = null;
+    }
+
+    /**
+     * Override parent helpers that mutate the contacts table so the
+     * `getContactsGroupedByStatus()` cache is dropped on every write.
+     * `acceptContact`, `addPendingContact`, `blockContact`,
+     * `unblockContact`, `deleteContact`, and `updateContactFields` all
+     * route through these — covering them once here is sturdier than
+     * remembering to call invalidate from each of those public methods.
+     */
+    protected function insert(array $data) {
+        $this->invalidateGroupedByStatusCache();
+        return parent::insert($data);
+    }
+
+    protected function update(array $data, string $whereColumn, $whereValue): int {
+        $this->invalidateGroupedByStatusCache();
+        return parent::update($data, $whereColumn, $whereValue);
+    }
+
+    protected function delete(string $column, $value): int {
+        $this->invalidateGroupedByStatusCache();
+        return parent::delete($column, $value);
     }
 
     /**
@@ -153,6 +231,10 @@ class ContactRepository extends AbstractRepository {
      */
     public function updateContactStatus(string $pubkey, string $status): bool
     {
+        // Bypasses parent::update() with raw SQL, so the override-based
+        // invalidation in the parent helpers doesn't fire — invalidate
+        // the grouped-by-status cache by hand here.
+        $this->invalidateGroupedByStatusCache();
         $query ="UPDATE {$this->tableName}
                     SET status = :status
                     WHERE {$this->primaryKey} = :pubkey";
@@ -405,7 +487,7 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of pending contacts
      */
     public function getPendingContactRequests(): array {
-        $query = "SELECT * 
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE c.name IS NULL 
@@ -446,7 +528,7 @@ class ContactRepository extends AbstractRepository {
     public function getUserPendingContactRequests(): array
     {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE c.name IS NOT NULL
@@ -466,7 +548,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAcceptedContacts(): array
     {
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'accepted'
@@ -490,17 +572,37 @@ class ContactRepository extends AbstractRepository {
      * @param int $offset Zero-based offset
      * @return array Rows joined with addresses, newest `name ASC` order
      */
-    public function getAcceptedContactsPage(int $limit, int $offset = 0): array
+    public function getAcceptedContactsPage(int $limit, int $offset = 0, ?array $cursor = null): array
     {
-        $query = "SELECT *
+        // Cursor wins over offset. Sort key for accepted-contacts is
+        // `(c.name ASC, c.id ASC)` — name is the user-visible order
+        // (alphabetical), id is the strict-total-order tiebreaker so
+        // two contacts named 'Bob' don't both appear on consecutive
+        // pages. Cursor mode reads "give me rows lexicographically
+        // AFTER this `(name, id)` pair", matching the ASC direction.
+        $useCursor = $cursor !== null
+            && isset($cursor['name'], $cursor['id']);
+
+        $whereTail = $useCursor
+            ? " AND (c.name > :cursor_name
+                  OR (c.name = :cursor_name AND c.id > :cursor_id))"
+            : "";
+        $orderTail = $useCursor
+            ? " ORDER BY c.name ASC, c.id ASC LIMIT :limit"
+            : " ORDER BY c.name ASC LIMIT :limit OFFSET :offset";
+
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    AND c.status = 'accepted'
-                    ORDER BY c.name ASC
-                    LIMIT :limit OFFSET :offset";
+                    AND c.status = 'accepted'" . $whereTail . $orderTail;
         $stmt = $this->pdo->prepare($query);
         $stmt->bindValue(':limit',  max(0, $limit),  PDO::PARAM_INT);
-        $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        if ($useCursor) {
+            $stmt->bindValue(':cursor_name', (string) $cursor['name']);
+            $stmt->bindValue(':cursor_id',   (int) $cursor['id'], PDO::PARAM_INT);
+        } else {
+            $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
+        }
         try {
             $stmt->execute();
         } catch (PDOException $e) {
@@ -517,7 +619,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getBlockedContacts(): array
     {
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'blocked'
@@ -547,7 +649,11 @@ class ContactRepository extends AbstractRepository {
      */
     public function getContactsGroupedByStatus(): array
     {
-        $query = "SELECT *
+        if ($this->groupedByStatusCache !== null) {
+            return $this->groupedByStatusCache;
+        }
+
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE c.status IN ('accepted', 'pending', 'blocked')
@@ -556,6 +662,9 @@ class ContactRepository extends AbstractRepository {
 
         $groups = ['accepted' => [], 'user_pending' => [], 'blocked' => []];
         if (!$stmt) {
+            // Don't cache failure — a transient DB blip should re-query
+            // next call rather than feed stale empty buckets to every
+            // subsequent template helper for the rest of the request.
             return $groups;
         }
 
@@ -569,6 +678,7 @@ class ContactRepository extends AbstractRepository {
                 $groups['blocked'][] = $row;
             }
         }
+        $this->groupedByStatusCache = $groups;
         return $groups;
     }
 
@@ -683,7 +793,7 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of matching contacts (empty if none found)
      */
     public function lookupAllByName(string $name): array {
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND LOWER(c.name) = LOWER(:name)";
@@ -704,7 +814,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByName(string $name): ?array {
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND LOWER(c.name) = LOWER(:name)
@@ -732,7 +842,7 @@ class ContactRepository extends AbstractRepository {
         if (!$this->isValidTransportIndex($transportIndex)) {
             return null;
         }
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND LOWER(a.{$transportIndex}) = LOWER(:address)
@@ -754,7 +864,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByPubkey(string $pubkey): ?array {
-        $query = "SELECT * 
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND pubkey = :pubkey
@@ -771,13 +881,36 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Resolve a contact's `pubkey` (the full public key) from its hash, with
+     * no JOIN to `addresses`. Use this when the caller only needs the
+     * public key — `lookupByPubkeyHash()` does an `addresses JOIN contacts`
+     * and returns the full row, which is wasted I/O for callers that
+     * just want the pubkey for chain-verification or sync triggers.
+     *
+     * @param string $pubkeyHash Contact pubkey hash (SHA-256 hex)
+     * @return string|null       The contact's pubkey, or null if not found
+     */
+    public function findPubkeyByPubkeyHash(string $pubkeyHash): ?string {
+        $query = "SELECT pubkey
+                    FROM {$this->tableName}
+                    WHERE pubkey_hash = :pubkey_hash
+                    LIMIT 1";
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+        if (!$stmt) {
+            return null;
+        }
+        $result = $stmt->fetchColumn();
+        return $result !== false ? (string) $result : null;
+    }
+
+    /**
      * Lookup contact by pubkey hash
      *
      * @param string $pubkeyHash Contact pubkey hash
      * @return array|null Contact data or null
      */
     public function lookupByPubkeyHash(string $pubkeyHash): ?array {
-        $query = "SELECT * 
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.pubkey_hash = :pubkey_hash
@@ -800,7 +933,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact addresses or null
      */
     public function lookupAddressesByName(string $name): ?array {
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND LOWER(c.name) = LOWER(:name)";
@@ -963,7 +1096,7 @@ class ContactRepository extends AbstractRepository {
         if (!$this->isValidTransportIndex($transportIndex)) {
             return null;
         }
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND LOWER(a.{$transportIndex}) = LOWER(:address)
@@ -998,7 +1131,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getContactByNameOrAddress(string $identifier): ?array {
         // First try exact name match
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE c.name = :identifier
@@ -1012,7 +1145,7 @@ class ContactRepository extends AbstractRepository {
         }
 
         // Try http address
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE a.http = :identifier
@@ -1026,7 +1159,7 @@ class ContactRepository extends AbstractRepository {
         }
 
         // Try https address
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE a.https = :identifier
@@ -1040,7 +1173,7 @@ class ContactRepository extends AbstractRepository {
         }
 
         // Try tor address
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     WHERE a.tor = :identifier
@@ -1170,8 +1303,8 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAllContactsInfo(): array
     {
-        $query = "SELECT * 
-                    FROM {$this->tableName} c 
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
+                    FROM {$this->tableName} c
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash";
         $stmt = $this->execute($query);
@@ -1191,8 +1324,8 @@ class ContactRepository extends AbstractRepository {
      */
     public function getRecentContacts(int $limit = Constants::DISPLAY_RECENT_CONTACTS_LIMIT): array
     {
-         $query = "SELECT * 
-                    FROM {$this->tableName} c 
+         $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
+                    FROM {$this->tableName} c
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash
                     AND status = 'accepted' 
@@ -1214,7 +1347,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function searchByName(string $searchTerm): array
     {
-        $query = "SELECT *
+        $query = "SELECT " . self::SELECT_CONTACT_WITH_ADDRESS . "
                     FROM {$this->tableName} c
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash

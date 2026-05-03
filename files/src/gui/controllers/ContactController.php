@@ -6,8 +6,12 @@ namespace Eiou\Gui\Controllers;
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
+use Eiou\Services\ContactDecisionService;
 use Eiou\Services\ContactService;
+use Eiou\Services\GuiActionRegistry;
+use Eiou\Utils\ContactValidator;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
@@ -39,18 +43,82 @@ class ContactController
     private $contactService;
 
     /**
+     * @var ContactDecisionService|null Lazy-resolved when null.
+     */
+    private ?ContactDecisionService $decisionService;
+
+    /**
      * Constructor
      *
      * @param Session $session
      * @param ContactService $contactService
+     * @param ContactDecisionService|null $decisionService Optional injection (resolved from
+     *        ServiceContainer when null). Tests pass a mock; runtime defers to the container.
      */
     public function __construct(
         Session $session,
-        ContactService $contactService
+        ContactService $contactService,
+        ?ContactDecisionService $decisionService = null
         )
     {
         $this->session = $session;
         $this->contactService = $contactService;
+        $this->decisionService = $decisionService;
+    }
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     *
+     * All ContactController actions register at TIER_AUTH so the
+     * dispatcher's CSRF gate does not fire — every handler does its
+     * own verifyCSRFToken() (rotating for HTML-redirect, also rotating
+     * for the AJAX ping/chain-drop trio because that's the existing
+     * default and the existing behavior). This preserves:
+     *   - rotate-on-success for both the HTML-redirect and AJAX paths;
+     *   - the legacy plain-text 403 ("CSRF token validation failed…")
+     *     for HTML form submits (vs. the registry's JSON envelope,
+     *     which would render as raw JSON in the user's browser);
+     *   - the per-handler JSON error envelope shape AJAX clients
+     *     already parse.
+     *
+     * `addCurrency` was unreachable from Functions.php's pre-migration
+     * if-ladder (the whitelist listed only the other 11 contact
+     * actions), but the handler exists. Registering it here makes the
+     * action reachable should anything ever post it; no current GUI
+     * form does, so there is no observable behavior change today.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        // HTML-redirect actions — handler does rotating verifyCSRFToken().
+        $registry->register('addContact',             [$this, 'handleAddContact'],             GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptContact',          [$this, 'handleAcceptContact'],          GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('addCurrency',            [$this, 'handleAddCurrency'],            GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptCurrency',         [$this, 'handleAcceptCurrency'],         GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptAllCurrencies',    [$this, 'handleAcceptAllCurrencies'],    GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('applyContactDecisions',  [$this, 'handleApplyContactDecisions'],  GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('declineCurrency',        [$this, 'handleDeclineCurrency'],        GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('declineContact',         [$this, 'handleDeclineContact'],         GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('deleteContact',          [$this, 'handleDeleteContact'],          GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('blockContact',           [$this, 'handleBlockContact'],           GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('unblockContact',         [$this, 'handleUnblockContact'],         GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('editContact',            [$this, 'handleEditContact'],            GuiActionRegistry::TIER_AUTH, 'core');
+
+        // JSON-AJAX actions — handler sets Content-Type, does its own
+        // CSRF check, exits with JSON. Registry routes; doesn't gate.
+        $registry->register('pingContact',            [$this, 'handlePingContact'],            GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('proposeChainDrop',       [$this, 'handleProposeChainDrop'],       GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('acceptChainDrop',        [$this, 'handleAcceptChainDrop'],        GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('rejectChainDrop',        [$this, 'handleRejectChainDrop'],        GuiActionRegistry::TIER_AUTH, 'core');
+    }
+
+    private function getDecisionService(): ContactDecisionService
+    {
+        if ($this->decisionService === null) {
+            $this->decisionService = Application::getInstance()
+                ->services
+                ->getContactDecisionService();
+        }
+        return $this->decisionService;
     }
 
     /**
@@ -82,42 +150,25 @@ class ContactController
             $message = 'All fields are required';
             $messageType = 'error';
         } else {
-            // Validate address
-            $addressValidation = InputValidator::validateAddress($address);
-            if (!$addressValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+            // Bulk-validate the standard contact field set in one
+            // call. ContactValidator preserves the legacy bail-on-
+            // first-error behavior + error-message format
+            // ("Invalid {label}: …") so nothing user-visible changes.
+            $check = ContactValidator::validateContactFields([
+                'address'  => $address,
+                'name'     => $name,
+                'fee'      => $fee,
+                'credit'   => $credit,
+                'currency' => $currency,
+            ]);
+            if (!$check['ok']) {
+                MessageHelper::redirectMessage($check['error'], 'error');
                 return;
             }
 
-            // Validate contact name
-            $nameValidation = InputValidator::validateContactName($name);
-            if (!$nameValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid contact name: ' . $nameValidation['error'], 'error');
-                return;
-            }
-
-            // Validate fee percentage
-            $feeValidation = InputValidator::validateFeePercent($fee);
-            if (!$feeValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
-                return;
-            }
-
-            // Validate credit limit
-            $creditValidation = InputValidator::validateCreditLimit($credit);
-            if (!$creditValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid credit limit: ' . $creditValidation['error'], 'error');
-                return;
-            }
-
-            // Validate currency
-            $currencyValidation = InputValidator::validateCurrency($currency);
-            if (!$currencyValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
-                return;
-            }
-
-            // Validate requested credit limit if provided
+            // Optional requested-credit-limit validation stays inline
+            // because it has its own message prefix and only fires
+            // when the field is present.
             $requestedCreditValidated = null;
             if ($requestedCredit !== '' && $requestedCredit !== null) {
                 $reqCreditValidation = InputValidator::validateCreditLimit($requestedCredit);
@@ -129,11 +180,11 @@ class ContactController
             }
 
             // Use sanitized and validated values
-            $address = $addressValidation['value'];
-            $name = $nameValidation['value'];
-            $fee = $feeValidation['value'];
-            $credit = $creditValidation['value'];
-            $currency = $currencyValidation['value'];
+            $address  = $check['values']['address'];
+            $name     = $check['values']['name'];
+            $fee      = $check['values']['fee'];
+            $credit   = $check['values']['credit'];
+            $currency = $check['values']['currency'];
 
             // Create argv array with --json flag for structured output
             // $data[7] = requested credit limit (or NULL placeholder), $data[8] = description
@@ -626,20 +677,17 @@ class ContactController
             $credit = Security::sanitizeInput($_POST['credit'] ?? '');
 
             if (empty($pubkey) || empty($currency) || $fee === '' || $credit === '') {
-                echo json_encode(['success' => false, 'error' => 'missing_fields', 'message' => 'All fields are required']);
-                return;
+                GuiErrorResponse::send('missing_fields', 'All fields are required', 400);
             }
 
             $feeValidation = InputValidator::validateFeePercent($fee);
             if (!$feeValidation['valid']) {
-                echo json_encode(['success' => false, 'error' => 'invalid_fee', 'message' => $feeValidation['error']]);
-                return;
+                GuiErrorResponse::send('invalid_fee', $feeValidation['error'], 400);
             }
 
             $creditValidation = InputValidator::validateAmount($credit, $currency);
             if (!$creditValidation['valid']) {
-                echo json_encode(['success' => false, 'error' => 'invalid_credit', 'message' => $creditValidation['error']]);
-                return;
+                GuiErrorResponse::send('invalid_credit', $creditValidation['error'], 400);
             }
 
             $app = Application::getInstance();
@@ -656,11 +704,15 @@ class ContactController
             if ($result) {
                 echo json_encode(['success' => true, 'message' => "Currency {$currency} added to contact"]);
             } else {
-                echo json_encode(['success' => false, 'error' => 'add_currency_failed', 'message' => 'Failed to add currency. Contact may not be accepted or currency already exists.']);
+                GuiErrorResponse::send(
+                    'add_currency_failed',
+                    'Failed to add currency. Contact may not be accepted or currency already exists.',
+                    400
+                );
             }
         } catch (\Exception $e) {
             Logger::getInstance()->logException($e);
-            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'An unexpected error occurred']);
+            GuiErrorResponse::send('server_error', 'An unexpected error occurred', 500);
         }
     }
 
@@ -781,15 +833,101 @@ class ContactController
         try {
             $app = Application::getInstance();
             $serviceContainer = $app->services;
-            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
-            $deleted = $contactCurrencyRepo->declineIncomingCurrency($pubkeyHash, $currency);
+            $deleted = $serviceContainer->getContactSyncService()
+                ->declineReceivedContactCurrency($pubkeyHash, $currency);
             if ($deleted) {
                 MessageHelper::redirectMessage("Currency {$currency} request declined.", 'success');
             } else {
                 // No-op is fine — the row might already be gone (double-submit,
                 // or the sender withdrew the request). Don't surface as error.
                 MessageHelper::redirectMessage("Currency {$currency} request not found — may already be resolved.", 'info');
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            MessageHelper::redirectMessage('An unexpected error occurred.', 'error');
+        }
+    }
+
+    /**
+     * Decline every pending currency on an incoming contact request in one
+     * shot. Mirrors `eiou contact decline <pubkey-hash>` and the new
+     * `POST /api/v1/contacts/:hash/decline` API endpoint, so all three
+     * surfaces share the same effect.
+     */
+    public function handleDeclineContact(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
+        if (empty($pubkeyHash)) {
+            MessageHelper::redirectMessage('Contact is required.', 'error');
+            return;
+        }
+
+        try {
+            $services = Application::getInstance()->services;
+            $contactCurrencyRepo = $services->getRepositoryFactory()
+                ->get(ContactCurrencyRepository::class);
+            $contactSyncService = $services->getContactSyncService();
+
+            $pending = $contactCurrencyRepo->getPendingCurrencies($pubkeyHash, 'incoming');
+            if (empty($pending)) {
+                MessageHelper::redirectMessage('No pending currencies to decline.', 'info');
+                return;
+            }
+
+            $declined = [];
+            $errors = [];
+            foreach ($pending as $row) {
+                $ccy = strtoupper((string) ($row['currency'] ?? ''));
+                if ($ccy === '') {
+                    continue;
+                }
+                try {
+                    // Per-currency notify is handled inside
+                    // declineReceivedContactCurrency (best-effort
+                    // async send) — the whole-contact notify below
+                    // covers the contact-transaction cleanup that
+                    // can't be inferred from individual currency
+                    // declines.
+                    $contactSyncService->declineReceivedContactCurrency($pubkeyHash, $ccy);
+                    $declined[] = $ccy;
+                } catch (\Throwable $e) {
+                    $errors[] = "{$ccy}: " . $e->getMessage();
+                }
+            }
+
+            // After all currencies are declined, send one
+            // whole-contact decline so the requester's contact
+            // transaction itself gets rejected — a per-currency
+            // handler can't know "that was the last one" without
+            // tracking remaining currencies.
+            if (!empty($declined)) {
+                try {
+                    $contactSyncService->sendContactDeclineNotification($pubkeyHash);
+                } catch (\Throwable $notifyErr) {
+                    // Non-fatal; ping/pong reconciliation will
+                    // eventually clean up if this didn't deliver.
+                }
+            }
+
+            if (!empty($declined) && empty($errors)) {
+                MessageHelper::redirectMessage(
+                    'Contact request declined (' . implode(', ', $declined) . ').',
+                    'success'
+                );
+            } elseif (!empty($declined)) {
+                MessageHelper::redirectMessage(
+                    'Partial decline — ok: ' . implode(', ', $declined)
+                    . '; errors: ' . implode('; ', $errors),
+                    'warning'
+                );
+            } else {
+                MessageHelper::redirectMessage(
+                    'Failed to decline contact request: ' . implode('; ', $errors),
+                    'error'
+                );
             }
         } catch (\Exception $e) {
             Logger::getInstance()->logException($e);
@@ -948,6 +1086,70 @@ class ContactController
     }
 
     /**
+     * Apply a batched set of per-currency decisions for a pending contact
+     * request: accept some currencies, decline others, leave the rest
+     * deferred (no action). Single submission for the whole "Contact
+     * Request" modal — replaces the per-row Accept/Decline buttons and
+     * the legacy Accept-All path.
+     *
+     * Payload (POST form-encoded):
+     *   pubkey_hash:     contact's pubkey hash
+     *   contact_address: address (used only when is_new_contact=1 + first accept)
+     *   contact_name:    nickname (used only when is_new_contact=1 + first accept)
+     *   is_new_contact:  "1" if the contact relationship still needs establishing
+     *   decisions:       JSON array — [{currency, action, fee?, credit?}, ...]
+     *                    action ∈ {"accept","decline"}; deferred rows are omitted
+     *                    by the client (we ignore unknown actions defensively).
+     *
+     * @return void
+     */
+    public function handleApplyContactDecisions(): void
+    {
+        $this->session->verifyCSRFToken();
+
+        $pubkeyHash = Security::sanitizeInput($_POST['pubkey_hash'] ?? '');
+        $decisionsJson = $_POST['decisions'] ?? '[]';
+        $decisions = json_decode($decisionsJson, true);
+        $isNewContact = !empty($_POST['is_new_contact']);
+        $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
+        $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
+
+        if (empty($pubkeyHash) || !is_array($decisions) || empty($decisions)) {
+            MessageHelper::redirectMessage('No decisions to apply.', 'error');
+            return;
+        }
+
+        try {
+            $result = $this->getDecisionService()->apply(
+                $pubkeyHash,
+                $decisions,
+                $isNewContact,
+                $contactAddress !== '' ? $contactAddress : null,
+                $contactName !== '' ? $contactName : null,
+            );
+
+            $accepted = $result['accepted'];
+            $declined = $result['declined'];
+            $errors = $result['errors'];
+
+            $parts = [];
+            if (!empty($accepted)) { $parts[] = 'Accepted: ' . implode(', ', $accepted); }
+            if (!empty($declined)) { $parts[] = 'Declined: ' . implode(', ', $declined); }
+            if (!empty($errors))   { $parts[] = 'Errors: ' . implode('; ', $errors); }
+
+            if (!empty($accepted) || !empty($declined)) {
+                $type = empty($errors) ? 'success' : 'warning';
+                MessageHelper::redirectMessage(implode('. ', $parts) . '.', $type);
+            } else {
+                MessageHelper::redirectMessage('Failed to apply decisions: ' . implode('; ', $errors), 'error');
+            }
+        } catch (\Exception $e) {
+            Logger::getInstance()->logException($e);
+            MessageHelper::redirectMessage('An unexpected error occurred.', 'error');
+        }
+    }
+
+    /**
      * Handle ping contact request (AJAX - returns JSON)
      *
      * @return void
@@ -965,23 +1167,17 @@ class ContactController
             $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
 
             if (empty($contactAddress)) {
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'missing_address',
-                    'message' => 'Contact address is required'
-                ]);
-                return;
+                GuiErrorResponse::send('missing_address', 'Contact address is required', 400);
             }
 
             // Validate address
             $addressValidation = InputValidator::validateAddress($contactAddress);
             if (!$addressValidation['valid']) {
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'invalid_address',
-                    'message' => 'Invalid address: ' . $addressValidation['error']
-                ]);
-                return;
+                GuiErrorResponse::send(
+                    'invalid_address',
+                    'Invalid address: ' . $addressValidation['error'],
+                    400
+                );
             }
 
             $contactAddress = $addressValidation['value'];
@@ -999,13 +1195,13 @@ class ContactController
                 'controller' => 'ContactController',
                 'action' => __FUNCTION__
             ]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::isDebug()
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::isDebug()
                     ? 'Internal server error: ' . $e->getMessage()
-                    : 'Internal server error'
-            ]);
+                    : 'Internal server error',
+                500
+            );
         }
     }
 
@@ -1058,8 +1254,15 @@ class ContactController
                 $this->handleAcceptAllCurrencies();
                 break;
 
+            case 'applyContactDecisions':
+                $this->handleApplyContactDecisions();
+                break;
+
             case 'declineCurrency':
                 $this->handleDeclineCurrency();
+                break;
+            case 'declineContact':
+                $this->handleDeclineContact();
                 break;
 
             case 'pingContact':
@@ -1091,8 +1294,7 @@ class ContactController
             $this->session->verifyCSRFToken();
             $contactPubkeyHash = Security::sanitizeInput($_POST['contact_pubkey_hash'] ?? '');
             if (empty($contactPubkeyHash)) {
-                echo json_encode(['success' => false, 'error' => 'missing_pubkey_hash', 'message' => 'Contact pubkey hash is required']);
-                return;
+                GuiErrorResponse::send('missing_pubkey_hash', 'Contact pubkey hash is required', 400);
             }
             $app = Application::getInstance();
             $chainDropService = $app->services->getChainDropService();
@@ -1100,11 +1302,13 @@ class ContactController
             echo json_encode($result);
         } catch (\Throwable $e) {
             Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
-            ]);
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::getAppEnv() !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error',
+                500
+            );
         }
     }
 
@@ -1120,8 +1324,7 @@ class ContactController
             $this->session->verifyCSRFToken();
             $proposalId = Security::sanitizeInput($_POST['proposal_id'] ?? '');
             if (empty($proposalId)) {
-                echo json_encode(['success' => false, 'error' => 'missing_proposal_id', 'message' => 'Proposal ID is required']);
-                return;
+                GuiErrorResponse::send('missing_proposal_id', 'Proposal ID is required', 400);
             }
             $app = Application::getInstance();
             $chainDropService = $app->services->getChainDropService();
@@ -1129,11 +1332,13 @@ class ContactController
             echo json_encode($result);
         } catch (\Throwable $e) {
             Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
-            ]);
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::getAppEnv() !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error',
+                500
+            );
         }
     }
 
@@ -1149,8 +1354,7 @@ class ContactController
             $this->session->verifyCSRFToken();
             $proposalId = Security::sanitizeInput($_POST['proposal_id'] ?? '');
             if (empty($proposalId)) {
-                echo json_encode(['success' => false, 'error' => 'missing_proposal_id', 'message' => 'Proposal ID is required']);
-                return;
+                GuiErrorResponse::send('missing_proposal_id', 'Proposal ID is required', 400);
             }
             $app = Application::getInstance();
             $chainDropService = $app->services->getChainDropService();
@@ -1161,11 +1365,13 @@ class ContactController
             echo json_encode($result);
         } catch (\Throwable $e) {
             Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
-            echo json_encode([
-                'success' => false,
-                'error' => 'internal_error',
-                'message' => Constants::getAppEnv() !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
-            ]);
+            GuiErrorResponse::send(
+                'internal_error',
+                Constants::getAppEnv() !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error',
+                500
+            );
         }
     }
 

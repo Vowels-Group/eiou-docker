@@ -194,9 +194,32 @@ interface ContactSyncServiceInterface
      * accepted and verified. Updates the transaction status to complete.
      *
      * @param string $senderPublicKey The sender's public key
+     * @param string|null $currency Optional per-currency filter
      * @return bool True if the transaction was completed successfully
      */
-    public function completeReceivedContactTransaction(string $senderPublicKey): bool;
+    public function completeReceivedContactTransaction(string $senderPublicKey, ?string $currency = null): bool;
+
+    /**
+     * Decline a received contact-currency request and flip the matching
+     * tx record from 'accepted' to 'rejected'. Used by every decline
+     * surface (CLI, GUI, API, batched-apply) so the tx ledger reflects
+     * the decision instead of leaving the row stuck on 'accepted'.
+     *
+     * @param string $pubkeyHash The contact's pubkey hash
+     * @param string $currency Currency being declined
+     * @return bool True if the contact_currency row was deleted
+     */
+    public function declineReceivedContactCurrency(string $pubkeyHash, string $currency): bool;
+
+    /**
+     * Sender-side: flip the local 'sent' contact tx to 'rejected' when the
+     * peer responds with STATUS_REJECTED during the contact handshake.
+     *
+     * @param string $contactPublicKey The peer's pubkey
+     * @param string $currency Currency of the rejected request
+     * @return bool True if a row was updated
+     */
+    public function rejectSentContactTransaction(string $contactPublicKey, string $currency): bool;
 
     // =========================================================================
     // MESSAGE SENDING

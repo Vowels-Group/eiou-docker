@@ -101,7 +101,7 @@ totaltests=$((totaltests + 1))
 
 # Step 1: A sends contact request to B
 echo -e "\t   Step 1: ${containerA} adds ${containerB} as contact..."
-addResultA=$(docker exec ${containerA} eiou add ${addressB} TestContactB 0.1 1000 USD 2>&1)
+addResultA=$(docker exec ${containerA} eiou contact add ${addressB} TestContactB --fee 0.1 --credit 1000 --currency USD 2>&1)
 echo -e "\t   Result: $(echo "${addResultA}" | head -1)"
 
 # Check A's contact status — should be 'pending' (waiting for B to accept)
@@ -115,7 +115,7 @@ echo -e "\t   ${containerA}'s contact status with ${containerB}: ${statusA_step1
 
 # Step 2: B sends contact request to A (mutual request)
 echo -e "\t   Step 2: ${containerB} adds ${containerA} as contact (mutual request)..."
-addResultB=$(docker exec ${containerB} eiou add ${addressA} TestContactA 0.1 1000 USD 2>&1)
+addResultB=$(docker exec ${containerB} eiou contact add ${addressA} TestContactA --fee 0.1 --credit 1000 --currency USD 2>&1)
 echo -e "\t   Result: $(echo "${addResultB}" | head -1)"
 
 # Wait briefly for async processing

@@ -340,7 +340,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `CliService` | CLI output formatting | ContactRepo, BalanceRepo, TransactionRepo + setter: ContactCreditRepo, P2pRepo |
 | `DebugService` | Debug logging and diagnostics | DebugRepo |
 | `DebugReportService` | Generates debug reports (limited/full) with system info, logs, and diagnostics | DebugService, Logger |
-| `AnalyticsService` | Opt-in anonymous usage statistics — collects aggregate metrics (transaction counts, volume, contact count, active days) and sends weekly to `analytics.eiou.org`. Anonymous ID is HMAC-SHA256 hash. Disabled by default | UserContext, TransactionRepo, ContactRepo |
+| `AnalyticsService` | Opt-in anonymous usage statistics — collects aggregate metrics (transaction counts, volume, contact count, active days) and sends a single daily heartbeat to `analytics.eiou.org` (cron at 03:00 UTC, not real-time). Anonymous ID is HMAC-SHA256 hash. Disabled by default | UserContext, TransactionRepo, ContactRepo |
 | `UpdateCheckService` | Checks Docker Hub (with GitHub Releases fallback) for newer image versions. Cached for 24 hours. Respects `updateCheckEnabled` setting. Tor-only nodes skip | UserContext |
 | `CliDlqService` | CLI dead letter queue operations (list, retry, abandon) | DeadLetterQueueRepo, TransportUtility |
 | `CliHelpService` | CLI help/documentation generation | None |
@@ -1234,6 +1234,8 @@ Each node maintains a MariaDB database with these primary tables:
 | `held_transactions` | Transactions pending sync completion |
 | `api_keys` | API authentication keys |
 | `api_request_log` | API request audit trail |
+| `payback_methods` | The node's own payback methods — per-row AES-256-GCM encrypted `encrypted_fields` JSON blob keyed to the wallet with `method_id` as AAD (so ciphertext can't be swapped between rows). Carries `type`, `label`, `currency`, `priority`, `share_policy` (ENUM `auto`/`never`), `settlement_min_unit` + `settlement_min_unit_exponent`. Rail-type dispatch is plugin-extensible via `PaybackMethodTypeRegistry`; see `docs/PLUGINS.md` |
+| `payback_methods_received` | Cache of methods fetched from contacts over the E2E `payback-methods-request.v1` round-trip. Reserved for a future offline-cache layer — the current contact-modal Payback tab is a pure live fetch and does not write to this table |
 | `rate_limits` | Rate limiting state |
 | `chain_drop_proposals` | Mutual tx drop agreement tracking |
 | `p2p_senders` | Multi-path upstream sender tracking for RP2P forwarding |
@@ -2567,9 +2569,9 @@ Contacts progress through states managed by the `contacts` table:
                +----+-----+             +-----------+
                     |                         ^
                     |                         |
-                    +--- eiou block ----------+
+                    +--- eiou contact block --+
                     |
-                    +--- eiou delete --> (row deleted from DB)
+                    +--- eiou contact delete --> (row deleted from DB)
 ```
 
 | State | Description |
@@ -2594,12 +2596,12 @@ currency's chain heads don't match.
 ```
   Node A                                        Node B
     |                                             |
-    +-- eiou add <address>                        |
+    +-- eiou contact add <address> <name>         |
     |     +-- Send contact request -------------->|
     |         (tx_type='contact', amount=0,       +-- Contact appears as 'pending'
     |          currency=<requested currency>)     |
     |                                             |
-    |                                             +-- eiou accept <name>
+    |                                             +-- eiou contact accept <hash> ...
     |                                             |     +-- Update contact to 'accepted'
     |                                             |     +-- Calculate available credit
     |<-- Send acceptance (+ availableCredit) -----+     +-- Complete contact transaction
@@ -2640,6 +2642,7 @@ and available credit synchronization.
 | `processorsTotal` | Expected total processors |
 | `availableCreditByCurrency` | `{currency: amount}` — how much credit the contact has available for us |
 | `chainStatusByCurrency` | Per-currency chain validity flags |
+| `peerKnownCurrencies` | Currency codes the responder has *visible to this peer* — specifically, rows where status='accepted' (any direction) OR (status='pending' AND direction='incoming'). Outgoing-pending rows on the responder's side are deliberately excluded so we don't pre-announce requests that haven't been delivered yet. Used by the caller to reconcile stale outgoing-pending rows the responder either declined silently or never received. Older peers omit the field; the caller skips reconciliation when absent (back-compat). |
 
 **Available credit update:** Available credit is explicitly reported by the remote
 contact and stored in the `contact_credit` table. There are three update paths:
@@ -2656,6 +2659,46 @@ from the pong against local chain heads. If any currency's chain heads don't mat
 sync is triggered automatically. This is controlled by the `contactStatusSyncOnPing`
 setting (default: `true`). When disabled, chain mismatches are logged but not
 auto-repaired.
+
+**Currency-status reconciliation:** After saving available credit, the caller compares
+its own `(direction=outgoing, status=pending)` rows against `peerKnownCurrencies`. Any
+currency missing from the peer's list means the peer either declined the request and
+the notification was lost in flight, or never received it at all — the caller drops
+the stale row + rejects the contact transaction so the user's next retry succeeds via
+`addCurrencyToExisting` rather than tripping `CONTACT_EXISTS`. This is a backstop for
+the primary path (the peer's `contact_currency_declined` notification handled by
+`MessageService::handleContactMessageRequest`); reconcile catches lost messages.
+
+**Age guard.** Reconcile only fires for rows older than the
+`cleanupDeliveryRetentionDays` setting (default: 30 days, sourced from
+`UserContext::getCleanupDeliveryRetentionDays()`). Rows younger than that may still
+have an in-flight delivery attempt — first-pass retry queue or DLQ — and prematurely
+dropping them would make the user give up on a request that's about to land. After the
+retention window the underlying delivery record has been pruned by the cleanup
+processor, so a peer that doesn't recognize the currency genuinely never will and
+reconcile is safe. Failure mode of the guard is "stale row hangs around longer than
+necessary" rather than "user loses a real request" — strictly the safer side. No
+hard-coded threshold; the operator can tune the window via
+`changesettings cleanupDeliveryRetentionDays N`.
+
+**Privacy scope of peerKnownCurrencies.** Two layers of scoping:
+
+1. **Filtered by `pubkey_hash = <requesting peer>`** so it only contains currencies
+   that already involve that specific peer. It cannot leak currencies you trade with
+   other contacts, because those are stored under different pubkey-hashes.
+2. **Filtered to `status='accepted' OR (status='pending' AND direction='incoming')`**
+   so the responder's *own* outgoing-pending rows — requests they're trying to send
+   but haven't successfully delivered yet — are excluded from the advertisement.
+   Without this scope, an in-flight outgoing-pending row would tell the peer "I'm
+   planning to ask you about X" before they receive the actual request, leaking
+   intent ahead of the message.
+
+The pong is only sent to accepted contacts (blocked / unknown peers get a
+`buildRejection` response with no per-currency data). Net effect: the peer is told the
+state for *our pair* that they already half-know from their own DB (their own request
+landed → they have the row → matching incoming-pending on our side); the proactive
+list just makes lost state-change messages reconcilable in O(1) ping cycles instead
+of hanging forever.
 
 **Online status determination:**
 
@@ -2842,38 +2885,121 @@ API (8080). It uses an MVC-like structure with controllers, helpers, and HTML te
 
 ```
 /src/gui/
-├── controllers/              # POST request handlers
-│   ├── ContactController     # Contact add, accept, block, delete, settings
-│   ├── TransactionController # Send eIOU, transaction operations
-│   └── SettingsController    # Node settings management
+├── controllers/              # POST handlers (registered with GuiActionRegistry,
+│   │                         # see "GUI Action Registry" below)
+│   ├── ContactController     # add/accept/block/delete contacts, ping, chain-drop
+│   ├── TransactionController # sendEIOU, P2P approve/reject, getP2pCandidates
+│   ├── PaymentRequestController # create/approve/decline/cancel payment requests
+│   ├── SettingsController    # updateSettings, debug-report endpoints, analyticsConsent
+│   ├── DlqController         # dlqRetry/Abandon/RetryAll/AbandonAll
+│   ├── PaybackMethodsController # CRUD for payback rails (sentinel-unwind pattern)
+│   ├── PluginController      # plugin list / toggle / restart-banner / uninstall
+│   └── ApiKeysController     # API key CRUD (TIER_SENSITIVE for mutations)
 ├── helpers/                  # View data preparation
 │   ├── ContactDataBuilder    # Builds contact data arrays for templates
 │   ├── MessageHelper         # Flash message formatting and display
 │   └── ViewHelper            # Common view utilities
 ├── functions/
-│   └── Functions             # Shared template functions
+│   ├── Functions             # POST router (dispatcher → GuiActionRegistry); GET handlers
+│   ├── coreInlineActions     # No-controller POST closures (whatsNew, rememberSession,
+│   │                         # search/loadMore for transactions+payment requests)
+│   ├── TemplateHelpers       # cspNonce, formatTimestamp, status-icon maps,
+│   │                         # renderSection(), renderTable(),
+│   │                         # renderTransactionRowsForAjax() etc
+│   └── WalletTemplateHelpers # Post-auth template helpers (renderSection lives here)
 ├── includes/
 │   └── Session               # Secure session management (auth code-based + remember-me rotation tokens)
 ├── layout/
 │   ├── authenticationForm    # Login page (auth code entry)
 │   ├── wallet.html           # Main wallet layout (authenticated)
-│   └── walletSubParts/       # Wallet page sections
-│       ├── header             # Wallet title, logout button
-│       ├── banner             # System status banners
-│       ├── quickActions        # Action buttons (Send, Add Contact, etc.)
-│       ├── walletInformation   # Balance, earnings, available credit cards
-│       ├── contactSection      # Contact cards with scroll navigation
-│       ├── contactForm         # Contact modal (add/accept/view) with currency slider pills
-│       ├── eiouForm            # Send eIOU form with dynamic currency list and P2P options
-│       ├── transactionHistory  # Recent transactions list
-│       ├── settingsSection     # Node settings panel
-│       ├── notifications       # Toast notification container
-│       └── floatingButtons     # Refresh and back-to-top buttons
+│   └── walletSubParts/       # Wallet page sections (every standard section
+│       │                     # rendered through renderSection() — uniform
+│       │                     # form-container chrome + section-intro + body)
+│       ├── header / banner / notifications / quickActions / floatingButtons
+│       ├── walletInformation / paybackMethodsSection / dashboardTab
+│       ├── contactSection / contactsTab / pending-contacts (in contactSection)
+│       ├── eiouForm / sendTab / paymentRequestsSection
+│       ├── transactionHistory / activityTab
+│       ├── settingsSection / settingsTab / apiKeysSection / pluginsSection /
+│       │   debugSection
+│       └── _contactRow / _transactionHistoryRow / _paymentRequestRow (row partials
+│           reused by initial-render and AJAX append paths)
 └── assets/
     ├── css/                  # Stylesheets
     ├── js/                   # JavaScript (vanilla, Tor-compatible)
     └── fontawesome/          # Icon library
 ```
+
+### GUI Action Registry
+
+Every POST request from the wallet GUI flows through `GuiActionRegistry`. Plugin
+handlers and core handlers register against the same registry — there's no
+separate plugin path.
+
+The dispatcher at the top of `Functions.php` looks up `$_POST['action']`,
+checks the registered tier (`public` / `auth` / `csrf` / `sensitive`), and
+calls the handler. Tiers control what the registry enforces before dispatch:
+
+- `TIER_PUBLIC` — no gate (rare; reserved for unusual cases).
+- `TIER_AUTH` — authenticated session. Registry routes but does NOT check
+  CSRF, so the handler can keep its existing rotating
+  `verifyCSRFToken()` call and its existing failure-response shape
+  (e.g. plain-text 403 for HTML form submits).
+- `TIER_CSRF` — auth + non-rotating `validateCSRFToken($t, false)`.
+  On failure the registry emits
+  `{"success":false,"error":"csrf_error","message":"..."}` JSON 403.
+  Default for new plugin AJAX handlers.
+- `TIER_SENSITIVE` — `TIER_CSRF` + the session must hold a recent
+  sensitive-access grant (auth-code re-prompt, several minutes).
+
+Core entries register at `TIER_AUTH` because each handler keeps its own
+inline rotating-vs-non-rotating CSRF semantics and its own legacy envelope
+shape (no behavior change vs the pre-migration if-ladder).
+
+Last-write-wins on collision. A plugin that registers an action with a
+core action's name overrides core. The dispatcher invokes whatever's
+last-registered in the registry. This is documented as the override
+mechanic in `docs/PLUGINS.md` — plugins doing this MUST mirror the
+existing envelope shape or JS clients will break.
+
+Each controller exposes a `registerActions(GuiActionRegistry $r)` method
+called from `gui/index.html` after construction. No-controller AJAX
+handlers register from `gui/functions/coreInlineActions.php` (required
+from the top of `Functions.php` before the dispatcher).
+
+`Functions.php`'s POST router has zero hardcoded `if/in_array($action, ...)`
+branches as of this writing.
+
+### Plugin GUI Hooks
+
+Beyond the action registry, the GUI exposes four extension surfaces that
+let plugins extend rendering without forking templates:
+
+- **Render hooks (`gui.<area>.<position>`)** — fire-and-collect. Listeners
+  return HTML strings; the host concatenates them at the fire site.
+  Includes `gui.head.styles`, `gui.head.scripts`, `gui.footer.scripts`,
+  `gui.dashboard.before/after`, `gui.contacts.after`, `gui.activity.after`,
+  `gui.settings.section`, plus `gui.section.before.<id>` and
+  `gui.section.after.<id>` fired automatically by `renderSection()`.
+- **Filter hooks (`gui.<area>`)** — value-pipeline. Each listener
+  receives the value from the previous stage. Includes `gui.tabs`,
+  `gui.dashboard.widgets`, `gui.contact_modal.tabs` /
+  `gui.contact_modal.body`, `gui.contact.actions`.
+- **`PluginAssetRegistry`** — plugins call `enqueueStyle()` / `enqueueScript()`
+  in `boot()`; the host inlines small files with CSP-nonce or serves
+  larger files via `/gui/plugin-assets/<id>/<path>` (validated by
+  `PluginAssetServer`).
+- **`TabRegistry`** — the five core tabs are registry entries. Plugins
+  add their own tabs at chosen `order`.
+
+`renderSection()` and `renderTable()` helpers in
+`WalletTemplateHelpers.php` give plugin-authored sections the same chrome
+as core sections. See `docs/PLUGIN_GUI_HOOKS.md` for the design and
+`docs/PLUGINS.md` "Extending the GUI" for the plugin-author reference.
+
+Optional `PLUGIN_HOOKS_TRACE=1` env flag logs every hook fire (kind,
+hook, listener count, errors) — useful for plugin authors discovering
+which hooks the host actually calls without grepping templates.
 
 ### Session Management
 
@@ -2888,8 +3014,14 @@ class implements secure session handling:
 
 The GUI login form offers a "Remember this browser for N days" checkbox. When ticked,
 on successful auth the node mints a random 32-byte token, stores only its SHA-256 hash
-in the `remember_tokens` table, and writes the raw token into an `EIOU_REMEMBER`
-cookie (HttpOnly, SameSite=Strict, Secure when HTTPS).
+in the `remember_tokens` table, and writes the raw token into an `EIOU_REMEMBER_<nodeHash>`
+cookie (HttpOnly, SameSite=Strict, Secure when HTTPS). The cookie name is suffixed with
+`substr(sha256(public_key_pem), 0, 16)` so two nodes sharing a hostname (typical dev:
+`localhost:443` for one node, `localhost:8443` for another — cookies ignore port per
+RFC 6265) don't clobber each other's tokens. The same per-node suffix also applies to
+the PHP session cookie name. In production each node has its own hostname so the suffix
+is invisible but harmless; in dev it's load-bearing for being able to stay logged into
+two nodes simultaneously.
 
 On every subsequent page load where no session is authenticated but the cookie is
 present, `gui/index.html` asks `RememberTokenService::rotateToken(raw, ua)` to
@@ -3463,6 +3595,8 @@ public function testSearchContactsWithInvalidName(): void
 |----------|-------------|
 | [GUI_REFERENCE.md](GUI_REFERENCE.md) | Web interface documentation |
 | [GUI_QUICK_REFERENCE.md](GUI_QUICK_REFERENCE.md) | GUI quick reference card |
+| [PLUGIN_GUI_HOOKS.md](PLUGIN_GUI_HOOKS.md) | Plugin GUI hooks design (render slots, filter slots, asset registry, tab/action registries) |
+| [PLUGINS.md](PLUGINS.md) | Plugin authoring guide — see "Extending the GUI" for the day-to-day reference |
 
 ### Configuration and Errors
 

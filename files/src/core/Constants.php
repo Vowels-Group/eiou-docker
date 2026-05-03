@@ -44,7 +44,7 @@ class Constants {
     // docker-compose.yml for production deployments. Use Constants::isDebug() to
     // check debug state — it respects the env override.
     const APP_ENV = 'development';
-    const APP_VERSION = '0.1.13-alpha';
+    const APP_VERSION = '0.1.14-alpha';
     const MIN_COMPATIBLE_VERSION = '0.1.3-alpha';
     const APP_DEBUG = true;
 
@@ -52,7 +52,21 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 10;
+    const SCHEMA_VERSION = 14;
+
+    /**
+     * Plugin signature enforcement mode. One of:
+     *   - 'off'     — don't verify signatures (default; backwards compatible)
+     *   - 'warn'    — verify + log failures, but still load the plugin
+     *   - 'require' — verify + refuse to load any plugin that fails
+     *
+     * Turn this up as a rollout path: enable 'warn' for a release cycle so
+     * operators see which plugins would fail, then flip to 'require' once
+     * every plugin in your trust set is signed. Can be overridden per-node
+     * via a future `userconfig.json` key; core default stays 'off' until
+     * signed plugins are the norm.
+     */
+    const PLUGIN_SIGNATURE_MODE = 'off';
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -188,6 +202,16 @@ class Constants {
     // collection impractical. Set to false via EIOU_TOR_FORCE_FAST env variable
     // to allow best-fee mode over Tor (useful for testing).
     const TOR_FORCE_FAST = true;
+
+    // Networking — host-side endpoints used for the local Tor SOCKS
+    // proxy and the loopback HTTP backplane. Lifted to constants so a
+    // future port change (or an operator-tunable proxy host) doesn't
+    // require grepping the codebase.
+    const LOCALHOST_IP    = '127.0.0.1';
+    const TOR_PROXY_HOST  = '127.0.0.1';
+    const TOR_PROXY_PORT  = 9050;
+    /** Combined `host:port` form — the shape `curl_setopt(CURLOPT_PROXY, …)` expects. */
+    const TOR_PROXY       = '127.0.0.1:9050';
 
     // Hop budget randomization
     // When true (default), P2P routing uses a geometric distribution (30% stop

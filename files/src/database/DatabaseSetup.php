@@ -4,9 +4,45 @@
 namespace Eiou\Database;
 
 use Eiou\Utils\Logger;
+use InvalidArgumentException;
 use PDO;
 use PDOException;
 use RuntimeException;
+
+/**
+ * Defense-in-depth identifier guard for the SHOW / ALTER DDL string-concat
+ * sites in this file.
+ *
+ * Background. The migration runner can't use PDO placeholders for table /
+ * column / index names (MySQL forbids it for DDL), so it interpolates
+ * directly into the SQL. Today the interpolated values come exclusively
+ * from hardcoded migration arrays at the top of each function — operator-
+ * vetted code, never user input — and the AUDIT_SECURITY pass classified
+ * the apparent SQLi as informational-only for that reason.
+ *
+ * This guard makes the "no user input" property structural rather than
+ * a code-review-only invariant: every identifier must match
+ * `[A-Za-z_][A-Za-z0-9_]*` (MySQL's unquoted-identifier shape) and stay
+ * within MySQL's 64-char limit. If a future code change ever lets an
+ * external value reach one of those arrays, the migration aborts with
+ * a loud `InvalidArgumentException` instead of silently executing
+ * attacker-shaped DDL.
+ *
+ * @throws InvalidArgumentException when the identifier fails the shape check
+ */
+function assertSafeMigrationIdentifier(string $identifier, string $context): void
+{
+    if ($identifier === '' || strlen($identifier) > 64) {
+        throw new InvalidArgumentException(
+            "migration identifier ({$context}) length out of range: '{$identifier}'"
+        );
+    }
+    if (!preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/', $identifier)) {
+        throw new InvalidArgumentException(
+            "migration identifier ({$context}) contains disallowed characters: '{$identifier}'"
+        );
+    }
+}
 
 function freshInstall(){
     // Skip database setup in test mode
@@ -110,6 +146,13 @@ function freshInstall(){
                 $dbConn->exec(getApiRequestLogTableSchema());
                 $dbConn->exec(getApiNoncesTableSchema());
 
+                // Payback Methods (profile of settlement methods + v2 received cache)
+                $dbConn->exec(getPaybackMethodsTableSchema());
+                $dbConn->exec(getPaybackMethodsReceivedTableSchema());
+
+                // Plugin isolation — per-plugin MySQL-user credentials (encrypted)
+                $dbConn->exec(getPluginCredentialsTableSchema());
+
                 // System & Security
                 $dbConn->exec(getDebugTableSchema());
                 $dbConn->exec(getRateLimitsTableSchema());
@@ -187,57 +230,114 @@ function runMigrations(PDO $pdo): array {
         return ['_status' => 'up_to_date'];
     }
 
-    $results = [];
+    // Serialize concurrent migrations across PIDs with a MySQL advisory
+    // lock. Without this, multiple workers booting simultaneously each see
+    // the old version, all run table/column/index migrations in parallel,
+    // and the losers crash on 1061 "Duplicate key name" / 1050 "Table
+    // already exists". This is pre-ServiceContainer territory so we issue
+    // GET_LOCK directly instead of going through DatabaseLockingService.
+    $lockName = 'eiou_schema_migration';
+    $lockTimeout = 60;
+    $lockAcquired = false;
+    try {
+        $stmt = $pdo->prepare("SELECT GET_LOCK(:name, :timeout) AS acquired");
+        $stmt->execute(['name' => $lockName, 'timeout' => $lockTimeout]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $acquired = $row['acquired'] ?? null;
+        $lockAcquired = ($acquired === 1 || $acquired === '1');
+    } catch (PDOException $e) {
+        if (class_exists('Eiou\\Utils\\Logger')) {
+            Logger::getInstance()->error('Schema migration lock acquisition failed', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
 
-    // List of migration tables to create (added after initial release)
-    // Use fully-qualified names since dynamic calls don't use namespace resolution
-    $migrations = [
-        'payment_requests'               => 'Eiou\Database\getPaymentRequestsTableSchema',
-        'payment_requests_archive'       => 'Eiou\Database\getPaymentRequestsArchiveTableSchema',
-        'remember_tokens'                => 'Eiou\Database\getRememberTokensTableSchema',
-        'transactions_archive'           => 'Eiou\Database\getTransactionsArchiveTableSchema',
-        'transaction_chain_checkpoints'  => 'Eiou\Database\getTransactionChainCheckpointsTableSchema',
-    ];
+    if (!$lockAcquired) {
+        // Another PID may have completed migrations while we waited; if
+        // the version file is now current, treat that as success.
+        $currentVersion = file_exists($versionFile) ? (int) trim(file_get_contents($versionFile)) : 0;
+        if ($currentVersion >= $schemaVersion) {
+            return ['_status' => 'up_to_date'];
+        }
+        return ['_status' => 'error: could not acquire schema migration lock'];
+    }
 
-    foreach ($migrations as $tableName => $schemaFunction) {
-        try {
-            // Check if table exists
-            $stmt = $pdo->query("SHOW TABLES LIKE '$tableName'");
-            if ($stmt->rowCount() === 0) {
-                // Table doesn't exist, create it
-                $pdo->exec($schemaFunction());
-                $results[$tableName] = 'created';
-            } else {
-                $results[$tableName] = 'exists';
+    try {
+        // Re-read inside the lock — the holder before us may have just
+        // bumped the version, in which case we have nothing to do.
+        $currentVersion = file_exists($versionFile) ? (int) trim(file_get_contents($versionFile)) : 0;
+        if ($currentVersion >= $schemaVersion) {
+            return ['_status' => 'up_to_date'];
+        }
+
+        $results = [];
+
+        // List of migration tables to create (added after initial release)
+        // Use fully-qualified names since dynamic calls don't use namespace resolution
+        $migrations = [
+            'payment_requests'               => 'Eiou\Database\getPaymentRequestsTableSchema',
+            'payment_requests_archive'       => 'Eiou\Database\getPaymentRequestsArchiveTableSchema',
+            'remember_tokens'                => 'Eiou\Database\getRememberTokensTableSchema',
+            'transactions_archive'           => 'Eiou\Database\getTransactionsArchiveTableSchema',
+            'transaction_chain_checkpoints'  => 'Eiou\Database\getTransactionChainCheckpointsTableSchema',
+            'payback_methods'                => 'Eiou\Database\getPaybackMethodsTableSchema',
+            'payback_methods_received'       => 'Eiou\Database\getPaybackMethodsReceivedTableSchema',
+            'plugin_credentials'             => 'Eiou\Database\getPluginCredentialsTableSchema',
+        ];
+
+        foreach ($migrations as $tableName => $schemaFunction) {
+            try {
+                assertSafeMigrationIdentifier($tableName, 'migrations.tableName');
+                // Check if table exists
+                $stmt = $pdo->query("SHOW TABLES LIKE '$tableName'");
+                if ($stmt->rowCount() === 0) {
+                    // Table doesn't exist, create it
+                    $pdo->exec($schemaFunction());
+                    $results[$tableName] = 'created';
+                } else {
+                    $results[$tableName] = 'exists';
+                }
+            } catch (PDOException $e) {
+                $results[$tableName] = 'error: ' . $e->getMessage();
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("Migration failed for table $tableName", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
+        }
+
+        // Run column migrations
+        $columnResults = runColumnMigrations($pdo);
+        $results = array_merge($results, $columnResults);
+
+        // Check if any migration errored — only update version if all succeeded
+        $hasErrors = false;
+        foreach ($results as $status) {
+            if (is_string($status) && strpos($status, 'error:') === 0) {
+                $hasErrors = true;
+                break;
+            }
+        }
+
+        if (!$hasErrors) {
+            file_put_contents($versionFile, (string) $schemaVersion);
+        }
+
+        return $results;
+    } finally {
+        try {
+            $rs = $pdo->prepare("SELECT RELEASE_LOCK(:name)");
+            $rs->execute(['name' => $lockName]);
         } catch (PDOException $e) {
-            $results[$tableName] = 'error: ' . $e->getMessage();
             if (class_exists('Eiou\\Utils\\Logger')) {
-                Logger::getInstance()->error("Migration failed for table $tableName", [
-                    'error' => $e->getMessage()
+                Logger::getInstance()->warning('Schema migration lock release failed', [
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
     }
-
-    // Run column migrations
-    $columnResults = runColumnMigrations($pdo);
-    $results = array_merge($results, $columnResults);
-
-    // Check if any migration errored — only update version if all succeeded
-    $hasErrors = false;
-    foreach ($results as $status) {
-        if (is_string($status) && strpos($status, 'error:') === 0) {
-            $hasErrors = true;
-            break;
-        }
-    }
-
-    if (!$hasErrors) {
-        file_put_contents($versionFile, (string) $schemaVersion);
-    }
-
-    return $results;
 }
 
 /**
@@ -266,6 +366,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($columnsToAdd as $tableName => $columns) {
         foreach ($columns as $columnName => $columnDefinition) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'columnsToAdd.tableName');
+                assertSafeMigrationIdentifier($columnName, 'columnsToAdd.columnName');
                 // Use query() instead of prepare() - SHOW COLUMNS doesn't support placeholders in MariaDB
                 // Column names come from our own code, not user input, so direct interpolation is safe
                 $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
@@ -291,6 +393,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($columnsToDrop as $tableName => $columns) {
         foreach ($columns as $columnName) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'columnsToDrop.tableName');
+                assertSafeMigrationIdentifier($columnName, 'columnsToDrop.columnName');
                 // Use query() instead of prepare() - SHOW COLUMNS doesn't support placeholders in MariaDB
                 $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
 
@@ -327,6 +431,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($enumUpdates as $tableName => $columns) {
         foreach ($columns as $columnName => $newEnumDef) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'enumUpdates.tableName');
+                assertSafeMigrationIdentifier($columnName, 'enumUpdates.columnName');
                 // Check current ENUM values
                 $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
                 $columnInfo = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -363,17 +469,122 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
 
+    // Column type changes: tighten loose types on existing tables.
+    // Pattern: [tableName => [columnName => ['from' => regex, 'to' => new MySQL definition]]]
+    // The `from` regex matches against `SHOW COLUMNS` "Type"; only run
+    // the MODIFY if the current type still matches. Idempotent.
+    $columnTypeChanges = [
+        // addresses.pubkey_hash and balances.pubkey_hash were TEXT but
+        // every value is a SHA-256 hex digest (exactly 64 chars). The
+        // contacts / contact_credit / contact_currencies tables already
+        // store pubkey_hash as VARCHAR(64). Aligning the two TEXT
+        // columns avoids implicit type coercion on the heavily-used
+        // `addresses a JOIN contacts c ON a.pubkey_hash = c.pubkey_hash`
+        // and lets the existing pubkey indexes work as full-key
+        // equality indexes instead of TEXT prefix indexes.
+        'addresses' => [
+            'pubkey_hash' => ['from' => '/^text$/i', 'to' => 'VARCHAR(64) NOT NULL'],
+        ],
+        'balances' => [
+            'pubkey_hash' => ['from' => '/^text$/i', 'to' => 'VARCHAR(64) NOT NULL'],
+        ],
+    ];
+
+    foreach ($columnTypeChanges as $tableName => $columns) {
+        foreach ($columns as $columnName => $spec) {
+            try {
+                assertSafeMigrationIdentifier($tableName, 'columnTypeChanges.tableName');
+                assertSafeMigrationIdentifier($columnName, 'columnTypeChanges.columnName');
+                $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
+                $columnInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$columnInfo) {
+                    $results["{$tableName}.{$columnName}_type"] = 'missing_column';
+                    continue;
+                }
+
+                if (!preg_match($spec['from'], $columnInfo['Type'])) {
+                    $results["{$tableName}.{$columnName}_type"] = 'already_updated';
+                    continue;
+                }
+
+                // Defensive guard: refuse to truncate. If any existing
+                // value is longer than the target VARCHAR length, log
+                // and skip — operator can investigate (this should
+                // never happen for SHA-256 hashes but the cost of the
+                // check is one cheap query).
+                if (preg_match('/VARCHAR\((\d+)\)/i', $spec['to'], $m)) {
+                    $maxLen = (int) $m[1];
+                    $check = $pdo->query(
+                        "SELECT MAX(CHAR_LENGTH(`$columnName`)) AS max_len FROM `$tableName`"
+                    );
+                    $row = $check->fetch(PDO::FETCH_ASSOC);
+                    $observedMax = (int) ($row['max_len'] ?? 0);
+                    if ($observedMax > $maxLen) {
+                        $results["{$tableName}.{$columnName}_type"] =
+                            "skipped: existing value length $observedMax exceeds target $maxLen";
+                        if (class_exists('Eiou\\Utils\\Logger')) {
+                            Logger::getInstance()->error(
+                                "Column type migration skipped (would truncate)",
+                                [
+                                    'table' => $tableName,
+                                    'column' => $columnName,
+                                    'observed_max_length' => $observedMax,
+                                    'target_definition' => $spec['to'],
+                                ]
+                            );
+                        }
+                        continue;
+                    }
+                }
+
+                $pdo->exec("ALTER TABLE `$tableName` MODIFY COLUMN `$columnName` {$spec['to']}");
+                $results["{$tableName}.{$columnName}_type"] = 'updated';
+            } catch (PDOException $e) {
+                $results["{$tableName}.{$columnName}_type"] = 'error: ' . $e->getMessage();
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("Column type migration failed for {$tableName}.{$columnName}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
+
     // Add missing indexes
-    $indexesToAdd = [];
+    $indexesToAdd = [
+        // dead_letter_queue.message_id was previously unindexed, so the
+        // duplicate-detection lookup in DeadLetterQueueRepository::add
+        // (`WHERE message_id = ? AND status IN ('pending','retrying')`)
+        // ran a full-table scan every time. Composite (message_id,
+        // status) covers both the equality and the status filter.
+        'dead_letter_queue' => [
+            'idx_dlq_message_status' => 'message_id, status',
+        ],
+        // contact_currencies pending-currency lookups in
+        // ContactCurrencyRepository previously hit the pubkey_hash-only
+        // index and filtered by status post-scan. Composite covers
+        // both columns so multi-currency accept/decline flows skip
+        // the row-walk.
+        'contact_currencies' => [
+            'idx_cc_hash_status' => 'pubkey_hash, status',
+        ],
+    ];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
         foreach ($indexes as $indexName => $columnSpec) {
             try {
+                assertSafeMigrationIdentifier($tableName, 'indexesToAdd.tableName');
+                assertSafeMigrationIdentifier($indexName, 'indexesToAdd.indexName');
                 // Check if index exists
                 $stmt = $pdo->query("SHOW INDEX FROM `$tableName` WHERE Key_name = '$indexName'");
                 if ($stmt->rowCount() === 0) {
                     // Handle composite indexes (columns separated by comma)
                     $columns = array_map('trim', explode(',', $columnSpec));
+                    foreach ($columns as $col) {
+                        assertSafeMigrationIdentifier($col, 'indexesToAdd.columnSpec');
+                    }
                     $columnList = '`' . implode('`, `', $columns) . '`';
                     $pdo->exec("ALTER TABLE `$tableName` ADD INDEX `$indexName` ($columnList)");
                     $results["{$tableName}.{$indexName}"] = 'index_created';

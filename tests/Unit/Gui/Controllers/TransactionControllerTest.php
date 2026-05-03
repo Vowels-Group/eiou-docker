@@ -471,6 +471,25 @@ class TransactionControllerTest extends TestCase
         $this->assertTrue(true);
     }
 
+    /**
+     * registerActions populates the shared registry with every owned
+     * POST action at TIER_AUTH so the dispatcher's CSRF gate doesn't
+     * fire — handlers do their own check (rotating for sendEIOU,
+     * non-rotating for the AJAX trio).
+     */
+    public function testRegisterActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        foreach (['sendEIOU', 'approveP2pTransaction', 'rejectP2pTransaction', 'getP2pCandidates', 'getTransactionByTxid'] as $a) {
+            $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
+    }
+
     protected function tearDown(): void
     {
         $_POST = [];

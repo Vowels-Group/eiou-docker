@@ -28,7 +28,7 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 - **Location**: `tests/Unit/`
 - **Framework**: PHPUnit 11
-- **Total**: 2900+ tests, 5500+ assertions
+- **Total**: 5000+ tests, 15000+ assertions across 200+ files in 16 test categories (Api, Cli, Core, Database, Events, Exceptions, Formatters, Gui, Processors, Repositories, Schemas, Security, Services, Startup, Utils, Validators)
 
 ### Integration Tests (Shell)
 
@@ -46,9 +46,16 @@ Integration tests validate the complete system behavior using Docker containers.
 
 **Route cancellation tests** (`routeCancellationTest.sh`): 13 tests covering route cancellation service wiring, capacity reservation table existence, hop budget distribution (deterministic-mode aware: accepts constant `maxHops` when `EIOU_HOP_BUDGET_RANDOMIZED=false`, requires variance when randomized), capacity reservation creation during relay, release after best-fee selection, originator downstream cancel via `broadcastFullCancelForHash`, multi-route safety with `full_cancel` flag propagation, cancel timing vs passive expiry, and relay status propagation. Best with collisions or collisionscluster topologies.
 
-**Payment request tests** (`paymentRequestTest.sh`): 8 tests covering the full payment request lifecycle via the REST API — baseline list, create, outgoing pending confirmation, incoming delivery (async-safe), decline, cancel, invalid-create error handling, and a full **approve flow**: creates a request, polls until it arrives at the recipient, approves (triggering `sendEiou` internally), then verifies the transaction landed by checking the txid in the transactions table and confirming balance changes on both nodes. Included in the `all` and `api` test subsets.
+**Payment request tests** (`paymentRequestTest.sh`): 10 tests covering the full payment request lifecycle via the REST API — baseline list, create, outgoing pending confirmation, incoming delivery (async-safe), decline, cancel, invalid-create error handling, a full **approve flow** (creates a request, polls until it arrives at the recipient, approves which triggers `sendEiou` internally, verifies the transaction landed and balance changes on both nodes), an **approve-with-payer-note flow** that confirms the on-chain description ends up as `"payment: <requester desc> | <payer note>"`, and an over-long payer-note rejection check. Permission-gated since v0.1.14: `wallet:read` for list/create/decline/cancel, `wallet:send` for approve. Included in the `all` and `api` test subsets.
 
 ## Unit Test Inventory
+
+> The per-file tables below are a curated overview, not a mechanical
+> dump of every test file. The repo's actual count is the authoritative
+> number — `composer test -- --list-tests | wc -l` for tests, the
+> PHPUnit summary line for assertions. The inventory may lag behind
+> when new test files are added; the headings (Security, Utils, …)
+> always reflect every directory under `tests/Unit/`.
 
 ### Security Tests (`tests/Unit/Security/`)
 
@@ -252,6 +259,13 @@ Integration tests validate the complete system behavior using Docker containers.
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | **OutputSchemaTest.php** | 25+ | Debug/logging output for all message types |
+
+### Validator Tests (`tests/Unit/Validators/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **PaybackMethodTypeValidatorTest.php** | 30+ | Payback method type catalog: required-keys check, sibling-field references in `show_when`, currency-code references; field-by-field validation (text, mod-97 IBAN, ABA routing checksum, free-text custom rails); plugin-registered rail types. |
+| **Checksum/** | varies | Checksum-validator helpers (IBAN mod-97, ABA routing) consumed by `PaybackMethodTypeValidator`. |
 
 ### Schema/Payload Tests (`tests/Unit/Schemas/Payloads/`)
 
@@ -471,14 +485,17 @@ tests/
 │   │   └── Utilities/
 │   │       ├── CurrencyUtilityServiceTest.php
 │   │       └── TimeUtilityServiceTest.php
-│   └── Utils/
-│       ├── AddressValidatorTest.php
-│       ├── AdaptivePollerTest.php
-│       ├── InputValidatorTest.php
-│       ├── LoggerTest.php
-│       ├── SecureLoggerTest.php
-│       └── SecurityTest.php
-└── ...                        # Integration test scripts
+│   ├── Utils/
+│   │   ├── AddressValidatorTest.php
+│   │   ├── AdaptivePollerTest.php
+│   │   ├── InputValidatorTest.php
+│   │   ├── LoggerTest.php
+│   │   ├── SecureLoggerTest.php
+│   │   └── SecurityTest.php
+│   └── Validators/
+│       ├── Checksum/
+│       └── PaybackMethodTypeValidatorTest.php
+└── ...                        # Integration test scripts (see tests/README.md)
 ```
 
 ## Writing New Tests

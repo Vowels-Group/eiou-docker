@@ -152,6 +152,82 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
+ * Mirror of files/src/utils/InputValidator.php::validateAddress() in
+ * client-side JS so the Add Contact form can reject malformed input
+ * before submitting — without this, a typo in the address would round-
+ * trip through the controller, redirect with an "Invalid address" toast,
+ * and the user would lose every typed value (name / fee / credit /
+ * description / requested-credit). Tor v2/v3 lengths come from
+ * Constants::VALIDATION_TOR_V2_ADDRESS_LENGTH / V3 (16 / 56).
+ *
+ * Returns the same shape as the PHP side:
+ *   {valid: bool, value: string|null, error: string|null, type: 'tor'|'https'|'http'|null}
+ */
+function validateContactAddressClient(address) {
+    if (typeof address !== 'string' || address === '') {
+        return { valid: false, value: null, error: 'Address cannot be empty', type: null };
+    }
+    var trimmed = address.trim();
+
+    // Strip http(s):// off .onion paste-mistakes (matches server-side
+    // normalization).
+    if (/\.onion(\/|$)/i.test(trimmed)) {
+        trimmed = trimmed.replace(/^https?:\/\//i, '');
+    }
+
+    // Tor v2 (16 chars) and v3 (56 chars) onion addresses, optional
+    // :port and /path suffix.
+    var torV2 = /^[a-z2-7]{16}\.onion(:\d+)?(\/.*)?$/i;
+    var torV3 = /^[a-z2-7]{56}\.onion(:\d+)?(\/.*)?$/i;
+    if (torV2.test(trimmed) || torV3.test(trimmed)) {
+        return {
+            valid: true,
+            value: trimmed.replace(/\/$/, ''),
+            error: null,
+            type: 'tor',
+        };
+    }
+
+    // HTTP/HTTPS — use the URL constructor as the JS analogue of
+    // FILTER_VALIDATE_URL. Reject anything without a scheme so a bare
+    // "alice.example.com" fails the way the PHP filter does.
+    try {
+        var url = new URL(trimmed);
+        if (url.protocol === 'https:') {
+            return { valid: true, value: trimmed, error: null, type: 'https' };
+        }
+        if (url.protocol === 'http:') {
+            return { valid: true, value: trimmed, error: null, type: 'http' };
+        }
+    } catch (_) { /* fall through */ }
+
+    return { valid: false, value: null, error: 'Invalid address format', type: null };
+}
+
+/**
+ * Bring a modal to the top of the stacking context by re-appending it
+ * to document.body. Browsers stack fixed-position elements with the
+ * same z-index by DOM order — last child wins. Calling this on every
+ * stacked-modal open keeps the most-recently-opened modal visually on
+ * top, even when chained through multiple jumps (contact → tx →
+ * different contact → tx) where two modals end up sharing the
+ * `.modal-stack-top` z-index tier (10010).
+ *
+ * Idempotent: re-appending a node that already exists at that position
+ * is a no-op DOM-wise (preserves listeners + form state).
+ */
+function bringModalToTop(modal) {
+    if (!modal) return;
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+        return;
+    }
+    if (modal !== document.body.lastElementChild) {
+        document.body.appendChild(modal);
+    }
+}
+
+/**
  * Escapes HTML special characters to prevent XSS attacks.
  *
  * Uses the DOM's textContent property to safely escape any HTML entities
@@ -178,14 +254,20 @@ function escapeHtml(text) {
 }
 
 /**
- * Display-time normalisation for transaction descriptions. Old contact-
- * request txs stored their description as the long phrase "Contact request
- * transaction"; the current default is the shorter "Contact request".
- * Render the short form regardless of what's in the DB so the history looks
- * consistent across old + new rows. Returns the input unchanged for any
- * other description.
+ * Display-time normalisation for transaction descriptions. Contact-request
+ * descriptions evolved through three formats: "Contact request transaction"
+ * (oldest), "Contact request" (interim), and "Contact request (CCY)" (current
+ * default — self-disambiguating in multi-currency rows). When a currency is
+ * supplied, promote any of the older placeholders to the currency-bearing
+ * form so old + new rows render consistently. Returns the input unchanged
+ * for user-typed descriptions and any other text.
  */
-function displayTxDescription(desc) {
+function displayTxDescription(desc, currency) {
+    var ccy = (typeof currency === 'string' && currency) ? currency.toUpperCase() : '';
+    var isPlaceholder = desc === '' || desc === 'Contact request' || desc === 'Contact request transaction';
+    if (isPlaceholder && ccy) {
+        return 'Contact request (' + ccy + ')';
+    }
     if (desc === 'Contact request transaction') {
         return 'Contact request';
     }
@@ -337,6 +419,20 @@ var Paginator = (function () {
             html += '</select>';
             html += '</label>';
 
+            // Arrows + range, all in one cluster. The next arrow does
+            // double-duty: when there's an unrendered next page in the
+            // already-loaded rows, it just pages forward; when we're
+            // at the end of the loaded set AND a server-side loadMore
+            // is available, it fetches the next batch and advances
+            // automatically once the rows land. The standalone "Load
+            // older" button used to live separately to the right —
+            // collapsing it into the arrow keeps pagination + lazy
+            // server fetch on a single, predictable control.
+            var hasMoreLocal = state.size !== 0 && (state.page + 1) < pages;
+            var hasMoreRemote = !!(state.loadMoreFn && !state.loadMoreExhausted);
+            var canGoPrev = state.page > 0;
+            var canGoNext = hasMoreLocal || hasMoreRemote;
+
             // Range summary
             var rangeText;
             if (visibleLen === 0) {
@@ -348,23 +444,18 @@ var Paginator = (function () {
                 var to = Math.min(from + state.size - 1, visibleLen);
                 rangeText = from + '–' + to + ' of ' + visibleLen;
             }
+
+            html += '<span class="paginator-nav">';
+            html += '<button type="button" class="paginator-btn paginator-prev" ' + (!canGoPrev ? 'disabled' : '') + ' data-paginator-action="prev" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>';
             html += '<span class="paginator-range">' + rangeText + '</span>';
-
-            // Page navigation (only when more than one page)
-            if (pages > 1) {
-                html += '<span class="paginator-nav">';
-                html += '<button type="button" class="paginator-btn paginator-prev" ' + (state.page === 0 ? 'disabled' : '') + ' data-paginator-action="prev" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Previous page"><i class="fas fa-chevron-left"></i></button>';
-                html += '<span class="paginator-page-indicator">Page ' + (state.page + 1) + ' / ' + pages + '</span>';
-                html += '<button type="button" class="paginator-btn paginator-next" ' + (state.page + 1 >= pages ? 'disabled' : '') + ' data-paginator-action="next" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="Next page"><i class="fas fa-chevron-right"></i></button>';
-                html += '</span>';
-            }
-
-            // Load-older button (Phase 2)
-            if (state.loadMoreFn && !state.loadMoreExhausted) {
-                var busyIcon = state.loadMoreBusy ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt';
-                var busyLabel = state.loadMoreBusy ? 'Loading…' : state.loadMoreLabel;
-                html += '<button type="button" class="paginator-btn paginator-load-more" ' + (state.loadMoreBusy ? 'disabled' : '') + ' data-paginator-action="load-more" data-paginator-key="' + escapeHtml(state.key) + '"><i class="fas ' + busyIcon + '"></i> ' + escapeHtml(busyLabel) + '</button>';
-            }
+            // Inline busy spinner so the user sees the fetch is in
+            // flight without a separate "Loading…" button. Replaces
+            // the previous standalone Load-more visual.
+            var nextIcon = state.loadMoreBusy ? 'fa-spinner fa-spin' : 'fa-chevron-right';
+            var nextDisabled = !canGoNext || state.loadMoreBusy;
+            var nextAria = state.loadMoreBusy ? 'Loading more rows' : 'Next page';
+            html += '<button type="button" class="paginator-btn paginator-next" ' + (nextDisabled ? 'disabled' : '') + ' data-paginator-action="next" data-paginator-key="' + escapeHtml(state.key) + '" aria-label="' + nextAria + '"><i class="fas ' + nextIcon + '"></i></button>';
+            html += '</span>';
 
             html += '</div>';
             state.container.innerHTML = html;
@@ -397,7 +488,19 @@ var Paginator = (function () {
         }
 
         function setLoadMoreBusy(busy) {
+            var wasBusy = state.loadMoreBusy;
             state.loadMoreBusy = !!busy;
+            // Falling edge: a server fetch just settled. If the user
+            // got here by clicking the next arrow at the end of the
+            // loaded set, bump them to the new last page so the just-
+            // arrived rows are what they see. Skip when state.size===0
+            // ("All") since there are no client-side pages to advance
+            // through.
+            var shouldAdvance = wasBusy && !state.loadMoreBusy && state.pendingAdvance && state.size !== 0;
+            state.pendingAdvance = false;
+            if (shouldAdvance) {
+                state.page = state.page + 1;
+            }
             apply();
         }
 
@@ -437,8 +540,34 @@ var Paginator = (function () {
                 if (action === 'prev') {
                     inst.goTo(inst.state.page - 1);
                 } else if (action === 'next') {
-                    inst.goTo(inst.state.page + 1);
+                    var s = inst.state;
+                    // Compute current pages count from visible (non-
+                    // filter-hidden) rows so the "do I need to fetch
+                    // more?" decision matches what apply() last
+                    // rendered.
+                    var visibleCount = 0;
+                    var rows = s.tbody.querySelectorAll(s.rowSelector);
+                    for (var r = 0; r < rows.length; r++) {
+                        if (!rows[r].classList.contains('filter-hidden')) visibleCount++;
+                    }
+                    var pages = (s.size === 0 || visibleCount <= 0) ? 1 : Math.ceil(visibleCount / s.size);
+                    var atLastLocalPage = (s.size === 0) || (s.page + 1 >= pages);
+                    if (atLastLocalPage && s.loadMoreFn && !s.loadMoreExhausted && !s.loadMoreBusy) {
+                        // Auto-advance after the fetch lands. setLoadMoreBusy
+                        // (called by the loadMore callback when it's done)
+                        // sees this flag and bumps the page on the user's
+                        // behalf so they end up on the freshly-loaded rows
+                        // instead of staring at the still-current page.
+                        s.pendingAdvance = true;
+                        inst.setLoadMoreBusy(true);
+                        s.loadMoreFn(inst);
+                    } else {
+                        inst.goTo(s.page + 1);
+                    }
                 } else if (action === 'load-more') {
+                    // Legacy entry point: nothing in v0.1.14+ renders this
+                    // button anymore (the next-arrow swallowed its job),
+                    // but external callers / tests may still dispatch it.
                     if (inst.state.loadMoreFn && !inst.state.loadMoreBusy) {
                         inst.setLoadMoreBusy(true);
                         inst.state.loadMoreFn(inst);
@@ -1151,6 +1280,27 @@ function renderTransactionModal(tx) {
         html += '</div>';
     }
 
+    // Pending-contact notice: a contact-request tx in 'accepted' state on the
+    // receiver side corresponds to a Pending Contact Request awaiting user
+    // action. Surface a clickable link here — same pattern as the DLQ notice
+    // — so the user can jump straight to the right pending modal instead of
+    // hunting for it in the Pending Contact Requests section. Only render
+    // when a matching pending modal actually exists in the DOM (the request
+    // could already have been resolved without a page refresh).
+    if (isContactReq && tx.status === 'accepted' && tx.type === 'received') {
+        var senderHash = tx.sender_public_key_hash || '';
+        var hasPending = senderHash && !!document.querySelector('[data-pending-contact-modal][data-pubkey-hash="' + senderHash + '"]');
+        if (hasPending) {
+            html += '<div class="tx-modal-pending-contact-notice">';
+            html += '<i class="fas fa-info-circle"></i> ';
+            html += 'This contact request is awaiting your decision — '
+                 +  '<a href="#" data-action="jumpToPendingContactByPubkeyHash"'
+                 +  ' data-pubkey-hash="' + escapeHtml(senderHash) + '">'
+                 +  'open the Pending Contact Request</a> to accept, decline, or defer.';
+            html += '</div>';
+        }
+    }
+
     // Details section
     html += '<div class="tx-detail-section">';
 
@@ -1178,7 +1328,7 @@ function renderTransactionModal(tx) {
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description)) + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(displayTxDescription(tx.description, tx.currency)) + '</div>';
         html += '</div>';
     }
 
@@ -1310,6 +1460,35 @@ function closeTransactionModal() {
  *
  * @param {string} txid - The transaction ID to look up and display
  */
+/**
+ * Open the pending-contact-request modal for a given contact pubkey hash,
+ * stacked on top of whichever modal called us. Used by the contact-detail
+ * "Their requests" section, the Transaction Details "this is awaiting your
+ * decision" notice on contact-type rows, and any other surface that wants
+ * to drop the user into the right pending modal for a specific contact.
+ *
+ * Returns silently when no matching pending modal exists (e.g. the row was
+ * already acted on but the page hasn't refreshed).
+ *
+ * @param {string} pubkeyHash - Contact's pubkey hash (matches the
+ *                              data-pubkey-hash attribute on the rendered
+ *                              pending-contact-modal-N element)
+ */
+function openPendingContactModalByPubkeyHash(pubkeyHash) {
+    if (!pubkeyHash) return;
+    var modal = document.querySelector('[data-pending-contact-modal][data-pubkey-hash="' + pubkeyHash + '"]');
+    if (!modal) return;
+    // Pending-contact modals are rendered inside the Contacts tab pane, which
+    // is display:none when the user is on Activity / Settings / etc. — and a
+    // position:fixed child of a display:none ancestor still doesn't render.
+    // Hoist to <body> so the modal overlays whichever tab the user is on. The
+    // move preserves event listeners and form state; idempotent on subsequent
+    // opens (already-hoisted modals stay where they are).
+    bringModalToTop(modal);
+    modal.classList.remove('d-none');
+    modal.classList.add('modal-stack-top');
+}
+
 function openTransactionModalByTxid(txid) {
     if (!txid) { return; }
 
@@ -1425,6 +1604,12 @@ document.addEventListener('keydown', function(event) {
     // modal opened from DLQ modal via its Transaction ID link), Escape
     // should dismiss only the top modal so the user returns to the
     // underlying modal they were reading.
+    var stackedPending = document.querySelector('[data-pending-contact-modal].modal-stack-top:not(.d-none)');
+    if (stackedPending) {
+        stackedPending.classList.add('d-none');
+        stackedPending.classList.remove('modal-stack-top');
+        return;
+    }
     var contactModalEl = document.getElementById('contactModal');
     if (contactModalEl
         && contactModalEl.classList.contains('modal-stack-top')
@@ -2126,10 +2311,51 @@ function initializeFormLoaders() {
     // Retry info text for contact operations
     var retryInfoText = 'Connecting to contact server. The message processor will continue retrying in the background.';
 
-    // Add contact form (now inside modal)
+    // Add contact form (now inside modal). Client-side validation runs
+    // first so an invalid address is caught here — without this, the
+    // form would post, the controller would redirect with an "Invalid
+    // address" toast, and the user would lose every typed value
+    // including the address they fat-fingered. Uses the HTML5
+    // setCustomValidity / reportValidity pair so the error appears in
+    // the same browser-native bubble style as the "Please fill out
+    // this field" tooltip on empty required fields — consistent UX.
     var addContactForm = document.getElementById('add-contact-form');
     if (addContactForm) {
-        addContactForm.addEventListener('submit', function() {
+        var addrInput = document.getElementById('address');
+        // Clear the custom validity message as soon as the user
+        // starts editing the address — matches how the native
+        // empty-required-field tooltip dismisses on input.
+        if (addrInput) {
+            addrInput.addEventListener('input', function() {
+                addrInput.setCustomValidity('');
+            });
+        }
+        addContactForm.addEventListener('submit', function(ev) {
+            if (!addrInput) return;
+            // Reset before re-validating so a stale message doesn't
+            // suppress the empty-field default browser bubble.
+            addrInput.setCustomValidity('');
+            var raw = (addrInput.value || '').trim();
+            // Empty case is already handled by the `required` attribute —
+            // browser shows "Please fill out this field" natively. Skip
+            // our format check when the value is empty so we don't
+            // double-block on the same condition.
+            if (raw !== '') {
+                var validation = validateContactAddressClient(raw);
+                if (!validation.valid) {
+                    ev.preventDefault();
+                    addrInput.setCustomValidity('Invalid address: ' + validation.error);
+                    addrInput.reportValidity();
+                    return;
+                }
+                // Mirror the server's normalization (strip http(s):// off
+                // .onion paste-mistakes, drop trailing slash) so the value
+                // posted matches what the server would have stored anyway.
+                if (validation.value && validation.value !== raw) {
+                    addrInput.value = validation.value;
+                }
+            }
+
             showLoader('Adding contact...', retryInfoText);
             startOperationTimeout('addContact', 'Still waiting for response. The message is being retried in the background. You can continue using the app and check back later.');
         });
@@ -2213,16 +2439,15 @@ function initializeFormLoaders() {
     }
 
     // Payment request — Approve & Pay (triggers a full sendEiou, can be slow over Tor)
-    var approveForms = document.querySelectorAll('form input[name="action"][value="approvePaymentRequest"]');
-    for (var i = 0; i < approveForms.length; i++) {
-        var form = approveForms[i].closest('form');
-        if (form) {
-            form.addEventListener('submit', function() {
-                showLoader('Approving & sending payment...', 'Processing your transaction. This may take a moment over Tor.');
-                startOperationTimeout('approvePayment', 'Still processing. Check your transaction history — the payment may have completed in the background.');
-            });
-        }
-    }
+    //
+    // The Pay button now goes through a confirmation modal so the payer can
+    // optionally append a note to the on-chain transaction description. The
+    // requester's original description is shown read-only so it's clear the
+    // payer is *adding to it* rather than editing it; the counter under the
+    // textarea decrements live as they type and is hard-capped at whatever
+    // space the requester's description leaves under the 255-char ceiling
+    // (matching PaymentRequestService::maxPayerNoteLength on the backend).
+    initializePaymentRequestApprovalHandler();
 
     // Payment request — Decline (sends a Tor response message, can be slow)
     var declineForms = document.querySelectorAll('form input[name="action"][value="declinePaymentRequest"]');
@@ -2250,53 +2475,298 @@ function initializeFormLoaders() {
 }
 
 /**
- * Initializes shared name fields and Accept All buttons for pending contact currency forms.
+ * Wire up the Pay → confirmation modal flow on incoming payment-request
+ * rows. Each Pay form (rendered by paymentRequestsSection.html) carries
+ * data-pr-description, data-pr-amount, and data-pr-counterparty so the
+ * modal can pre-populate without a round-trip. Submit is intercepted,
+ * the modal is opened, and on confirm the typed note is written into
+ * the form's hidden payer_note input before the form is actually
+ * submitted (which then hits the existing showLoader path).
  *
- * Shared name: A single Name input above all currency forms for a contact.
- * On form submit, the name value is copied to a hidden field inside the form.
- *
- * Accept All: Sequentially submits all currency forms for a contact via fetch,
- * then reloads the page to show results.
+ * Mirror of the backend cap: PaymentRequestService::maxPayerNoteLength()
+ * computes available = 255 - len(requester_description) - len(' | ').
+ * If available is 0 we still let the user pay — they just can't add a
+ * note (textarea is disabled with an explanatory hint).
  */
-function initializeCurrencyAcceptHandlers() {
-    // Before form submit, copy shared name to hidden field
-    var currencyForms = document.querySelectorAll('.currency-accept-form');
-    for (var i = 0; i < currencyForms.length; i++) {
-        (function(form) {
-            form.addEventListener('submit', function(e) {
-                var sharedNameId = form.getAttribute('data-shared-name-id');
-                if (sharedNameId) {
-                    var nameInput = document.getElementById(sharedNameId);
-                    var target = form.querySelector('.shared-name-target');
-                    if (nameInput && target) {
-                        var nameVal = nameInput.value.trim();
-                        if (!nameVal) {
-                            e.preventDefault();
-                            nameInput.focus();
-                            nameInput.style.borderColor = '#dc3545';
-                            if (typeof showToast === 'function') {
-                                showToast('Required', 'Please enter a name for this contact', 'warning');
-                            }
-                            return false;
-                        }
-                        target.value = nameVal;
-                    }
-                }
-            });
-        })(currencyForms[i]);
+var PR_APPROVE_DESC_MAX = 255;
+var PR_APPROVE_SEPARATOR = ' | ';
+var pendingApproveForm = null;
+
+function initializePaymentRequestApprovalHandler() {
+    // Event-delegated submit handler so the row-click "Payment Request
+    // Details" drill-down modal — which builds its Pay form
+    // dynamically in openPrPendingModal — gets caught too. A
+    // per-element listener attached at DOMContentLoaded would only
+    // see the inline pending-row forms, not the dynamically inserted
+    // ones, so users would land on the legacy direct-submit path
+    // and skip the note modal entirely.
+    document.addEventListener('submit', function (ev) {
+        var form = ev.target;
+        if (!form || !form.classList || !form.classList.contains('pr-approve-form')) return;
+        // Only intercept user-initiated submits — the modal-confirm
+        // path re-submits programmatically with a flag set so the
+        // showLoader handler still fires the second time.
+        if (form.getAttribute('data-pr-confirmed') === '1') {
+            showLoader('Approving & sending payment...', 'Processing your transaction. This may take a moment over Tor.');
+            startOperationTimeout('approvePayment', 'Still processing. Check your transaction history — the payment may have completed in the background.');
+            return;
+        }
+        ev.preventDefault();
+        openPrApproveModal(form);
+    }, true);
+
+    var confirmBtn = document.getElementById('pr-approve-confirm');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', confirmPrApproveModal);
     }
 
-    // Accept All form handler — collects fee/credit from individual currency forms
-    var acceptAllForms = document.querySelectorAll('.accept-all-form');
-    for (var j = 0; j < acceptAllForms.length; j++) {
-        (function(form) {
-            form.addEventListener('submit', function(e) {
-                var card = form.closest('.pending-contact-accept-form');
-                if (!card) { e.preventDefault(); return; }
+    var noteEl = document.getElementById('pr-approve-note');
+    if (noteEl) {
+        noteEl.addEventListener('input', updatePrApproveCounter);
+    }
+}
 
-                // Validate shared name first
-                var nameInput = card.querySelector('.shared-name-input');
-                if (nameInput && !nameInput.value.trim()) {
+function openPrApproveModal(form) {
+    pendingApproveForm = form;
+    // If the user reached Pay via the row-click drill-down modal
+    // (openPrPendingModal), close that modal first so we don't render
+    // two stacked dialogs. The drill-down modal is a dynamically
+    // inserted #pr-pending-modal element appended to <body>.
+    var pendingModal = document.getElementById('pr-pending-modal');
+    if (pendingModal && document.body.contains(pendingModal)) {
+        document.body.removeChild(pendingModal);
+    }
+    var desc = form.getAttribute('data-pr-description') || '';
+    var amount = form.getAttribute('data-pr-amount') || '';
+    var cp = form.getAttribute('data-pr-counterparty') || '';
+
+    var descEl = document.getElementById('pr-approve-orig-desc');
+    if (descEl) descEl.textContent = desc || '— (no description)';
+    var amountEl = document.getElementById('pr-approve-amount');
+    if (amountEl) amountEl.textContent = amount;
+    var cpEl = document.getElementById('pr-approve-counterparty');
+    if (cpEl) cpEl.textContent = cp;
+
+    var noteEl = document.getElementById('pr-approve-note');
+    if (noteEl) {
+        noteEl.value = '';
+        noteEl.disabled = false;
+        noteEl.placeholder = 'e.g. "paid via coinbase txid abc123"';
+    }
+    var errEl = document.getElementById('pr-approve-error');
+    if (errEl) { errEl.textContent = ''; errEl.classList.add('d-none'); }
+
+    updatePrApproveCounter();
+
+    // If the requester's description already eats the whole budget,
+    // there's no room for a note — disable the textarea but still let
+    // the payer hit Pay (with no note) so the flow isn't blocked.
+    var max = prApproveMaxNote();
+    if (max <= 0 && noteEl) {
+        noteEl.disabled = true;
+        noteEl.placeholder = 'No room — requester description fills the 255-char budget';
+    }
+
+    var modal = document.getElementById('pr-approve-modal');
+    if (modal) modal.classList.remove('d-none');
+    if (noteEl && !noteEl.disabled) setTimeout(function () { noteEl.focus(); }, 50);
+}
+
+function closePrApproveModal() {
+    var modal = document.getElementById('pr-approve-modal');
+    if (modal) modal.classList.add('d-none');
+    pendingApproveForm = null;
+}
+
+function prApproveMaxNote() {
+    if (!pendingApproveForm) return 0;
+    var desc = pendingApproveForm.getAttribute('data-pr-description') || '';
+    var available = PR_APPROVE_DESC_MAX - desc.length - PR_APPROVE_SEPARATOR.length;
+    return available > 0 ? available : 0;
+}
+
+function updatePrApproveCounter() {
+    var noteEl = document.getElementById('pr-approve-note');
+    var counterEl = document.getElementById('pr-approve-counter');
+    if (!noteEl || !counterEl) return;
+    var max = prApproveMaxNote();
+    var len = (noteEl.value || '').length;
+    var left = max - len;
+    if (left < 0) left = 0;
+    counterEl.textContent = len + ' / ' + max + '  (' + left + ' chars left)';
+    if (max > 0 && len > max) {
+        counterEl.style.color = '#f87171';
+    } else if (max > 0 && left <= 10) {
+        counterEl.style.color = '#fbbf24';
+    } else {
+        counterEl.style.color = '';
+    }
+}
+
+function confirmPrApproveModal() {
+    if (!pendingApproveForm) return;
+    var noteEl = document.getElementById('pr-approve-note');
+    var errEl = document.getElementById('pr-approve-error');
+    var note = (noteEl && !noteEl.disabled) ? (noteEl.value || '').trim() : '';
+    var max = prApproveMaxNote();
+
+    if (note.length > max) {
+        if (errEl) {
+            errEl.textContent = 'Note too long — max ' + max + ' chars for this request';
+            errEl.classList.remove('d-none');
+        }
+        return;
+    }
+
+    var hidden = pendingApproveForm.querySelector('input[name="payer_note"]');
+    if (hidden) hidden.value = note;
+
+    var form = pendingApproveForm;
+    closePrApproveModal();
+
+    // Mark + re-submit so the existing submit handler hits the
+    // showLoader path on this pass instead of re-opening the modal.
+    form.setAttribute('data-pr-confirmed', '1');
+    if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+    } else {
+        form.submit();
+    }
+}
+
+/**
+ * Initialize the per-currency segmented decision controls + the bottom
+ * Apply button for pending contact-request modals. The user picks
+ * Accept / Decline / Defer per currency (with a smart default), tweaks
+ * fee / credit on Accept rows, and submits everything via a single
+ * applyContactDecisions POST. Defer rows are dropped from the payload.
+ */
+function initializeCurrencyAcceptHandlers() {
+    var forms = document.querySelectorAll('.apply-decisions-form');
+    for (var i = 0; i < forms.length; i++) {
+        (function (form) {
+            var accordions = form.querySelectorAll('.pending-currency-accordion');
+            var applyBtn = form.querySelector('.apply-decisions-btn');
+            var applyLabel = form.querySelector('.apply-decisions-label');
+
+            function setDecision(accordion, value) {
+                var prev = accordion.getAttribute('data-decision') || 'accept';
+                accordion.setAttribute('data-decision', value);
+                var btns = accordion.querySelectorAll('.currency-decision-btn');
+                for (var b = 0; b < btns.length; b++) {
+                    btns[b].classList.toggle('is-active', btns[b].getAttribute('data-decision-value') === value);
+                    btns[b].setAttribute('aria-checked', btns[b].getAttribute('data-decision-value') === value ? 'true' : 'false');
+                }
+                // Collapse the body when there's nothing left to configure
+                // (Decline/Defer rows have no fee/credit). Accept rows
+                // re-open. Skipped when the previous state already
+                // matched, so manual user expand/collapse is preserved.
+                if (prev !== value) {
+                    accordion.open = (value === 'accept');
+                }
+                updateApplyLabel();
+            }
+
+            function tally() {
+                var counts = { accept: 0, decline: 0, defer: 0 };
+                for (var k = 0; k < accordions.length; k++) {
+                    var d = accordions[k].getAttribute('data-decision') || 'defer';
+                    if (counts[d] === undefined) { counts[d] = 0; }
+                    counts[d]++;
+                }
+                return counts;
+            }
+
+            function updateApplyLabel() {
+                var c = tally();
+                var actionable = c.accept + c.decline;
+                if (!applyBtn || !applyLabel) return;
+                if (actionable === 0) {
+                    applyLabel.textContent = 'Apply (nothing to do)';
+                    applyBtn.disabled = true;
+                    return;
+                }
+                applyBtn.disabled = false;
+                if (c.accept > 0 && c.decline === 0 && c.defer === 0) {
+                    applyLabel.textContent = c.accept === 1 ? 'Accept request' : 'Accept all ' + c.accept + ' currencies';
+                } else if (c.decline > 0 && c.accept === 0) {
+                    applyLabel.textContent = c.decline === 1 ? 'Decline 1 currency' : 'Decline ' + c.decline + ' currencies';
+                } else {
+                    var parts = [];
+                    if (c.accept > 0) parts.push(c.accept + ' accept');
+                    if (c.decline > 0) parts.push(c.decline + ' decline');
+                    if (c.defer > 0) parts.push(c.defer + ' defer');
+                    applyLabel.textContent = 'Apply: ' + parts.join(', ');
+                }
+            }
+
+            // Wire each accordion: click on a decision button updates state;
+            // initialize active styling from the data-decision PHP set.
+            for (var k = 0; k < accordions.length; k++) {
+                (function (accordion) {
+                    var initial = accordion.getAttribute('data-decision') || 'accept';
+                    setDecision(accordion, initial);
+
+                    var btns = accordion.querySelectorAll('.currency-decision-btn');
+                    for (var b = 0; b < btns.length; b++) {
+                        btns[b].addEventListener('click', function (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDecision(accordion, this.getAttribute('data-decision-value'));
+                        });
+                    }
+                })(accordions[k]);
+            }
+
+            updateApplyLabel();
+
+            // Write the decisions JSON + the new-contact name into the
+            // form's hidden inputs, set the button to a busy state. Used
+            // both by the in-line happy path (before letting the event
+            // continue to native submission) and by the guard-confirmed
+            // path that calls form.submit() programmatically.
+            //
+            // Loader pattern mirrors the payment-request approve handler:
+            // showLoader covers the page, startOperationTimeout schedules
+            // a 15s auto-reload + post-reload toast so the user is never
+            // stuck staring at a spinner if the contact's transport is
+            // degraded — local state is saved synchronously, the outbound
+            // notification is owned by the DLQ retry processor.
+            function writePayload(decisions, isNewContact, nameInput) {
+                if (isNewContact && nameInput) {
+                    var nameTarget = form.querySelector('.apply-decisions-name-target');
+                    if (nameTarget) { nameTarget.value = nameInput.value.trim(); }
+                }
+                form.querySelector('.apply-decisions-data').value = JSON.stringify(decisions);
+                if (applyBtn) {
+                    applyBtn.disabled = true;
+                    var applyIcon = applyBtn.querySelector('i');
+                    if (applyIcon) { applyIcon.className = 'fas fa-spinner fa-spin'; }
+                    if (applyLabel) { applyLabel.textContent = 'Applying…'; }
+                }
+                if (typeof showLoader === 'function') {
+                    showLoader('Applying contact decisions…',
+                               'Saving your decisions locally. The notification to the contact is queued and will keep retrying in the background if the transport is slow.');
+                }
+                if (typeof startOperationTimeout === 'function') {
+                    startOperationTimeout('applyContactDecisions',
+                                          'Still processing. Your decisions are saved locally and the notification to the contact will keep retrying in the background — check the Failed Messages panel under Activity.');
+                }
+            }
+
+            form.addEventListener('submit', function (e) {
+                var counts = tally();
+                if (counts.accept === 0 && counts.decline === 0) {
+                    e.preventDefault();
+                    return;
+                }
+
+                // Name validation: required only when at least one Accept on a
+                // new contact (a name is needed to establish the relationship).
+                var isNewContact = form.getAttribute('data-is-new-contact') === '1';
+                var sharedNameId = form.getAttribute('data-shared-name-id');
+                var nameInput = sharedNameId ? document.getElementById(sharedNameId) : null;
+                if (isNewContact && counts.accept > 0 && nameInput && !nameInput.value.trim()) {
                     e.preventDefault();
                     nameInput.focus();
                     nameInput.style.borderColor = '#dc3545';
@@ -2306,78 +2776,65 @@ function initializeCurrencyAcceptHandlers() {
                     return;
                 }
 
-                // Copy shared name into the Accept All form's hidden field (for new contacts)
-                var nameTarget = form.querySelector('.accept-all-name-target');
-                if (nameTarget && nameInput) {
-                    nameTarget.value = nameInput.value.trim();
-                }
-
-                // Collect currency data from individual forms
-                // Field names differ: existing contacts use "currency"/"fee"/"credit",
-                // new contacts use "contact_currency"/"contact_fee"/"contact_credit"
-                var currencyForms = card.querySelectorAll('.currency-accept-form');
-                var currencies = [];
-                for (var k = 0; k < currencyForms.length; k++) {
-                    var cf = currencyForms[k];
-                    var currency = cf.querySelector('input[name="currency"]') || cf.querySelector('input[name="contact_currency"]');
-                    var fee = cf.querySelector('input[name="fee"]') || cf.querySelector('input[name="contact_fee"]');
-                    var credit = cf.querySelector('input[name="credit"]') || cf.querySelector('input[name="contact_credit"]');
-                    if (currency && fee && credit) {
-                        currencies.push({
-                            currency: currency.value,
-                            fee: fee.value,
-                            credit: credit.value
+                // Build decisions payload. Defer rows omitted; accept rows
+                // include fee/credit; decline rows are bare.
+                var decisions = [];
+                for (var n = 0; n < accordions.length; n++) {
+                    var ac = accordions[n];
+                    var decision = ac.getAttribute('data-decision') || 'defer';
+                    var currency = ac.getAttribute('data-currency') || '';
+                    if (!currency || decision === 'defer') continue;
+                    if (decision === 'accept') {
+                        var feeEl = ac.querySelector('.currency-fee-input');
+                        var creditEl = ac.querySelector('.currency-credit-input');
+                        decisions.push({
+                            currency: currency,
+                            action: 'accept',
+                            fee: feeEl ? feeEl.value : '',
+                            credit: creditEl ? creditEl.value : ''
                         });
+                    } else if (decision === 'decline') {
+                        decisions.push({ currency: currency, action: 'decline' });
                     }
                 }
+                if (decisions.length === 0) { e.preventDefault(); return; }
 
-                if (currencies.length === 0) {
-                    e.preventDefault();
-                    return;
-                }
-
-                // Defaults guard — if any currency is at both the default
-                // fee AND default credit, warn before accepting. User's
-                // defaults come from data attributes on the accept-all form
-                // (emitted by PHP from user settings). Skipped if all
-                // currencies were customized.
+                // Defaults guard for Accept rows — warn once if any are at
+                // both the default fee AND default credit.
                 var defaultFee = form.getAttribute('data-default-fee');
                 var defaultCredit = form.getAttribute('data-default-credit');
-                if (defaultFee !== null && defaultCredit !== null) {
+                if (defaultFee !== null && defaultCredit !== null && !form.dataset.guardConfirmed) {
                     var untouched = [];
-                    for (var m = 0; m < currencies.length; m++) {
-                        // Number comparison — the rendered value may have
-                        // trailing zeros etc. that string-compare would miss.
-                        if (parseFloat(currencies[m].fee) === parseFloat(defaultFee)
-                            && parseFloat(currencies[m].credit) === parseFloat(defaultCredit)) {
-                            untouched.push(currencies[m].currency);
+                    for (var m = 0; m < decisions.length; m++) {
+                        if (decisions[m].action !== 'accept') continue;
+                        if (parseFloat(decisions[m].fee) === parseFloat(defaultFee)
+                            && parseFloat(decisions[m].credit) === parseFloat(defaultCredit)) {
+                            untouched.push(decisions[m].currency);
                         }
                     }
-                    if (untouched.length > 0 && !form.dataset.guardConfirmed) {
+                    if (untouched.length > 0) {
                         e.preventDefault();
-                        var msg = untouched.length === currencies.length
-                            ? 'You\'re accepting all ' + currencies.length + ' currencies with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
-                            : 'The following currencies are at your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
-                        if (!confirm(msg)) return;
-                        // One-shot bypass — set a flag, re-submit, skip the
-                        // guard on the second pass.
-                        form.dataset.guardConfirmed = '1';
-                        form.submit();
+                        var acceptCount = counts.accept;
+                        var msg = untouched.length === acceptCount
+                            ? 'You\'re accepting ' + acceptCount + ' currenc' + (acceptCount === 1 ? 'y' : 'ies') + ' with your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + '. Continue?'
+                            : 'The following currencies use your default fee ' + defaultFee + '% and credit limit ' + defaultCredit + ': ' + untouched.join(', ') + '. Continue?';
+                        showConfirmModal(msg, { title: 'Accept with defaults?', confirmText: 'Continue' }).then(function (ok) {
+                            if (!ok) return;
+                            form.dataset.guardConfirmed = '1';
+                            // form.submit() does NOT fire the submit event,
+                            // so we must populate the hidden fields first.
+                            writePayload(decisions, isNewContact, nameInput);
+                            HTMLFormElement.prototype.submit.call(form);
+                        });
                         return;
                     }
                 }
 
-                // Set the JSON data into the hidden field
-                form.querySelector('.accept-all-currencies-data').value = JSON.stringify(currencies);
-
-                // Show loading state
-                var btn = form.querySelector('.accept-all-btn');
-                if (btn) {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
-                }
+                // Happy path: write payload and let the event continue —
+                // the natural submission picks up the just-set hidden field.
+                writePayload(decisions, isNewContact, nameInput);
             });
-        })(acceptAllForms[j]);
+        })(forms[i]);
     }
 }
 
@@ -3347,7 +3804,13 @@ function showInfoModal(el) {
     if (!text) return;
 
     var overlay = document.createElement('div');
-    overlay.className = 'modal';
+    // Always render info modals on the elevated z-index tier so they
+    // sit above whichever modal opened the ℹ icon (contact-detail,
+    // tx-detail, the Add Contact form, etc.). Without modal-stack-top
+    // the info popup at z=10000 falls behind a parent modal that has
+    // been promoted to z=10010 — same bug class as the contact → tx →
+    // contact chain we already fixed for the main modals.
+    overlay.className = 'modal modal-stack-top';
     overlay.id = 'info-modal';
     overlay.innerHTML =
         '<div class="modal-content" style="max-width:440px">' +
@@ -3380,6 +3843,153 @@ function showInfoModal(el) {
     overlay.onclick = function(e) { if (e.target === overlay) { closeInfoModal(); } };
     document.addEventListener('keydown', escHandler);
     document.body.appendChild(overlay);
+    // Re-append after attach so DOM order matches click order — when
+    // chained through contact → tx → contact the info modal needs to
+    // sit later in body than every other stacked modal.
+    if (typeof bringModalToTop === 'function') bringModalToTop(overlay);
+}
+
+/**
+ * Custom confirm dialog — replaces the browser-native confirm() prompt with a
+ * styled modal matching the rest of the GUI. Returns a Promise resolving to
+ * true (confirmed) or false (cancelled / dismissed). Falls back to native
+ * confirm() if Promise is unavailable.
+ *
+ * @param {string} message - The message to display
+ * @param {Object} [options]
+ * @param {string} [options.title='Confirm'] - Header text
+ * @param {string} [options.confirmText='OK'] - Confirm button label
+ * @param {string} [options.cancelText='Cancel'] - Cancel button label
+ * @param {string} [options.confirmClass='btn-primary'] - Confirm button class
+ * @param {string} [options.icon='fa-question-circle'] - Header icon
+ * @returns {Promise<boolean>}
+ */
+function showConfirmModal(message, options) {
+    options = options || {};
+    var title = options.title || 'Confirm';
+    var confirmText = options.confirmText || 'OK';
+    var cancelText = options.cancelText || 'Cancel';
+    var confirmClass = options.confirmClass || 'btn-primary';
+    var icon = options.icon || 'fa-question-circle';
+
+    if (typeof Promise === 'undefined') {
+        return { then: function (cb) { cb(window.confirm(message)); return this; } };
+    }
+
+    return new Promise(function (resolve) {
+        var overlay = document.createElement('div');
+        overlay.className = 'modal modal-stack-top';
+        overlay.innerHTML =
+            '<div class="modal-content modal-confirm">' +
+                '<div class="modal-header">' +
+                    '<h3><i class="fas ' + icon + '"></i> ' + escapeHtml(title) + '</h3>' +
+                    '<span class="close" data-confirm-close="1" title="Close">&times;</span>' +
+                '</div>' +
+                '<div class="modal-body modal-confirm-body">' +
+                    escapeHtml(message) +
+                '</div>' +
+                '<div class="modal-footer modal-confirm-footer">' +
+                    '<button type="button" class="btn btn-secondary modal-confirm-cancel">' + escapeHtml(cancelText) + '</button>' +
+                    '<button type="button" class="btn ' + confirmClass + ' modal-confirm-ok">' + escapeHtml(confirmText) + '</button>' +
+                '</div>' +
+            '</div>';
+
+        function cleanup(result) {
+            document.removeEventListener('keydown', keyHandler);
+            if (document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+            resolve(result);
+        }
+
+        function keyHandler(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) { cleanup(false); }
+            else if (e.key === 'Enter' || e.keyCode === 13) { cleanup(true); }
+        }
+
+        overlay.querySelector('.modal-confirm-ok').onclick = function () { cleanup(true); };
+        overlay.querySelector('.modal-confirm-cancel').onclick = function () { cleanup(false); };
+        overlay.querySelector('[data-confirm-close]').onclick = function () { cleanup(false); };
+        overlay.onclick = function (e) { if (e.target === overlay) { cleanup(false); } };
+
+        document.addEventListener('keydown', keyHandler);
+        document.body.appendChild(overlay);
+
+        var okBtn = overlay.querySelector('.modal-confirm-ok');
+        if (okBtn) { try { okBtn.focus(); } catch (e) {} }
+    });
+}
+
+/**
+ * Custom alert dialog — styled replacement for the browser-native alert().
+ * Returns a Promise that resolves when the user dismisses the modal.
+ *
+ * @param {string} message
+ * @param {Object} [options]
+ * @param {string} [options.title='Notice'] - Header text
+ * @param {string} [options.okText='OK']
+ * @param {string} [options.type='info'] - 'info' | 'success' | 'warning' | 'error'
+ * @returns {Promise<void>}
+ */
+function showAlertModal(message, options) {
+    options = options || {};
+    var type = options.type || 'info';
+    var title = options.title || (type === 'error' ? 'Error' : (type === 'warning' ? 'Warning' : (type === 'success' ? 'Success' : 'Notice')));
+    var okText = options.okText || 'OK';
+    var icons = {
+        info: 'fa-info-circle',
+        success: 'fa-check-circle',
+        warning: 'fa-exclamation-triangle',
+        error: 'fa-exclamation-circle'
+    };
+    var btnClass = (type === 'error' || type === 'warning') ? 'btn-warning' : 'btn-primary';
+
+    if (typeof Promise === 'undefined') {
+        window.alert(message);
+        return { then: function (cb) { cb(); return this; } };
+    }
+
+    return new Promise(function (resolve) {
+        var overlay = document.createElement('div');
+        overlay.className = 'modal modal-stack-top';
+        overlay.innerHTML =
+            '<div class="modal-content modal-confirm">' +
+                '<div class="modal-header">' +
+                    '<h3><i class="fas ' + (icons[type] || icons.info) + '"></i> ' + escapeHtml(title) + '</h3>' +
+                    '<span class="close" data-alert-close="1" title="Close">&times;</span>' +
+                '</div>' +
+                '<div class="modal-body modal-confirm-body">' +
+                    escapeHtml(message) +
+                '</div>' +
+                '<div class="modal-footer modal-confirm-footer">' +
+                    '<button type="button" class="btn ' + btnClass + ' modal-alert-ok">' + escapeHtml(okText) + '</button>' +
+                '</div>' +
+            '</div>';
+
+        function cleanup() {
+            document.removeEventListener('keydown', keyHandler);
+            if (document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+            resolve();
+        }
+
+        function keyHandler(e) {
+            if (e.key === 'Escape' || e.keyCode === 27 || e.key === 'Enter' || e.keyCode === 13) {
+                cleanup();
+            }
+        }
+
+        overlay.querySelector('.modal-alert-ok').onclick = cleanup;
+        overlay.querySelector('[data-alert-close]').onclick = cleanup;
+        overlay.onclick = function (e) { if (e.target === overlay) { cleanup(); } };
+
+        document.addEventListener('keydown', keyHandler);
+        document.body.appendChild(overlay);
+
+        var okBtn = overlay.querySelector('.modal-alert-ok');
+        if (okBtn) { try { okBtn.focus(); } catch (e) {} }
+    });
 }
 
 /**
@@ -3571,14 +4181,31 @@ function openContactModal(contact, openTab) {
                 }
             }
 
-            // Show incoming requests (read-only — accept via Pending Contact Requests section)
+            // Show incoming requests with a clickable affordance that opens the
+            // matching pending-contact-request modal stacked on top of this
+            // contact-detail modal — the user can act on the request without
+            // closing this modal first. Falls back to plain text if no pending
+            // modal element exists for this contact's pubkey hash (e.g. the
+            // request was already resolved server-side and the page hasn't
+            // been re-rendered yet).
             if (pendingCurrencies.length > 0) {
                 phtml += '<div class="mb-md"><strong><i class="fas fa-inbox"></i> Their requests:</strong></div>';
+                var pkh = contact.pubkey_hash || '';
+                var hasPendingModal = pkh && !!document.querySelector('[data-pending-contact-modal][data-pubkey-hash="' + pkh + '"]');
                 for (var pi = 0; pi < pendingCurrencies.length; pi++) {
                     var pc = pendingCurrencies[pi];
                     phtml += '<div class="d-flex gap-sm align-items-center mb-sm">';
                     phtml += '<span class="badge badge-info">' + escapeHtml(pc.currency) + '</span>';
-                    phtml += '<span class="text-muted">Accept via Pending Contact Requests section</span>';
+                    if (hasPendingModal) {
+                        phtml += '<a href="#" class="text-link"'
+                              +  ' data-action="jumpToPendingContactByPubkeyHash"'
+                              +  ' data-pubkey-hash="' + escapeHtml(pkh) + '"'
+                              +  ' title="Open the Pending Contact Request modal for this contact">'
+                              +  '<i class="fas fa-external-link-alt"></i> Review &amp; respond'
+                              +  '</a>';
+                    } else {
+                        phtml += '<span class="text-muted">Accept via Pending Contact Requests section</span>';
+                    }
                     phtml += '</div>';
                 }
             }
@@ -3773,6 +4400,16 @@ function openContactModal(contact, openTab) {
     document.getElementById('unblock_contact_address').value = contact.address;
     document.getElementById('delete_contact_address').value = contact.address;
 
+    // Plugin contact-action forms (gui.contact.actions filter): each
+    // form ships a hidden <input class="plugin-contact-action-address">
+    // the plugin author shouldn't have to populate themselves. Mirrors
+    // the core block/unblock/delete pattern above so a plugin POST
+    // reaches its handler with the same contact_address payload.
+    var pluginAddressInputs = document.querySelectorAll('.plugin-contact-action-address');
+    for (var p = 0; p < pluginAddressInputs.length; p++) {
+        pluginAddressInputs[p].value = contact.address || '';
+    }
+
     // Store current contact address for ping function
     currentContactAddress = contact.address;
 
@@ -3849,7 +4486,7 @@ function openContactModal(contact, openTab) {
             html += '<i class="fas ' + statusIcon + '"></i>';
             html += '</span>';
             html += '</td>';
-            var displayDesc = displayTxDescription(description);
+            var displayDesc = displayTxDescription(description, tx.currency);
             html += '<td class="col-tx-desc" title="' + escapeHtml(displayDesc || 'No description') + '">';
             html += escapeHtml(displayDesc || '—');
             html += '</td>';
@@ -3869,7 +4506,10 @@ function openContactModal(contact, openTab) {
         transactionsEl.innerHTML = html;
     }
 
-    // Open specified tab or default to info tab
+    // Open specified tab or default to info tab. The Payback tab is always
+    // visible — even when net-even or being owed, the user may want to
+    // offer a partial pre-settlement or just inspect the contact's
+    // declared rails.
     var tabToOpen = openTab || 'info-tab';
     showModalTab(tabToOpen, null);
 
@@ -4529,14 +5169,28 @@ function loadMoreContacts(inst) {
  * @param {string} key    - Paginator key (for logging / debugging only)
  * @param {Object} inst   - Paginator instance returned by Paginator.create
  */
+// Per-paginator next-page cursor cache. Cursors are opaque base64url
+// strings minted server-side from the last row of each page; we hold
+// them in plain object property (NOT localStorage) so the cursor stays
+// scoped to this tab's instance, matching Tor Browser's first-party
+// isolation expectations and avoiding any cross-tab leakage.
+var loadMoreCursors = {};
+
 function loadMoreViaGuiAction(action, key, inst) {
-    var offset = inst.getLoadedCount();
     var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
     var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
 
     var formData = new FormData();
     formData.append('action', action);
-    formData.append('offset', String(offset));
+    // Send both `cursor` and `offset`. The server prefers cursor when
+    // present (constant-time keyset query, regardless of how deep the
+    // history goes), and falls back to `offset` for the first request
+    // and for actions whose server side hasn't been migrated to the
+    // cursor mode yet. Sending both keeps the rollout incremental.
+    if (loadMoreCursors[key]) {
+        formData.append('cursor', loadMoreCursors[key]);
+    }
+    formData.append('offset', String(inst.getLoadedCount()));
     formData.append('csrf_token', csrfToken);
 
     fetch(window.location.pathname, {
@@ -4562,6 +5216,14 @@ function loadMoreViaGuiAction(action, key, inst) {
             for (var i = 0; i < data.rows.length; i++) {
                 transactionData.push(data.rows[i]);
             }
+        }
+        // Stash the cursor for the next click. If the server didn't mint
+        // one (older endpoint, or page is exhausted), drop the cached
+        // cursor so the next click falls back cleanly to offset mode.
+        if (typeof data.next_cursor === 'string' && data.next_cursor !== '') {
+            loadMoreCursors[key] = data.next_cursor;
+        } else {
+            delete loadMoreCursors[key];
         }
         if (data.exhausted) {
             inst.setLoadMoreExhausted(true);
@@ -5987,7 +6649,18 @@ function openPrPendingModal(el) {
     // Action buttons as real forms so they submit properly
     html += '<div class="d-flex gap-sm" style="margin-top:1rem">';
     if (direction === 'incoming') {
-        html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="approvePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Pay</button></form>';
+        // Pay form carries class + data attrs the approval modal handler
+        // (initializePaymentRequestApprovalHandler in script.js) reads to
+        // pre-populate the requester's description and dynamic char cap.
+        html += '<form method="POST" class="pr-approve-form d-inline" '
+              + 'data-pr-description="' + escapeHtml(desc) + '" '
+              + 'data-pr-amount="' + escapeHtml(amount) + '" '
+              + 'data-pr-counterparty="' + escapeHtml(name) + '">'
+              + '<input type="hidden" name="action" value="approvePaymentRequest">'
+              + '<input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '">'
+              + '<input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '">'
+              + '<input type="hidden" name="payer_note" value="">'
+              + '<button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Pay</button></form>';
         html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="declinePaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-times"></i> Decline</button></form>';
     } else {
         html += '<form method="POST" class="d-inline"><input type="hidden" name="action" value="cancelPaymentRequest"><input type="hidden" name="csrf_token" value="' + escapeHtml(csrf) + '"><input type="hidden" name="request_id" value="' + escapeHtml(requestId) + '"><button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-ban"></i> Cancel</button></form>';
@@ -6348,7 +7021,7 @@ function retryDlqItem(dlqId, btn) {
             if (response.success) {
                 showToast('Delivered', 'Message successfully re-sent', 'success');
                 setTimeout(function() { window.location.reload(); }, 1500);
-            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+            } else if (response.code === 'csrf_invalid') {
                 showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
@@ -6449,10 +7122,18 @@ function revokeAllRememberSessions(btn) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function abandonDlqItem(dlqId, btn) {
-    if (!confirm('Abandon this message? It will no longer be retried and this cannot be undone.')) {
-        return;
-    }
+    showConfirmModal('Abandon this message? It will no longer be retried and this cannot be undone.', {
+        title: 'Abandon message?',
+        confirmText: 'Abandon',
+        confirmClass: 'btn-danger',
+        icon: 'fa-exclamation-triangle'
+    }).then(function (ok) {
+        if (!ok) return;
+        abandonDlqItemConfirmed(dlqId, btn);
+    });
+}
 
+function abandonDlqItemConfirmed(dlqId, btn) {
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -6489,7 +7170,7 @@ function abandonDlqItem(dlqId, btn) {
             if (response.success) {
                 showToast('Abandoned', 'Message marked as abandoned', 'info');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1000);
-            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+            } else if (response.code === 'csrf_invalid') {
                 showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
@@ -6510,10 +7191,17 @@ function abandonDlqItem(dlqId, btn) {
  */
 function retryAllDlqItems(btn) {
     var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
-    if (!confirm('Retry all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '?')) {
-        return;
-    }
+    showConfirmModal('Retry all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '?', {
+        title: 'Retry pending messages?',
+        confirmText: 'Retry all'
+    }).then(function (ok) {
+        if (!ok) return;
+        retryAllDlqItemsConfirmed(btn);
+    });
+}
 
+function retryAllDlqItemsConfirmed(btn) {
+    var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -6557,7 +7245,7 @@ function retryAllDlqItems(btn) {
                     showToast('All failed', total + ' message' + (total !== 1 ? 's' : '') + ' could not be delivered', 'error');
                 }
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 2000);
-            } else if (response.error && response.error.indexOf('CSRF') !== -1) {
+            } else if (response.code === 'csrf_invalid') {
                 showToast('Session expired', 'Refreshing page — please retry after reload', 'warning');
                 setTimeout(function() { window.location.hash = 'dlq'; window.location.reload(); }, 1500);
             } else {
@@ -6578,10 +7266,18 @@ function retryAllDlqItems(btn) {
  */
 function abandonAllDlqItems(btn) {
     var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
-    if (!confirm('Abandon all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '? This cannot be undone.')) {
-        return;
-    }
+    showConfirmModal('Abandon all ' + count + ' pending message' + (count !== 1 ? 's' : '') + '? This cannot be undone.', {
+        title: 'Abandon all messages?',
+        confirmText: 'Abandon all',
+        confirmClass: 'btn-danger',
+        icon: 'fa-exclamation-triangle'
+    }).then(function (ok) {
+        if (!ok) return;
+        abandonAllDlqItemsConfirmed(btn);
+    });
+}
 
+function abandonAllDlqItemsConfirmed(btn) {
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken || !csrfToken.value) {
         showToast('Error', 'CSRF token not found', 'error');
@@ -7239,62 +7935,71 @@ window.addEventListener('beforeunload', liveStopPolling);
 // P2P Transaction Approval/Rejection (XMLHttpRequest for Tor compatibility)
 function approveP2pTransaction(hash, candidateId) {
     var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
-    if (!confirm(msg)) return;
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken) { alert('CSRF token not found'); return; }
-    var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
-    if (candidateId) {
-        body = body + '&candidate_id=' + encodeURIComponent(candidateId);
-    }
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 60000;
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    if (data.success) { window.location.reload(); }
-                    else { alert('Error: ' + (data.message || 'Unknown error')); }
-                } catch (e) {
-                    alert('Error parsing response');
-                }
-            } else {
-                alert('Network error');
-            }
+    showConfirmModal(msg, { title: 'Approve transaction?', confirmText: 'Send' }).then(function (ok) {
+        if (!ok) return;
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
+        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        if (candidateId) {
+            body = body + '&candidate_id=' + encodeURIComponent(candidateId);
         }
-    };
-    xhr.ontimeout = function() { alert('Request timed out'); };
-    xhr.send(body);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.pathname, true);
+        xhr.timeout = 60000;
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.success) { window.location.reload(); }
+                        else { showAlertModal(data.message || 'Unknown error', { title: 'Error', type: 'error' }); }
+                    } catch (e) {
+                        showAlertModal('Error parsing response', { type: 'error' });
+                    }
+                } else {
+                    showAlertModal('Network error', { type: 'error' });
+                }
+            }
+        };
+        xhr.ontimeout = function() { showAlertModal('Request timed out', { type: 'warning' }); };
+        xhr.send(body);
+    });
 }
 
 function rejectP2pTransaction(hash) {
-    if (!confirm('Are you sure you want to reject this transaction?')) return;
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken) { alert('CSRF token not found'); return; }
-    var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 60000;
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    if (data.success) { window.location.reload(); }
-                    else { alert('Error: ' + (data.message || 'Unknown error')); }
-                } catch (e) {
-                    alert('Error parsing response');
+    showConfirmModal('Are you sure you want to reject this transaction?', {
+        title: 'Reject transaction?',
+        confirmText: 'Reject',
+        confirmClass: 'btn-danger',
+        icon: 'fa-exclamation-triangle'
+    }).then(function (ok) {
+        if (!ok) return;
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
+        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location.pathname, true);
+        xhr.timeout = 60000;
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.success) { window.location.reload(); }
+                        else { showAlertModal(data.message || 'Unknown error', { title: 'Error', type: 'error' }); }
+                    } catch (e) {
+                        showAlertModal('Error parsing response', { type: 'error' });
+                    }
+                } else {
+                    showAlertModal('Network error', { type: 'error' });
                 }
-            } else {
-                alert('Network error');
             }
-        }
-    };
-    xhr.ontimeout = function() { alert('Request timed out'); };
-    xhr.send(body);
+        };
+        xhr.ontimeout = function() { showAlertModal('Request timed out', { type: 'warning' }); };
+        xhr.send(body);
+    });
 }
 
 function loadP2pCandidates(hash, container) {
@@ -7454,18 +8159,31 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             // modal behind whichever modal it was stacked on top of.
             //
             // Only opt in / out of the stack when the click came from a
-            // *different* modal. DLQ detail modal → Transaction ID adds
-            // the class; a click from outside any modal clears it so a
-            // stale flag from a previous session doesn't survive.
+            // *different* modal. Contact / DLQ detail → Transaction ID
+            // adds the class; a click from outside any modal clears it
+            // so a stale flag from a previous session doesn't survive.
             var txModalEl = document.getElementById('transactionModal');
             if (txModalEl) {
                 var originModal = el.closest ? el.closest('.modal') : null;
                 var originatedInTxModal = (originModal && originModal.id === 'transactionModal');
                 if (!originatedInTxModal) {
-                    if (originModal
-                        && originModal.style.display !== 'none'
-                        && (originModal.offsetParent !== null || originModal.classList.contains('active'))) {
+                    // Don't use offsetParent here — it's always null for
+                    // position:fixed elements (which every .modal is), so the
+                    // previous check reported the contactModal as "hidden"
+                    // and removed the stack class even when contactModal
+                    // was fully visible on top of the tx modal.
+                    var originVisible = originModal &&
+                        originModal.style.display !== 'none' &&
+                        originModal.getBoundingClientRect().width > 0;
+                    if (originVisible) {
                         txModalEl.classList.add('modal-stack-top');
+                        // Re-append to body so DOM order matches click
+                        // order. Without this, a tx modal opened from
+                        // inside a contact modal that's itself stacked
+                        // on top of an earlier tx modal ends up behind
+                        // the contact modal because both share z=10010
+                        // and the contact modal sits later in DOM order.
+                        bringModalToTop(txModalEl);
                     } else {
                         txModalEl.classList.remove('modal-stack-top');
                     }
@@ -7482,7 +8200,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var cid = el.getAttribute('data-contact-id');
             if (!cid) return;
             var contactModalEl = document.getElementById('contactModal');
-            if (contactModalEl) contactModalEl.classList.add('modal-stack-top');
+            if (contactModalEl) {
+                contactModalEl.classList.add('modal-stack-top');
+                bringModalToTop(contactModalEl);
+            }
             openContactByContactId(cid);
         },
 
@@ -7518,6 +8239,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'showModalTab': function(el) {
             var tab = el.getAttribute('data-tab');
             showModalTab(tab, el);
+        },
+        'showContactPaybackTab': function(el) {
+            showModalTab('payback-tab', el);
+            if (window.paybackOptions) { window.paybackOptions.openForCurrentContact(); }
+        },
+        'refreshContactPayback': function() {
+            if (window.paybackOptions) { window.paybackOptions.refresh(); }
         },
 
         // Currency slider
@@ -7597,12 +8325,26 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'revokeRememberSession': function(el) {
             var id = parseInt(el.getAttribute('data-session-id'), 10);
             if (!id) return;
-            if (!confirm('Sign out this browser? It will need to enter the auth code again.')) return;
-            revokeRememberSession(id, el);
+            showConfirmModal('Sign out this browser? It will need to enter the auth code again.', {
+                title: 'Sign out browser?',
+                confirmText: 'Sign out',
+                confirmClass: 'btn-warning',
+                icon: 'fa-sign-out-alt'
+            }).then(function (ok) {
+                if (!ok) return;
+                revokeRememberSession(id, el);
+            });
         },
         'revokeAllRememberSessions': function(el) {
-            if (!confirm('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.')) return;
-            revokeAllRememberSessions(el);
+            showConfirmModal('Sign out ALL remembered browsers, including this one? Every device will need to enter the auth code again.', {
+                title: 'Sign out everywhere?',
+                confirmText: 'Sign out all',
+                confirmClass: 'btn-danger',
+                icon: 'fa-exclamation-triangle'
+            }).then(function (ok) {
+                if (!ok) return;
+                revokeAllRememberSessions(el);
+            });
         },
         'openPendingContactModal': function(el) {
             // Row-click handler for the pending-contacts table. Reads the
@@ -7619,7 +8361,32 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var modalId = el.getAttribute('data-modal-id');
             if (!modalId) return;
             var modal = document.getElementById(modalId);
-            if (modal) modal.classList.add('d-none');
+            if (modal) {
+                modal.classList.add('d-none');
+                modal.classList.remove('modal-stack-top');
+            }
+        },
+        // Cross-modal jump used by the contact-detail modal "Their requests"
+        // section, the tx-details modal pending-contact notice, and any
+        // other surface that wants to drop the user into the pending-contact
+        // request modal for a specific pubkey hash. Stacks on top of the
+        // origin modal so Escape returns to it.
+        'jumpToPendingContactByPubkeyHash': function(el) {
+            var hash = el.getAttribute('data-pubkey-hash');
+            openPendingContactModalByPubkeyHash(hash);
+        },
+        // Reverse direction: from inside a pending-contact request modal,
+        // jump to the contact's detail modal (only meaningful when the
+        // contact is already accepted — additional currency requests).
+        'jumpToContactFromPendingModal': function(el) {
+            var cid = el.getAttribute('data-contact-id');
+            if (!cid) return;
+            var contactModalEl = document.getElementById('contactModal');
+            if (contactModalEl) {
+                contactModalEl.classList.add('modal-stack-top');
+                bringModalToTop(contactModalEl);
+            }
+            openContactByContactId(cid);
         },
         'openResetToDefaultsModal': function() {
             var modal = document.getElementById('settingsResetToDefaultsModal');
@@ -7699,6 +8466,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             form.submit();
         },
 
+        // Payment request approve (Pay) modal
+        'closePrApproveModal': function() { closePrApproveModal(); },
+
         // API Keys
         'openApiKeyCreateModal': function() { window.apiKeys.openCreateModal(); },
         'closeApiKeyCreateModal': function() { window.apiKeys.closeCreateModal(); },
@@ -7728,7 +8498,46 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'closeApiKeyRevealModal': function() { window.apiKeys.closeRevealModal(); },
         'copyApiKeyReveal': function(el) { window.apiKeys.copyToClipboard(el.getAttribute('data-target')); },
         'closeApiKeysVerifyModal': function() { window.apiKeys.closeVerifyModal(); },
-        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); }
+        'submitApiKeysVerify': function() { window.apiKeys.submitVerify(); },
+
+        // Plugins
+        'reloadPlugins': function() { if (window.plugins) window.plugins.reload(); },
+        'restartNodeFromPlugins': function() { if (window.plugins) window.plugins.requestRestart(); },
+        'openPluginModal': function(el) {
+            if (window.plugins) window.plugins.openModal(el.getAttribute('data-plugin'));
+        },
+        'openPluginChangelog': function(el) {
+            if (window.plugins) window.plugins.openChangelog(el.getAttribute('data-plugin'));
+        },
+        'openPluginUninstall': function(el) {
+            if (window.plugins) window.plugins.openUninstall(el.getAttribute('data-plugin'));
+        },
+
+        // Payback Methods
+        'openPaybackMethodForm': function(el) {
+            if (window.paybackMethods) {
+                window.paybackMethods.openForm(el.getAttribute('data-payback-mode') || 'add', el.getAttribute('data-method-id') || null);
+            }
+        },
+        'closePaybackMethodForm': function() { if (window.paybackMethods) { window.paybackMethods.closeForm(); } },
+        'submitPaybackMethod': function() { if (window.paybackMethods) { window.paybackMethods.submit(); } },
+        'revealPaybackMethod': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.reveal(el.getAttribute('data-method-id')); }
+        },
+        'deletePaybackMethod': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.remove(el.getAttribute('data-method-id'), el.getAttribute('data-label') || ''); }
+        },
+        'deletePaybackMethodFromModal': function() {
+            if (window.paybackMethods) { window.paybackMethods.removeCurrent(); }
+        },
+        'paybackSwitchToEdit': function() {
+            if (window.paybackMethods) { window.paybackMethods.switchToEdit(); }
+        },
+        'selectPaybackType': function(el) {
+            if (window.paybackMethods) { window.paybackMethods.selectType(el.getAttribute('data-type')); }
+        },
+        'paybackStepNext': function() { if (window.paybackMethods) { window.paybackMethods.gotoStep(2); } },
+        'paybackStepBack': function() { if (window.paybackMethods) { window.paybackMethods.gotoStep(1); } }
     };
 
     // Settings grid hint expand — click to toggle truncated hint text
@@ -7748,11 +8557,30 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 return; // let the default action (e.g. href) proceed
             }
 
-            // data-confirm: confirmation dialog for form submit buttons
-            if (el.getAttribute('data-confirm')) {
-                if (!confirm(el.getAttribute('data-confirm'))) {
-                    event.preventDefault();
-                }
+            // data-confirm: confirmation dialog for form submit buttons.
+            // Uses the custom showConfirmModal — since it's async, we always
+            // preventDefault, then re-submit via the owning form once
+            // confirmed. Skip the modal on the synthetic re-click we trigger
+            // ourselves (data-confirmed marker), so the form actually posts.
+            if (el.getAttribute('data-confirm') && !el.hasAttribute('data-confirmed')) {
+                event.preventDefault();
+                event.stopPropagation();
+                var btn = el;
+                var msg = btn.getAttribute('data-confirm');
+                var isDanger = btn.classList.contains('btn-danger');
+                var isWarning = btn.classList.contains('btn-warning');
+                var opts = {
+                    title: isDanger ? 'Confirm action' : (isWarning ? 'Please confirm' : 'Confirm'),
+                    confirmText: btn.getAttribute('data-confirm-text') || 'Yes',
+                    cancelText: 'Cancel',
+                    confirmClass: isDanger ? 'btn-danger' : (isWarning ? 'btn-warning' : 'btn-primary'),
+                    icon: isDanger ? 'fa-exclamation-triangle' : 'fa-question-circle'
+                };
+                showConfirmModal(msg, opts).then(function (ok) {
+                    if (!ok) { return; }
+                    btn.setAttribute('data-confirmed', '1');
+                    try { btn.click(); } finally { btn.removeAttribute('data-confirmed'); }
+                });
                 return;
             }
 
@@ -7786,11 +8614,22 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'switchAdvancedSection') { switchAdvancedSection(el.value); }
         else if (action === 'editCurrencyChanged') { editCurrencyChanged(el.value); }
         else if (action === 'switchContactCurrency') { switchContactCurrency(el.value); }
+        else if (action === 'switchWalletCurrencyFromSelect') { switchWalletCurrency(el.value); }
         else if (action === 'filterContacts') { filterContacts(); }
         else if (action === 'filterTransactions') { filterTransactions(); }
         else if (action === 'filterPaymentRequests') { filterPaymentRequests(); }
         else if (action === 'setDlqFilter') { setDlqFilter(); }
         else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
+        else if (action === 'togglePlugin') {
+            if (window.plugins) {
+                window.plugins.toggle(el.getAttribute('data-plugin'), el.checked);
+            }
+        }
+        else if (action === 'togglePluginFromModal') {
+            if (window.plugins) {
+                window.plugins.toggleFromModal(el.getAttribute('data-plugin'), el.checked);
+            }
+        }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
             // chosen scheme without saving. Target element is named by
@@ -8256,17 +9095,31 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function refresh() {
-            return post({ action: 'apiKeysList' }).then(function(r) {
-                if (r.data && r.data.success) {
-                    renderList(r.data.keys || []);
-                    renderAccessState(r.data.seconds_remaining || 0);
-                    loaded = true;
-                } else {
-                    showToast('Error', (r.data && r.data.message) || 'Could not load API keys', 'error');
-                }
-            }).catch(function() {
-                showToast('Error', 'Network error while loading API keys', 'error');
-            });
+            // Silently retry once before surfacing the toast — refresh
+            // is triggered when the Settings tab becomes visible, and
+            // the fetch frequently coincides with the tab-switch
+            // animation / nav repaint and aborts on the first attempt.
+            // A genuine outage will still fail the second attempt and
+            // toast normally; transient flakes get swallowed.
+            var attempt = function(retried) {
+                return post({ action: 'apiKeysList' }).then(function(r) {
+                    if (r.data && r.data.success) {
+                        renderList(r.data.keys || []);
+                        renderAccessState(r.data.seconds_remaining || 0);
+                        loaded = true;
+                    } else {
+                        showToast('Error', (r.data && r.data.message) || 'Could not load API keys', 'error');
+                    }
+                }).catch(function() {
+                    if (!retried) {
+                        return new Promise(function(resolve) {
+                            setTimeout(function() { resolve(attempt(true)); }, 600);
+                        });
+                    }
+                    showToast('Error', 'Network error while loading API keys', 'error');
+                });
+            };
+            return attempt(false);
         }
 
         function ensureLoadedOnTab() {
@@ -8308,15 +9161,22 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function closeCreateModal() { hideModal('apiKeysCreateModal'); }
 
         function applyPreset(preset) {
-            var boxes = document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]');
+            var form = document.getElementById('apiKeysCreateForm');
+            var boxes = form ? form.querySelectorAll('input[name="permissions[]"]') : [];
             if (preset === 'clear') {
                 boxes.forEach(function(b) { b.checked = false; });
                 return;
             }
-            var presets = {
-                'read_only': ['wallet:read', 'contacts:read', 'system:read', 'backup:read'],
-                'full_access': ['admin']
-            };
+            // Presets come from the form's data-permission-presets attribute,
+            // emitted by ApiKeysController::permissionPresets() — single
+            // source of truth lives in PHP so a new read-class scope auto-
+            // joins the read_only preset without a JS edit.
+            var presets = {};
+            try {
+                presets = JSON.parse((form && form.dataset && form.dataset.permissionPresets) || '{}');
+            } catch (e) {
+                presets = {};
+            }
             var target = presets[preset] || [];
             boxes.forEach(function(b) { b.checked = target.indexOf(b.value) !== -1; });
         }
@@ -8606,9 +9466,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function withSensitiveAccess(requestFn, onResponse, label) {
             var attempt = function() {
                 return requestFn().then(function(r) {
-                    if (r && r.status === 401 && r.data && r.data.error === 'sensitive_access_required') {
+                    if (r && r.status === 401 && r.data && r.data.code === 'sensitive_access_required') {
                         pendingAction = { fn: attempt, label: label };
-                        openVerifyModal(r.data.message);
+                        // Server now sends `error` as the human message and
+                        // the machine code as `code` (canonical envelope).
+                        // Pass the human-readable string to the verify modal.
+                        openVerifyModal(r.data.error);
                         return;
                     }
                     if (typeof onResponse === 'function') onResponse(r);
@@ -8620,9 +9483,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             return attempt();
         }
 
-        function openVerifyModal(message) {
+        function openVerifyModal(messageOrCallback, maybeLabel, onCancel) {
+            // Accept either a server-provided message (used internally by
+            // withSensitiveAccess) or a callback to run after successful verify
+            // (used by other modules that don't route through that helper).
+            // Optional onCancel fires when the user dismisses the modal without
+            // verifying — so callers can tear down their own loading state
+            // (e.g. the "Loading…" spinner inside the Payback View modal).
+            if (typeof messageOrCallback === 'function') {
+                pendingAction = {
+                    fn:     messageOrCallback,
+                    label:  maybeLabel || 'Confirm',
+                    cancel: typeof onCancel === 'function' ? onCancel : null,
+                };
+            }
             var input = document.getElementById('apiKeysVerifyAuthcode');
             var err = document.getElementById('apiKeysVerifyError');
+            if (!input) { return; }
             input.value = '';
             if (err) { err.classList.add('d-none'); err.textContent = ''; }
             showModal('apiKeysVerifyModal');
@@ -8630,8 +9507,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function closeVerifyModal() {
+            var cancel = pendingAction && pendingAction.cancel;
             pendingAction = null;
             hideModal('apiKeysVerifyModal');
+            if (typeof cancel === 'function') { cancel(); }
         }
 
         function submitVerify() {
@@ -8652,7 +9531,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     }
                 } else {
                     if (err) {
-                        err.textContent = (r.data && r.data.error === 'invalid_authcode')
+                        err.textContent = (r.data && r.data.code === 'invalid_authcode')
                             ? 'Invalid auth code. Please try again.'
                             : 'Could not verify. Please try again.';
                         err.classList.remove('d-none');
@@ -8696,8 +9575,1786 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             copyDetailKeyId: copyDetailKeyId,
             closeRevealModal: closeRevealModal,
             copyToClipboard: copyToClipboard,
+            openVerifyModal: openVerifyModal,
             closeVerifyModal: closeVerifyModal,
             submitVerify: submitVerify
+        };
+    })();
+
+    // ========================================================================
+    // Plugins GUI module
+    //
+    // Backs the "Plugins" section in the Settings tab. Lists every plugin
+    // discovered on disk (enabled or not) and lets the user flip the enabled
+    // flag. Toggles are persisted immediately but event subscriptions bind
+    // during boot, so a restart notice is shown after any change.
+    // ========================================================================
+    window.plugins = (function() {
+        var loaded = false;
+        var lastList = [];
+
+        function csrfToken() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return (el && el.value) ? el.value : '';
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function post(payload) {
+            var body = new FormData();
+            Object.keys(payload).forEach(function(k) {
+                if (payload[k] !== null && payload[k] !== undefined) {
+                    body.append(k, payload[k]);
+                }
+            });
+            if (!body.has('csrf_token')) body.append('csrf_token', csrfToken());
+            return fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) {
+                    return { status: res.status, data: data };
+                });
+            });
+        }
+
+        function statusBadge(status) {
+            var label = status || 'unknown';
+            var cls = 'status-badge status-unknown';
+            if (status === 'booted')        { cls = 'status-badge status-online';  label = 'Running'; }
+            else if (status === 'failed')   { cls = 'badge-danger';                 label = 'Failed'; }
+            else if (status === 'disabled') { cls = 'status-badge status-offline'; label = 'Disabled'; }
+            else if (status === 'registered' || status === 'discovered') {
+                cls = 'status-badge status-partial'; label = 'Loaded';
+            }
+            return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
+        }
+
+        function dotFor(p) {
+            if (p.error || p.status === 'failed') {
+                return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--failed" title="Failed"></i>';
+            }
+            if (p.enabled) {
+                return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--enabled" title="Enabled"></i>';
+            }
+            return '<i class="fas fa-circle plugin-status-dot plugin-status-dot--disabled" title="Disabled"></i>';
+        }
+
+        function renderList(pluginsArr) {
+            pluginsArr = pluginsArr || [];
+            lastList = pluginsArr;
+            var emptyEl = document.getElementById('plugins-empty');
+            var tableEl = document.getElementById('plugins-table-wrapper');
+            var tbody   = document.getElementById('plugins-tbody');
+            if (!tbody) return;
+
+            if (pluginsArr.length === 0) {
+                if (emptyEl) {
+                    emptyEl.innerHTML = 'No plugins installed. Drop a plugin folder into <code>/etc/eiou/plugins/</code> and click Refresh.';
+                    emptyEl.classList.remove('d-none');
+                }
+                if (tableEl) tableEl.classList.add('d-none');
+                tbody.innerHTML = '';
+                return;
+            }
+
+            if (emptyEl) emptyEl.classList.add('d-none');
+            if (tableEl) tableEl.classList.remove('d-none');
+
+            var rows = pluginsArr.map(function(p) {
+                var checkId = 'plugin-toggle-' + p.name.replace(/[^a-z0-9-]/gi, '-');
+                var desc = p.description || '';
+                var tooltip = p.error ? (desc ? desc + ' — ' : '') + p.error : desc;
+                var descCell = p.error
+                    ? '<i class="fas fa-exclamation-triangle text-danger"></i> ' + escapeHtml(desc || p.error)
+                    : escapeHtml(desc);
+                return ''
+                    + '<tr class="cursor-pointer"'
+                    +   ' data-action="openPluginModal"'
+                    +   ' data-plugin="' + escapeHtml(p.name) + '">'
+                    +   '<td class="col-plugin-dot text-center">' + dotFor(p) + '</td>'
+                    +   '<td class="col-name"><strong>' + escapeHtml(p.name) + '</strong></td>'
+                    +   '<td class="col-version"><code>' + escapeHtml(p.version) + '</code></td>'
+                    +   '<td class="col-description" title="' + escapeHtml(tooltip) + '">' + descCell + '</td>'
+                    +   '<td class="col-enabled text-right">'
+                    +     '<label class="toggle-switch" for="' + checkId + '" data-stop-propagation="true">'
+                    +       '<input type="checkbox" id="' + checkId + '"'
+                    +         ' data-action-change="togglePlugin"'
+                    +         ' data-plugin="' + escapeHtml(p.name) + '"'
+                    +         ' data-stop-propagation="true"'
+                    +         (p.enabled ? ' checked' : '') + '>'
+                    +       '<span class="toggle-slider"></span>'
+                    +     '</label>'
+                    +   '</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = rows.join('');
+        }
+
+        function showRestartBanner() {
+            var el = document.getElementById('plugins-restart-banner');
+            if (el) el.classList.remove('d-none');
+        }
+        function hideRestartBanner() {
+            var el = document.getElementById('plugins-restart-banner');
+            if (el) el.classList.add('d-none');
+        }
+
+        // "Running" = the plugin is actually live in the current node process.
+        // `booted` is the only status that means fully loaded + subscribed.
+        // Everything else (disabled, failed, registered, discovered) means
+        // not-running from a runtime perspective.
+        function isRunning(p) { return p && p.status === 'booted'; }
+
+        // A plugin needs a restart iff its desired enabled flag diverges from
+        // the runtime. Toggling back to the pre-change state clears the need.
+        function isDivergent(p) { return !!p.enabled !== isRunning(p); }
+
+        function updateRestartBanner() {
+            var any = false;
+            for (var i = 0; i < lastList.length; i++) {
+                if (isDivergent(lastList[i])) { any = true; break; }
+            }
+            if (any) showRestartBanner();
+            else hideRestartBanner();
+        }
+
+        function refresh() {
+            // Same lazy-load + retry pattern as the API-keys panel —
+            // tab-switch + first AJAX attempt frequently race and the
+            // first attempt aborts. Silent retry once before toasting.
+            var attempt = function(retried) {
+                return post({ action: 'pluginsList' }).then(function(r) {
+                    if (r.data && r.data.success) {
+                        renderList(r.data.plugins || []);
+                        // Banner reflects real divergence between desired enabled
+                        // flags and runtime status — not a sticky config-changed
+                        // flag. Toggling back to the original state clears it.
+                        updateRestartBanner();
+                        loaded = true;
+                    } else {
+                        var msg = (r.data && r.data.message) || 'Could not load plugins';
+                        if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                    }
+                }).catch(function() {
+                    if (!retried) {
+                        return new Promise(function(resolve) {
+                            setTimeout(function() { resolve(attempt(true)); }, 600);
+                        });
+                    }
+                    if (typeof showToast === 'function') showToast('Error', 'Network error while loading plugins', 'error');
+                });
+            };
+            return attempt(false);
+        }
+
+        // -- Restart flow ----------------------------------------------------
+
+        function showRestartOverlay() {
+            // Idempotent: don't stack overlays on a double click.
+            if (document.getElementById('plugins-restart-overlay')) return;
+            var overlay = document.createElement('div');
+            overlay.id = 'plugins-restart-overlay';
+            overlay.className = 'restart-overlay';
+            overlay.innerHTML =
+                '<div class="restart-overlay-card">' +
+                  '<i class="fas fa-spinner fa-spin"></i>' +
+                  '<h3>Restarting node…</h3>' +
+                  '<p>Workers and processors are recycling.</p>' +
+                  '<p>This page will reload automatically.</p>' +
+                '</div>';
+            document.body.appendChild(overlay);
+        }
+
+        function pollUntilBackOnline(attempts) {
+            attempts = attempts || 0;
+            // Cap at ~30s of polling. The poller in startup.sh fires within
+            // ~2s and `eiou restart` is fast, but the FPM master respawn
+            // can briefly drop in-flight connections — so we tolerate
+            // transient errors and only give up after many failures.
+            if (attempts > 30) {
+                if (typeof showToast === 'function') {
+                    showToast('Restart taking longer than expected',
+                        'The node may still be restarting. Reload the page manually if it does not return.',
+                        'warning');
+                }
+                return;
+            }
+            // We send a benign POST that the server can answer cheaply. The
+            // pluginsList action is already idempotent and CSRF-protected.
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: (function() {
+                    var b = new FormData();
+                    b.append('action', 'pluginsList');
+                    b.append('csrf_token', csrfToken());
+                    return b;
+                })(),
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                // 200 with JSON body == FPM workers are serving requests again.
+                // Reload to pick up the freshly booted state in the worker
+                // that handles the next page render.
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    setTimeout(function() { pollUntilBackOnline(attempts + 1); }, 1000);
+                }
+            }).catch(function() {
+                setTimeout(function() { pollUntilBackOnline(attempts + 1); }, 1000);
+            });
+        }
+
+        function requestRestart() {
+            showConfirmModal(
+                'Restart the node now?\n\nPHP-FPM workers and background processors will recycle. Active sessions stay logged in, but pages may reload briefly. Plugin toggles take effect after this restart.',
+                {
+                    title: 'Restart node?',
+                    confirmText: 'Restart',
+                    confirmClass: 'btn-warning',
+                    icon: 'fa-power-off'
+                }
+            ).then(function (ok) {
+                if (!ok) return;
+                showRestartOverlay();
+                post({ action: 'pluginsRequestRestart' }).then(function(r) {
+                    if (!(r.data && r.data.success)) {
+                        var overlay = document.getElementById('plugins-restart-overlay');
+                        if (overlay) overlay.remove();
+                        var msg = (r.data && r.data.message) || 'Restart request failed';
+                        if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                        return;
+                    }
+                    // Wait briefly for the request poller (~2s cycle) to pick
+                    // it up + run `eiou restart`, THEN start polling — checking
+                    // immediately would just see the still-running old worker
+                    // and "succeed" before the restart even started.
+                    setTimeout(function() { pollUntilBackOnline(0); }, 3000);
+                }).catch(function() {
+                    var overlay = document.getElementById('plugins-restart-overlay');
+                    if (overlay) overlay.remove();
+                    if (typeof showToast === 'function') showToast('Error', 'Network error while requesting restart', 'error');
+                });
+            });
+        }
+
+        function toggle(name, enabled) {
+            if (!name) return;
+            post({
+                action: 'pluginsToggle',
+                name: name,
+                enabled: enabled ? '1' : '0'
+            }).then(function(r) {
+                if (r.data && r.data.success) {
+                    // Mirror the new flag into lastList so the banner and any
+                    // follow-up toggle decisions see the current desired state.
+                    var p = findByName(name);
+                    if (p) p.enabled = enabled;
+                    updateRestartBanner();
+                    if (typeof showToast === 'function') {
+                        var msg = (p && isDivergent(p))
+                            ? name + ' — restart the node for the change to take effect.'
+                            : name + ' — matches the current runtime, no restart needed.';
+                        showToast(
+                            enabled ? 'Plugin enabled' : 'Plugin disabled',
+                            msg,
+                            'success'
+                        );
+                    }
+                } else {
+                    // Revert the checkbox on failure so the UI matches truth.
+                    var cb = document.querySelector('input[data-plugin="' + name.replace(/"/g, '') + '"]');
+                    if (cb) cb.checked = !enabled;
+                    var msg = (r.data && r.data.message) || 'Toggle failed';
+                    if (typeof showToast === 'function') showToast('Error', msg, 'error');
+                }
+            }).catch(function() {
+                var cb = document.querySelector('input[data-plugin="' + name.replace(/"/g, '') + '"]');
+                if (cb) cb.checked = !enabled;
+                if (typeof showToast === 'function') showToast('Error', 'Network error', 'error');
+            });
+        }
+
+        function ensureLoadedOnTab() {
+            var settingsPanel = document.getElementById('tab-panel-settings');
+            if (!settingsPanel) return;
+            var observer = new MutationObserver(function() {
+                if (settingsPanel.style.display !== 'none' && !loaded) {
+                    refresh();
+                }
+            });
+            observer.observe(settingsPanel, { attributes: true, attributeFilter: ['style'] });
+            if (settingsPanel.style.display !== 'none' && !loaded) {
+                refresh();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', ensureLoadedOnTab);
+
+        function findByName(name) {
+            for (var i = 0; i < lastList.length; i++) {
+                if (lastList[i].name === name) return lastList[i];
+            }
+            return null;
+        }
+
+        function closeModal() {
+            var overlay = document.getElementById('plugin-modal');
+            if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            document.removeEventListener('keydown', modalEsc);
+        }
+
+        function modalEsc(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) closeModal();
+        }
+
+        // Server normalized these to http(s)-only URLs (see PluginLoader),
+        // so a link tag is safe — we still set rel=noopener to keep the new
+        // window from reaching back through window.opener.
+        function linkLine(url) {
+            var safe = escapeHtml(url);
+            return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' +
+                safe + ' <i class="fas fa-external-link-alt" style="font-size:0.75em"></i></a>';
+        }
+
+        function authorLine(author) {
+            if (!author || !author.name) return '';
+            var nameEsc = escapeHtml(author.name);
+            if (author.url) {
+                var urlEsc = escapeHtml(author.url);
+                return '<a href="' + urlEsc + '" target="_blank" rel="noopener noreferrer">' +
+                    nameEsc + ' <i class="fas fa-external-link-alt" style="font-size:0.75em"></i></a>';
+            }
+            return nameEsc;
+        }
+
+        // A bundled CHANGELOG.md wins over a manifest URL — we can render it
+        // in-place without a round-trip to the open internet (works over Tor
+        // or on an air-gapped node).
+        function changelogLine(p) {
+            if (p.has_changelog) {
+                return '<button type="button" class="btn btn-sm btn-link p-0"' +
+                    ' data-action="openPluginChangelog"' +
+                    ' data-plugin="' + escapeHtml(p.name) + '">' +
+                    'View bundled CHANGELOG.md' +
+                    '</button>';
+            }
+            if (p.changelog) {
+                return linkLine(p.changelog);
+            }
+            return '';
+        }
+
+        function openChangelogModal(name) {
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-changelog-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:720px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem"><i class="fas fa-scroll"></i> ' +
+                            escapeHtml(name) + ' — Changelog</h3>' +
+                        '<span class="close" id="plugin-changelog-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body plugin-changelog-body" id="plugin-changelog-body">' +
+                        '<i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;' +
+                    '</div>' +
+                '</div>';
+
+            function closeChangelog() {
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) closeChangelog(); }
+
+            overlay.querySelector('#plugin-changelog-close').onclick = closeChangelog;
+            overlay.onclick = function(e) { if (e.target === overlay) closeChangelog(); };
+            document.addEventListener('keydown', esc);
+            document.body.appendChild(overlay);
+
+            post({ action: 'pluginChangelog', name: name }).then(function(r) {
+                var body = document.getElementById('plugin-changelog-body');
+                if (!body) return;
+                if (r.data && r.data.success) {
+                    // Server rendered with UpdateCheckService::markdownToHtml,
+                    // which escapes all user content via htmlspecialchars — safe
+                    // to inject as innerHTML here.
+                    body.innerHTML = r.data.html;
+                } else {
+                    body.innerHTML = '<div class="text-muted">No bundled changelog available.</div>';
+                }
+            }).catch(function() {
+                var body = document.getElementById('plugin-changelog-body');
+                if (body) body.innerHTML = '<div class="text-danger">Failed to load changelog.</div>';
+            });
+        }
+
+        function openModal(name) {
+            var p = findByName(name);
+            if (!p) return;
+            closeModal();
+
+            var checkId = 'plugin-modal-toggle';
+            var errBlock = p.error
+                ? '<div class="alert alert-danger text-sm" style="margin-top:0.75rem">'
+                +   '<i class="fas fa-exclamation-triangle"></i> ' + escapeHtml(p.error)
+                + '</div>'
+                : '';
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:480px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem"><i class="fas fa-puzzle-piece"></i> ' + escapeHtml(p.name) + '</h3>' +
+                        '<span class="close" id="plugin-modal-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem">' +
+                        '<dl class="plugin-modal-dl">' +
+                            '<dt>Version</dt><dd><code>' + escapeHtml(p.version || '') + '</code>' +
+                                (p.license ? ' <span class="text-muted">· ' + escapeHtml(p.license) + '</span>' : '') +
+                            '</dd>' +
+                            '<dt>Status</dt><dd>' + statusBadge(p.status) + '</dd>' +
+                            (p.author ? '<dt>Author</dt><dd>' + authorLine(p.author) + '</dd>' : '') +
+                            (p.homepage ? '<dt>Website</dt><dd>' + linkLine(p.homepage) + '</dd>' : '') +
+                            (changelogLine(p) ? '<dt>Changelog</dt><dd>' + changelogLine(p) + '</dd>' : '') +
+                            '<dt>Description</dt><dd>' + escapeHtml(p.description || '—') + '</dd>' +
+                        '</dl>' +
+                        '<div class="plugin-modal-toggle-row">' +
+                            '<label for="' + checkId + '"><strong>Enabled</strong></label>' +
+                            '<label class="toggle-switch" for="' + checkId + '">' +
+                                '<input type="checkbox" id="' + checkId + '"' +
+                                    ' data-action-change="togglePluginFromModal"' +
+                                    ' data-plugin="' + escapeHtml(p.name) + '"' +
+                                    (p.enabled ? ' checked' : '') + '>' +
+                                '<span class="toggle-slider"></span>' +
+                            '</label>' +
+                        '</div>' +
+                        '<div class="text-muted text-sm" style="margin-top:0.75rem">' +
+                            'Toggles persist immediately but take effect after a node restart.' +
+                        '</div>' +
+                        errBlock +
+                        // Uninstall is a permanent action — only offered when
+                        // the plugin is already disabled, so the operator has
+                        // to take two deliberate steps: disable, then uninstall.
+                        // Hidden for enabled plugins to prevent an accidental
+                        // double-click from doing the destructive thing.
+                        (!p.enabled
+                            ? '<div class="plugin-modal-uninstall-row" style="margin-top:1rem;border-top:1px solid var(--border-color,#ccc);padding-top:0.75rem">' +
+                                '<button type="button" class="btn btn-sm btn-danger"' +
+                                    ' data-action="openPluginUninstall"' +
+                                    ' data-plugin="' + escapeHtml(p.name) + '">' +
+                                    '<i class="fas fa-trash"></i> Uninstall' +
+                                '</button>' +
+                                '<div class="text-muted text-xs" style="margin-top:0.5rem">' +
+                                    'Removes the plugin\'s files, MySQL tables, and credentials. This cannot be undone.' +
+                                '</div>' +
+                              '</div>'
+                            : ''
+                        ) +
+                    '</div>' +
+                '</div>';
+
+            overlay.querySelector('#plugin-modal-close').onclick = closeModal;
+            overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+            document.addEventListener('keydown', modalEsc);
+            document.body.appendChild(overlay);
+        }
+
+        // Two-step uninstall modal: operator types the plugin name to confirm
+        // (same pattern as "Delete API Key"). Runs the full uninstall and
+        // then renders the per-step result so the operator can see exactly
+        // what happened.
+        function openUninstallModal(name) {
+            var p = findByName(name);
+            if (!p) return;
+            closeModal(); // close the detail modal if it's open
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'plugin-uninstall-modal';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:520px">' +
+                    '<div class="modal-header">' +
+                        '<h3 style="font-size:1rem;color:#b02020"><i class="fas fa-trash"></i> Uninstall ' +
+                            escapeHtml(p.name) + '</h3>' +
+                        '<span class="close" id="plugin-uninstall-close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1.25rem;font-size:0.9rem">' +
+                        '<div class="alert alert-danger">' +
+                            '<strong>Permanent action.</strong> This removes the plugin\'s files and every MySQL table it owns. There is no undo — a fresh install will issue a new credential, new tables, and a new MySQL user.' +
+                        '</div>' +
+                        '<p>To confirm, type <code>' + escapeHtml(p.name) + '</code> below:</p>' +
+                        '<input type="text" id="plugin-uninstall-input" class="form-control"' +
+                            ' autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">' +
+                        '<div id="plugin-uninstall-steps" style="margin-top:1rem;display:none"></div>' +
+                    '</div>' +
+                    '<div class="modal-footer" style="padding:0.75rem 1.25rem;display:flex;justify-content:flex-end;gap:0.5rem">' +
+                        '<button type="button" class="btn btn-sm btn-secondary" id="plugin-uninstall-cancel">Cancel</button>' +
+                        '<button type="button" class="btn btn-sm btn-danger" id="plugin-uninstall-confirm" disabled>' +
+                            '<i class="fas fa-trash"></i> Uninstall' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+            function closeUninst() {
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) closeUninst(); }
+
+            overlay.querySelector('#plugin-uninstall-close').onclick = closeUninst;
+            overlay.querySelector('#plugin-uninstall-cancel').onclick = closeUninst;
+            overlay.onclick = function(e) { if (e.target === overlay) closeUninst(); };
+            document.addEventListener('keydown', esc);
+            document.body.appendChild(overlay);
+
+            var input = overlay.querySelector('#plugin-uninstall-input');
+            var confirmBtn = overlay.querySelector('#plugin-uninstall-confirm');
+            input.focus();
+            input.addEventListener('input', function() {
+                confirmBtn.disabled = input.value !== p.name;
+            });
+
+            confirmBtn.addEventListener('click', function() {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Working…';
+
+                post({ action: 'pluginsUninstall', name: name }).then(function(r) {
+                    var stepsEl = overlay.querySelector('#plugin-uninstall-steps');
+                    if (!stepsEl) return;
+                    stepsEl.style.display = '';
+
+                    var steps = (r.data && r.data.steps) || {};
+                    var html = '<table class="contacts-table" style="font-size:0.85rem"><tbody>';
+                    Object.keys(steps).forEach(function(k) {
+                        var v = String(steps[k]);
+                        var icon, color;
+                        if (v === 'ok')       { icon = 'fa-check';  color = '#28a745'; }
+                        else if (v === 'skipped') { icon = 'fa-minus'; color = '#888'; }
+                        else                  { icon = 'fa-times';  color = '#b02020'; }
+                        html += '<tr>' +
+                            '<td style="width:1.5em;color:' + color + '"><i class="fas ' + icon + '"></i></td>' +
+                            '<td><code>' + escapeHtml(k) + '</code></td>' +
+                            '<td style="color:' + color + '">' + escapeHtml(v) + '</td>' +
+                        '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    stepsEl.innerHTML = html;
+
+                    if (r.data && r.data.success) {
+                        if (typeof showToast === 'function') {
+                            showToast('Plugin uninstalled', p.name, 'success');
+                        }
+                        // Refresh the list so the row disappears.
+                        refresh();
+                        confirmBtn.innerHTML = '<i class="fas fa-check"></i> Done';
+                        setTimeout(closeUninst, 1200);
+                    } else {
+                        if (typeof showToast === 'function') {
+                            showToast('Uninstall partial failure', 'Some steps errored; see modal for detail.', 'error');
+                        }
+                        confirmBtn.innerHTML = '<i class="fas fa-redo"></i> Retry';
+                        confirmBtn.disabled = false;
+                    }
+                }).catch(function() {
+                    if (typeof showToast === 'function') {
+                        showToast('Error', 'Network error during uninstall', 'error');
+                    }
+                    confirmBtn.innerHTML = '<i class="fas fa-trash"></i> Uninstall';
+                    confirmBtn.disabled = false;
+                });
+            });
+        }
+
+        function toggleFromModal(name, enabled) {
+            var rowCb = document.querySelector('#plugins-tbody input[data-plugin="' + String(name).replace(/"/g, '') + '"]');
+            if (rowCb) rowCb.checked = enabled;
+            closeModal();
+            toggle(name, enabled);
+        }
+
+        return {
+            reload: function() { loaded = false; return refresh(); },
+            toggle: toggle,
+            toggleFromModal: toggleFromModal,
+            openModal: openModal,
+            openUninstall: openUninstallModal,
+            openChangelog: openChangelogModal,
+            requestRestart: requestRestart
+        };
+    })();
+
+    // Payback Methods — list / add / reveal / edit / delete
+    //
+    // Talks to /?ajax=paybackMethodsList etc. via the same XHR pattern as
+    // the API-keys module. CSRF token is pulled from the hidden field the
+    // page layout already puts in the DOM.
+    // =====================================================================
+    window.paybackMethods = (function () {
+        var state = {
+            methods: [],
+            listLoaded: false,
+            formMode: 'add',
+            editingId: null,
+            selectedType: null,
+            currentStep: 1,
+            filters: { type: '', currency: '' }
+        };
+        var catalog = null;
+        var catalogTypesById = {};
+
+        function ensureCatalog() {
+            if (catalog) { return catalog; }
+            var el = document.getElementById('payback-methods-catalog');
+            if (!el) { return null; }
+            try {
+                catalog = JSON.parse(el.textContent || '{}');
+                (catalog.types || []).forEach(function (t) { catalogTypesById[t.id] = t; });
+            } catch (e) { catalog = null; }
+            return catalog;
+        }
+        function getType(id) { ensureCatalog(); return catalogTypesById[id] || null; }
+
+        function csrf() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return el ? el.value : '';
+        }
+
+        function post(action, extra, cb) {
+            var body = 'action=' + encodeURIComponent(action) +
+                       '&csrf_token=' + encodeURIComponent(csrf());
+            Object.keys(extra || {}).forEach(function (k) {
+                body += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(extra[k]);
+            });
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.pathname, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                var data;
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch (e) {
+                    // 302 / 401 / an HTML login page all fail JSON.parse here.
+                    // That's nearly always a session expiring mid-action.
+                    var looksLikeLogin = /<html|<!DOCTYPE/i.test(xhr.responseText || '');
+                    data = (looksLikeLogin || xhr.status === 302 || xhr.status === 401)
+                        ? { success: false, error: 'session_expired', message: 'Session expired — please sign in again, then retry.' }
+                        : { success: false, error: 'bad_response', message: 'Unexpected response from server.' };
+                }
+                cb(data, xhr.status);
+            };
+            xhr.send(body);
+        }
+
+        function loadList() {
+            post('paybackMethodsList', {}, function (data) {
+                if (!data.success) { return; }
+                state.methods = data.methods || [];
+                state.listLoaded = true;
+                renderAccessState(data.seconds_remaining || 0);
+                render();
+            });
+        }
+
+        function render() {
+            var container = document.getElementById('payback-methods-list');
+            if (!container) { return; }
+            if (!state.methods.length) {
+                container.innerHTML =
+                    '<div class="payback-methods-empty text-muted">' +
+                    'No payback methods yet. Click <strong>+ Add</strong> above to set one up.' +
+                    '</div>';
+                return;
+            }
+            var cat = ensureCatalog() || { types: [] };
+            var typeLabels = {};
+            (cat.types || []).forEach(function (t) { typeLabels[t.id] = t.label; });
+            var sharePolicyLabels = { auto: 'Auto', never: 'Never' };
+
+            // Filter option sets drawn from the current methods so users only
+            // see choices that would actually match something.
+            var typeSet = {}, currencySet = {};
+            state.methods.forEach(function (m) {
+                if (m.type) { typeSet[m.type] = typeLabels[m.type] || m.type; }
+                if (m.currency) { currencySet[m.currency] = true; }
+            });
+            var typeIds = Object.keys(typeSet).sort(function (a, b) {
+                return (typeSet[a] || '').localeCompare(typeSet[b] || '');
+            });
+            var currencies = Object.keys(currencySet).sort();
+
+            var fType = state.filters.type || '';
+            var fCur  = state.filters.currency || '';
+            var filtered = state.methods.filter(function (m) {
+                if (fType && m.type !== fType) { return false; }
+                if (fCur && m.currency !== fCur) { return false; }
+                return true;
+            });
+
+            var filtersHtml = '';
+            // Only show filters if there's more than one option on either axis.
+            // Styling reuses the shared .contacts-filters / .contacts-filter-select
+            // chrome also used by the Recent Transactions section.
+            if (typeIds.length > 1 || currencies.length > 1) {
+                filtersHtml = '<div class="contacts-filters mb-md">';
+                if (typeIds.length > 1) {
+                    filtersHtml += '<select id="payback-filter-type" class="contacts-filter-select" data-payback-filter="type" aria-label="Filter by type">' +
+                        '<option value="">Any type</option>';
+                    typeIds.forEach(function (id) {
+                        var sel = (id === fType) ? ' selected' : '';
+                        filtersHtml += '<option value="' + escapeAttr(id) + '"' + sel + '>' + escapeHtml(typeSet[id]) + '</option>';
+                    });
+                    filtersHtml += '</select>';
+                }
+                if (currencies.length > 1) {
+                    filtersHtml += '<select id="payback-filter-currency" class="contacts-filter-select" data-payback-filter="currency" aria-label="Filter by currency">' +
+                        '<option value="">Any currency</option>';
+                    currencies.forEach(function (c) {
+                        var sel = (c === fCur) ? ' selected' : '';
+                        filtersHtml += '<option value="' + escapeAttr(c) + '"' + sel + '>' + escapeHtml(c) + '</option>';
+                    });
+                    filtersHtml += '</select>';
+                }
+                filtersHtml += '</div>';
+            }
+
+            var html = filtersHtml +
+                '<div class="contacts-table-wrapper payback-methods-table-wrapper">' +
+                '<table class="contacts-table payback-methods-table">' +
+                '<thead><tr>' +
+                    '<th class="col-pb-type"     style="width:14%">Type</th>' +
+                    '<th class="col-pb-currency" style="width:13%">Currency</th>' +
+                    '<th class="col-pb-label"    style="width:22%">Label</th>' +
+                    '<th class="col-pb-details"  style="width:37%">Details</th>' +
+                    '<th class="col-pb-share"    style="width:14%">Share</th>' +
+                '</tr></thead><tbody>';
+            if (!filtered.length) {
+                html += '<tr><td colspan="5" class="text-muted" style="padding:0.75rem; text-align:center;">' +
+                    'No methods match the current filters.</td></tr>';
+            }
+            filtered.forEach(function (m) {
+                var typeLabel = typeLabels[m.type] || m.type;
+                var shareLabel = sharePolicyLabels[m.share_policy] || (m.share_policy || 'auto');
+                html +=
+                    '<tr class="is-clickable" ' +
+                        'data-action="openPaybackMethodForm" data-payback-mode="view" ' +
+                        'data-method-id="' + escapeAttr(m.method_id) + '" title="Click to view">' +
+                        '<td class="col-pb-type"><span class="payback-method-type-badge">' + escapeHtml(typeLabel) + '</span></td>' +
+                        '<td class="col-pb-currency">' + escapeHtml(m.currency) + '</td>' +
+                        '<td class="col-pb-label payback-method-label" title="' + escapeAttr(m.label) + '">' + escapeHtml(m.label) + '</td>' +
+                        '<td class="col-pb-details payback-method-mask text-muted" title="' + escapeAttr(m.masked_display || '') + '">' + escapeHtml(m.masked_display || '') + '</td>' +
+                        '<td class="col-pb-share">' + escapeHtml(shareLabel) + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('[data-payback-filter]').forEach(function (sel) {
+                sel.addEventListener('change', function () {
+                    state.filters[sel.getAttribute('data-payback-filter')] = sel.value;
+                    render();
+                });
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // Form: open / close / step nav
+        // -------------------------------------------------------------------
+
+        function openForm(mode, methodId) {
+            state.formMode = mode || 'add';
+            state.editingId = methodId || null;
+            state.selectedType = null;
+            state.currentStep = 1;
+
+            ensureCatalog();
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+
+            resetFormInputs();
+            clearReadOnlyView();
+            var isEditOrView = state.formMode === 'edit' || state.formMode === 'view';
+            if (!isEditOrView) { renderTypeTiles(); }
+            setModalTitle(
+                state.formMode === 'view' ? 'View Payback Method' :
+                state.formMode === 'edit' ? 'Edit Payback Method' :
+                'Add Payback Method'
+            );
+            setStepVisibility(isEditOrView ? 0 : 1);
+            hideErrors();
+            overlay.style.display = 'flex';
+
+            if (!overlay.__paybackBackdropBound) {
+                overlay.__paybackBackdropBound = true;
+                overlay.addEventListener('click', function (e) {
+                    if (e.target === overlay) { closeForm(); }
+                });
+            }
+
+            if ((state.formMode === 'edit' || state.formMode === 'view') && methodId) {
+                // Use reveal so sensitive fields decrypt for pre-fill. The
+                // endpoint is gated by sensitive-access; on 403 we pop the
+                // unlock modal and retry after the user enters their code.
+                var loadForEdit = function () {
+                    post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
+                        if (status === 403 && data.code === 'sensitive_access_required') {
+                            if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                                // If the user cancels the unlock modal, don't
+                                // leave them staring at an infinite "Loading…"
+                                // inside the View/Edit modal — close it too.
+                                window.apiKeys.openVerifyModal(loadForEdit, 'Unlock to view method', closeForm);
+                            } else {
+                                showErrors([{ field: null, message: 'Please unlock sensitive actions first.' }]);
+                            }
+                            return;
+                        }
+                        if (!data.success || !data.method) {
+                            showErrors([{ field: null, message: data.error || 'Could not load method' }]);
+                            return;
+                        }
+                        prefillForEdit(data.method);
+                        if (state.formMode === 'view') { applyReadOnlyView(); }
+                    });
+                };
+                loadForEdit();
+            }
+        }
+
+        function closeForm() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (overlay) { overlay.style.display = 'none'; }
+            state.editingId = null;
+            state.selectedType = null;
+            state.currentStep = 1;
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (t) {
+                t.disabled = false;
+            });
+        }
+
+        function gotoStep(n) {
+            if (n === 2) {
+                if (!state.selectedType) { return; }
+                renderStep2(state.selectedType);
+            }
+            state.currentStep = n;
+            setStepVisibility(n);
+        }
+
+        // View mode reuses the edit form but locks every input. Toggled on
+        // after prefillForEdit populates, and cleared on next openForm.
+        function applyReadOnlyView() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+            overlay.classList.add('is-view-mode');
+            overlay.querySelectorAll('.modal-body input, .modal-body textarea').forEach(function (el) {
+                el.setAttribute('readonly', 'readonly');
+            });
+            overlay.querySelectorAll('.modal-body select, .modal-body button').forEach(function (el) {
+                el.disabled = true;
+            });
+        }
+        function clearReadOnlyView() {
+            var overlay = document.getElementById('payback-method-modal-overlay');
+            if (!overlay) { return; }
+            overlay.classList.remove('is-view-mode');
+            overlay.querySelectorAll('.modal-body [readonly]').forEach(function (el) {
+                el.removeAttribute('readonly');
+            });
+            overlay.querySelectorAll('.modal-body select, .modal-body button').forEach(function (el) {
+                el.disabled = false;
+            });
+        }
+
+        // Delete the method currently open in the edit form.
+        function removeCurrent() {
+            if (!state.editingId) { return; }
+            var label = (document.getElementById('payback-label') || {}).value || 'this method';
+            remove(state.editingId, label);
+        }
+
+        // Flip the open modal from view → edit without refetching. Data is
+        // already loaded; we just unlock the inputs and swap footer actions.
+        function switchToEdit() {
+            if (state.formMode !== 'view' || !state.editingId) { return; }
+            state.formMode = 'edit';
+            clearReadOnlyView();
+            setModalTitle('Edit Payback Method');
+            setStepVisibility(2);
+        }
+
+        function setStepVisibility(n) {
+            // n=0 → loading placeholder (edit/view while revealing); n=1/2 → step panels
+            var loading = document.querySelector('#payback-method-modal-overlay .payback-loading');
+            if (loading) { loading.style.display = (n === 0) ? '' : 'none'; }
+            document.querySelectorAll('#payback-method-modal-overlay .payback-step').forEach(function (s) {
+                s.style.display = (n !== 0 && s.getAttribute('data-step') === String(n)) ? '' : 'none';
+            });
+            var viewing = state.formMode === 'view';
+            var editing = state.formMode === 'edit';
+            var back    = document.querySelector('#payback-method-modal-overlay .payback-step-back');
+            var next    = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            var save    = document.querySelector('#payback-method-modal-overlay .payback-submit');
+            var del     = document.querySelector('#payback-method-modal-overlay .payback-delete');
+            var cancel  = document.querySelector('#payback-method-modal-overlay .payback-cancel');
+            var edit    = document.querySelector('#payback-method-modal-overlay .payback-edit-from-view');
+            var banner  = document.querySelector('#payback-method-modal-overlay .payback-view-banner');
+            // In view/edit we jump straight to step 2 and hide the type-picker nav.
+            if (back)   { back.style.display   = (n === 2 && !viewing && !editing) ? '' : 'none'; }
+            if (next)   { next.style.display   = (n === 1 && !viewing && !editing) ? '' : 'none'; }
+            if (save)   { save.style.display   = (n === 2 && !viewing) ? '' : 'none'; }
+            if (del)    { del.style.display    = (n === 2 && editing) ? '' : 'none'; }
+            if (edit)   { edit.style.display   = (n === 2 && viewing) ? '' : 'none'; }
+            if (banner) { banner.style.display = (n === 2 && viewing) ? '' : 'none'; }
+            if (cancel) { cancel.textContent = viewing ? 'Close' : 'Cancel'; }
+        }
+
+        function setModalTitle(title) {
+            var el = document.getElementById('payback-method-modal-title');
+            if (el) {
+                el.innerHTML = '<i class="fas fa-hand-holding-usd"></i> ' + escapeHtml(title);
+            }
+        }
+
+        function resetFormInputs() {
+            var label = document.getElementById('payback-label');
+            if (label) { label.value = ''; }
+            var priority = document.getElementById('payback-priority');
+            if (priority) { priority.value = '100'; }
+            var share = document.getElementById('payback-share-policy');
+            if (share) { share.value = 'auto'; }
+            var fields = document.getElementById('payback-type-fields');
+            if (fields) { fields.innerHTML = ''; }
+            var currency = document.getElementById('payback-currency');
+            if (currency) { currency.innerHTML = ''; }
+            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            if (next) { next.disabled = true; }
+        }
+
+        // -------------------------------------------------------------------
+        // Form: step 1 (type selector)
+        // -------------------------------------------------------------------
+
+        function renderTypeTiles() {
+            var cat = ensureCatalog();
+            var grid = document.getElementById('payback-type-grid');
+            if (!cat || !grid) { return; }
+            var byGroup = {};
+            (cat.types || []).forEach(function (t) {
+                byGroup[t.group] = byGroup[t.group] || [];
+                byGroup[t.group].push(t);
+            });
+            var html = '';
+            var openIndex = 0;  // first non-empty group starts expanded
+            var groupIndex = -1;
+            (cat.groups || []).forEach(function (g) {
+                var types = byGroup[g.id] || [];
+                if (!types.length) { return; }
+                groupIndex += 1;
+                var openAttr = groupIndex === openIndex ? ' open' : '';
+                html += '<details class="payback-type-group"' + openAttr + '>' +
+                        '<summary class="payback-type-group-label">' +
+                            '<i class="fas fa-chevron-right payback-type-group-chevron"></i>' +
+                            '<span>' + escapeHtml(g.label) + '</span>' +
+                            '<span class="payback-type-group-count">' + types.length + '</span>' +
+                        '</summary>' +
+                        '<div class="payback-type-group-tiles">';
+                types.forEach(function (t) {
+                    html += '<button type="button" class="payback-type-tile" ' +
+                            'data-action="selectPaybackType" data-type="' + escapeAttr(t.id) + '" ' +
+                            'title="' + escapeAttr(t.description || '') + '">' +
+                                '<i class="' + escapeAttr(t.icon || 'fas fa-coins') + '"></i>' +
+                                '<span class="payback-type-tile-label">' + escapeHtml(t.label) + '</span>' +
+                            '</button>';
+                });
+                html += '</div></details>';
+            });
+            grid.innerHTML = html;
+        }
+
+        function selectType(typeId) {
+            if (!getType(typeId)) { return; }
+            state.selectedType = typeId;
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (tile) {
+                tile.classList.toggle('is-selected', tile.getAttribute('data-type') === typeId);
+            });
+            var next = document.querySelector('#payback-method-modal-overlay .payback-step-next');
+            if (next) { next.disabled = false; }
+        }
+
+        // -------------------------------------------------------------------
+        // Form: step 2 (per-type fields + currency)
+        // -------------------------------------------------------------------
+
+        function renderStep2(typeId) {
+            var type = getType(typeId);
+            if (!type) { return; }
+            renderTypeInfo(type);
+            renderCurrencyOptions(type, null);
+            renderTypeFields(type);
+        }
+
+        // Per-type info block. The catalog entry may carry an `info` string
+        // (plain text or limited HTML — plugins opt in by setting this key in
+        // their getCatalogEntry() return). Rendered as a collapsible details
+        // banner at the top of step 2 so it doesn't shove the form down for
+        // returning users who don't need the refresher.
+        function renderTypeInfo(type) {
+            var host = document.getElementById('payback-type-info');
+            if (!host) { return; }
+            var info = type && type.info ? String(type.info).trim() : '';
+            if (info === '') {
+                host.style.display = 'none';
+                host.innerHTML = '';
+                return;
+            }
+            host.style.display = '';
+            host.innerHTML =
+                '<details class="section-intro text-muted">' +
+                    '<summary>' +
+                        '<i class="' + escapeAttr(type.icon || 'fas fa-info-circle') + '"></i> ' +
+                        '<span>About ' + escapeHtml(type.label || type.id) + '</span>' +
+                    '</summary>' +
+                    '<div class="section-intro-body">' + info + '</div>' +
+                '</details>';
+        }
+
+        function renderCurrencyOptions(type, preselect) {
+            var select = document.getElementById('payback-currency');
+            var hint = document.querySelector('.payback-currency-hint');
+            if (!select) { return; }
+            var cat = ensureCatalog() || { currencies: [] };
+            var codes = (type.currencies && type.currencies.length)
+                ? type.currencies
+                : cat.currencies.map(function (c) { return c.code; });
+            var html = '';
+            codes.forEach(function (code) {
+                var match = (cat.currencies || []).filter(function (c) { return c.code === code; })[0];
+                var label = match ? match.label : code;
+                var sel = (preselect && preselect === code) ? ' selected' : '';
+                html += '<option value="' + escapeAttr(code) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+            });
+            select.innerHTML = html;
+            if (hint) {
+                hint.textContent = (type.currencies && type.currencies.length)
+                    ? 'Only currencies valid for this method are shown.'
+                    : 'Any ISO-4217 or declared asset code.';
+            }
+        }
+
+        function renderTypeFields(type) {
+            var container = document.getElementById('payback-type-fields');
+            if (!container) { return; }
+            container.innerHTML = '';
+            (type.fields || []).forEach(function (f, i) {
+                container.appendChild(buildFieldDom(f, i));
+            });
+            attachConditionalWatchers(type);
+            applyShowWhen(type);
+            applySwiftIdentifierToggle(type);
+
+            if (type.currenciesFor && type.currenciesFor.field) {
+                var watched = document.querySelector('#payback-type-fields [data-payback-field="' + type.currenciesFor.field + '"]');
+                if (watched) {
+                    watched.addEventListener('change', function () { applyCurrenciesFor(type, watched.value); });
+                    applyCurrenciesFor(type, watched.value);
+                }
+            }
+        }
+
+        function buildFieldDom(f, index) {
+            var inputId = 'payback-field-' + f.name + '-' + index;
+            var wrap = document.createElement('div');
+            wrap.className = 'form-group payback-field-group';
+            wrap.setAttribute('data-payback-field-group', f.name);
+            wrap.setAttribute('data-payback-field-index', String(index));
+            if (f.showWhen) {
+                wrap.setAttribute('data-show-when-field', f.showWhen.field);
+                wrap.setAttribute('data-show-when-in', JSON.stringify(f.showWhen.in || []));
+            }
+
+            var label = document.createElement('label');
+            label.className = 'form-label';
+            label.setAttribute('for', inputId);
+            label.textContent = f.label + (f.required ? ' *' : '');
+            wrap.appendChild(label);
+
+            var input;
+            if (f.type === 'select') {
+                input = document.createElement('select');
+                input.className = 'form-control';
+                (f.options || []).forEach(function (opt) {
+                    var o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.label;
+                    input.appendChild(o);
+                });
+            } else if (f.type === 'textarea') {
+                input = document.createElement('textarea');
+                input.className = 'form-control';
+                input.rows = 3;
+            } else {
+                input = document.createElement('input');
+                input.type = f.type === 'email' ? 'email'
+                           : f.type === 'tel' ? 'tel'
+                           : f.type === 'number' ? 'number'
+                           : 'text';
+                input.className = 'form-control';
+            }
+            input.id = inputId;
+            input.setAttribute('data-payback-field', f.name);
+            if (f.placeholder) { input.placeholder = f.placeholder; }
+            if (f.required) { input.required = true; }
+            wrap.appendChild(input);
+
+            if (f.help) {
+                var help = document.createElement('small');
+                help.className = 'text-muted';
+                help.textContent = f.help;
+                wrap.appendChild(help);
+            }
+            return wrap;
+        }
+
+        function attachConditionalWatchers(type) {
+            var watched = {};
+            (type.fields || []).forEach(function (f) {
+                if (f.showWhen && f.showWhen.field) { watched[f.showWhen.field] = true; }
+            });
+            Object.keys(watched).forEach(function (name) {
+                var el = document.querySelector('#payback-type-fields [data-payback-field="' + name + '"]');
+                if (el && !el.__paybackWatcherAttached) {
+                    el.__paybackWatcherAttached = true;
+                    var refresh = function () { applyShowWhen(type); applySwiftIdentifierToggle(type); };
+                    el.addEventListener('change', refresh);
+                    el.addEventListener('input',  refresh);
+                }
+            });
+        }
+
+        function applyShowWhen(type) {
+            (type.fields || []).forEach(function (f, i) {
+                if (!f.showWhen) { return; }
+                var wrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"]');
+                if (!wrap) { return; }
+                var watched = document.querySelector('#payback-type-fields [data-payback-field="' + f.showWhen.field + '"]');
+                var val = watched ? watched.value : '';
+                var wanted = f.showWhen.in || [];
+                wrap.style.display = wanted.indexOf(val) !== -1 ? '' : 'none';
+            });
+        }
+
+        // SWIFT uniquely accepts *either* an IBAN or a local account number,
+        // not both. Rather than render two separate text fields side by side
+        // (confusing, looks like duplicates), render a segmented toggle and
+        // display only the chosen field. Activated only when rail=swift.
+        function applySwiftIdentifierToggle(type) {
+            var container = document.getElementById('payback-type-fields');
+            var railEl = document.querySelector('#payback-type-fields [data-payback-field="rail"]');
+            if (!container || !railEl) { return; }
+
+            var indices = { iban: -1, account_number: -1 };
+            (type.fields || []).forEach(function (f, i) {
+                if (f.showWhen && f.showWhen.field === 'rail'
+                        && Array.isArray(f.showWhen.in) && f.showWhen.in.length === 1
+                        && f.showWhen.in[0] === 'swift'
+                        && (f.name === 'iban' || f.name === 'account_number')) {
+                    indices[f.name] = i;
+                }
+            });
+
+            var existing = document.getElementById('payback-swift-id-toggle');
+            if (railEl.value !== 'swift' || indices.iban === -1 || indices.account_number === -1) {
+                if (existing) { existing.parentNode.removeChild(existing); }
+                return;
+            }
+
+            var ibanWrap = container.querySelector('[data-payback-field-index="' + indices.iban + '"]');
+            var acctWrap = container.querySelector('[data-payback-field-index="' + indices.account_number + '"]');
+            if (!ibanWrap || !acctWrap) { return; }
+
+            if (!existing) {
+                existing = document.createElement('div');
+                existing.id = 'payback-swift-id-toggle';
+                existing.className = 'form-group payback-swift-id-toggle';
+                existing.innerHTML =
+                    '<label class="form-label">Identifier *</label>' +
+                    '<div class="payback-swift-id-btns" role="tablist" aria-label="SWIFT identifier type">' +
+                        '<button type="button" class="btn btn-primary btn-compact" data-swift-id="iban">IBAN</button>' +
+                        '<button type="button" class="btn btn-secondary btn-compact" data-swift-id="account_number">Account number</button>' +
+                    '</div>' +
+                    '<small class="text-muted">SWIFT accepts either an IBAN or a local account number.</small>';
+                ibanWrap.parentNode.insertBefore(existing, ibanWrap);
+                existing.querySelectorAll('[data-swift-id]').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        setSwiftIdentifier(b.getAttribute('data-swift-id'), indices);
+                    });
+                });
+            }
+            // Strip the redundant "IBAN (or account_number)" / "Account
+            // number (or IBAN)" labels — the toggle now communicates that.
+            [[ibanWrap, 'IBAN'], [acctWrap, 'Account number']].forEach(function (pair) {
+                var lbl = pair[0].querySelector('label.form-label');
+                if (lbl) { lbl.textContent = pair[1]; }
+            });
+            setSwiftIdentifier(existing.getAttribute('data-current') || 'iban', indices);
+        }
+
+        function setSwiftIdentifier(choice, indices) {
+            var toggle = document.getElementById('payback-swift-id-toggle');
+            if (!toggle) { return; }
+            toggle.setAttribute('data-current', choice);
+            toggle.querySelectorAll('[data-swift-id]').forEach(function (b) {
+                var active = b.getAttribute('data-swift-id') === choice;
+                b.classList.toggle('btn-primary',   active);
+                b.classList.toggle('btn-secondary', !active);
+            });
+            var ibanWrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + indices.iban + '"]');
+            var acctWrap = document.querySelector('#payback-type-fields [data-payback-field-index="' + indices.account_number + '"]');
+            if (ibanWrap) { ibanWrap.style.display = (choice === 'iban')           ? '' : 'none'; }
+            if (acctWrap) { acctWrap.style.display = (choice === 'account_number') ? '' : 'none'; }
+        }
+
+        function applyCurrenciesFor(type, variantValue) {
+            var map = type.currenciesFor && type.currenciesFor.map;
+            if (!map) { return; }
+            var allowed = Object.prototype.hasOwnProperty.call(map, variantValue) ? map[variantValue] : null;
+            var select = document.getElementById('payback-currency');
+            if (!select) { return; }
+            var cat = ensureCatalog() || { currencies: [] };
+            var codes;
+            if (!allowed) {
+                codes = (type.currencies && type.currencies.length)
+                    ? type.currencies
+                    : cat.currencies.map(function (c) { return c.code; });
+            } else {
+                codes = allowed;
+            }
+            var previous = select.value;
+            var html = '';
+            codes.forEach(function (code) {
+                var match = (cat.currencies || []).filter(function (c) { return c.code === code; })[0];
+                var label = match ? match.label : code;
+                var sel = code === previous ? ' selected' : '';
+                html += '<option value="' + escapeAttr(code) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+            });
+            select.innerHTML = html;
+            if (codes.indexOf(previous) === -1 && codes.length) {
+                select.value = codes[0];
+            }
+        }
+
+        function prefillForEdit(m) {
+            var type = getType(m.type);
+            if (!type) { return; }
+            selectType(m.type);
+            gotoStep(2);
+            var labelEl = document.getElementById('payback-label');
+            if (labelEl) { labelEl.value = m.label || ''; }
+            renderCurrencyOptions(type, m.currency);
+            var share = document.getElementById('payback-share-policy');
+            if (share) { share.value = m.share_policy || 'auto'; }
+            var priority = document.getElementById('payback-priority');
+            if (priority) { priority.value = m.priority != null ? m.priority : 100; }
+
+            var stored = m.fields || {};
+
+            // First pass: set values on watched/unconditional fields (e.g., rail
+            // selects) so applyShowWhen resolves correctly.
+            (type.fields || []).forEach(function (f, i) {
+                if (f.showWhen) { return; }
+                if (stored[f.name] == null) { return; }
+                var el = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"] [data-payback-field]');
+                if (el) { el.value = stored[f.name]; }
+            });
+            applyShowWhen(type);
+
+            // For SWIFT, pick the identifier branch that actually has a value.
+            if (stored.rail === 'swift') {
+                var prefer = (stored.iban && String(stored.iban).length) ? 'iban'
+                           : (stored.account_number && String(stored.account_number).length) ? 'account_number'
+                           : 'iban';
+                var toggle = document.getElementById('payback-swift-id-toggle');
+                if (!toggle) { applySwiftIdentifierToggle(type); toggle = document.getElementById('payback-swift-id-toggle'); }
+                if (toggle) { toggle.setAttribute('data-current', prefer); }
+            }
+            applySwiftIdentifierToggle(type);
+
+            // Second pass: fill every conditional field whose showWhen matches
+            // the stored watched value.
+            (type.fields || []).forEach(function (f, i) {
+                if (stored[f.name] == null) { return; }
+                if (f.showWhen) {
+                    var watchedVal = stored[f.showWhen.field];
+                    if ((f.showWhen.in || []).indexOf(watchedVal) === -1) { return; }
+                }
+                var input = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"] [data-payback-field]');
+                if (input) { input.value = stored[f.name]; }
+            });
+
+            document.querySelectorAll('#payback-type-grid .payback-type-tile').forEach(function (t) {
+                if (t.getAttribute('data-type') !== m.type) { t.disabled = true; }
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // Submit / reveal / delete
+        // -------------------------------------------------------------------
+
+        function submit() {
+            hideErrors();
+            var typeId = state.selectedType;
+            if (!typeId) {
+                showErrors([{ field: null, message: 'Pick a payback-method type first.' }]);
+                return;
+            }
+            var type = getType(typeId);
+            if (!type) { return; }
+            var label       = (document.getElementById('payback-label')        || {}).value || '';
+            var currency    = (document.getElementById('payback-currency')     || {}).value || '';
+            var sharePolicy = (document.getElementById('payback-share-policy') || {}).value || 'auto';
+            var priority    = (document.getElementById('payback-priority')     || {}).value || 100;
+
+            var fields = collectVisibleFields();
+
+            var editing = state.formMode === 'edit' && state.editingId;
+            var action  = editing ? 'paybackMethodsUpdate' : 'paybackMethodsCreate';
+            var payload;
+            if (editing) {
+                // Type and currency are immutable after create. Only send fields
+                // the user actually modified; empty objects would fail validation.
+                payload = { method_id: state.editingId };
+                if (label)       { payload.label = label; }
+                if (sharePolicy) { payload.share_policy = sharePolicy; }
+                if (priority !== '' && priority != null) { payload.priority = priority; }
+                if (Object.keys(fields).length > 0) { payload.fields = JSON.stringify(fields); }
+            } else {
+                payload = {
+                    type: typeId,
+                    label: label,
+                    currency: currency,
+                    fields: JSON.stringify(fields),
+                    share_policy: sharePolicy,
+                    priority: priority
+                };
+            }
+
+            post(action, payload, function (data, status) {
+                if (status === 403 && data.code === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { submit(); });
+                    } else {
+                        showErrors([{ field: null, message: 'Please unlock sensitive actions first.' }]);
+                    }
+                    return;
+                }
+                if (!data.success) {
+                    showErrors(data.errors || [{ field: null, message: data.error || 'Save failed' }]);
+                    return;
+                }
+                closeForm();
+                loadList();
+            });
+        }
+
+        function collectVisibleFields() {
+            var out = {};
+            document.querySelectorAll('#payback-type-fields [data-payback-field]').forEach(function (el) {
+                var wrap = el.closest('[data-payback-field-group]');
+                if (wrap && wrap.style.display === 'none') { return; }
+                var name = el.getAttribute('data-payback-field');
+                var v = el.value;
+                if (el.type === 'number' && v !== '' && !isNaN(v)) { v = Number(v); }
+                if (v === '' || v == null) { return; }
+                out[name] = v;
+            });
+            return out;
+        }
+
+        function showErrors(errs) {
+            var box = document.getElementById('payback-form-errors');
+            if (!box) { return; }
+            if (!errs || !errs.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+            var html = '<ul class="form-errors-list">';
+            errs.forEach(function (e) {
+                var prefix = e.field ? (e.field + ': ') : '';
+                html += '<li>' + escapeHtml(prefix + (e.message || e.code || 'Invalid')) + '</li>';
+            });
+            html += '</ul>';
+            box.innerHTML = html;
+            box.style.display = 'block';
+            if (typeof box.scrollIntoView === 'function') {
+                box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+
+        function hideErrors() {
+            var box = document.getElementById('payback-form-errors');
+            if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+        }
+
+        function reveal(methodId) {
+            post('paybackMethodsReveal', { method_id: methodId }, function (data, status) {
+                if (status === 403 && data.code === 'sensitive_access_required') {
+                    if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                        window.apiKeys.openVerifyModal(function () { reveal(methodId); });
+                    } else {
+                        showAlertModal('Please unlock sensitive actions first (re-enter your auth code).', { title: 'Locked', type: 'warning' });
+                    }
+                    return;
+                }
+                if (!data.success) { showAlertModal('Failed to reveal: ' + (data.error || 'unknown'), { type: 'error' }); return; }
+                var m = data.method;
+                var lines = Object.keys(m.fields || {}).map(function (k) {
+                    return k + ': ' + m.fields[k];
+                });
+                showAlertModal(m.label + ' (' + m.type + ', ' + m.currency + ')\n\n' + lines.join('\n'), { title: 'Payback method', type: 'info' });
+            });
+        }
+
+        function remove(methodId, label) {
+            showConfirmModal('Remove payback method "' + label + '"? This cannot be undone.', {
+                title: 'Remove payback method?',
+                confirmText: 'Remove',
+                confirmClass: 'btn-danger',
+                icon: 'fa-exclamation-triangle'
+            }).then(function (ok) {
+                if (!ok) return;
+                post('paybackMethodsDelete', { method_id: methodId }, function (data, status) {
+                    if (status === 403 && data.code === 'sensitive_access_required') {
+                        if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                            window.apiKeys.openVerifyModal(function () { remove(methodId, label); });
+                        } else {
+                            showAlertModal('Please unlock sensitive actions first.', { title: 'Locked', type: 'warning' });
+                        }
+                        return;
+                    }
+                    if (!data.success) { showAlertModal('Failed to delete: ' + (data.error || 'unknown'), { type: 'error' }); return; }
+                    closeForm();
+                    loadList();
+                });
+            });
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function escapeAttr(s) { return escapeHtml(s); }
+
+        function renderAccessState(secondsRemaining) {
+            var el = document.getElementById('payback-methods-access-state');
+            if (!el) { return; }
+            if (secondsRemaining > 0) {
+                el.innerHTML = '<i class="fas fa-unlock-alt"></i> Unlocked for ' +
+                    Math.ceil(secondsRemaining / 60) + ' min';
+            } else {
+                el.textContent = '';
+            }
+        }
+
+        // Auto-load on DOM ready if the section is present.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                if (document.getElementById('payback-methods-section')) { loadList(); }
+            });
+        } else if (document.getElementById('payback-methods-section')) {
+            loadList();
+        }
+
+        return {
+            loadList:   loadList,
+            openForm:   openForm,
+            closeForm:  closeForm,
+            submit:     submit,
+            reveal:     reveal,
+            remove:     remove,
+            removeCurrent: removeCurrent,
+            switchToEdit: switchToEdit,
+            selectType: selectType,
+            gotoStep:   gotoStep
+        };
+    })();
+
+    // ========================================================================
+    // Payback Options (contact modal "Payback" tab)
+    //
+    // Ephemeral fetch of a contact's shareable payback methods. Synchronous
+    // E2E round-trip through the node; response rendered in the tab and
+    // never persisted anywhere (no DB row, no localStorage). Closing the
+    // modal / switching tab drops the in-memory copy.
+    // ========================================================================
+
+    window.paybackOptions = (function () {
+        var state = {
+            // Identity of the contact whose data is currently on screen. Used
+            // to discard stale responses if the user switches contacts mid-flight.
+            loadedForPubkeyHash: null,
+            lastFetchAddress:    null,
+            currentCurrency:     null,
+            methods:             []
+        };
+
+        function setStateText(msg) {
+            var el = document.getElementById('payback-options-state');
+            if (el) { el.textContent = msg || ''; }
+        }
+
+        // currentContactCurrencies is an array of objects shaped
+        // {currency, status, credit_limit, fee, my_available_credit,
+        //  their_available_credit, ...}. Pull out just the codes.
+        function contactCurrencyCodes() {
+            if (!Array.isArray(currentContactCurrencies)) { return []; }
+            var out = [];
+            currentContactCurrencies.forEach(function (entry) {
+                if (entry && typeof entry === 'object' && entry.currency) {
+                    out.push(entry.currency);
+                } else if (typeof entry === 'string') {
+                    out.push(entry);
+                }
+            });
+            return out;
+        }
+
+        function pickDefaultCurrency() {
+            // Currency of the largest debt this node owes the contact. Balance
+            // from the contact's perspective: negative = we owe them.
+            var balances = (typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {};
+            var codes = contactCurrencyCodes();
+            if (!codes.length) { codes = Object.keys(balances); }
+            if (!codes.length) { return 'USD'; }
+            var best = null, bestOwed = -Infinity;
+            codes.forEach(function (c) {
+                var b = balances[c];
+                var raw = b && (b.balance != null ? b.balance : b.amount);
+                var n = parseFloat(raw);
+                if (isNaN(n)) { n = 0; }
+                var owed = -n; // positive = we owe them
+                if (owed > bestOwed) { bestOwed = owed; best = c; }
+            });
+            return best || codes[0];
+        }
+
+        function renderCurrencyOptions(available) {
+            var sel = document.getElementById('payback-options-currency');
+            if (!sel) { return; }
+            var codes = contactCurrencyCodes();
+            if (!codes.length) {
+                codes = Object.keys((typeof currentContactBalances === 'object' && currentContactBalances) ? currentContactBalances : {});
+            }
+            // Ensure currencies mentioned in the response are selectable too.
+            (available || []).forEach(function (c) {
+                if (c && codes.indexOf(c) === -1) { codes.push(c); }
+            });
+            if (!codes.length) { codes = ['USD']; }
+            var html = '<option value="">All currencies</option>';
+            codes.forEach(function (c) {
+                html += '<option value="' + escapeAttrSafe(c) + '"' + (c === state.currentCurrency ? ' selected' : '') + '>' + escapeHtmlSafe(c) + '</option>';
+            });
+            sel.innerHTML = html;
+            sel.onchange = function () {
+                state.currentCurrency = sel.value || null;
+                load(true);
+            };
+        }
+
+        function renderContactName() {
+            // The short inline label was merged into the info details; we
+            // now populate the contact name inside the expandable section.
+            var el = document.getElementById('payback-contact-name-info');
+            if (!el) { return; }
+            var nameEl = document.getElementById('modal_contact_name');
+            var name = (nameEl && nameEl.textContent) ? nameEl.textContent.trim() : 'this contact';
+            el.textContent = name || 'this contact';
+        }
+
+        function escapeHtmlSafe(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function escapeAttrSafe(s) { return escapeHtmlSafe(s); }
+
+        function render(payload) {
+            var container = document.getElementById('payback-options-list');
+            if (!container) { return; }
+            var status  = payload && payload.status;
+            var methods = (payload && Array.isArray(payload.methods)) ? payload.methods : [];
+            state.methods = methods;
+
+            if (status === 'denied') {
+                container.innerHTML = '<p class="no-transactions">This contact is not sharing any matching payback methods.</p>';
+                return;
+            }
+            if (status === 'rate_limited') {
+                container.innerHTML = '<p class="no-transactions">Rate-limited by the remote node. Try again later.</p>';
+                return;
+            }
+            if (status !== 'ok' || !methods.length) {
+                container.innerHTML = '<p class="no-transactions">No payback methods available right now.</p>';
+                return;
+            }
+
+            methods = methods.slice().sort(function (a, b) {
+                return (a.priority || 100) - (b.priority || 100);
+            });
+
+            var html = '<div class="contacts-table-wrapper">' +
+                '<table class="contacts-table payback-options-table">' +
+                '<thead><tr>' +
+                    '<th class="col-pbo-type"     style="width:30%">Type</th>' +
+                    '<th class="col-pbo-currency" style="width:28%">Currency</th>' +
+                    '<th class="col-pbo-label"    style="width:42%">Label</th>' +
+                '</tr></thead><tbody>';
+            methods.forEach(function (m, i) {
+                html +=
+                    '<tr class="payback-opt-row is-clickable" data-method-idx="' + i + '" title="Tap for details">' +
+                        '<td class="col-pbo-type"><span class="payback-method-type-badge">' + escapeHtmlSafe(m.type || '') + '</span></td>' +
+                        '<td class="col-pbo-currency">' + escapeHtmlSafe(m.currency || '') + '</td>' +
+                        '<td class="col-pbo-label">' + escapeHtmlSafe(m.label || '') + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('.payback-opt-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                    var idx = parseInt(row.getAttribute('data-method-idx'), 10);
+                    var method = state.methods[idx];
+                    if (method) { openDetailModal(method); }
+                });
+            });
+        }
+
+        function openDetailModal(method) {
+            var fields = (method && typeof method.fields === 'object' && method.fields) ? method.fields : {};
+            var rows = '';
+            Object.keys(fields).forEach(function (k) {
+                var v = fields[k];
+                if (v == null || v === '') { return; }
+                rows +=
+                    '<div class="payback-detail-row">' +
+                        '<div class="payback-detail-key text-muted">' + escapeHtmlSafe(k) + '</div>' +
+                        '<div class="payback-detail-value">' +
+                            '<span class="payback-detail-text">' + escapeHtmlSafe(String(v)) + '</span>' +
+                            ' <button type="button" class="btn btn-sm btn-outline payback-detail-copy" data-copy="' + escapeAttrSafe(String(v)) + '" data-copy-label="' + escapeAttrSafe(String(k)) + '" title="Copy"><i class="fas fa-copy"></i></button>' +
+                        '</div>' +
+                    '</div>';
+            });
+            if (!rows) { rows = '<p class="text-muted">No fields shared.</p>'; }
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal';
+            overlay.id = 'payback-detail-modal';
+            overlay.style.display = 'flex';
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width:520px">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-hand-holding-usd"></i> ' + escapeHtmlSafe(method.label || method.type || 'Payback method') + '</h3>' +
+                        '<span class="close" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1rem 1.5rem;">' +
+                        '<div class="payback-detail-row">' +
+                            '<div class="payback-detail-key text-muted">Type</div>' +
+                            '<div class="payback-detail-value"><span class="payback-method-type-badge">' + escapeHtmlSafe(method.type || '') + '</span></div>' +
+                        '</div>' +
+                        '<div class="payback-detail-row">' +
+                            '<div class="payback-detail-key text-muted">Currency</div>' +
+                            '<div class="payback-detail-value">' + escapeHtmlSafe(method.currency || '') + '</div>' +
+                        '</div>' +
+                        rows +
+                    '</div>' +
+                '</div>';
+
+            function close() {
+                if (document.body.contains(overlay)) { document.body.removeChild(overlay); }
+                document.removeEventListener('keydown', esc);
+            }
+            function esc(e) { if (e.key === 'Escape' || e.keyCode === 27) { close(); } }
+            overlay.querySelector('.close').onclick = close;
+            overlay.onclick = function (e) { if (e.target === overlay) { close(); } };
+            document.addEventListener('keydown', esc);
+            overlay.querySelectorAll('.payback-detail-copy').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var v = btn.getAttribute('data-copy') || '';
+                    if (!v) { return; }
+                    var label = btn.getAttribute('data-copy-label') || 'Value';
+                    copyToClipboard(v, label + ' copied!');
+                });
+            });
+            document.body.appendChild(overlay);
+        }
+
+        function load(skipStateReset) {
+            var address = currentContactAddress;
+            var pubkeyHash = currentContactPubkeyHash;
+            if (!address) {
+                setStateText('No contact address available.');
+                return;
+            }
+            var currency = state.currentCurrency;
+            if (!skipStateReset) { setStateText('Fetching from contact…'); }
+            state.lastFetchAddress = address;
+            state.loadedForPubkeyHash = pubkeyHash;
+
+            var csrfEl = document.querySelector('input[name="csrf_token"]');
+            var csrf = csrfEl ? csrfEl.value : '';
+            var body = 'action=paybackMethodsFetchFromContact' +
+                       '&csrf_token=' + encodeURIComponent(csrf) +
+                       '&address=' + encodeURIComponent(address);
+            if (currency) { body += '&currency=' + encodeURIComponent(currency); }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.pathname, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                // Drop stale responses if the user switched contacts mid-flight.
+                if (state.lastFetchAddress !== address) { return; }
+                var data;
+                try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+                if (!data || !data.success) {
+                    setStateText('Fetch failed' + (data && data.error ? ': ' + data.error : '') + '.');
+                    render({ status: 'error', methods: [] });
+                    return;
+                }
+                setStateText('Fetched ' + new Date().toLocaleTimeString() + ' (not stored).');
+                render(data);
+                renderCurrencyOptions((data.methods || []).map(function (m) { return m.currency; }));
+            };
+            xhr.send(body);
+        }
+
+        function openForCurrentContact() {
+            renderContactName();
+            state.currentCurrency = pickDefaultCurrency();
+            renderCurrencyOptions([]);
+            load();
+        }
+
+        function refresh() {
+            if (!state.lastFetchAddress) { openForCurrentContact(); return; }
+            load();
+        }
+
+        return {
+            openForCurrentContact: openForCurrentContact,
+            refresh: refresh
         };
     })();
 

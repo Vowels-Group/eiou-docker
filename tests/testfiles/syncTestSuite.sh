@@ -84,10 +84,10 @@ echo -e "\t   Sender: ${sender} (${senderAddress})"
 echo -e "\t   Receiver: ${receiver} (${receiverAddress})"
 
 # Ensure contacts exist between sender and receiver
-# Use same format as addContactsTest: eiou add <address> <name> <fee> <credit> <currency>
+# Use same format as addContactsTest: eiou contact add <address> <name> --fee <fee> --credit <credit> --currency <currency>
 # Credit must be > 0 to allow transactions (1000 matches http4 topology default)
-docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 USD 2>&1 > /dev/null || true
+docker exec ${sender} eiou contact add ${receiverAddress} ${receiver} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
+docker exec ${receiver} eiou contact add ${senderAddress} ${sender} --fee 0.1 --credit 1000 --currency USD 2>&1 > /dev/null || true
 # Process queues for contact exchange
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
@@ -1567,10 +1567,9 @@ setup_ab_chain() {
     echo -e "\t   Creating AB chain (AB0-AB3)..."
 
     # AB0 is the contact transaction (already exists from test setup)
-    # Send AB1, AB2, AB3 (use EIOU_TEST_MODE to bypass rate limiter)
-    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 1 USD "AB1-${ts}" 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 2 USD "AB2-${ts}" 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 3 USD "AB3-${ts}" 2>&1 > /dev/null
+    docker exec ${contactA} eiou send ${addressB} 1 USD "AB1-${ts}" 2>&1 > /dev/null
+    docker exec ${contactA} eiou send ${addressB} 2 USD "AB2-${ts}" 2>&1 > /dev/null
+    docker exec ${contactA} eiou send ${addressB} 3 USD "AB3-${ts}" 2>&1 > /dev/null
 
     # Process transactions
     wait_for_queue_processed ${contactA} 5
@@ -1582,10 +1581,9 @@ setup_cb_chain() {
     local ts="$1"
     echo -e "\t   Creating CB chain (CB0-CB3)..."
 
-    # Use EIOU_TEST_MODE to bypass rate limiter
-    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 1 USD "CB1-${ts}" 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 2 USD "CB2-${ts}" 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 3 USD "CB3-${ts}" 2>&1 > /dev/null
+    docker exec ${contactC} eiou send ${addressB} 1 USD "CB1-${ts}" 2>&1 > /dev/null
+    docker exec ${contactC} eiou send ${addressB} 2 USD "CB2-${ts}" 2>&1 > /dev/null
+    docker exec ${contactC} eiou send ${addressB} 3 USD "CB3-${ts}" 2>&1 > /dev/null
 
     wait_for_queue_processed ${contactC} 5
     wait_for_queue_processed ${contactB} 5
@@ -1662,8 +1660,7 @@ send_multiple_transactions() {
     local count="$6"
 
     for i in $(seq $start_num $((start_num + count - 1))); do
-        # Use EIOU_TEST_MODE to bypass rate limiter
-        docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiver_addr} 1 USD "${prefix}${i}-${ts}" 2>&1 > /dev/null
+        docker exec ${sender} eiou send ${receiver_addr} 1 USD "${prefix}${i}-${ts}" 2>&1 > /dev/null
         sleep 0.5  # Allow transaction to be committed before next one
     done
 }
@@ -2163,7 +2160,7 @@ echo -e "\t   After deletion:  B has ${countB_t4_del} AB txs (lost all ${countB_
 
 # B sends transactions to A (acts as new contact request in a way)
 echo -e "\t   B sending BA1 to A..."
-docker exec -e EIOU_TEST_MODE=true ${contactB} eiou send ${addressA} 1 USD "BA1-${timestamp4}" 2>&1 > /dev/null
+docker exec ${contactB} eiou send ${addressA} 1 USD "BA1-${timestamp4}" 2>&1 > /dev/null
 
 # Process queues
 echo -e "\t   Processing message queues..."

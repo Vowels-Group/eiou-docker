@@ -62,15 +62,43 @@ class RateLimiterService implements RateLimiterServiceInterface {
             }
         }
 
-        // If rate limiting is disabled or in test mode, always allow
+        // If rate limiting is disabled or running under PHPUnit, always allow.
+        //
+        // The unconditional bypass used to honor the `EIOU_TEST_MODE` env
+        // var directly, which meant a hostile orchestrator (or a typo in
+        // docker-compose.yml) could disable login brute-force protection
+        // in production by exporting one variable. Now the bypass is gated
+        // on the `EIOU_TEST_MODE` PHP CONSTANT, which is only `define()`d
+        // by `tests/bootstrap.php` (PHPUnit). Production builds never
+        // define that constant — there's no env-var path that turns it
+        // on at runtime.
+        //
+        // Belt-and-braces: if anyone ever DOES set `EIOU_TEST_MODE=true`
+        // as an env var on a production container, we log a SECURITY
+        // warning every request (no static-once gate) so it surfaces
+        // loudly in logs without disabling rate limiting. Operators can
+        // grep for the marker.
         $rateLimitEnabled = $this->userContext ? $this->userContext->getRateLimitEnabled() : Constants::RATE_LIMIT_ENABLED;
-        $testMode = getenv('EIOU_TEST_MODE') === 'true';
-        if (!$rateLimitEnabled || $testMode) {
-            if ($testMode) {
-                static $testModeWarned = false;
-                if (!$testModeWarned) {
-                    Logger::getInstance()->warning("Rate limiting bypassed: EIOU_TEST_MODE is enabled");
-                    $testModeWarned = true;
+        $bypassEnabled = defined('EIOU_TEST_MODE') && EIOU_TEST_MODE === true;
+
+        // Loud-warning channel: legacy env-var present but build-time
+        // constant absent. Was previously THE bypass; now it's an alarm.
+        if (!$bypassEnabled && getenv('EIOU_TEST_MODE') === 'true') {
+            Logger::getInstance()->error(
+                "SECURITY: EIOU_TEST_MODE env var set on a non-test build. " .
+                "Rate-limit bypass IGNORED. If this is unexpected, audit your " .
+                "container env config — the env var is no longer honored at " .
+                "runtime; only the PHPUnit bootstrap constant disables rate limiting.",
+                ['identifier_hash' => substr(hash('sha256', $identifier), 0, 12)]
+            );
+        }
+
+        if (!$rateLimitEnabled || $bypassEnabled) {
+            if ($bypassEnabled) {
+                static $bypassWarned = false;
+                if (!$bypassWarned) {
+                    Logger::getInstance()->warning("Rate limiting bypassed: EIOU_TEST_MODE constant defined (PHPUnit bootstrap)");
+                    $bypassWarned = true;
                 }
             }
             return [
@@ -152,10 +180,11 @@ class RateLimiterService implements RateLimiterServiceInterface {
      * Delegates to Security::getClientIp() which only trusts proxy headers
      * when REMOTE_ADDR is in the trusted proxies list.
      *
+     * @param \Eiou\Core\AppConfig $appConfig Typed config snapshot.
      * @return string IP address
      */
-    public static function getClientIp(): string {
-        return Security::getClientIp();
+    public static function getClientIp(\Eiou\Core\AppConfig $appConfig): string {
+        return Security::getClientIp($appConfig);
     }
 
 }

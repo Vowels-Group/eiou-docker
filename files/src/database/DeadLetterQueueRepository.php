@@ -237,7 +237,13 @@ class DeadLetterQueueRepository extends AbstractRepository {
         if ($limit <= 0) {
             return [];
         }
-        $query = "SELECT * FROM {$this->tableName}
+        // Live-notification poll path. Caller in `Functions.php` only reads
+        // id / message_type / message_id / status / created_at — drop the
+        // `payload` (JSON blob, the largest column) and other fields the
+        // toast renderer never touches. Verified against the
+        // `dlqRepoPoll->getItemsSince(...)` consumer.
+        $query = "SELECT id, message_type, message_id, status, created_at
+                  FROM {$this->tableName}
                   WHERE created_at > :created_after
                   ORDER BY created_at DESC
                   LIMIT :limit";
@@ -247,8 +253,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         try {
             $stmt->execute();
-            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            return $this->decodeJsonFields($results, 'payload');
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             $this->logError('Failed to get DLQ items since', $e);
             return [];

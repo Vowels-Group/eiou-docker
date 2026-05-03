@@ -48,11 +48,28 @@ class ContactCreditRepository extends AbstractRepository {
      * @return array|null Credit data with available_credit and currency, or null if not found
      */
     public function getAvailableCredit(string $pubkeyHash, ?string $currency = null): ?array {
+        // Joined to contact_currencies + filtered to status='accepted'
+        // for the same reason as getTotalAvailableCreditByCurrency:
+        // an unaccepted (or declined) currency that still has a stale
+        // contact_credit row shouldn't surface as "you have credit"
+        // anywhere — neither the dashboard total nor per-contact UI.
         if ($currency !== null) {
-            $query = "SELECT available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+            $query = "SELECT cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                      FROM {$this->tableName} cc
+                      INNER JOIN contact_currencies cur
+                        ON cur.pubkey_hash = cc.pubkey_hash
+                       AND cur.currency    = cc.currency
+                       AND cur.status      = 'accepted'
+                      WHERE cc.pubkey_hash = :pubkey_hash AND cc.currency = :currency";
             $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]);
         } else {
-            $query = "SELECT available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
+            $query = "SELECT cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                      FROM {$this->tableName} cc
+                      INNER JOIN contact_currencies cur
+                        ON cur.pubkey_hash = cc.pubkey_hash
+                       AND cur.currency    = cc.currency
+                       AND cur.status      = 'accepted'
+                      WHERE cc.pubkey_hash = :pubkey_hash";
             $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
         }
 
@@ -77,7 +94,13 @@ class ContactCreditRepository extends AbstractRepository {
      * @return array Array of ['available_credit' => int, 'currency' => string] rows
      */
     public function getAvailableCreditAllCurrencies(string $pubkeyHash): array {
-        $query = "SELECT available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
+        $query = "SELECT cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                  FROM {$this->tableName} cc
+                  INNER JOIN contact_currencies cur
+                    ON cur.pubkey_hash = cc.pubkey_hash
+                   AND cur.currency    = cc.currency
+                   AND cur.status      = 'accepted'
+                  WHERE cc.pubkey_hash = :pubkey_hash";
         $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
 
         if (!$stmt) {
@@ -166,6 +189,103 @@ class ContactCreditRepository extends AbstractRepository {
     }
 
     /**
+     * Multi-currency batched upsert — equivalent to N
+     * `upsertAvailableCredit` calls collapsed into one INSERT round-trip.
+     *
+     * Avoids the N+1 pattern in ContactSyncService when storing credit
+     * for a contact who has many accepted currencies (5–10 common).
+     *
+     * @param string $pubkeyHash    Contact pubkey hash
+     * @param array  $creditByCurrency  ['USD' => SplitAmount, 'EUR' => SplitAmount, …]
+     * @return bool true on success (false if the prepared statement fails)
+     */
+    public function upsertAvailableCreditBatch(string $pubkeyHash, array $creditByCurrency): bool {
+        if (empty($creditByCurrency)) {
+            return true;
+        }
+        $rows = [];
+        $params = [];
+        foreach ($creditByCurrency as $currency => $availableCredit) {
+            $rows[] = '(?, ?, ?, ?, NOW(6))';
+            $params[] = $pubkeyHash;
+            $params[] = $availableCredit->whole;
+            $params[] = $availableCredit->frac;
+            $params[] = $currency;
+        }
+        $query = "INSERT INTO {$this->tableName}
+                  (pubkey_hash, available_credit_whole, available_credit_frac, currency, updated_at)
+                  VALUES " . implode(', ', $rows) . "
+                  ON DUPLICATE KEY UPDATE
+                  available_credit_whole = VALUES(available_credit_whole),
+                  available_credit_frac  = VALUES(available_credit_frac),
+                  currency               = VALUES(currency),
+                  updated_at             = NOW(6)";
+        try {
+            $stmt = $this->pdo->prepare($query);
+            // Positional `?` placeholders + numeric-keyed params: pass
+            // directly to execute() rather than through bindValue() (which
+            // expects 1-indexed integer keys for positional, but our flat
+            // array is 0-indexed). PDO::execute() handles the binding.
+            return $stmt->execute($params);
+        } catch (\PDOException $e) {
+            $this->logError("upsertAvailableCreditBatch failed", $e, $query);
+            return false;
+        }
+    }
+
+    /**
+     * Multi-currency batched if-newer upsert — equivalent to N
+     * `upsertAvailableCreditIfNewer` calls collapsed into one INSERT
+     * round-trip.
+     *
+     * Per-row "newer" check uses MySQL's `VALUES(col)` to read the
+     * about-to-be-inserted value inside the ON DUPLICATE KEY UPDATE
+     * clause, so each currency's update is gated on its own
+     * timestamp comparison (not the batch's first row).
+     *
+     * @param string $pubkeyHash       Contact pubkey hash
+     * @param array  $creditByCurrency ['USD' => SplitAmount, 'EUR' => SplitAmount, …]
+     * @param int    $calculatedAt     Single timestamp (sender's
+     *                                 microtime; same for every currency
+     *                                 in this response)
+     * @return bool true on success
+     */
+    public function upsertAvailableCreditIfNewerBatch(
+        string $pubkeyHash,
+        array $creditByCurrency,
+        int $calculatedAt
+    ): bool {
+        if (empty($creditByCurrency)) {
+            return true;
+        }
+        $timestamp = self::microtimeIntToTimestamp($calculatedAt);
+        $rows = [];
+        $params = [];
+        foreach ($creditByCurrency as $currency => $availableCredit) {
+            $rows[] = '(?, ?, ?, ?, ?)';
+            $params[] = $pubkeyHash;
+            $params[] = $availableCredit->whole;
+            $params[] = $availableCredit->frac;
+            $params[] = $currency;
+            $params[] = $timestamp;
+        }
+        $query = "INSERT INTO {$this->tableName}
+                  (pubkey_hash, available_credit_whole, available_credit_frac, currency, updated_at)
+                  VALUES " . implode(', ', $rows) . "
+                  ON DUPLICATE KEY UPDATE
+                  available_credit_whole = IF(VALUES(updated_at) > updated_at, VALUES(available_credit_whole), available_credit_whole),
+                  available_credit_frac  = IF(VALUES(updated_at) > updated_at, VALUES(available_credit_frac), available_credit_frac),
+                  updated_at             = IF(VALUES(updated_at) > updated_at, VALUES(updated_at), updated_at)";
+        try {
+            $stmt = $this->pdo->prepare($query);
+            return $stmt->execute($params);
+        } catch (\PDOException $e) {
+            $this->logError("upsertAvailableCreditIfNewerBatch failed", $e, $query);
+            return false;
+        }
+    }
+
+    /**
      * Convert app microtime integer to MySQL TIMESTAMP(6) string
      *
      * App uses (int)(microtime(true) * 10000), e.g. 17417499042270.
@@ -203,7 +323,24 @@ class ContactCreditRepository extends AbstractRepository {
      * @return array Array of ['currency' => string, 'total_available_credit' => int] rows
      */
     public function getTotalAvailableCreditByCurrency(): array {
-        $query = "SELECT currency, SUM(available_credit_whole) AS sum_whole, SUM(available_credit_frac) AS sum_frac FROM {$this->tableName} GROUP BY currency";
+        // INNER JOIN with contact_currencies on (pubkey_hash, currency)
+        // and filter to status='accepted' so currencies the peer hasn't
+        // accepted yet — or has declined — don't count toward the
+        // dashboard's "Total Available Credit." The contact_credit row
+        // gets pre-emptively created when WE propose an outgoing
+        // currency (ContactManagementService::addCurrencyToContact),
+        // and it stays around until decline-cleanup or ping-reconcile
+        // catches it; this filter makes the aggregation correct
+        // regardless of those cleanup paths' state.
+        $query = "SELECT cc.currency,
+                         SUM(cc.available_credit_whole) AS sum_whole,
+                         SUM(cc.available_credit_frac)  AS sum_frac
+                  FROM {$this->tableName} cc
+                  INNER JOIN contact_currencies cur
+                    ON cur.pubkey_hash = cc.pubkey_hash
+                   AND cur.currency    = cc.currency
+                   AND cur.status      = 'accepted'
+                  GROUP BY cc.currency";
         $stmt = $this->execute($query);
 
         if (!$stmt) {
@@ -240,7 +377,13 @@ class ContactCreditRepository extends AbstractRepository {
             $placeholders[] = $key;
             $params[$key] = $hash;
         }
-        $query = "SELECT pubkey_hash, available_credit_whole, available_credit_frac, currency FROM {$this->tableName} WHERE pubkey_hash IN (" . implode(',', $placeholders) . ")";
+        $query = "SELECT cc.pubkey_hash, cc.available_credit_whole, cc.available_credit_frac, cc.currency
+                  FROM {$this->tableName} cc
+                  INNER JOIN contact_currencies cur
+                    ON cur.pubkey_hash = cc.pubkey_hash
+                   AND cur.currency    = cc.currency
+                   AND cur.status      = 'accepted'
+                  WHERE cc.pubkey_hash IN (" . implode(',', $placeholders) . ")";
         $stmt = $this->execute($query, $params);
 
         if (!$stmt) {
@@ -266,6 +409,28 @@ class ContactCreditRepository extends AbstractRepository {
     public function deleteByPubkeyHash(string $pubkeyHash): bool {
         $deletedRows = $this->delete($this->primaryKey, $pubkeyHash);
         return $deletedRows > 0;
+    }
+
+    /**
+     * Delete the credit row for one specific (contact, currency) pair.
+     * Called from the decline-cleanup paths so orphan rows don't
+     * accumulate even though the aggregation queries already filter
+     * them out — keeps the table tight and avoids confusing snapshots.
+     *
+     * @param string $pubkeyHash Contact's public key hash
+     * @param string $currency   Currency code
+     * @return bool True if a row was deleted
+     */
+    public function deleteForContactCurrency(string $pubkeyHash, string $currency): bool {
+        $stmt = $this->execute(
+            "DELETE FROM {$this->tableName}
+             WHERE pubkey_hash = :pubkey_hash AND currency = :currency",
+            [':pubkey_hash' => $pubkeyHash, ':currency' => $currency]
+        );
+        if (!$stmt) {
+            return false;
+        }
+        return $stmt->rowCount() > 0;
     }
 
     /**

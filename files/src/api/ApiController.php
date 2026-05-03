@@ -59,12 +59,18 @@ use Eiou\Services\ApiKeyService;
  * - POST /api/v1/system/sync                 - Trigger sync operation
  * - POST /api/v1/system/shutdown             - Shutdown processors
  * - POST /api/v1/system/start               - Start processors
+ * - POST /api/v1/system/restart             - Restart processors + PHP-FPM workers in-place
  * - GET  /api/v1/system/debug-report        - Download debug report (JSON)
  * - POST /api/v1/system/debug-report        - Submit debug report to support
  *
- * - POST /api/v1/chaindrop/propose           - Propose tx drop
- * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal
- * - POST /api/v1/chaindrop/reject            - Reject tx drop proposal
+ * - GET  /api/v1/plugins                     - List installed plugins (admin)
+ * - POST /api/v1/plugins/:name/enable        - Enable a plugin (admin, no auto-restart)
+ * - POST /api/v1/plugins/:name/disable       - Disable a plugin (admin, no auto-restart)
+ * - *    /api/v1/plugins/:name/:action       - Plugin-owned endpoints (admin, via PluginApiRegistry)
+ *
+ * - POST /api/v1/chaindrop/propose           - Propose tx drop (wallet:send)
+ * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal (admin — irreversible chain rewrite)
+ * - POST /api/v1/chaindrop/reject            - Reject tx drop proposal (wallet:send)
  * - GET  /api/v1/chaindrop                   - List tx drop proposals
  *
  * - GET  /api/v1/p2p                         - List P2P transactions awaiting approval
@@ -170,6 +176,8 @@ class ApiController {
                 'p2p' => $this->handleP2p($method, $action, $id, $params, $body),
                 'backup' => $this->handleBackup($method, $action, $params, $body),
                 'requests' => $this->handleRequests($method, $action, $id, $params, $body),
+                'plugins' => $this->handlePlugins($method, $action, $id, $params, $body),
+                'payback-methods' => $this->handlePaybackMethods($method, $action, $id, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
         } catch (ServiceException $e) {
@@ -224,16 +232,28 @@ class ApiController {
      * Handle contacts endpoints
      *
      * Routes:
-     * - GET    /api/v1/contacts                  - List all contacts
-     * - POST   /api/v1/contacts                  - Add new contact
-     * - GET    /api/v1/contacts/pending          - Get pending contact requests
-     * - GET    /api/v1/contacts/search           - Search contacts by name
-     * - POST   /api/v1/contacts/ping/:address    - Ping a contact
-     * - GET    /api/v1/contacts/:address         - Get contact details
-     * - DELETE /api/v1/contacts/:address         - Delete contact
-     * - PUT    /api/v1/contacts/:address         - Update contact
-     * - POST   /api/v1/contacts/block/:address   - Block contact
-     * - POST   /api/v1/contacts/unblock/:address - Unblock contact
+     * - GET    /api/v1/contacts                              - List all contacts
+     * - POST   /api/v1/contacts                              - Add new contact
+     * - GET    /api/v1/contacts/pending                      - Get pending contact requests
+     * - GET    /api/v1/contacts/search                       - Search contacts by name
+     * - POST   /api/v1/contacts/ping/:address                - Ping a contact
+     * - POST   /api/v1/contacts/:hash/decisions              - Apply batched contact-currency decisions
+     * - POST   /api/v1/contacts/:hash/decline                - Decline every pending currency on a contact request
+     * - GET    /api/v1/contacts/:hash/currencies             - List every currency configured for a contact
+     * - POST   /api/v1/contacts/:hash/currencies             - Add a new currency to an accepted contact
+     * - POST   /api/v1/contacts/:hash/currency-accept        - Accept a single pending currency
+     * - POST   /api/v1/contacts/:hash/currency-decline       - Decline a single pending currency
+     * - POST   /api/v1/contacts/:hash/currency-remove        - Locally remove a currency from a contact (no peer notification)
+     * - GET    /api/v1/contacts/:address                     - Get contact details
+     * - DELETE /api/v1/contacts/:address                     - Delete contact
+     * - PUT    /api/v1/contacts/:address                     - Update contact
+     * - POST   /api/v1/contacts/block/:address               - Block contact
+     * - POST   /api/v1/contacts/unblock/:address             - Unblock contact
+     *
+     * Decisions / per-currency endpoints back the GUI batched-apply modal and
+     * the `eiou contact apply / accept / currency …` CLI surface; all three
+     * paths share ContactDecisionService so the partition + declines-first
+     * + first-accept-via-add semantics are guaranteed identical.
      */
     private function handleContacts(string $method, ?string $action, ?string $id, array $params, string $body): array {
         return match (true) {
@@ -244,6 +264,13 @@ class ApiController {
             $method === 'POST' && $action === 'ping' && $id => $this->pingContact($id),
             $method === 'POST' && $action === 'block' && $id => $this->blockContact($id),
             $method === 'POST' && $action === 'unblock' && $id => $this->unblockContact($id),
+            $method === 'POST' && $action && $id === 'decisions' => $this->applyContactDecisionsApi($action, $body),
+            $method === 'POST' && $action && $id === 'decline' => $this->declineContactRequestApi($action),
+            $method === 'GET'  && $action && $id === 'currencies' => $this->listContactCurrenciesApi($action),
+            $method === 'POST' && $action && $id === 'currencies' => $this->addContactCurrencyApi($action, $body),
+            $method === 'POST' && $action && $id === 'currency-accept' => $this->acceptContactCurrencyApi($action, $body),
+            $method === 'POST' && $action && $id === 'currency-decline' => $this->declineContactCurrencyApi($action, $body),
+            $method === 'POST' && $action && $id === 'currency-remove' => $this->removeContactCurrencyApi($action, $body),
             $method === 'GET' && $action => $this->getContact($action),
             $method === 'DELETE' && $action => $this->deleteContact($action),
             $method === 'PUT' && $action => $this->updateContact($action, $body),
@@ -264,6 +291,7 @@ class ApiController {
             $method === 'POST' && $action === 'sync' => $this->triggerSync($body),
             $method === 'POST' && $action === 'shutdown' => $this->shutdownProcessors(),
             $method === 'POST' && $action === 'start' => $this->startProcessors(),
+            $method === 'POST' && $action === 'restart' => $this->restartNode(),
             $method === 'GET' && $action === 'debug-report' => $this->getDebugReport($params),
             $method === 'POST' && $action === 'debug-report' => $this->submitDebugReport($body),
             default => $this->errorResponse('Unknown system action: ' . $action, 404, 'unknown_action')
@@ -316,6 +344,50 @@ class ApiController {
             $method === 'POST' && $action === 'cleanup' => $this->cleanupBackups(),
             default => $this->errorResponse('Unknown backup action: ' . $action, 404, 'unknown_action')
         };
+    }
+
+    /**
+     * Handle plugin endpoints (admin only)
+     *
+     * Routes:
+     * - GET  /api/v1/plugins                   - List installed plugins
+     * - POST /api/v1/plugins/:name/enable      - Enable a plugin
+     * - POST /api/v1/plugins/:name/disable     - Disable a plugin
+     *
+     * Enable/disable persists the flag but does NOT restart the node.
+     * Follow up with POST /api/v1/system/restart to apply changes.
+     */
+    private function handlePlugins(string $method, ?string $action, ?string $id, array $params, string $body): array {
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
+        }
+
+        // Core plugin-management endpoints first.
+        if ($method === 'GET' && !$action)                        { return $this->listPluginsApi(); }
+        if ($method === 'POST' && $action && $id === 'enable')    { return $this->togglePluginApi($action, true); }
+        if ($method === 'POST' && $action && $id === 'disable')   { return $this->togglePluginApi($action, false); }
+        if ($method === 'DELETE' && $action && !$id)              { return $this->uninstallPluginApi($action); }
+
+        // Plugin-owned endpoint fallthrough. Shape: /api/v1/plugins/{plugin}/{action}.
+        // The registry inherits admin scope from the gate above — v1 keeps all
+        // plugin-owned endpoints admin-only to sidestep per-endpoint scope
+        // declarations in the manifest.
+        if ($action && $id) {
+            $registry = $this->services->getPluginApiRegistry();
+            if ($registry->has($action, $method, $id)) {
+                $result = $registry->dispatch($action, $method, $id, $params, $body);
+                if ($result['status'] === 200) {
+                    return $this->successResponse($result['payload']);
+                }
+                return $this->errorResponse(
+                    $result['payload']['message'] ?? 'Plugin endpoint failed',
+                    $result['status'],
+                    $result['payload']['error'] ?? 'plugin_error'
+                );
+            }
+        }
+
+        return $this->errorResponse('Unknown plugins action', 404, 'unknown_action');
     }
 
     // ==================== Wallet Endpoints ====================
@@ -1425,6 +1497,311 @@ class ApiController {
         }
     }
 
+    /**
+     * POST /api/v1/contacts/:hash/decisions
+     *
+     * Body: {
+     *   "decisions": [{currency, action: accept|decline|defer, fee, credit}, ...],
+     *   "is_new_contact"?: bool,
+     *   "contact_address"?: string,
+     *   "contact_name"?: string
+     * }
+     *
+     * Returns: { accepted: [...], declined: [...], errors: [...] }
+     */
+    private function applyContactDecisionsApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+
+        $decisions = $data['decisions'] ?? null;
+        if (!is_array($decisions) || empty($decisions)) {
+            return $this->errorResponse('decisions must be a non-empty array', 400, 'missing_decisions');
+        }
+
+        $result = $this->services->getContactDecisionService()->apply(
+            urldecode($pubkeyHash),
+            $decisions,
+            (bool) ($data['is_new_contact'] ?? false),
+            isset($data['contact_address']) ? (string) $data['contact_address'] : null,
+            isset($data['contact_name']) ? (string) $data['contact_name'] : null,
+        );
+
+        return $this->successResponse($result);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currencies
+     *
+     * Add a new currency to an already-accepted contact (the
+     * `addCurrencyToExisting` branch of ContactManagementService::addContact).
+     *
+     * Body: { currency, fee, credit }
+     */
+    private function addContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        foreach (['currency', 'fee', 'credit'] as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                return $this->errorResponse("Missing required field: {$field}", 400, 'missing_field');
+            }
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $contactPubkey = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactPubkeyFromHash($hash);
+        if ($contactPubkey === null) {
+            return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+        }
+        $contact = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactByPubkey($contactPubkey);
+        if ($contact === null) {
+            return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+        }
+        $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
+        if ($address === null) {
+            return $this->errorResponse('Contact has no address', 422, 'invalid_state');
+        }
+
+        // Reuse the addContact pipeline so validation runs through one place.
+        $argv = [
+            'eiou', 'add', $address, $contact['name'] ?? '',
+            (string) $data['fee'], (string) $data['credit'], strtoupper((string) $data['currency']),
+            '--json',
+        ];
+        CliOutputManager::resetInstance();
+        $outputManager = new CliOutputManager($argv);
+
+        ob_start();
+        $this->services->getContactService()->addContact($argv, $outputManager);
+        $cliOut = ob_get_clean();
+        $cliResponse = $this->parseCliJsonResponse($cliOut);
+
+        if ($cliResponse && ($cliResponse['success'] ?? false)) {
+            return $this->successResponse([
+                'message' => 'Currency added',
+                'currency' => strtoupper((string) $data['currency']),
+            ]);
+        }
+        return $this->errorResponse(
+            $cliResponse['error']['message'] ?? 'Failed to add currency',
+            400,
+            strtolower((string) ($cliResponse['error']['code'] ?? 'currency_add_failed'))
+        );
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currency-accept
+     *
+     * Accept a single pending currency. Body: { currency, fee, credit }.
+     * Routes through the shared ContactDecisionService so the new-contact
+     * first-accept-via-add semantics match the GUI batched-apply path.
+     */
+    private function acceptContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        foreach (['currency', 'fee', 'credit'] as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                return $this->errorResponse("Missing required field: {$field}", 400, 'missing_field');
+            }
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $contactPubkey = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactPubkeyFromHash($hash);
+        if ($contactPubkey === null) {
+            return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+        }
+        $contact = $this->services->getRepositoryFactory()
+            ->get(ContactRepository::class)
+            ->getContactByPubkey($contactPubkey);
+        $isNewContact = $contact !== null
+            && ($contact['status'] ?? null) !== Constants::CONTACT_STATUS_ACCEPTED;
+        $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
+        $name = $contact['name'] ?? null;
+
+        $result = $this->services->getContactDecisionService()->apply(
+            $hash,
+            [[
+                'currency' => strtoupper((string) $data['currency']),
+                'action' => 'accept',
+                'fee' => (string) $data['fee'],
+                'credit' => (string) $data['credit'],
+            ]],
+            $isNewContact,
+            $address,
+            $name,
+        );
+
+        return $this->successResponse($result);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currency-decline
+     *
+     * Decline a single pending currency. Body: { currency }.
+     */
+    private function declineContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data) || empty($data['currency'])) {
+            return $this->errorResponse('Missing required field: currency', 400, 'missing_field');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $currency = strtoupper((string) $data['currency']);
+
+        $this->services->getContactSyncService()
+            ->declineReceivedContactCurrency($hash, $currency);
+
+        return $this->successResponse([
+            'message' => "Currency {$currency} declined",
+            'pubkey_hash' => $hash,
+            'currency' => $currency,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/decline
+     *
+     * Decline every pending currency on an incoming contact request in one
+     * shot. Mirrors `eiou contact decline <pubkey-hash>` — useful when an
+     * operator wants to reject a request without enumerating its currencies.
+     */
+    private function declineContactRequestApi(string $pubkeyHash): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $repo = $this->services->getRepositoryFactory()
+            ->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $contactSyncService = $this->services->getContactSyncService();
+
+        $pending = $repo->getPendingCurrencies($hash, 'incoming');
+        if (empty($pending)) {
+            return $this->successResponse([
+                'message' => 'No pending currencies to decline',
+                'declined' => [],
+            ]);
+        }
+
+        $declined = [];
+        $errors = [];
+        foreach ($pending as $row) {
+            $ccy = strtoupper((string) ($row['currency'] ?? ''));
+            if ($ccy === '') {
+                continue;
+            }
+            try {
+                $contactSyncService->declineReceivedContactCurrency($hash, $ccy);
+                $declined[] = $ccy;
+            } catch (\Throwable $e) {
+                $errors[] = "{$ccy}: " . $e->getMessage();
+            }
+        }
+
+        // Whole-contact decline notification — covers the contact
+        // transaction reject the per-currency declines can't infer.
+        if (!empty($declined)) {
+            try {
+                $contactSyncService->sendContactDeclineNotification($hash);
+            } catch (\Throwable $notifyErr) {
+                // Non-fatal; ping/pong reconciliation backs us up.
+            }
+        }
+
+        if (!empty($errors)) {
+            return $this->errorResponse(
+                'Some declines failed',
+                500,
+                'partial_decline_failure',
+                ['declined' => $declined, 'errors' => $errors]
+            );
+        }
+
+        return $this->successResponse([
+            'message' => 'Contact request declined',
+            'declined' => $declined,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/contacts/:hash/currencies
+     *
+     * List every currency configured for the contact (incoming + outgoing,
+     * pending + accepted + declined). Mirrors `eiou contact currency list`.
+     */
+    private function listContactCurrenciesApi(string $pubkeyHash): array {
+        if (!$this->hasPermission('contacts:read')) {
+            return $this->permissionDenied('contacts:read');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $repo = $this->services->getRepositoryFactory()
+            ->get(\Eiou\Database\ContactCurrencyRepository::class);
+
+        $rows = $repo->getContactCurrencies($hash);
+        return $this->successResponse([
+            'pubkey_hash' => $hash,
+            'currencies' => $rows,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/contacts/:hash/currency-remove
+     *
+     * Locally remove a currency configuration. Local-only — the peer is not
+     * notified. Use currency-decline to reject an incoming pending request,
+     * not this. Mirrors `eiou contact currency remove`. Body: { currency }.
+     */
+    private function removeContactCurrencyApi(string $pubkeyHash, string $body): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!is_array($data) || empty($data['currency'])) {
+            return $this->errorResponse('Missing required field: currency', 400, 'missing_field');
+        }
+
+        $hash = urldecode($pubkeyHash);
+        $currency = strtoupper((string) $data['currency']);
+
+        $repo = $this->services->getRepositoryFactory()
+            ->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $repo->deleteCurrencyConfig($hash, $currency);
+
+        return $this->successResponse([
+            'message' => "Currency {$currency} removed locally",
+            'pubkey_hash' => $hash,
+            'currency' => $currency,
+        ]);
+    }
+
     // ==================== System Endpoints ====================
 
     /**
@@ -1609,8 +1986,8 @@ class ApiController {
      * Update system settings (one at a time)
      */
     private function updateSettings(string $body): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         $data = json_decode($body, true);
@@ -1854,8 +2231,8 @@ class ApiController {
      * Trigger sync operation
      */
     private function triggerSync(string $body): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -1898,8 +2275,8 @@ class ApiController {
      * Shutdown processors (flag + signal only, API stays responsive)
      */
     private function shutdownProcessors(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -1933,13 +2310,154 @@ class ApiController {
     }
 
     /**
+     * POST /api/v1/system/restart
+     *
+     * Request a full in-place node restart (PHP-FPM workers + processors).
+     * The API runs as www-data and cannot signal the root-owned FPM master,
+     * so we write a request marker that the root-side poller in startup.sh
+     * picks up within ~2s and turns into `eiou restart`.
+     *
+     * Use this after toggling plugins via the API, or any other change that
+     * is bound at boot. The request is rate-limited to one restart per 10s
+     * by the poller; rapid duplicate calls return success but only the
+     * first is acted on.
+     */
+    private function restartNode(): array {
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
+        }
+
+        try {
+            $requester = new \Eiou\Services\RestartRequestService();
+            // Audit field: which API key triggered this. Logged so we can
+            // tell GUI-vs-API-vs-CLI restarts apart in the audit trail.
+            $requestor = (string) ($this->authenticatedKey['key_id'] ?? '');
+
+            if (!$requester->request('api', $requestor)) {
+                return $this->errorResponse(
+                    'Could not write the restart request file',
+                    500,
+                    'request_write_failed'
+                );
+            }
+
+            \Eiou\Utils\Logger::getInstance()->info('node_restart_requested_via_api', [
+                'requestor' => $requestor,
+            ]);
+
+            return $this->successResponse([
+                'message' => 'Restart requested. The node will respawn its workers within a few seconds.',
+                'expected_restart_within_seconds' => 5,
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Restart request failed: ' . $e->getMessage(), 500, 'restart_error');
+        }
+    }
+
+    /**
+     * GET /api/v1/plugins
+     *
+     * Returns the full list of discovered plugins including the optional
+     * metadata fields (author, homepage, changelog, license, has_changelog).
+     * Same payload shape as `pluginsList` in the GUI — no schema split.
+     */
+    private function listPluginsApi(): array {
+        $loader = \Eiou\Core\Application::getInstance()->pluginLoader;
+        if ($loader === null) {
+            return $this->errorResponse('Plugin system not initialized', 500, 'plugin_loader_unavailable');
+        }
+        return $this->successResponse([
+            'plugins' => $loader->listAllPlugins(),
+        ]);
+    }
+
+    /**
+     * POST /api/v1/plugins/{name}/enable
+     * POST /api/v1/plugins/{name}/disable
+     *
+     * Persist the enabled flag; does NOT restart the node. The caller must
+     * follow up with POST /api/v1/system/restart for the change to take
+     * effect in the running process.
+     */
+    private function togglePluginApi(string $name, bool $enabled): array {
+        $loader = \Eiou\Core\Application::getInstance()->pluginLoader;
+        if ($loader === null) {
+            return $this->errorResponse('Plugin system not initialized', 500, 'plugin_loader_unavailable');
+        }
+
+        // Kebab-case alphanumerics only — same guard the CLI + GUI apply.
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            return $this->errorResponse('Invalid plugin name', 400, 'invalid_name');
+        }
+
+        $known = array_column($loader->listAllPlugins(), 'name');
+        if (!in_array($name, $known, true)) {
+            return $this->errorResponse('Unknown plugin: ' . $name, 404, 'unknown_plugin');
+        }
+
+        if (!$loader->setEnabled($name, $enabled)) {
+            return $this->errorResponse('Failed to persist plugin state', 500, 'persist_failed');
+        }
+
+        \Eiou\Utils\Logger::getInstance()->info('plugin_toggled_via_api', [
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'requestor' => $this->authenticatedKey['key_id'] ?? null,
+        ]);
+
+        return $this->successResponse([
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'restart_required' => true,
+            'message' => 'Plugin state persisted. POST /api/v1/system/restart to apply.',
+        ]);
+    }
+
+    /**
+     * DELETE /api/v1/plugins/{name}
+     *
+     * Uninstall a plugin completely. Plugin must be disabled first.
+     * Runs the full step sequence (onUninstall hook, revoke, drop tables,
+     * drop user, delete credentials, remove files, clean state).
+     *
+     * Response carries a per-step status so the caller can surface
+     * partial-failure information. 200 with success=false indicates the
+     * plugin is gone on disk but some MySQL-side cleanup reported an
+     * error — the operator should investigate the `steps` field.
+     */
+    private function uninstallPluginApi(string $name): array {
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            return $this->errorResponse('Invalid plugin name', 400, 'invalid_name');
+        }
+
+        try {
+            $service = $this->services->getPluginUninstallService();
+            $result = $service->uninstall($name);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), 404, 'unknown_plugin');
+        } catch (\RuntimeException $e) {
+            // "Cannot uninstall enabled plugin" — 409 Conflict makes sense
+            // since the state conflicts with the requested action.
+            return $this->errorResponse($e->getMessage(), 409, 'plugin_still_enabled');
+        }
+
+        \Eiou\Utils\Logger::getInstance()->info('plugin_uninstalled_via_api', [
+            'plugin' => $name,
+            'success' => $result['success'],
+            'requestor' => $this->authenticatedKey['key_id'] ?? null,
+        ]);
+
+        return $this->successResponse($result);
+    }
+
+    /**
      * POST /api/v1/system/start
      *
      * Start processors by removing shutdown flag
      */
     private function startProcessors(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2386,9 +2904,9 @@ class ApiController {
      * Handle tx drop endpoints
      *
      * Routes:
-     * - POST /api/v1/chaindrop/propose  - Propose tx drop
-     * - POST /api/v1/chaindrop/accept   - Accept tx drop proposal
-     * - POST /api/v1/chaindrop/reject   - Reject tx drop proposal
+     * - POST /api/v1/chaindrop/propose  - Propose tx drop (wallet:send)
+     * - POST /api/v1/chaindrop/accept   - Accept tx drop proposal (admin — irreversible chain rewrite)
+     * - POST /api/v1/chaindrop/reject   - Reject tx drop proposal (wallet:send)
      * - GET  /api/v1/chaindrop          - List tx drop proposals
      */
     private function handleChainDrop(string $method, ?string $action, array $params, string $body): array {
@@ -2505,10 +3023,20 @@ class ApiController {
 
     /**
      * POST /api/v1/chaindrop/accept
+     *
+     * Gated on `admin` (not `wallet:send`) because accepting a chain
+     * drop irreversibly rewrites the bilateral chain on both sides:
+     * missing transactions are dropped, surrounding transactions are
+     * re-signed, balances recalculated. Asymmetric with `propose`
+     * (which is just a sent request — non-destructive on this node
+     * until the other side accepts) and `reject` (declines, leaves
+     * gap unresolved). The server-side auto-accept policy
+     * (`EIOU_AUTO_CHAIN_DROP_ACCEPT`) handles the routine case;
+     * this endpoint is for manual operator override.
      */
     private function acceptChainDrop(string $body): array {
-        if (!$this->hasPermission('wallet:send')) {
-            return $this->permissionDenied('wallet:send');
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
         }
 
         $data = json_decode($body, true);
@@ -2675,120 +3203,22 @@ class ApiController {
             return $this->errorResponse($hashValidation['error'], 400, 'invalid_hash');
         }
         $hash = $hashValidation['value'];
-        $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : 0;
+        $candidateId = isset($data['candidate_id']) ? (int) $data['candidate_id'] : null;
 
-        try {
-            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
-            $p2p = $p2pRepo->getAwaitingApproval($hash);
-            if (!$p2p) {
-                return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
-            }
-
-            if (empty($p2p['destination_address'])) {
-                return $this->errorResponse('Only the transaction originator can approve', 403, 'not_originator');
-            }
-
-            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
-            $sendService = $this->services->getSendOperationService();
-
-            if ($candidateId > 0) {
-                // Candidate selected by ID
-                $candidate = $rp2pCandidateRepo->getCandidateById($candidateId);
-                if (!$candidate) {
-                    return $this->errorResponse('Selected route candidate not found', 404, 'candidate_not_found');
-                }
-
-                if ($candidate['hash'] !== $hash) {
-                    return $this->errorResponse('Candidate does not belong to this transaction', 400, 'candidate_mismatch');
-                }
-
-                $request = [
-                    'hash' => $candidate['hash'],
-                    'time' => $candidate['time'],
-                    'amount' => $candidate['amount'],
-                    'currency' => $candidate['currency'],
-                    'senderPublicKey' => $candidate['sender_public_key'],
-                    'senderAddress' => $candidate['sender_address'],
-                    'signature' => $candidate['sender_signature'],
-                ];
-
-                $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
-                $rp2pRepo->insertRp2pRequest($request);
-                $p2pRepo->updateStatus($hash, 'found');
-                $sendService->sendP2pEiou($request);
-                $rp2pCandidateRepo->deleteCandidatesByHash($hash);
-
-                return $this->successResponse([
-                    'message' => 'P2P transaction approved and sent',
-                    'hash' => $hash,
-                    'candidate_id' => $candidateId,
-                ]);
-            }
-
-            // No candidate_id - try fast mode (single rp2p)
-            $candidates = $rp2pCandidateRepo->getCandidatesByHash($hash);
-
-            if (!empty($candidates) && count($candidates) > 1) {
-                // Multiple candidates - caller must pick
-                return $this->errorResponse(
-                    'Multiple route candidates available. Provide candidate_id to select one.',
-                    400,
-                    'candidate_selection_required',
-                );
-            }
-
-            if (!empty($candidates) && count($candidates) === 1) {
-                $candidate = $candidates[0];
-                $request = [
-                    'hash' => $candidate['hash'],
-                    'time' => $candidate['time'],
-                    'amount' => $candidate['amount'],
-                    'currency' => $candidate['currency'],
-                    'senderPublicKey' => $candidate['sender_public_key'],
-                    'senderAddress' => $candidate['sender_address'],
-                    'signature' => $candidate['sender_signature'],
-                ];
-
-                $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
-                $rp2pRepo->insertRp2pRequest($request);
-                $p2pRepo->updateStatus($hash, 'found');
-                $sendService->sendP2pEiou($request);
-                $rp2pCandidateRepo->deleteCandidatesByHash($hash);
-
-                return $this->successResponse([
-                    'message' => 'P2P transaction approved and sent',
-                    'hash' => $hash,
-                ]);
-            }
-
-            // No candidates - check for single rp2p (fast mode)
-            $rp2pRepo = $this->services->getRepositoryFactory()->get(Rp2pRepository::class);
-            $rp2p = $rp2pRepo->getByHash($hash);
-
-            if ($rp2p) {
-                $request = [
-                    'hash' => $rp2p['hash'],
-                    'time' => $rp2p['time'],
-                    'amount' => $rp2p['amount'],
-                    'currency' => $rp2p['currency'],
-                    'senderPublicKey' => $rp2p['sender_public_key'],
-                    'senderAddress' => $rp2p['sender_address'],
-                    'signature' => $rp2p['sender_signature'],
-                ];
-
-                $p2pRepo->updateStatus($hash, 'found');
-                $sendService->sendP2pEiou($request);
-
-                return $this->successResponse([
-                    'message' => 'P2P transaction approved and sent (fast mode)',
-                    'hash' => $hash,
-                ]);
-            }
-
-            return $this->errorResponse('No route available for this transaction', 404, 'no_route');
-        } catch (Exception $e) {
-            return $this->errorResponse('Failed to approve P2P transaction: ' . $e->getMessage(), 500, 'p2p_error');
+        $result = $this->services->getP2pApprovalService()->approve($hash, null, $candidateId);
+        if (!$result['success']) {
+            return $this->errorResponse($result['message'], $result['status'] ?? 500, $result['code']);
         }
+
+        $modeSuffix = ($result['mode'] ?? null) === 'fast' ? ' (fast mode)' : '';
+        $response = [
+            'message' => 'P2P transaction approved and sent' . $modeSuffix,
+            'hash' => $result['hash'],
+        ];
+        if ($candidateId !== null && $candidateId > 0) {
+            $response['candidate_id'] = $candidateId;
+        }
+        return $this->successResponse($response);
     }
 
     /**
@@ -2810,34 +3240,14 @@ class ApiController {
         }
         $hash = $hashValidation['value'];
 
-        try {
-            $p2pRepo = $this->services->getRepositoryFactory()->get(P2pRepository::class);
-            $p2p = $p2pRepo->getAwaitingApproval($hash);
-            if (!$p2p) {
-                return $this->errorResponse('Transaction not found or not awaiting approval', 404, 'not_found');
-            }
-
-            if (empty($p2p['destination_address'])) {
-                return $this->errorResponse('Only the transaction originator can reject', 403, 'not_originator');
-            }
-
-            $p2pRepo->updateStatus($hash, Constants::STATUS_CANCELLED);
-
-            // Propagate cancel upstream
-            $p2pService = $this->services->getP2pService();
-            $p2pService->sendCancelNotificationForHash($hash);
-
-            // Clean up any remaining candidates
-            $rp2pCandidateRepo = $this->services->getRepositoryFactory()->get(Rp2pCandidateRepository::class);
-            $rp2pCandidateRepo->deleteCandidatesByHash($hash);
-
-            return $this->successResponse([
-                'message' => 'P2P transaction rejected and cancelled',
-                'hash' => $hash,
-            ]);
-        } catch (Exception $e) {
-            return $this->errorResponse('Failed to reject P2P transaction: ' . $e->getMessage(), 500, 'p2p_error');
+        $result = $this->services->getP2pApprovalService()->reject($hash);
+        if (!$result['success']) {
+            return $this->errorResponse($result['message'], $result['status'] ?? 500, $result['code']);
         }
+        return $this->successResponse([
+            'message' => 'P2P transaction rejected and cancelled',
+            'hash' => $result['hash'],
+        ]);
     }
 
     // ==================== Helper Methods ====================
@@ -3035,14 +3445,33 @@ class ApiController {
     /**
      * Handle /api/v1/requests endpoints
      *
-     * GET    /api/v1/requests              → list all requests
-     * POST   /api/v1/requests              → create a payment request
-     * POST   /api/v1/requests/approve      → approve an incoming request
-     * POST   /api/v1/requests/decline      → decline an incoming request
-     * DELETE /api/v1/requests/{id}         → cancel an outgoing request
+     * GET    /api/v1/requests              → list all requests          (wallet:read)
+     * POST   /api/v1/requests              → create a payment request   (wallet:read)
+     *                                        — non-destructive on this node; the recipient
+     *                                          must approve before any value moves.
+     * POST   /api/v1/requests/approve      → approve incoming request   (wallet:send)
+     *                                        — fires sendEiou internally; moves real value.
+     * POST   /api/v1/requests/decline      → decline an incoming request (wallet:read)
+     * DELETE /api/v1/requests/{id}         → cancel an outgoing request (wallet:read)
+     *
+     * NOTE: until v0.1.14 these endpoints had no permission gate at all
+     * — any valid API key (even one with no scopes) could approve a
+     * pending request and trigger an outbound transaction. The matrix
+     * above mirrors how the CLI cliRateLimits buckets the same
+     * operations and how the corresponding `eiou request …` paths are
+     * gated when callers go through the request path.
      */
     private function handleRequests(string $method, ?string $action, ?string $id, array $params, string $body): array
     {
+        // Determine the required scope for this (method, action) pair so
+        // the gate denial maps to the right scope name. Reads gate on
+        // wallet:read; the only value-moving endpoint (approve) gates on
+        // wallet:send.
+        $requiredScope = ($method === 'POST' && $action === 'approve') ? 'wallet:send' : 'wallet:read';
+        if (!$this->hasPermission($requiredScope)) {
+            return $this->permissionDenied($requiredScope);
+        }
+
         $prService = $this->services->getPaymentRequestService();
 
         return match (true) {
@@ -3097,11 +3526,40 @@ class ApiController {
         $data      = json_decode($body, true) ?? [];
         $requestId = trim($data['request_id'] ?? '');
 
+        // Optional payer-side annotation appended to the on-chain
+        // transaction description with " | ". Length is capped against
+        // the requester's existing description so the combined string
+        // fits the 255-char on-chain ceiling. Over-long notes are
+        // rejected here rather than silently truncated server-side.
+        $payerNote = isset($data['payer_note']) ? trim((string)$data['payer_note']) : '';
+
         if (empty($requestId)) {
             return $this->errorResponse('request_id is required', 400, 'missing_fields');
         }
 
-        $result = $prService->approve($requestId);
+        if ($payerNote !== '') {
+            $existing = $prService->getByRequestId($requestId);
+            if ($existing === null) {
+                return $this->errorResponse('Payment request not found', 404, 'not_found');
+            }
+            $maxNote = \Eiou\Services\PaymentRequestService::maxPayerNoteLength($existing['description'] ?? null);
+            if ($maxNote === 0) {
+                return $this->errorResponse(
+                    'Requester description leaves no room for a note',
+                    400,
+                    'payer_note_too_long'
+                );
+            }
+            if (strlen($payerNote) > $maxNote) {
+                return $this->errorResponse(
+                    "Note too long (max {$maxNote} chars for this request)",
+                    400,
+                    'payer_note_too_long'
+                );
+            }
+        }
+
+        $result = $prService->approve($requestId, $payerNote !== '' ? $payerNote : null);
         if (!$result['success']) {
             return $this->errorResponse($result['error'], 400, 'approve_failed');
         }
@@ -3185,7 +3643,7 @@ class ApiController {
             $keyId,
             $path,
             $method,
-            ApiAuthService::getClientIp(),
+            ApiAuthService::getClientIp($this->services->getAppConfig()),
             $statusCode,
             $responseTimeMs
         );
@@ -3215,5 +3673,193 @@ class ApiController {
         if ($this->logger) {
             $this->logger->$level($message, $context);
         }
+    }
+
+    // =========================================================================
+    // Payback Methods endpoints
+    //
+    //   GET    /api/v1/payback-methods                  → list (read)
+    //   POST   /api/v1/payback-methods                  → create (write)
+    //   GET    /api/v1/payback-methods/{id}             → get (read, public shape)
+    //   GET    /api/v1/payback-methods/{id}/reveal      → reveal (write — plaintext)
+    //   PUT    /api/v1/payback-methods/{id}             → update (write)
+    //   DELETE /api/v1/payback-methods/{id}             → delete (write)
+    //   PUT    /api/v1/payback-methods/{id}/share-policy → set share policy (write)
+    //
+    // Permissions: 'payback:read' for the two GET endpoints; 'payback:write'
+    // (or 'admin') for every mutation and the reveal endpoint — reveal exposes
+    // sensitive plaintext and is treated as a write-class operation.
+    // =========================================================================
+
+    private function handlePaybackMethods(string $method, ?string $action, ?string $id, array $params, string $body): array
+    {
+        $svc = $this->services->getPaybackMethodService();
+
+        if ($method === 'GET' && $action === null) {
+            if (!$this->hasPermission('payback:read')) {
+                return $this->errorResponse('Permission required: payback:read', 403, 'permission_denied');
+            }
+            return $this->listPaybackMethods($svc, $params);
+        }
+
+        if ($method === 'POST' && $action === null) {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->createPaybackMethod($svc, $body);
+        }
+
+        if ($action === null) {
+            return $this->errorResponse('Method not allowed', 405, 'method_not_allowed');
+        }
+
+        // The second path segment (action) is the method_id for per-row routes.
+        $methodId = $action;
+        $subAction = $id; // third segment, e.g. 'reveal' | 'share-policy'
+
+        if ($method === 'GET' && $subAction === 'reveal') {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->revealPaybackMethod($svc, $methodId);
+        }
+
+        if ($method === 'PUT' && $subAction === 'share-policy') {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->setPaybackMethodSharePolicy($svc, $methodId, $body);
+        }
+
+        if ($method === 'GET' && $subAction === null) {
+            if (!$this->hasPermission('payback:read')) {
+                return $this->errorResponse('Permission required: payback:read', 403, 'permission_denied');
+            }
+            return $this->getPaybackMethod($svc, $methodId);
+        }
+
+        if ($method === 'PUT' && $subAction === null) {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->updatePaybackMethod($svc, $methodId, $body);
+        }
+
+        if ($method === 'DELETE' && $subAction === null) {
+            if (!$this->hasPermission('payback:write')) {
+                return $this->errorResponse('Permission required: payback:write', 403, 'permission_denied');
+            }
+            return $this->deletePaybackMethod($svc, $methodId);
+        }
+
+        return $this->errorResponse('Unknown payback-methods action', 404, 'unknown_action');
+    }
+
+    private function listPaybackMethods(\Eiou\Services\PaybackMethodService $svc, array $params): array
+    {
+        $currency = isset($params['currency']) ? strtoupper((string) $params['currency']) : null;
+        $enabledOnly = !(isset($params['all']) && $params['all'] === '1');
+        $rows = $svc->list($currency, $enabledOnly);
+        return $this->successResponse(['methods' => $rows, 'count' => count($rows)]);
+    }
+
+    private function createPaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $body): array
+    {
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        foreach (['type', 'label', 'currency', 'fields'] as $required) {
+            if (!isset($data[$required])) {
+                return $this->errorResponse("Missing required field: $required", 400, 'missing_field');
+            }
+        }
+        if (!is_array($data['fields'])) {
+            return $this->errorResponse('`fields` must be an object', 400, 'invalid_field_type');
+        }
+        $result = $svc->add(
+            (string) $data['type'],
+            (string) $data['label'],
+            strtoupper((string) $data['currency']),
+            $data['fields'],
+            isset($data['share_policy']) ? (string) $data['share_policy'] : 'auto',
+            isset($data['priority']) ? (int) $data['priority'] : 100
+        );
+        if ($result['errors'] !== []) {
+            return $this->errorResponse('Validation failed', 400, 'validation_failed') + [
+                'data' => ['errors' => $result['errors']],
+            ];
+        }
+        return $this->successResponse(['method_id' => $result['method_id']], 201);
+    }
+
+    private function getPaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId): array
+    {
+        $row = $svc->get($methodId);
+        if ($row === null) {
+            return $this->errorResponse('Payback method not found', 404, 'not_found');
+        }
+        return $this->successResponse(['method' => $row]);
+    }
+
+    private function revealPaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId): array
+    {
+        $row = $svc->getReveal($methodId);
+        if ($row === null) {
+            return $this->errorResponse('Payback method not found', 404, 'not_found');
+        }
+        return $this->successResponse(['method' => $row]);
+    }
+
+    private function updatePaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId, string $body): array
+    {
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $this->errorResponse('Invalid JSON body', 400, 'invalid_json');
+        }
+        $changes = [];
+        foreach (['label', 'share_policy', 'priority', 'enabled', 'fields'] as $key) {
+            if (array_key_exists($key, $data)) {
+                $changes[$key] = $data[$key];
+            }
+        }
+        $errors = $svc->update($methodId, $changes);
+        if ($errors !== []) {
+            $codes = array_column($errors, 'code');
+            if (in_array('not_found', $codes, true)) {
+                return $this->errorResponse('Payback method not found', 404, 'not_found');
+            }
+            return $this->errorResponse('Validation failed', 400, 'validation_failed') + [
+                'data' => ['errors' => $errors],
+            ];
+        }
+        return $this->successResponse(['method_id' => $methodId]);
+    }
+
+    private function deletePaybackMethod(\Eiou\Services\PaybackMethodService $svc, string $methodId): array
+    {
+        if (!$svc->remove($methodId)) {
+            return $this->errorResponse('Payback method not found', 404, 'not_found');
+        }
+        return $this->successResponse(['method_id' => $methodId, 'deleted' => true]);
+    }
+
+    private function setPaybackMethodSharePolicy(\Eiou\Services\PaybackMethodService $svc, string $methodId, string $body): array
+    {
+        $data = json_decode($body, true);
+        if (!is_array($data) || !isset($data['share_policy'])) {
+            return $this->errorResponse('Missing required field: share_policy', 400, 'missing_field');
+        }
+        $errors = $svc->setSharePolicy($methodId, (string) $data['share_policy']);
+        if ($errors !== []) {
+            $codes = array_column($errors, 'code');
+            if (in_array('not_found', $codes, true)) {
+                return $this->errorResponse('Payback method not found', 404, 'not_found');
+            }
+            return $this->errorResponse('Validation failed', 400, 'validation_failed') + [
+                'data' => ['errors' => $errors],
+            ];
+        }
+        return $this->successResponse(['method_id' => $methodId, 'share_policy' => $data['share_policy']]);
     }
 }

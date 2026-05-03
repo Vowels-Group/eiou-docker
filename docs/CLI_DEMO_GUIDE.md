@@ -27,14 +27,16 @@ A step-by-step walkthrough for demonstrating eIOU CLI commands.
    - [Starting the Environment](#starting-the-4-node-environment)
    - [Network Architecture](#network-architecture)
 6. [Contact Management Commands](#section-5-contact-management-commands)
-   - [add](#51-add---adding-contacts)
-   - [pending](#52-pending---viewing-pending-requests)
-   - [search](#53-search---finding-contacts)
-   - [viewcontact](#54-viewcontact---contact-details)
-   - [update](#55-update---modifying-contacts)
-   - [ping](#56-ping---checking-online-status)
-   - [block/unblock](#57-blockunblock---blocking-contacts)
-   - [delete](#58-delete---removing-contacts)
+   - [contact add](#51-contact-add---adding-contacts)
+   - [contact accept](#52-contact-accept---accepting-incoming-requests)
+   - [contact pending](#53-contact-pending---viewing-pending-requests)
+   - [contact search / list](#54-contact-search--list---finding-contacts)
+   - [contact view](#55-contact-view---contact-details)
+   - [contact update](#56-contact-update---modifying-contacts)
+   - [contact ping](#57-contact-ping---checking-online-status)
+   - [contact block/unblock](#58-contact-blockunblock---blocking-contacts)
+   - [contact delete](#59-contact-delete---removing-contacts)
+   - [contact currency add/accept/decline/list/remove](#510-contact-currency---per-currency-operations)
 7. [Transaction Commands](#section-6-transaction-commands)
    - [send](#61-send---sending-transactions)
    - [viewbalances](#62-viewbalances---checking-balances)
@@ -495,36 +497,43 @@ docker exec alice eiou changesettings hostname http://alice
 ### 3.5 help - Getting Help
 
 ```bash
-# General help (lists all commands)
+# General help (lists all top-level commands)
 docker exec alice eiou help
 
-# Help for specific commands
+# Help for top-level commands (info, send, viewbalances, history, overview,
+# viewsettings, changesettings, sync, updatecheck, shutdown, start, …)
 docker exec alice eiou help info
-docker exec alice eiou help add
-docker exec alice eiou help search
-docker exec alice eiou help viewcontact
-docker exec alice eiou help update
-docker exec alice eiou help block
-docker exec alice eiou help unblock
-docker exec alice eiou help delete
 docker exec alice eiou help send
 docker exec alice eiou help viewbalances
 docker exec alice eiou help history
-docker exec alice eiou help pending
 docker exec alice eiou help overview
 docker exec alice eiou help viewsettings
 docker exec alice eiou help changesettings
 docker exec alice eiou help sync
-docker exec alice eiou help ping
-docker exec alice eiou help backup
-docker exec alice eiou help apikey
 ```
 
-**Test mode commands** (require `EIOU_TEST_MODE=true`):
+**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to the contact handler's own help — so `eiou help contact` and `eiou contact` print **the exact same** subcommand tree (single source of truth). Same for `eiou help contact currency` → per-currency help.
+
 ```bash
-docker exec alice eiou help out
-docker exec alice eiou help in
+# These three print identical output (same subcommand tree):
+docker exec alice eiou contact
+docker exec alice eiou contact help
+docker exec alice eiou help contact
+# And these two print the per-currency tree:
+docker exec alice eiou contact currency
+docker exec alice eiou help contact currency
+
+# Other namespaces are reached via the namespace itself:
+docker exec alice eiou backup help
+docker exec alice eiou apikey help
+docker exec alice eiou payback help
+docker exec alice eiou chaindrop help
+docker exec alice eiou request            # subcommand list for payment requests
+docker exec alice eiou p2p                # P2P approval list (also doubles as the syntax discoverer)
+docker exec alice eiou plugin             # plugin list (and via `--help` per registered plugin)
 ```
+
+There is no `eiou help contact add` (or any per-subcommand) form — drill down with `eiou contact` (full tree) and copy the subcommand line you want.
 
 ---
 
@@ -657,130 +666,203 @@ eIOU contacts form the trust network that enables value transfer.
 
 #### Bidirectional Requirement
 
-A contact relationship requires **mutual agreement**. Both parties must add each other:
+A contact relationship requires **mutual agreement** — but only one side runs `add`. The other side runs `accept` (or `apply` for multi-currency) on the incoming request. Conceptually:
 
 ```
-Alice adds Bob     -->  Creates a PENDING relationship
-Bob adds Alice     -->  Both sides become ACCEPTED
+Alice: eiou contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD
+            ↓ (sends a contact request to Bob)
+Bob:   eiou contact pending                     # see Alice's pending request, copy the pubkey-hash
+       eiou contact accept <alice-hash> --currency USD --fee 0.1 --credit 1000
+            ↓ (Bob's accept finalizes the relationship on both sides)
+Both nodes now show the contact as ACCEPTED.
 ```
+
+For multi-currency relationships, Bob can accept several currencies in one call (`--currency USD --fee … --credit … --currency EUR --fee … --credit …`) or use `eiou contact apply` with a batched payload of accept/decline/defer decisions.
+
+> **Mutual-add convenience:** if both sides happen to run `contact add` (each not knowing the other already sent a request), the dispatcher recognises the cross-request and short-circuits to `accepted` for the matching currency. This is convenient but hides the per-currency knobs — use `accept` / `apply` when you actually want to set fee/credit on the receiving side. See [§5.10](#510-contact-currency---per-currency-operations) for per-currency lifecycle.
 
 #### Contact Parameters
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `address` | Node's network address | `http://bob` |
-| `name` | Display name | `Bob` |
-| `fee` | Transaction fee percentage | `0.01` (0.01%) |
-| `credit` | Maximum balance to extend. Setting to `0` means you can be contacts but they cannot send transactions through you | `1000` |
-| `currency` | Currency for credit limit | `USD` |
-| `requested_credit` | (Optional) Credit limit you'd like the contact to set for you — sent as a suggestion | `500` |
+| Parameter | Flag | Description | Example |
+|-----------|------|-------------|---------|
+| `address` | positional | Node's network address | `http://bob` |
+| `name` | positional | Display name | `Bob` |
+| `fee` | `--fee` | Transaction fee percentage you charge to relay this contact's transactions | `0.1` (0.1%) |
+| `credit` | `--credit` | Credit limit you extend. `0` allows the relationship without enabling transactions through you | `1000` |
+| `currency` | `--currency` | Currency code for the per-currency row (default `USD`) | `USD` |
+| `requested_credit` | `--requested-credit` | Credit limit you'd like the **receiver** to extend to *you* in this currency. Sent over the wire as `requested_credit_limit` in the contact payload — the receiver sees it as a suggestion when accepting (the GUI shows it; `POST /api/v1/contacts` accepts it as `requested_credit_limit`). The receiver still chooses what to actually grant. | `500` |
+| `message` | `--message` | Optional short note attached to the request (E2E or transport-encrypted) | `"Hey, it's Dave"` |
+
+Flags can appear in any order and in any position relative to the positional `<address> <name>`.
 
 #### Contact States
 
 | State | Description |
 |-------|-------------|
-| **Pending** | Awaiting acceptance from the other party |
-| **Accepted** | Both parties have added each other |
-| **Blocked** | Transactions blocked |
+| **Pending (incoming)** | Someone requested a contact relationship; you can `accept`, `apply`, or `decline` |
+| **Pending (outgoing)** | You sent a request and are waiting for the other side to accept |
+| **Accepted** | Both sides finalized at least one currency (transactions can flow on accepted currencies) |
+| **Blocked** | Incoming transactions and routing are rejected |
 
 ---
 
-### 5.1 add - Adding Contacts
+### 5.1 contact add - Adding Contacts
 
 **Syntax:**
 ```bash
-eiou add <address> <name> <fee> <credit> <currency> [message]
+eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
 ```
+
+Sends an outbound contact request. The receiving node sees this as a pending incoming request (`eiou contact pending`) until they `accept` (or `apply`). `--requested-credit` puts a `requested_credit_limit` field on the wire so the receiver knows the credit limit you'd like them to extend (they still choose what to actually grant on accept).
 
 #### Creating the A<->B<->C<->D Chain
 
+The canonical flow is **add on one side, accept on the other**. Below, alice/bob/carol/daniel each issue an outbound `add`, and the receiving node confirms with `accept`. We use a small `--json | jq` snippet to grab the requester's pubkey-hash because `accept` keys off the hash, not the address.
+
 ```bash
-# Create A<->B link
-docker exec alice eiou add http://bob Bob 0.1 1000 USD
-docker exec bob eiou add http://alice Alice 0.1 1000 USD
+# A → B (Alice adds Bob)
+docker exec alice eiou contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD
 
-# Create B<->C link
-docker exec bob eiou add http://carol Carol 0.1 1000 USD
-docker exec carol eiou add http://bob Bob 0.1 1000 USD
+# B accepts Alice's request
+ALICE_HASH=$(docker exec bob eiou contact pending --json | jq -r '.data.incoming[0].pubkey_hash')
+docker exec bob eiou contact accept "$ALICE_HASH" --currency USD --fee 0.1 --credit 1000
 
-# Create C<->D link
-docker exec carol eiou add http://daniel Daniel 0.1 1000 USD
-docker exec daniel eiou add http://carol Carol 0.1 1000 USD
+# B → C
+docker exec bob eiou contact add http://carol Carol --fee 0.1 --credit 1000 --currency USD
+BOB_HASH=$(docker exec carol eiou contact pending --json | jq -r '.data.incoming[0].pubkey_hash')
+docker exec carol eiou contact accept "$BOB_HASH" --currency USD --fee 0.1 --credit 1000
+
+# C → D
+docker exec carol eiou contact add http://daniel Daniel --fee 0.1 --credit 1000 --currency USD
+CAROL_HASH=$(docker exec daniel eiou contact pending --json | jq -r '.data.incoming[0].pubkey_hash')
+docker exec daniel eiou contact accept "$CAROL_HASH" --currency USD --fee 0.1 --credit 1000
 ```
+
+> **Mutual-add shortcut:** if both nodes run `contact add` against each other (without using `accept`), the dispatcher recognises the cross-request and finalizes the matching currency to `accepted` automatically. This is what the integration test suite does for speed (`tests/testfiles/addContactsTest.sh`). It works, but it forces both sides to publish the same fee/credit; use `add + accept` when the receiving side wants different terms.
 
 #### Verifying the Chain
 
 ```bash
-# Alice should see Bob as accepted
-docker exec alice eiou search
-
-# Bob should see both Alice and Carol
-docker exec bob eiou search
-
-# Carol should see both Bob and Daniel
-docker exec carol eiou search
-
-# Daniel should see Carol
-docker exec daniel eiou search
+# List accepted contacts on each node
+docker exec alice eiou contact list --status accepted
+docker exec bob   eiou contact list --status accepted
+docker exec carol eiou contact list --status accepted
+docker exec daniel eiou contact list --status accepted
 ```
 
 #### Cross-Currency Contact Requests
 
-When two nodes request different currencies, each request is tracked independently:
+When each side wants to use a different currency, they each issue their own `contact add` and accept the other's incoming request *per currency*. Use `contact currency accept` (or batched `contact apply`) — **not** `contact add`, which is for outbound new currencies, not for accepting incoming ones.
 
 ```bash
 # Alice requests USD from Bob
-docker exec alice eiou add http://bob Bob 0.1 1000 USD
+docker exec alice eiou contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD
 
 # Bob requests GBY from Alice
-docker exec bob eiou add http://alice Alice 0.2 4000 GBY
+docker exec bob eiou contact add http://alice Alice --fee 0.2 --credit 4000 --currency GBY
 ```
 
 Each side now sees:
-- **Alice**: outgoing USD (awaiting Bob), incoming GBY (from Bob — can accept)
-- **Bob**: outgoing GBY (awaiting Alice), incoming USD (from Alice — can accept)
+- **Alice**: outgoing USD (awaiting Bob), incoming GBY (from Bob — can accept/decline)
+- **Bob**: outgoing GBY (awaiting Alice), incoming USD (from Alice — can accept/decline)
 
-Accept specific currency requests independently:
 ```bash
-# Bob accepts Alice's USD request
-docker exec bob eiou add http://alice Alice 0.2 4000 USD
+# Bob accepts Alice's incoming USD request (use the per-currency accept)
+docker exec bob eiou contact currency accept Alice USD --fee 0.2 --credit 4000
 
-# Alice accepts Bob's GBY request
-docker exec alice eiou add http://bob Bob 0.1 1000 GBY
+# Alice accepts Bob's incoming GBY request
+docker exec alice eiou contact currency accept Bob GBY --fee 0.1 --credit 1000
+```
+
+For multiple currencies in one call use `contact accept <hash> --currency CCY --fee F --credit C` repeated, or `contact apply` with `--accept CCY:fee:credit` flags or a JSON file payload.
+
+---
+
+### 5.2 contact accept - Accepting Incoming Requests
+
+Accept a pending incoming contact request, optionally for several currencies in one shot.
+
+```bash
+# Find the requester's pubkey-hash
+docker exec bob eiou contact pending
+
+# Single-currency accept
+docker exec bob eiou contact accept <pubkey-hash> --currency USD --fee 0.1 --credit 1000
+
+# Multi-currency accept
+docker exec bob eiou contact accept <pubkey-hash> \
+    --currency USD --fee 0.1 --credit 1000 \
+    --currency EUR --fee 0.05 --credit 500
+```
+
+**Decline (all pending currencies on the request):**
+```bash
+docker exec bob eiou contact decline <pubkey-hash>
+```
+
+**Batched accept/decline/defer (`contact apply`):**
+```bash
+# Per-decision flags
+docker exec bob eiou contact apply <pubkey-hash> \
+    --accept USD:0.1:1000 --accept EUR:0.05:500 --decline GBP --defer XRP
+
+# Or pipe a JSON payload (modal payload shape)
+echo '[{"currency":"USD","action":"accept","fee":"0.1","credit":"1000"}]' \
+  | docker exec -i bob eiou contact apply <pubkey-hash> --from -
+```
+
+`pubkey-hash` is the stable identifier; it's what `eiou contact pending --json` reports under `incoming[].pubkey_hash`. Names and addresses also resolve, but the hash is what doesn't churn across restores.
+
+---
+
+### 5.3 contact pending - Viewing Pending Requests
+
+```bash
+docker exec alice eiou contact pending
+
+# Filter to one direction
+docker exec alice eiou contact pending --incoming
+docker exec alice eiou contact pending --outgoing
+
+# Scriptable form
+docker exec alice eiou contact pending --json
+```
+
+The hint text printed for each incoming request shows a paste-ready `eiou contact accept` / `eiou contact decline` line.
+
+---
+
+### 5.4 contact search / list - Finding Contacts
+
+```bash
+# List all contacts grouped by status
+docker exec alice eiou contact list
+
+# Filter to one bucket
+docker exec alice eiou contact list --status accepted
+docker exec alice eiou contact list --status pending
+docker exec alice eiou contact list --status blocked
+
+# Substring search by name
+docker exec bob eiou contact search Alice
+
+# JSON for scripting
+docker exec alice eiou contact list --json
 ```
 
 ---
 
-### 5.2 pending - Viewing Pending Requests
-
-```bash
-docker exec alice eiou pending
-```
-
-Shows incoming and outgoing requests awaiting acceptance.
-
----
-
-### 5.3 search - Finding Contacts
-
-```bash
-# List all contacts
-docker exec alice eiou search
-
-# Search by name
-docker exec bob eiou search Alice
-```
-
----
-
-### 5.4 viewcontact - Contact Details
+### 5.5 contact view - Contact Details
 
 ```bash
 # View by name
-docker exec alice eiou viewcontact Bob
+docker exec alice eiou contact view Bob
 
 # View by address
-docker exec bob eiou viewcontact http://alice
+docker exec bob eiou contact view http://alice
+
+# View by pubkey-hash (most stable identifier)
+docker exec alice eiou contact view <pubkey-hash>
 ```
 
 Shows contact details including balance, fee, credit limit, and bidirectional available credit:
@@ -789,28 +871,32 @@ Shows contact details including balance, fee, credit limit, and bidirectional av
 
 ---
 
-### 5.5 update - Modifying Contacts
+### 5.6 contact update - Modifying Contacts
+
+The update form is flag-based — same shape as `contact add`, all fields optional. `--currency` is required only when `--fee` or `--credit` is set (those are stored per-currency).
 
 ```bash
 # Update contact name
-docker exec alice eiou update Bob name Robert
+docker exec alice eiou contact update Bob --name Robert
 
 # Update fee for USD
-docker exec alice eiou update Bob fee 0.5 USD
+docker exec alice eiou contact update Bob --fee 0.5 --currency USD
 
 # Update credit limit for EUR
-docker exec alice eiou update Bob credit 2000 EUR
+docker exec alice eiou contact update Bob --credit 2000 --currency EUR
 
-# Update all at once for USD
-docker exec alice eiou update Bob all NewName 0.2 1500 USD
+# Update multiple fields in one command
+docker exec alice eiou contact update Bob --name Robert --fee 0.2 --credit 1500 --currency USD
 ```
+
+Updates are **local-only** — the contact is not notified. Multi-field updates fan out to one service call per touched field (not atomic). For atomic updates, use `PUT /api/v1/contacts/:address`.
 
 ---
 
-### 5.6 ping - Checking Online Status
+### 5.7 contact ping - Checking Online Status
 
 ```bash
-docker exec alice eiou ping Bob
+docker exec alice eiou contact ping Bob
 ```
 
 **Expected output:**
@@ -822,21 +908,21 @@ Response Time: 45ms
 Chain Valid:   Yes
 ```
 
-Ping also exchanges per-currency available credit and chain validity with the contact. After a ping, `viewcontact` will show the latest per-currency available credit values (stored in `contact_credit` table).
+Ping also exchanges per-currency available credit and chain validity with the contact. After a ping, `eiou contact view` will show the latest per-currency available credit values (stored in `contact_credit` table). Mismatched chain heads trigger a sync, and unrecoverable gaps auto-propose a tx drop.
 
 ---
 
-### 5.7 block/unblock - Blocking Contacts
+### 5.8 contact block/unblock - Blocking Contacts
 
 ```bash
 # Block a contact
-docker exec alice eiou block Bob
+docker exec alice eiou contact block Bob
 
 # Verify blocked status
-docker exec alice eiou viewcontact Bob
+docker exec alice eiou contact view Bob
 
 # Unblock the contact
-docker exec alice eiou unblock Bob
+docker exec alice eiou contact unblock Bob
 ```
 
 **Effects of blocking:**
@@ -846,13 +932,38 @@ docker exec alice eiou unblock Bob
 
 ---
 
-### 5.8 delete - Removing Contacts
+### 5.9 contact delete - Removing Contacts
 
 ```bash
-docker exec alice eiou delete OldContact
+docker exec alice eiou contact delete OldContact
 ```
 
 **Warning:** Deletion is permanent. Outstanding balances should be settled before deletion.
+
+---
+
+### 5.10 contact currency - Per-currency Operations
+
+Once a contact is accepted on one currency, additional currencies are negotiated on the same `contact_currencies` row, not by re-running `contact add`. The `contact currency` namespace handles this lifecycle.
+
+```bash
+# Propose a new currency on an already-accepted contact
+docker exec alice eiou contact currency add Bob EUR --fee 0.05 --credit 500
+
+# Accept an incoming per-currency proposal
+docker exec bob eiou contact currency accept Alice EUR --fee 0.05 --credit 500
+
+# Decline an incoming per-currency proposal
+docker exec bob eiou contact currency decline Alice EUR
+
+# List every currency configured for a contact (status + direction)
+docker exec alice eiou contact currency list Bob
+
+# Locally remove a currency configuration (does NOT notify the remote — use `decline` for that)
+docker exec alice eiou contact currency remove Bob EUR
+```
+
+`currency decline` sends a `contact_currency_declined` message so the requester's outgoing-pending row drops on the spot. `currency remove` is a local cleanup hatch only.
 
 ---
 
@@ -950,7 +1061,7 @@ Alice and Daniel cannot transact directly. When Alice sends to Daniel:
 
 **Step 1: Verify Alice cannot directly reach Daniel**
 ```bash
-docker exec alice eiou search Daniel
+docker exec alice eiou contact search Daniel
 # Expected: No contacts found matching "Daniel"
 ```
 
@@ -1206,25 +1317,34 @@ docker volume rm demo-mysql-data demo-config demo-eiou demo-backups
 
 | Category | Command | Description |
 |----------|---------|-------------|
-| **Wallet** | `eiou info` | Wallet information |
-| | `eiou overview` | Dashboard summary |
-| **Contacts** | `eiou add <addr> <name> <fee> <credit> <currency> [message]` | Add contact |
-| | `eiou search [name]` | Search contacts |
-| | `eiou viewcontact <name>` | View contact details |
-| | `eiou pending` | Show pending requests |
-| | `eiou ping <name>` | Check online status |
-| | `eiou update <name> <field> <value> [currency]` | Update contact |
-| | `eiou block <name>` | Block contact |
-| | `eiou unblock <name>` | Unblock contact |
-| | `eiou delete <name>` | Delete contact |
-| **Transactions** | `eiou send <name> <amount> <currency>` | Send transaction |
-| | `eiou viewbalances [name]` | View balances |
-| | `eiou history [name]` | Transaction history |
+| **Wallet** | `eiou info [detail] [--show-auth]` | Wallet information |
+| | `eiou overview [limit]` | Dashboard summary |
+| **Contacts (lifecycle)** | `eiou contact add <addr> <name> [--fee F --credit C --currency CCY] [--message M]` | Send outbound contact request |
+| | `eiou contact accept <hash> --currency CCY --fee F --credit C [--currency …]` | Accept incoming request (single- or multi-currency) |
+| | `eiou contact apply <hash> [--accept CCY:F:C ...] [--decline CCY] [--defer CCY]` | Batched accept/decline/defer (or `--from <file\|->` JSON) |
+| | `eiou contact decline <hash>` | Decline every pending currency on an incoming request |
+| | `eiou contact pending [--incoming\|--outgoing] [--json]` | Show pending requests |
+| **Contacts (ops)** | `eiou contact list [--status accepted\|pending\|blocked]` | List contacts grouped by status |
+| | `eiou contact view <name\|address\|hash>` | View contact details |
+| | `eiou contact search [query]` | Substring search by name |
+| | `eiou contact ping <name\|address>` | Check online status + chain heads |
+| | `eiou contact update <name\|address> [--name N] [--fee F] [--credit C] [--currency CCY]` | Update contact (local-only; multi-field, non-atomic) |
+| | `eiou contact block <name\|address>` / `eiou contact unblock <name\|address>` | Block / unblock contact |
+| | `eiou contact delete <name\|address>` | Delete contact (permanent) |
+| **Per-currency** | `eiou contact currency add <contact> <CCY> --fee F --credit C` | Propose a new currency on an accepted contact |
+| | `eiou contact currency accept <contact> <CCY> --fee F --credit C` | Accept an incoming per-currency proposal |
+| | `eiou contact currency decline <contact> <CCY>` | Decline an incoming per-currency proposal |
+| | `eiou contact currency list <contact>` | Show all currencies + status + direction |
+| | `eiou contact currency remove <contact> <CCY>` | Locally remove a currency (no remote notify) |
+| **Transactions** | `eiou send <name\|addr> <amount> <CCY> [description] [--best]` | Send transaction (direct or P2P-relayed) |
+| | `eiou viewbalances [name\|addr]` | View balances |
+| | `eiou history [name\|addr] [limit]` | Transaction history |
 | **Settings** | `eiou viewsettings` | View settings |
 | | `eiou changesettings <key> <value>` | Change setting |
-| **System** | `eiou sync [type]` | Synchronize data |
+| **System** | `eiou sync [contacts\|transactions\|balances]` | Synchronize data |
 | | `eiou backup <action>` | Backup management |
-| | `eiou help [command]` | Display help |
+| | `eiou chaindrop <action>` | Tx drop / chain gap resolution |
+| | `eiou help [command]` | Display top-level help (namespaced help comes from the namespace itself, e.g. `eiou contact`) |
 
 ### Global Options
 
@@ -1264,7 +1384,7 @@ docker compose -f tests/old/compose-files/docker-compose-4line.yml up -d --build
 **Solutions:**
 ```bash
 # Check if both nodes are online
-docker exec alice eiou ping Bob
+docker exec alice eiou contact ping Bob
 
 # Trigger sync on both nodes
 docker exec alice eiou sync
@@ -1276,10 +1396,10 @@ docker exec bob eiou sync
 **Solutions:**
 ```bash
 # Verify contact is accepted
-docker exec alice eiou viewcontact Bob
+docker exec alice eiou contact view Bob
 
 # Check contact is online
-docker exec alice eiou ping Bob
+docker exec alice eiou contact ping Bob
 
 # Sync both nodes
 docker exec alice eiou sync

@@ -19,10 +19,10 @@
 echo -e "\nAdding contacts..."
 containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
 for containersLinkKey in "${containersLinkKeys[@]}"; do
-    values=${containersLinks[${containersLinkKey}]}
-    containerKeys=(${containersLinkKey//,/ })    
+    values=(${containersLinks[${containersLinkKey}]})
+    containerKeys=(${containersLinkKey//,/ })
     echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
-    docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
+    docker exec ${containerKeys[0]} eiou contact add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} --fee ${values[0]} --credit ${values[1]} --currency ${values[2]}
 done
 
 # Wait for contacts to be added with polling

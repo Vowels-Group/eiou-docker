@@ -291,4 +291,25 @@ class DlqControllerTest extends TestCase
         $decoded = json_decode($output, true);
         $this->assertFalse($decoded['success'] ?? true);
     }
+
+    /**
+     * registerActions populates the shared registry with every owned
+     * action at TIER_AUTH so the dispatcher's CSRF gate doesn't fire —
+     * each handler does its own non-rotating validateCSRFToken() and
+     * emits the legacy `{"success":false,"error":"Invalid CSRF token"}`
+     * envelope on failure.
+     */
+    #[Test]
+    public function registerActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        foreach (['dlqRetry', 'dlqAbandon', 'dlqRetryAll', 'dlqAbandonAll'] as $a) {
+            $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
+    }
 }

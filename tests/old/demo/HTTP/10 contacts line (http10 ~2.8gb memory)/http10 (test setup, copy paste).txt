@@ -20,37 +20,37 @@ docker volume rm httpJ-mysql-data httpJ-config httpJ-backups httpJ-letsencrypt
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped  --network=demo-net --name httpA -v "httpA-mysql-data:/var/lib/mysql" -v "httpA-config:/etc/eiou/config" -v "httpA-backups:/var/lib/eiou/backups" -v "httpA-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpA eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpB -v "httpB-mysql-data:/var/lib/mysql" -v "httpB-config:/etc/eiou/config" -v "httpB-backups:/var/lib/eiou/backups" -v "httpB-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpB eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpC -v "httpC-mysql-data:/var/lib/mysql" -v "httpC-config:/etc/eiou/config" -v "httpC-backups:/var/lib/eiou/backups" -v "httpC-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpC eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpD -v "httpD-mysql-data:/var/lib/mysql" -v "httpD-config:/etc/eiou/config" -v "httpD-backups:/var/lib/eiou/backups" -v "httpD-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpD eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpE -v "httpE-mysql-data:/var/lib/mysql" -v "httpE-config:/etc/eiou/config" -v "httpE-backups:/var/lib/eiou/backups" -v "httpE-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpE eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpF -v "httpF-mysql-data:/var/lib/mysql" -v "httpF-config:/etc/eiou/config" -v "httpF-backups:/var/lib/eiou/backups" -v "httpF-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpF eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpG -v "httpG-mysql-data:/var/lib/mysql" -v "httpG-config:/etc/eiou/config" -v "httpG-backups:/var/lib/eiou/backups" -v "httpG-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpG eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpH -v "httpH-mysql-data:/var/lib/mysql" -v "httpH-config:/etc/eiou/config" -v "httpH-backups:/var/lib/eiou/backups" -v "httpH-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpH eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpI -v "httpI-mysql-data:/var/lib/mysql" -v "httpI-config:/etc/eiou/config" -v "httpI-backups:/var/lib/eiou/backups" -v "httpI-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpI eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpJ -v "httpJ-mysql-data:/var/lib/mysql" -v "httpJ-config:/etc/eiou/config" -v "httpJ-backups:/var/lib/eiou/backups" -v "httpJ-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpJ eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpA -v "httpA-mysql-data:/var/lib/mysql" -v "httpA-config:/etc/eiou/config" -v "httpA-plugins:/etc/eiou/plugins" -v "httpA-backups:/var/lib/eiou/backups" -v "httpA-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpA eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpB -v "httpB-mysql-data:/var/lib/mysql" -v "httpB-config:/etc/eiou/config" -v "httpB-plugins:/etc/eiou/plugins" -v "httpB-backups:/var/lib/eiou/backups" -v "httpB-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpB eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpC -v "httpC-mysql-data:/var/lib/mysql" -v "httpC-config:/etc/eiou/config" -v "httpC-plugins:/etc/eiou/plugins" -v "httpC-backups:/var/lib/eiou/backups" -v "httpC-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpC eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpD -v "httpD-mysql-data:/var/lib/mysql" -v "httpD-config:/etc/eiou/config" -v "httpD-plugins:/etc/eiou/plugins" -v "httpD-backups:/var/lib/eiou/backups" -v "httpD-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpD eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpE -v "httpE-mysql-data:/var/lib/mysql" -v "httpE-config:/etc/eiou/config" -v "httpE-plugins:/etc/eiou/plugins" -v "httpE-backups:/var/lib/eiou/backups" -v "httpE-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpE eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpF -v "httpF-mysql-data:/var/lib/mysql" -v "httpF-config:/etc/eiou/config" -v "httpF-plugins:/etc/eiou/plugins" -v "httpF-backups:/var/lib/eiou/backups" -v "httpF-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpF eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpG -v "httpG-mysql-data:/var/lib/mysql" -v "httpG-config:/etc/eiou/config" -v "httpG-plugins:/etc/eiou/plugins" -v "httpG-backups:/var/lib/eiou/backups" -v "httpG-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpG eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpH -v "httpH-mysql-data:/var/lib/mysql" -v "httpH-config:/etc/eiou/config" -v "httpH-plugins:/etc/eiou/plugins" -v "httpH-backups:/var/lib/eiou/backups" -v "httpH-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpH eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpI -v "httpI-mysql-data:/var/lib/mysql" -v "httpI-config:/etc/eiou/config" -v "httpI-plugins:/etc/eiou/plugins" -v "httpI-backups:/var/lib/eiou/backups" -v "httpI-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpI eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpJ -v "httpJ-mysql-data:/var/lib/mysql" -v "httpJ-config:/etc/eiou/config" -v "httpJ-plugins:/etc/eiou/plugins" -v "httpJ-backups:/var/lib/eiou/backups" -v "httpJ-letsencrypt:/etc/letsencrypt" -e QUICKSTART=httpJ eiou/eiou
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
-docker exec httpA eiou add http://httpB httpB 0.1 1000 USD
-docker exec httpB eiou add http://httpA httpA 0.1 1000 USD
-docker exec httpB eiou add http://httpC httpC 0.1 1000 USD
-docker exec httpC eiou add http://httpB httpB 0.1 1000 USD
-docker exec httpC eiou add http://httpD httpD 0.1 1000 USD
-docker exec httpD eiou add http://httpC httpC 0.1 1000 USD
-docker exec httpD eiou add http://httpE httpE 0.1 1000 USD
-docker exec httpE eiou add http://httpD httpD 0.1 1000 USD
-docker exec httpE eiou add http://httpF httpF 0.1 1000 USD
-docker exec httpF eiou add http://httpE httpE 0.1 1000 USD
-docker exec httpF eiou add http://httpG httpG 0.1 1000 USD
-docker exec httpG eiou add http://httpF httpF 0.1 1000 USD
-docker exec httpG eiou add http://httpH httpH 0.1 1000 USD
-docker exec httpH eiou add http://httpG httpG 0.1 1000 USD
-docker exec httpH eiou add http://httpI httpI 0.1 1000 USD
-docker exec httpI eiou add http://httpH httpH 0.1 1000 USD
-docker exec httpI eiou add http://httpJ httpJ 0.1 1000 USD
-docker exec httpJ eiou add http://httpI httpI 0.1 1000 USD
+docker exec httpA eiou contact add http://httpB httpB --fee 0.1 --credit 1000 --currency USD
+docker exec httpB eiou contact add http://httpA httpA --fee 0.1 --credit 1000 --currency USD
+docker exec httpB eiou contact add http://httpC httpC --fee 0.1 --credit 1000 --currency USD
+docker exec httpC eiou contact add http://httpB httpB --fee 0.1 --credit 1000 --currency USD
+docker exec httpC eiou contact add http://httpD httpD --fee 0.1 --credit 1000 --currency USD
+docker exec httpD eiou contact add http://httpC httpC --fee 0.1 --credit 1000 --currency USD
+docker exec httpD eiou contact add http://httpE httpE --fee 0.1 --credit 1000 --currency USD
+docker exec httpE eiou contact add http://httpD httpD --fee 0.1 --credit 1000 --currency USD
+docker exec httpE eiou contact add http://httpF httpF --fee 0.1 --credit 1000 --currency USD
+docker exec httpF eiou contact add http://httpE httpE --fee 0.1 --credit 1000 --currency USD
+docker exec httpF eiou contact add http://httpG httpG --fee 0.1 --credit 1000 --currency USD
+docker exec httpG eiou contact add http://httpF httpF --fee 0.1 --credit 1000 --currency USD
+docker exec httpG eiou contact add http://httpH httpH --fee 0.1 --credit 1000 --currency USD
+docker exec httpH eiou contact add http://httpG httpG --fee 0.1 --credit 1000 --currency USD
+docker exec httpH eiou contact add http://httpI httpI --fee 0.1 --credit 1000 --currency USD
+docker exec httpI eiou contact add http://httpH httpH --fee 0.1 --credit 1000 --currency USD
+docker exec httpI eiou contact add http://httpJ httpJ --fee 0.1 --credit 1000 --currency USD
+docker exec httpJ eiou contact add http://httpI httpI --fee 0.1 --credit 1000 --currency USD
 
 # direct transaction
 docker exec httpA eiou send http://httpB 100 USD

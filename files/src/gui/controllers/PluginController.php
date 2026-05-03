@@ -1,0 +1,372 @@
+<?php
+# Copyright 2025-2026 Vowels Group, LLC
+
+namespace Eiou\Gui\Controllers;
+
+use Eiou\Gui\Helpers\GuiErrorResponse;
+use Eiou\Gui\Includes\Session;
+use Eiou\Services\GuiActionRegistry;
+use Eiou\Services\PluginLoader;
+use Eiou\Services\PluginUninstallService;
+use Eiou\Services\RestartRequestService;
+use Eiou\Utils\Logger;
+use Throwable;
+
+/**
+ * Plugin Controller
+ *
+ * Handles AJAX actions for the GUI plugins table:
+ *
+ *   pluginsList    — return all discovered plugins with status + enabled flag
+ *   pluginsToggle  — set enabled=true|false for a named plugin (CSRF required)
+ *
+ * Toggling does NOT take effect in the running process — event subscriptions
+ * and registered services bind during boot. The response includes
+ * restart_required: true so the GUI can surface that to the user.
+ */
+class PluginController
+{
+    private Session $session;
+    private PluginLoader $loader;
+    private RestartRequestService $restartRequester;
+    private ?PluginUninstallService $uninstallService;
+
+    public function __construct(
+        Session $session,
+        PluginLoader $loader,
+        ?RestartRequestService $restartRequester = null,
+        ?PluginUninstallService $uninstallService = null
+    ) {
+        $this->session = $session;
+        $this->loader = $loader;
+        $this->restartRequester = $restartRequester ?? new RestartRequestService();
+        $this->uninstallService = $uninstallService;
+    }
+
+    /**
+     * Action names this controller owns. Single source of truth so
+     * registerActions() (live path) and registerUnavailableStubs()
+     * (loader-not-ready path) can't drift.
+     */
+    private const OWNED_ACTIONS = [
+        'pluginsList',
+        'pluginsToggle',
+        'pluginsRequestRestart',
+        'pluginChangelog',
+        'pluginsUninstall',
+    ];
+
+    /**
+     * Register every owned action with the shared GuiActionRegistry.
+     *
+     * routeAction() centralizes CSRF + the sentinel-exception unwind,
+     * and per-action handlers are private. Each entry registers a
+     * delegate closure that calls routeAction() and catches the
+     * PluginControllerResponseSent sentinel locally — same as the
+     * legacy Functions.php try/catch did. Tier is TIER_AUTH because
+     * routeAction() does its own non-rotating CSRF check; gating CSRF
+     * twice would mean fighting the controller's 403 envelope shape
+     * with the registry's, and the controller's shape is what the JS
+     * client expects.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        $delegate = function (array $request): void {
+            try {
+                $this->routeAction();
+            } catch (PluginControllerResponseSent $sent) {
+                // Response already emitted by the controller via respond().
+            }
+        };
+        foreach (self::OWNED_ACTIONS as $action) {
+            $registry->register($action, $delegate, GuiActionRegistry::TIER_AUTH, 'core');
+        }
+    }
+
+    /**
+     * Register stub handlers that emit the legacy
+     * `{"success":false,"error":"plugin_loader_unavailable",...}`
+     * envelope. Called from the bootstrap when Application's
+     * PluginLoader hasn't discovered plugins yet (early-boot /
+     * no-wallet state) so a real PluginController can't be
+     * constructed. Without this, the registry would have no entries
+     * for the plugin* actions and POSTs would silently fall through
+     * to the wallet HTML render — the legacy if-branch's null check
+     * always emitted JSON.
+     */
+    public static function registerUnavailableStubs(GuiActionRegistry $registry): void
+    {
+        $stub = function (): void {
+            GuiErrorResponse::send(
+                'plugin_loader_unavailable',
+                'Plugin system is not initialized.',
+                500
+            );
+        };
+        foreach (self::OWNED_ACTIONS as $action) {
+            $registry->register($action, $stub, GuiActionRegistry::TIER_AUTH, 'core');
+        }
+    }
+
+    /**
+     * Route one of the plugins* AJAX actions. Always writes JSON and exits.
+     */
+    public function routeAction(): void
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $action = $_POST['action'] ?? '';
+
+            // Validate CSRF on every call. Don't rotate — the GUI may make
+            // multiple AJAX calls from the same page load.
+            if (!$this->session->validateCSRFToken($_POST['csrf_token'] ?? '', false)) {
+                $this->respondError('csrf_invalid', 'Invalid CSRF token', 403);
+            }
+
+            switch ($action) {
+                case 'pluginsList':
+                    $this->listPlugins();
+                    break;
+                case 'pluginsToggle':
+                    $this->togglePlugin();
+                    break;
+                case 'pluginsRequestRestart':
+                    $this->requestRestart();
+                    break;
+                case 'pluginChangelog':
+                    $this->showChangelog();
+                    break;
+                case 'pluginsUninstall':
+                    $this->uninstallPlugin();
+                    break;
+                default:
+                    $this->respondError('unknown_action', 'Unknown action', 400);
+            }
+        } catch (PluginControllerResponseSent $sent) {
+            throw $sent;
+        } catch (Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'context' => 'plugin_controller',
+                'action' => $_POST['action'] ?? '',
+            ]);
+            $this->respondError('server_error', $e->getMessage(), 500);
+        }
+    }
+
+    private function listPlugins(): void
+    {
+        $plugins = $this->loader->listAllPlugins();
+        $this->respond([
+            'success' => true,
+            'plugins' => $plugins,
+            // True when the on-disk state differs from what's actually
+            // running in this PHP-FPM worker. Drives the GUI's "Restart
+            // node" banner. Survives page reloads because it's recomputed
+            // from authoritative state, not held in JS memory.
+            'restart_required' => $this->computeRestartRequired($plugins),
+            'restart_requested' => $this->restartRequester->isRequested(),
+        ]);
+    }
+
+    /**
+     * Compare each plugin's persisted enabled flag to whether it's loaded
+     * in this worker. Any mismatch means a restart is needed for state to
+     * catch up.
+     *
+     * @param list<array{name:string,enabled:bool,status:string}> $plugins
+     */
+    private function computeRestartRequired(array $plugins): bool
+    {
+        // status values from PluginLoader: discovered, registered, booted,
+        // failed, disabled, not_loaded. Anything that ran register/boot is
+        // "actually loaded" from the worker's perspective.
+        $loadedStatuses = ['discovered', 'registered', 'booted'];
+
+        foreach ($plugins as $p) {
+            $isLoaded = in_array($p['status'] ?? '', $loadedStatuses, true);
+            if (($p['enabled'] ?? false) !== $isLoaded) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function requestRestart(): void
+    {
+        // Best-effort audit field — only safe to derive when a wallet is
+        // loaded. Skipping it never blocks the restart; it just leaves the
+        // requestor empty in the audit log.
+        $pubkeyHash = '';
+        try {
+            $user = \Eiou\Core\UserContext::getInstance();
+            if ($user->getPublicKey() !== null) {
+                $pubkeyHash = (string) $user->getPublicKeyHash();
+            }
+        } catch (Throwable $e) {
+            // missing wallet / uninitialized state — leave hash empty
+        }
+
+        if (!$this->restartRequester->request('gui', $pubkeyHash)) {
+            $this->respondError(
+                'request_failed',
+                'Could not write the restart request file.',
+                500
+            );
+        }
+
+        Logger::getInstance()->info('node_restart_requested_via_gui', [
+            'requestor' => $pubkeyHash,
+        ]);
+
+        $this->respond([
+            'success' => true,
+            // The poller in startup.sh runs every ~2s. Tell the client what
+            // to expect so the UI can size its loading overlay accordingly.
+            'expected_restart_within_seconds' => 5,
+            'message' => 'Restart requested. The node will respawn its workers within a few seconds.',
+        ]);
+    }
+
+    private function togglePlugin(): void
+    {
+        $name = (string) ($_POST['name'] ?? '');
+        $enabled = !empty($_POST['enabled']) && $_POST['enabled'] !== '0' && $_POST['enabled'] !== 'false';
+
+        // Plugin names from manifests are kebab-case alphanumerics. Reject
+        // anything else to keep arbitrary keys out of the state file.
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $this->respondError('invalid_name', 'Invalid plugin name', 400);
+        }
+
+        // Refuse to toggle a plugin that doesn't exist on disk — otherwise
+        // the state file accumulates ghost entries.
+        $known = array_column($this->loader->listAllPlugins(), 'name');
+        if (!in_array($name, $known, true)) {
+            $this->respondError('unknown_plugin', 'Plugin not found', 404);
+        }
+
+        if (!$this->loader->setEnabled($name, $enabled)) {
+            $this->respondError('persist_failed', 'Could not persist the new state', 500);
+        }
+
+        Logger::getInstance()->info('plugin_toggled_via_gui', [
+            'plugin' => $name,
+            'enabled' => $enabled,
+        ]);
+
+        $this->respond([
+            'success' => true,
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'restart_required' => true,
+        ]);
+    }
+
+    /**
+     * Uninstall a plugin. Requires the plugin to be already disabled —
+     * the GUI's two-step flow (disable, confirm) matches this.
+     *
+     * Returns the per-step status map so the modal can show which parts
+     * succeeded and which didn't.
+     */
+    private function uninstallPlugin(): void
+    {
+        $name = (string) ($_POST['name'] ?? '');
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $this->respondError('invalid_name', 'Invalid plugin name', 400);
+        }
+
+        if ($this->uninstallService === null) {
+            $this->respondError(
+                'uninstall_unavailable',
+                'Plugin uninstall service is not wired in this context.',
+                500
+            );
+        }
+
+        try {
+            $result = $this->uninstallService->uninstall($name);
+        } catch (\InvalidArgumentException $e) {
+            $this->respondError('unknown_plugin', $e->getMessage(), 404);
+        } catch (\RuntimeException $e) {
+            // "Cannot uninstall enabled plugin" lands here.
+            $this->respondError('plugin_still_enabled', $e->getMessage(), 409);
+        }
+
+        Logger::getInstance()->info('plugin_uninstalled_via_gui', [
+            'plugin' => $name,
+            'success' => $result['success'],
+        ]);
+
+        $this->respond([
+            'success' => $result['success'],
+            'plugin_id' => $result['plugin_id'],
+            'steps' => $result['steps'],
+            'message' => $result['success']
+                ? 'Plugin uninstalled.'
+                : 'Uninstall completed with errors. Check the step list for details.',
+        ], $result['success'] ? 200 : 500);
+    }
+
+    private function showChangelog(): void
+    {
+        $name = (string) ($_POST['name'] ?? '');
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $this->respondError('invalid_name', 'Invalid plugin name', 400);
+        }
+
+        $markdown = $this->loader->readChangelog($name);
+        if ($markdown === null) {
+            $this->respondError('not_found', 'Changelog not found', 404);
+        }
+
+        $this->respond([
+            'success' => true,
+            'plugin' => $name,
+            'html' => \Eiou\Services\UpdateCheckService::markdownToHtml($markdown),
+        ]);
+    }
+
+    /**
+     * Emit a JSON response and unwind. Same test-seam pattern as
+     * ApiKeysController::respond().
+     *
+     * @param array<string,mixed> $payload
+     */
+    protected function respond(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        echo json_encode($payload);
+        throw new PluginControllerResponseSent($status);
+    }
+
+    /**
+     * Emit a canonical GUI error envelope through the test-seam `respond()`.
+     * Mirrors the helper in ApiKeysController / PaybackMethodsController.
+     *
+     * @param array<string,mixed> $extras
+     */
+    private function respondError(string $code, string $message, int $status, array $extras = []): void
+    {
+        $payload = GuiErrorResponse::make($code, $message);
+        if ($extras !== []) {
+            $payload = array_merge($payload, $extras);
+        }
+        $this->respond($payload, $status);
+    }
+}
+
+/**
+ * Internal control-flow exception used only to unwind the stack after a
+ * JSON response has been emitted.
+ */
+class PluginControllerResponseSent extends \RuntimeException
+{
+    public int $httpStatus;
+    public function __construct(int $httpStatus)
+    {
+        parent::__construct('Plugin controller response already sent');
+        $this->httpStatus = $httpStatus;
+    }
+}

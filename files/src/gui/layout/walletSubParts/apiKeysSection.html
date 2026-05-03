@@ -1,27 +1,9 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!-- API Keys Section -->
-<div id="api-keys-section" class="form-container fade-in-up">
-    <div class="section-header">
-        <h2><i class="fas fa-key"></i> API Keys</h2>
-        <button type="button" class="btn btn-success btn-nowrap" data-action="openApiKeyCreateModal">
-            <i class="fas fa-plus"></i> Create API Key
-        </button>
-    </div>
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>Grant external apps programmatic access</span>
-        </summary>
-        <div class="section-intro-body">
-            Keys authenticate via HMAC-SHA256; the shared secret is shown once at
-            creation and cannot be retrieved again. Re-enter your auth code to
-            create, disable, or delete keys — a short-lived grant covers a few
-            minutes of edits before prompting again, independent of
-            &ldquo;Remember me&rdquo;.
-        </div>
-    </details>
-
+<?php
+ob_start();
+?>
     <div id="api-keys-filters" class="api-keys-filters d-none">
         <div class="api-keys-search-row search-icon-wrapper">
             <i class="fas fa-search search-icon-positioned"></i>
@@ -69,18 +51,7 @@
                         <i class="fas fa-sort sort-indicator"></i>
                     </th>
                     <th>Key ID</th>
-                    <th>Permissions <i class="fas fa-info-circle info-tooltip-icon" title="Each key holds a fixed subset of scopes granted at creation. Available scopes:
-
-• wallet:read — balance and transaction history
-• wallet:send — send transactions
-• contacts:read — list, view, ping contacts
-• contacts:write — add, update, delete, block contacts
-• system:read — status, metrics, settings
-• backup:read — backup status and verify
-• backup:write — create, restore, delete, toggle auto-backup
-• admin — full administrative access
-
-Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within that category." data-action="showInfoModal" data-stop-propagation="true" role="button" aria-label="More information about permissions"></i></th>
+                    <th>Permissions <i class="fas fa-info-circle info-tooltip-icon" title="Each key holds a fixed subset of scopes granted at creation.&#10;&#10;Available scopes are listed in the create-key modal (rendered from the backend whitelist so the tooltip can&apos;t drift).&#10;&#10;Wildcard suffixes (wallet:*, contacts:*, backup:*, payback:*) grant every permission within that category. `admin` implies every scope." data-action="showInfoModal" data-stop-propagation="true" role="button" aria-label="More information about permissions"></i></th>
                     <th class="sortable text-right" data-action="sortApiKeys" data-sort-column="rate_limit_per_minute" role="button">
                         <span class="sort-label">Rate <i class="fas fa-info-circle info-tooltip-icon" title="Requests per minute. How many API calls this key can make each minute before being throttled." data-action="showInfoModal" data-stop-propagation="true" role="button" aria-label="More information about rate limit"></i></span>
                         <i class="fas fa-sort sort-indicator"></i>
@@ -102,42 +73,43 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
     <div id="api-keys-no-matches" class="api-keys-empty text-muted d-none">
         No keys match the current filters.
     </div>
-</div>
+<?php
+$body = ob_get_clean();
 
-<!-- Re-auth modal -->
-<div id="apiKeysVerifyModal" class="modal d-none">
-    <div class="modal-content modal-content-sm">
-        <div class="modal-header">
-            <h3><i class="fas fa-lock"></i> Confirm it&rsquo;s you</h3>
-            <span class="close" data-action="closeApiKeysVerifyModal">&times;</span>
-        </div>
-        <div class="modal-body modal-body-padded">
-            <p class="text-muted">
-                API key operations need a fresh confirmation. Remembered
-                devices stay logged in, but creating or revoking keys always
-                requires your auth code.
-            </p>
-            <form>
-                <input type="hidden" name="action" value="apiKeysVerify">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                <div class="form-group">
-                    <label for="apiKeysVerifyAuthcode">Auth Code</label>
-                    <input type="password" id="apiKeysVerifyAuthcode" name="authcode"
-                           autocomplete="current-password" required>
-                </div>
-                <div id="apiKeysVerifyError" class="form-error d-none"></div>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-compact" data-action="closeApiKeysVerifyModal">
-                Cancel
-            </button>
-            <button type="button" class="btn btn-primary btn-compact" data-action="submitApiKeysVerify">
-                Unlock
-            </button>
-        </div>
-    </div>
-</div>
+echo renderSection([
+    'id'    => 'api-keys-section',
+    'icon'  => 'fas fa-key',
+    'title' => 'API Keys',
+    'headerExtras' =>
+          '<button type="button" class="btn btn-success btn-nowrap" data-action="openApiKeyCreateModal">'
+        . '<i class="fas fa-plus"></i> Create API Key'
+        . '</button>',
+    'introTitle' => 'About API Keys',
+    'intro' =>
+          'API keys let external tools &mdash; scripts, accounting importers, '
+        . 'monitoring dashboards, mobile apps &mdash; talk to this node over '
+        . 'HTTPS without ever seeing your auth code. Each key carries a fixed '
+        . 'subset of <strong>permissions</strong> (scopes) granted at creation: '
+        . 'a read-only key for an accounting importer never needs to send, a '
+        . 'send-only key for a point-of-sale app never needs to list contacts. '
+        . 'Scopes are locked at creation time and cannot be widened afterwards '
+        . '&mdash; create a new key instead.'
+        . '<br><br>'
+        . 'Keys authenticate via <strong>HMAC-SHA256</strong> over the request '
+        . 'body plus a timestamp, so even a passive observer on the wire '
+        . 'can\'t replay or modify the call. The shared secret is shown '
+        . '<strong>once</strong> on the create screen and is never retrievable '
+        . 'again &mdash; copy it straight into the tool that will use it. If '
+        . 'you lose it, disable the key and make a new one.'
+        . '<br><br>'
+        . 'Creating, disabling, or deleting a key is a sensitive action and '
+        . 're-prompts for your auth code. The re-auth covers a short window '
+        . '(a few minutes) so you can make several edits in a row without '
+        . 'typing the code again, but it expires on its own and is '
+        . 'independent of <em>Remember me</em> on login.',
+    'body' => $body,
+]);
+?>
 
 <!-- Create API key modal -->
 <div id="apiKeysCreateModal" class="modal d-none">
@@ -147,7 +119,41 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
             <span class="close" data-action="closeApiKeyCreateModal">&times;</span>
         </div>
         <div class="modal-body modal-body-padded">
-            <form id="apiKeysCreateForm">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About creating an API key</span>
+                </summary>
+                <div class="section-intro-body">
+                    API keys let external tools — scripts, accounting importers,
+                    monitoring dashboards — talk to this node over HTTPS without
+                    sharing your auth code. Each key carries a fixed subset of
+                    <strong>permissions</strong> (scopes) granted at creation
+                    time and cannot be upgraded afterwards — create a new key
+                    instead.
+                    <br><br>
+                    <strong>Label</strong> is for you — something that will help
+                    you recognise what the key is for in the list later.
+                    <strong>Presets</strong> fill the permission checkboxes with
+                    common bundles (Read-only, Full access); you can always
+                    tick or untick individual scopes afterwards.
+                    <br><br>
+                    <strong>Rate limit</strong> caps how many requests per
+                    minute the key is allowed; default 100, max 1000.
+                    <strong>Expires</strong> sets a hard cut-off after which
+                    the key is rejected — for scripts that should never live
+                    forever. Pick <em>Never</em> for keys you manage lifecycle
+                    of yourself.
+                    <br><br>
+                    The secret is shown once on the next screen and never
+                    again. Copy it somewhere safe before closing the modal.
+                </div>
+            </details>
+            <form id="apiKeysCreateForm"
+                  data-permission-presets='<?php echo htmlspecialchars(
+                      json_encode(\Eiou\Gui\Controllers\ApiKeysController::permissionPresets(), JSON_UNESCAPED_SLASHES),
+                      ENT_QUOTES, 'UTF-8'
+                  ); ?>'>
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
                 <div id="apiKeysCreateError" class="form-error d-none"></div>
@@ -179,7 +185,7 @@ Wildcard suffixes (wallet:*, contacts:*, backup:*) grant every permission within
                 <div class="form-group">
                     <label>Permissions</label>
                     <div class="api-keys-permissions">
-                        <?php foreach (\Eiou\Gui\Controllers\ApiKeysController::PERMISSION_GROUPS as $groupLabel => $perms): ?>
+                        <?php foreach (\Eiou\Gui\Controllers\ApiKeysController::permissionGroups() as $groupLabel => $perms): ?>
                             <fieldset class="api-keys-permission-group">
                                 <legend><?php echo htmlspecialchars($groupLabel); ?></legend>
                                 <?php foreach ($perms as $permKey => $permDesc): ?>

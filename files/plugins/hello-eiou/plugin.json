@@ -1,0 +1,17 @@
+{
+  "name": "hello-eiou",
+  "version": "1.2.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the eIOU plugin API surface: events, CLI, REST, and the GUI hooks system (render hooks, asset enqueue, tab registry, action registry, filter slots).",
+  "author": {
+    "name": "EIOU",
+    "url": "https://eiou.org"
+  },
+  "homepage": "https://github.com/Vowels-Group/eiou-docker/tree/main/files/plugins/hello-eiou",
+  "license": "Apache-2.0",
+  "entryClass": "Eiou\\Plugins\\HelloEiou\\HelloEiouPlugin",
+  "autoload": {
+    "psr-4": {
+      "Eiou\\Plugins\\HelloEiou\\": "src/"
+    }
+  }
+}

@@ -25,19 +25,105 @@ class ApiKeyService implements ApiKeyServiceInterface {
     private CliOutputManager $output;
 
     /**
-     * Available permissions
+     * Available permissions — single source of truth.
+     *
+     * Order matters for display: the GUI create-key modal and the CLI help
+     * walk this list in declared order, grouping by category prefix.
+     *
+     * `admin` is the only god-scope; it implies every other scope.
+     * (The legacy `'all'` synonym was removed — `admin` is enough.)
+     *
+     * Wildcards `<cat>:*` are honoured at lookup time by
+     * ApiKeyRepository::hasPermission(); they alias every verb in their
+     * category.
      */
     public const PERMISSIONS = [
         'wallet:read',
         'wallet:send',
+        'wallet:*',           // alias for wallet:read + wallet:send
         'contacts:read',
         'contacts:write',
+        'contacts:*',         // alias for contacts:read + contacts:write
         'system:read',
+        // `system:write` covers operational control of this node:
+        // sync, shutdown, start, restart, settings(PUT). Carved out
+        // from `admin` so a CI/automation key can poke the node
+        // without also unlocking key minting and plugin install.
+        'system:write',
+        'system:*',           // alias for system:read + system:write
         'backup:read',
         'backup:write',
+        'backup:*',           // alias for backup:read + backup:write
+        // Payback methods. `payback:write` is also the gate for the
+        // /payback-methods/:id/reveal endpoint because it returns
+        // plaintext — a read of secrets is treated as write-class.
+        'payback:read',
+        'payback:write',
+        'payback:*',          // alias for payback:read + payback:write
         'admin',
-        'all'
     ];
+
+    /**
+     * Per-permission descriptions — kept next to PERMISSIONS so both the
+     * GUI modal and the CLI help render the same prose for the same scope.
+     * Lookup falls back to "—" if a permission is missing here, but the
+     * test suite asserts every PERMISSIONS entry has a description.
+     */
+    public const PERMISSION_DESCRIPTIONS = [
+        'wallet:read'    => 'Read balance and transactions',
+        'wallet:send'    => 'Send transactions, manage chain drops, approve/reject P2P',
+        'wallet:*'       => 'Both wallet:read and wallet:send',
+        'contacts:read'  => 'List, view, search, and ping contacts',
+        'contacts:write' => 'Add, update, delete, block/unblock contacts; per-currency operations',
+        'contacts:*'     => 'Both contacts:read and contacts:write',
+        'system:read'    => 'View status, metrics, settings; download debug reports; trigger update-check',
+        'system:write'   => 'Trigger sync, shutdown/start/restart, change settings (operational control of this node)',
+        'system:*'       => 'Both system:read and system:write',
+        'backup:read'    => 'Read backup status/list, verify backups',
+        'backup:write'   => 'Create, restore, delete, enable/disable backups, cleanup',
+        'backup:*'       => 'Both backup:read and backup:write',
+        'payback:read'   => 'List/read your own payback methods (sensitive fields redacted)',
+        'payback:write'  => 'Create/edit/delete payback methods, AND reveal plaintext (write-class because it returns secrets)',
+        'payback:*'      => 'Both payback:read and payback:write',
+        'admin'          => 'Full administrative access (settings, sync, shutdown/start/restart, keys, plugins). Implies every other scope.',
+    ];
+
+    /**
+     * Group permissions by category prefix for display purposes (GUI
+     * create-key modal, CLI help). Wildcards `<cat>:*` are folded into
+     * their category. `admin` (and any other scopeless entries) goes into
+     * a trailing "Admin" group.
+     *
+     * Returns: ['Wallet' => ['wallet:read' => 'Read…', …], 'Contacts' => …, …, 'Admin' => ['admin' => '…']]
+     */
+    public static function permissionGroupsForDisplay(): array
+    {
+        $labels = [
+            'wallet'   => 'Wallet',
+            'contacts' => 'Contacts',
+            'system'   => 'System',
+            'backup'   => 'Backup',
+            'payback'  => 'Payback Methods',
+        ];
+
+        $groups = [];
+        $standalone = [];
+        foreach (self::PERMISSIONS as $perm) {
+            $desc = self::PERMISSION_DESCRIPTIONS[$perm] ?? '—';
+            if (!str_contains($perm, ':')) {
+                $standalone[$perm] = $desc;
+                continue;
+            }
+            [$cat] = explode(':', $perm, 2);
+            $label = $labels[$cat] ?? ucfirst($cat);
+            $groups[$label] ??= [];
+            $groups[$label][$perm] = $desc;
+        }
+        if (!empty($standalone)) {
+            $groups['Admin'] = $standalone;
+        }
+        return $groups;
+    }
 
     /**
      * Maximum allowed rate limit per minute
@@ -294,6 +380,16 @@ class ApiKeyService implements ApiKeyServiceInterface {
      * Show help for API key commands
      */
     private function showHelp(): void {
+        // Render the permissions list straight from PERMISSION_DESCRIPTIONS
+        // so this help can never drift from the validator's whitelist —
+        // adding a new scope to PERMISSIONS automatically advertises it.
+        $padTo = max(array_map('strlen', array_keys(self::PERMISSION_DESCRIPTIONS)));
+        $permLines = '';
+        foreach (self::PERMISSION_DESCRIPTIONS as $perm => $desc) {
+            $permLines .= sprintf("    - %s%s  %s\n", $perm, str_repeat(' ', $padTo - strlen($perm)), $desc);
+        }
+        $permLines = rtrim($permLines, "\n");
+
         $help = <<<HELP
 
 API Key Management Commands
@@ -306,15 +402,7 @@ Create a new API key:
     eiou apikey create "My Application" wallet:read,contacts:read
 
   Available permissions:
-    - wallet:read     Read wallet balance, info, and transactions
-    - wallet:send     Send transactions, manage chain drops
-    - contacts:read   List, view, search, and ping contacts
-    - contacts:write  Add, update, delete, block/unblock contacts
-    - system:read     View system status, metrics, and settings
-    - backup:read     Read backup status/list, verify backups
-    - backup:write    Create, restore, delete, enable/disable backups
-    - admin           Full administrative access (settings, sync, shutdown, keys)
-    - all             All permissions (same as admin)
+$permLines
 
 List all API keys:
   eiou apikey list

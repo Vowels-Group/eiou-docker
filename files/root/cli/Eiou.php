@@ -9,24 +9,34 @@
  *
  * Usage: php eiou.php <command> [arguments] [--json]
  *
- * Commands:
- *   generate [restore <seed>]  - Generate new wallet or restore from seed
- *   info [detail] [--show-auth] - Display wallet information
- *   add <address> <"name"> ... - Add a new contact (quote multi-word names)
- *   send <address|"name"> <amount> - Send an eIOU transaction
- *   viewbalances [contact]     - View balance(s)
- *   history [contact]          - View transaction history
- *   pending                    - View pending contact requests
- *   p2p [subcommand] [args]    - Manage P2P transactions awaiting approval
- *   dlq [list|retry|abandon]   - Manage dead letter queue (failed messages)
- *   overview [limit]           - View wallet overview dashboard
- *   report <type>              - Generate reports (debug [--send], etc.)
- *   request [subcommand] [args] - Manage payment requests
- *   help [command]             - Display help information
- *   sync [type]                - Synchronize data
- *   ping <contact>             - Check contact online status
- *   updatecheck                - Check for newer image versions
- *   shutdown                   - Graceful shutdown
+ * Commands (top-level — see CliHelpService for the canonical list):
+ *   generate [restore <seed>]                  - Generate or restore a wallet (startup-only)
+ *   info [detail] [--show-auth]                - Display wallet information
+ *   overview [limit]                           - Wallet dashboard summary
+ *   send <addr|name> <amount> <currency> [desc] [--best]  - Send an eIOU transaction
+ *   viewbalances [contact]                     - View balance(s)
+ *   history [contact] [limit]                  - View transaction history
+ *   contact <subcommand> [args]                - Contact management (add / accept / apply /
+ *                                                decline / list / pending / view / update /
+ *                                                delete / block / unblock / ping / search /
+ *                                                currency …) — see ContactCliHandler
+ *   p2p [subcommand] [args]                    - Manage P2P transactions awaiting approval
+ *   dlq [list|retry|abandon]                   - Manage dead letter queue (failed messages)
+ *   request [subcommand] [args]                - Manage payment requests
+ *   chaindrop [propose|accept|reject|list]     - Manage chain drop agreements
+ *   sync [type]                                - Synchronize data
+ *   verify-chain                               - Audit every bilateral chain end-to-end
+ *   backup <action> [args]                     - Manage encrypted database backups
+ *   apikey <action> [args]                     - Manage REST API keys
+ *   payback <action> [args]                    - Manage your payback methods
+ *   plugin [list|enable|disable|uninstall]     - Manage plugins (requires `restart` to apply)
+ *   viewsettings / changesettings [k v]        - View / change wallet settings
+ *   report <type> [--full] [--send]            - Generate troubleshooting reports
+ *   updatecheck                                - Check Docker Hub / GitHub for newer images
+ *   shutdown / start / restart                 - Stop / resume / fully restart processors
+ *   help [command]                             - Display top-level help
+ *                                                (`eiou help contact` and `… contact currency`
+ *                                                 delegate to the namespace's own showHelp)
  *
  * Output Flags:
  *   --json, -j     - Output in JSON format
@@ -85,8 +95,28 @@ if (!$app->currentUserLoaded()) {
 // Get Debug Service Instance
 $debugService = $app->services->getDebugService();
 
-// Apply rate limiting for CLI commands (if database is available and not in test mode)
-if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
+// Apply rate limiting for CLI commands (if database is available).
+//
+// We always invoke the rate limiter and let it decide whether to bypass.
+// The legitimate runtime bypass paths are:
+//   1. UserContext::getRateLimitEnabled() === false — the operator-toggleable
+//      `rateLimitEnabled` user setting (CLI / API / GUI all expose it).
+//   2. defined('EIOU_TEST_MODE') === true — set ONLY by tests/bootstrap.php
+//      under PHPUnit; production builds never define this constant.
+//
+// Crucially, the legacy `getenv('EIOU_TEST_MODE') === 'true'` env-var
+// bypass that used to live here was removed alongside the matching
+// hardening in RateLimiterService::checkLimit. A hostile orchestrator
+// (or a typo in docker-compose.yml) used to be able to turn off CLI
+// rate limiting in production by exporting one variable. RateLimiter
+// now logs a SECURITY error if the env var is seen without the build-
+// time constant; this caller deferring to it means that signal fires
+// reliably from CLI invocations too. The `eiou in` / `eiou out`
+// queue-processor commands (Eiou.php:247/261) still honor the env var
+// because the integration test suite needs them runnable via
+// `docker exec`, not PHPUnit; that is a deliberately narrower escape
+// hatch and is logged accordingly.
+if ($app->currentPdoLoaded()) {
     $rateLimiter = $app->getRateLimiter();
 
     // Get CLI identifier (user + command for more granular limiting)
@@ -95,7 +125,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
     // Define rate limits for different CLI commands
     $cliRateLimits = [
         'send' => ['max' => 30, 'window' => 60, 'block' => 300],      // 30 transactions per minute
-        'add' => ['max' => 20, 'window' => 60, 'block' => 300],       // 20 contact additions per minute
+        'contact' => ['max' => 20, 'window' => 60, 'block' => 300],   // 20 contact ops per minute
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
         'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
         'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 tx drop operations per minute
@@ -129,80 +159,12 @@ if ($request === "info") {
   $cliService = $app->services->getCliService();
   $cliService->displayUserInfo($cleanArgv, $output);
 }
-// Contacts
-elseif($request === "add"){
-  // Add Contact - validate input before processing
-  $debugService->output("Executing add contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->addContact($cleanArgv, $output);
-}
-elseif($request === "viewcontact"){
-  // View Contact
-  $debugService->output("Executing read contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->viewContact($cleanArgv, $output);
-}
-elseif($request === "update"){
-  // Update Contact
-  $debugService->output("Executing update contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->updateContact($cleanArgv, $output);
-}
-elseif($request === "block"){
-  // Block Contact
-  $debugService->output("Executing block contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  if (!$contactService->blockContact($cleanArgv[2] ?? null, $output)) {
-    exit(1);
-  }
-}
-elseif($request === "unblock"){
-  // Unblock Contact
-  $debugService->output("Executing unblock contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  if (!$contactService->unblockContact($cleanArgv[2] ?? null, $output)) {
-    exit(1);
-  }
-}
-elseif($request === "delete"){
-  // Delete Contact
-  $debugService->output("Executing delete contact request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  if (!$contactService->deleteContact($cleanArgv[2] ?? null, $output)) {
-    exit(1);
-  }
-}
-elseif($request === "search"){
-  // Search Contacts
-  $debugService->output("Executing search contacts request", 'SILENT');
-  $contactService = $app->services->getContactService();
-  $contactService->searchContacts($cleanArgv, $output);
-}
-elseif($request === "ping"){
-  // Ping a contact to check online status
-  $debugService->output("Executing ping contact request", 'SILENT');
-
-  $identifier = $cleanArgv[2] ?? null;
-  if (!$identifier) {
-    $output->error("Contact name or address required", ErrorCodes::MISSING_ARGUMENT);
-    exit(1);
-  }
-
-  $contactStatusService = $app->services->getContactStatusService();
-  $result = $contactStatusService->pingContact($identifier);
-
-  if ($result['success']) {
-    $output->success("Ping complete: {$result['contact_name']} is {$result['online_status']}", [
-      'contact_name' => $result['contact_name'],
-      'online_status' => $result['online_status'],
-      'chain_valid' => $result['chain_valid'],
-      'message' => $result['message']
-    ]);
-  } else {
-    $output->error($result['message'], $result['error'] === 'contact_not_found' ? ErrorCodes::CONTACT_NOT_FOUND : ErrorCodes::GENERAL_ERROR);
-    exit(1);
-  }
-}
+// Contacts: all contact operations live under the `eiou contact …` namespace
+// (see ContactCliHandler). The legacy top-level verbs (add / delete / block /
+// unblock / viewcontact / update / search / ping) were dropped in v0.1.14 in
+// favour of subcommands so apply / decline / per-currency operations have a
+// home and identifier parsing is consistent.
+//
 // Transactions
 elseif($request === "send"){
   // Send eIOU
@@ -221,12 +183,6 @@ elseif($request === "history"){
   $debugService->output("Executing transaction history request", 'SILENT');
   $cliService = $app->services->getCliService();
   $cliService->viewTransactionHistory($cleanArgv, $output);
-}
-elseif($request === "pending"){
-  // View pending contact requests
-  $debugService->output("Executing pending contacts request", 'SILENT');
-  $cliService = $app->services->getCliService();
-  $cliService->displayPendingContacts($cleanArgv, $output);
 }
 elseif($request === "overview"){
   // View wallet overview
@@ -266,10 +222,27 @@ elseif($request === "dlq"){
 }
 // Settings
 elseif($request === "help"){
-  // Help
+  // Help. Top-level commands render via CliHelpService; namespaced verbs
+  // delegate to the namespace handler's own help so there's a single
+  // source of truth for the subcommand tree (no drift between
+  // `eiou help contact` and `eiou contact`).
   $debugService->output("Executing help request", 'SILENT');
-  $cliService = $app->services->getCliService();
-  $cliService->displayHelp($cleanArgv, $output);
+  $helpTarget = isset($cleanArgv[2]) ? strtolower($cleanArgv[2]) : '';
+  if ($helpTarget === 'contact') {
+    $sub = isset($cleanArgv[3]) ? strtolower($cleanArgv[3]) : '';
+    if ($sub === 'currency') {
+      // eiou help contact currency → showCurrencyHelp()
+      $namespaceArgv = ['eiou', 'contact', 'currency', 'help'];
+    } else {
+      // eiou help contact [<anything-else>] → showHelp() (full tree)
+      $namespaceArgv = ['eiou', 'contact', 'help'];
+    }
+    $contactCli = $app->services->getContactCliHandler($output);
+    $contactCli->handleCommand($namespaceArgv);
+  } else {
+    $cliService = $app->services->getCliService();
+    $cliService->displayHelp($cleanArgv, $output);
+  }
 }
 elseif($request === "viewsettings"){
   // View Settings
@@ -335,12 +308,59 @@ elseif($request === "start"){
   $debugService->output("Executing start request", 'SILENT');
   $app->start($output);
 }
+elseif($request === "restart"){
+  // Full node restart: respawn processors AND PHP-FPM workers so freshly
+  // enabled plugins (or any other startup-bound state) take effect without
+  // a container reboot. Requires root inside the container to signal the
+  // PHP-FPM master.
+  $debugService->output("Executing restart request", 'SILENT');
+  $app->restart($output);
+}
+// Plugin management — list/enable/disable. Does NOT restart the node;
+// operator must run `eiou restart` (or hit the REST/GUI equivalent) for
+// enable/disable to take effect, since event subscriptions bind during
+// boot.
+elseif($request === "plugin"){
+  $debugService->output("Executing plugin request", 'SILENT');
+  if ($app->pluginLoader === null) {
+    $output->error('Plugin system not initialized', ErrorCodes::GENERAL_ERROR);
+    exit(1);
+  }
+  $pluginCliService = new \Eiou\Services\CliPluginService(
+    $app->pluginLoader,
+    $app->services->getPluginUninstallService()
+  );
+  $subcommand = strtolower($cleanArgv[2] ?? 'list');
+  if ($subcommand === 'enable') {
+    $pluginCliService->enablePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'disable') {
+    $pluginCliService->disablePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'uninstall') {
+    $pluginCliService->uninstallPlugin($cleanArgv, $output);
+  } else {
+    $pluginCliService->listPlugins($cleanArgv, $output);
+  }
+}
 // API Key Management
 elseif($request === "apikey"){
   // Manage API keys
   $debugService->output("Executing API key management request", 'SILENT');
   $apiKeyService = $app->services->getApiKeyService($output);
   $apiKeyService->handleCommand($cleanArgv);
+}
+// Payback Methods
+elseif($request === "payback"){
+  $debugService->output("Executing payback method management request", 'SILENT');
+  $paybackCli = $app->services->getPaybackMethodCliHandler($output);
+  $paybackCli->handleCommand($cleanArgv);
+}
+// Contacts (new namespace) — replaces the deprecated top-level
+// eiou add/accept/delete/block/unblock/viewcontact/ping/pending/search.
+// See docs/CLI_REFERENCE.md for the full subcommand tree.
+elseif($request === "contact"){
+  $debugService->output("Executing contact request", 'SILENT');
+  $contactCli = $app->services->getContactCliHandler($output);
+  $contactCli->handleCommand($cleanArgv);
 }
 // Backup Management
 elseif($request === "backup"){
@@ -395,14 +415,38 @@ elseif($request === "request"){
       exit(1);
     }
   } elseif ($subcommand === 'approve') {
-    // eiou request approve <request_id>
+    // eiou request approve <request_id> [note]
+    //
+    // [note] is an optional free-form annotation appended to the on-chain
+    // description with " | " (e.g. "paid via coinbase txid abc123"). The
+    // length is capped dynamically against whatever space is left after
+    // the requester's original description; over-long notes are rejected
+    // here rather than silently truncated.
     $requestId = $cleanArgv[3] ?? '';
+    $payerNote = isset($cleanArgv[4]) ? trim((string)$cleanArgv[4]) : '';
     if (empty($requestId)) {
-      $output->error("Usage: eiou request approve <request_id>", ErrorCodes::MISSING_ARGUMENT);
+      $output->error("Usage: eiou request approve <request_id> [note]", ErrorCodes::MISSING_ARGUMENT);
       exit(1);
     }
 
-    $result = $prService->approve($requestId);
+    if ($payerNote !== '') {
+      $existing = $prService->getByRequestId($requestId);
+      if ($existing === null) {
+        $output->error("Payment request not found", ErrorCodes::GENERAL_ERROR);
+        exit(1);
+      }
+      $maxNote = \Eiou\Services\PaymentRequestService::maxPayerNoteLength($existing['description'] ?? null);
+      if ($maxNote === 0) {
+        $output->error("Requester description leaves no room for a note", ErrorCodes::INVALID_ARGUMENT);
+        exit(1);
+      }
+      if (strlen($payerNote) > $maxNote) {
+        $output->error("Note too long (max {$maxNote} chars for this request)", ErrorCodes::INVALID_ARGUMENT);
+        exit(1);
+      }
+    }
+
+    $result = $prService->approve($requestId, $payerNote !== '' ? $payerNote : null);
     if ($result['success']) {
       $output->success($result['message'] ?? "Payment request approved", [
         'request_id' => $requestId,
@@ -554,10 +598,19 @@ elseif($request === "updatecheck"){
   }
 }
 else{
-  // If no known input, display commands possible for input
-  $cliService = $app->services->getCliService();
-  $cliService->displayHelp($cleanArgv, $output);
-  $output->error("Command '$request' not found", ErrorCodes::COMMAND_NOT_FOUND, 404);
+  // Plugin-owned CLI subcommand fallthrough: core's elseif chain didn't
+  // match, so ask the registry before declaring the command unknown. The
+  // registry catches handler exceptions and emits a clean CLI error, so a
+  // buggy plugin can't tear down the process here.
+  $pluginCliRegistry = $app->services->getPluginCliRegistry();
+  if ($pluginCliRegistry->has($request)) {
+    $pluginCliRegistry->dispatch($request, $cleanArgv, $output);
+  } else {
+    // Still unknown — show help and fail loudly.
+    $cliService = $app->services->getCliService();
+    $cliService->displayHelp($cleanArgv, $output);
+    $output->error("Command '$request' not found", ErrorCodes::COMMAND_NOT_FOUND, 404);
+  }
 }
 
 } catch (ValidationServiceException $e) {

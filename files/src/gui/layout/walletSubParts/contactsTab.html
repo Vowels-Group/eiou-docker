@@ -1,0 +1,7 @@
+<?php
+/**
+ * Contacts tab body — registered as 'contacts' in TabRegistry.
+ */
+require_once("/app/eiou/src/gui/layout/walletSubParts/contactSection.html");
+?>
+<?= $hooks->doRender('gui.contacts.after', ['user' => $user]) ?>

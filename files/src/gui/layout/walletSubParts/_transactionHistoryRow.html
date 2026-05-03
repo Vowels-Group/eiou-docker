@@ -50,12 +50,22 @@ $endName = $endContact['name'] ?? null;
 $endHash = $endContact['pubkey_hash'] ?? '';
 
 $description = !empty($tx['description']) ? $tx['description'] : '';
-// Old contact-request txs stored the description as the longer phrase
-// "Contact request transaction"; the current default is the shorter
-// "Contact request". Display the short form regardless of what's stored
-// so users see consistent wording across old + new history.
-if ($description === 'Contact request transaction') {
-    $description = 'Contact request';
+// Display-time normalisation for contact-request descriptions so old + new
+// rows render consistently. Old txs stored the long phrase "Contact request
+// transaction"; an interim default was the bare "Contact request"; the
+// current default is "Contact request (CCY)" so multi-currency rows are
+// self-disambiguating in the history list. Promote any of the older
+// placeholders to the currency-bearing form using the row's own currency.
+if ($isContactReq) {
+    $isPlaceholder = ($description === ''
+        || $description === 'Contact request'
+        || $description === 'Contact request transaction');
+    $rowCcy = strtoupper((string) ($tx['currency'] ?? ''));
+    if ($isPlaceholder && $rowCcy !== '') {
+        $description = "Contact request ({$rowCcy})";
+    } elseif ($description === 'Contact request transaction') {
+        $description = 'Contact request';
+    }
 }
 
 if ($isContactReq) { $typeKey = 'contact'; $typeLabel = 'Contact'; $typeIcon = 'fa-user-plus'; }

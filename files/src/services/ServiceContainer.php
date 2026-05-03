@@ -7,6 +7,7 @@ use Psr\Container\ContainerInterface;
 use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
+use Eiou\Core\AppConfig;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\SyncTriggerInterface;
@@ -229,6 +230,110 @@ class ServiceContainer implements ContainerInterface {
     // repository instances. RepositoryFactory handles lazy creation & caching.
     // =========================================================================
 
+    /**
+     * Get the GUI hook registry. Plugins use this in their boot() to
+     * register render + filter listeners; templates and controllers
+     * call doRender() / applyFilter() at hook fire sites. See
+     * docs/PLUGIN_GUI_HOOKS.md for the full API + slot list.
+     */
+    public function getHooks(): Hooks
+    {
+        if (!isset($this->services['Hooks'])) {
+            $this->services['Hooks'] = new Hooks($this->getAppConfig());
+        }
+        return $this->services['Hooks'];
+    }
+
+    /**
+     * Typed runtime configuration (env-driven flags). Built once per
+     * request via `AppConfig::fromEnvironment()`; consumers depend on
+     * this object instead of calling `getenv()` directly. See
+     * `Eiou\Core\AppConfig` for scope notes.
+     */
+    public function getAppConfig(): AppConfig
+    {
+        if (!isset($this->services['AppConfig'])) {
+            $this->services['AppConfig'] = AppConfig::fromEnvironment();
+        }
+        return $this->services['AppConfig'];
+    }
+
+    /**
+     * Override the AppConfig instance for tests that need to flip a
+     * specific env-driven flag without touching process env. Pass
+     * an `AppConfig::fromEnvironment()->withOverrides([...])` instance.
+     */
+    public function setAppConfig(AppConfig $appConfig): void
+    {
+        $this->services['AppConfig'] = $appConfig;
+    }
+
+    /**
+     * Get the GUI tab registry. Core tabs are registered by
+     * Functions.php on each request; plugins register their tabs in
+     * boot(). wallet.html iterates the registry to build the tab nav
+     * + panels. See docs/PLUGIN_GUI_HOOKS.md.
+     */
+    public function getTabRegistry(): TabRegistry
+    {
+        if (!isset($this->services['TabRegistry'])) {
+            $this->services['TabRegistry'] = new TabRegistry();
+        }
+        return $this->services['TabRegistry'];
+    }
+
+    /**
+     * Get the plugin asset registry. Plugins call enqueueStyle /
+     * enqueueScript in boot(); the registry's renderStyles /
+     * renderScripts are drained by the host render listeners attached
+     * to gui.head.styles / gui.head.scripts / gui.footer.scripts. See
+     * docs/PLUGIN_GUI_HOOKS.md.
+     */
+    public function getAssetRegistry(): PluginAssetRegistry
+    {
+        if (!isset($this->services['PluginAssetRegistry'])) {
+            $this->services['PluginAssetRegistry'] = new PluginAssetRegistry();
+        }
+        return $this->services['PluginAssetRegistry'];
+    }
+
+    /**
+     * Get the GUI action registry. Plugins call register() in boot()
+     * to add new POST handlers; Functions.php dispatches via has() +
+     * the per-tier gates the registry exposes. See
+     * docs/PLUGIN_GUI_HOOKS.md.
+     */
+    public function getActionRegistry(): GuiActionRegistry
+    {
+        if (!isset($this->services['GuiActionRegistry'])) {
+            $this->services['GuiActionRegistry'] = new GuiActionRegistry();
+        }
+        return $this->services['GuiActionRegistry'];
+    }
+
+    /**
+     * Get a per-plugin session store. Each store namespaces its keys
+     * under `plugin_<id>_*` so plugins can't accidentally (or
+     * deliberately) write to core session fields like
+     * SessionKeys::AUTHENTICATED or SessionKeys::CSRF_TOKEN. See
+     * `Eiou\Services\PluginSessionStore` for the supported API and
+     * the trust-boundary discussion.
+     *
+     * Stores are memoised per plugin id — repeat calls with the same
+     * id return the same instance.
+     *
+     * @param string $pluginId Plugin id (kebab-case, must match
+     *                         plugin.json's name field).
+     */
+    public function getPluginSessionStore(string $pluginId): PluginSessionStore
+    {
+        $cacheKey = 'PluginSessionStore.' . $pluginId;
+        if (!isset($this->services[$cacheKey])) {
+            $this->services[$cacheKey] = new PluginSessionStore($pluginId);
+        }
+        return $this->services[$cacheKey];
+    }
+
     /** @return RepositoryFactory */
     public function getRepositoryFactory(): RepositoryFactory {
         if ($this->repositoryFactory === null) {
@@ -293,6 +398,30 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['ContactService'];
+    }
+
+    /**
+     * Get ContactDecisionService instance
+     *
+     * Shared implementation of the batched contact-currency decision flow used
+     * by the GUI batched-apply modal, the `eiou contact apply` CLI, and the
+     * POST /api/v1/contacts/:hash/decisions API endpoint.
+     *
+     * @return \Eiou\Services\ContactDecisionService
+     */
+    public function getContactDecisionService(): \Eiou\Services\ContactDecisionService {
+        if (!isset($this->services['ContactDecisionService'])) {
+            $this->services['ContactDecisionService'] = new \Eiou\Services\ContactDecisionService(
+                $this->getRepositoryFactory()->get(ContactRepository::class),
+                $this->getRepositoryFactory()->get(ContactCurrencyRepository::class),
+                $this->getRepositoryFactory()->get(ContactCreditRepository::class),
+                $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getContactSyncService(),
+                $this->getContactService(),
+                $this->currentUser,
+            );
+        }
+        return $this->services['ContactDecisionService'];
     }
 
     /**
@@ -469,8 +598,10 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRepositoryFactory()->get(TransactionChainRepository::class),
                 $this->getRepositoryFactory()->get(TransactionContactRepository::class),
                 $this->getRepositoryFactory()->get(BalanceRepository::class),
+                $this->getRepositoryFactory()->get(HeldTransactionRepository::class),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getEventDispatcher()
             );
         }
         return $this->services['SyncService'];
@@ -602,9 +733,50 @@ class ServiceContainer implements ContainerInterface {
                 $this->getSendOperationService(),
                 $this->getP2pService()
             );
+            $service->setApprovalService($this->getP2pApprovalService());
             $this->services['CliP2pApprovalService'] = $service;
         }
         return $this->services['CliP2pApprovalService'];
+    }
+
+    /**
+     * Shared approve/reject commit point used by CLI, API, and GUI. Holds
+     * the validation rules and side-effect sequence in one place so every
+     * path emits P2P_APPROVED / P2P_REJECTED consistently.
+     */
+    public function getP2pApprovalService(): P2pApprovalService {
+        if (!isset($this->services['P2pApprovalService'])) {
+            $this->services['P2pApprovalService'] = new P2pApprovalService(
+                $this->getRepositoryFactory()->get(P2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pRepository::class),
+                $this->getRepositoryFactory()->get(Rp2pCandidateRepository::class),
+                $this->getSendOperationService(),
+                $this->getP2pService()
+            );
+        }
+        return $this->services['P2pApprovalService'];
+    }
+
+    /**
+     * Registry for plugin-owned CLI subcommands. Plugins grab this in
+     * boot() and call ->register() to expose `eiou <plugin> ...` verbs.
+     */
+    public function getPluginCliRegistry(): PluginCliRegistry {
+        if (!isset($this->services['PluginCliRegistry'])) {
+            $this->services['PluginCliRegistry'] = new PluginCliRegistry();
+        }
+        return $this->services['PluginCliRegistry'];
+    }
+
+    /**
+     * Registry for plugin-owned REST endpoints under
+     * /api/v1/plugins/{plugin}/{action}. Plugins register in boot().
+     */
+    public function getPluginApiRegistry(): PluginApiRegistry {
+        if (!isset($this->services['PluginApiRegistry'])) {
+            $this->services['PluginApiRegistry'] = new PluginApiRegistry();
+        }
+        return $this->services['PluginApiRegistry'];
     }
 
     /**
@@ -638,7 +810,8 @@ class ServiceContainer implements ContainerInterface {
     public function getCliSettingsService(): CliSettingsService {
         if (!isset($this->services['CliSettingsService'])) {
             $this->services['CliSettingsService'] = new CliSettingsService(
-                $this->currentUser
+                $this->currentUser,
+                $this->getAppConfig()
             );
         }
         return $this->services['CliSettingsService'];
@@ -665,9 +838,21 @@ class ServiceContainer implements ContainerInterface {
      */
     public function getRateLimiterService(): RateLimiterServiceInterface {
         if (!isset($this->services['RateLimiterService'])) {
-            $this->services['RateLimiterService'] = new RateLimiterService(
+            $svc = new RateLimiterService(
                 $this->getRepositoryFactory()->get(RateLimiterRepository::class)
             );
+            // Inject the current UserContext so the limiter can honor the
+            // operator-toggleable `rateLimitEnabled` setting plus the
+            // window/attempts/block overrides. Without this wire-up the
+            // limiter falls back to Constants::RATE_LIMIT_* defaults
+            // forever — the user setting was a no-op for the entire
+            // history of the codebase until this fix. See
+            // RateLimiterService::checkLimit() line 81 for where the
+            // userContext is consulted.
+            if (isset($this->currentUser)) {
+                $svc->setUserContext($this->currentUser);
+            }
+            $this->services['RateLimiterService'] = $svc;
         }
         return $this->services['RateLimiterService'];
     }
@@ -758,6 +943,201 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PaybackMethodService instance
+     *
+     * Orchestrates CRUD for the user's payback-methods profile, wrapping the
+     * PaybackMethodRepository and per-type validator and transparently
+     * encrypting the sensitive fields via KeyEncryption.
+     *
+     * @return \Eiou\Services\PaybackMethodService
+     */
+    public function getPaybackMethodService(): \Eiou\Services\PaybackMethodService {
+        if (!isset($this->services['PaybackMethodService'])) {
+            $registry = $this->getPaybackMethodTypeRegistry();
+            $this->services['PaybackMethodService'] = new \Eiou\Services\PaybackMethodService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodRepository::class),
+                new \Eiou\Validators\PaybackMethodTypeValidator($registry),
+                new \Eiou\Services\SettlementPrecisionService($registry),
+                null,     // logger — defaults
+                $registry
+            );
+        }
+        return $this->services['PaybackMethodService'];
+    }
+
+    /**
+     * Get PaybackMethodTypeRegistry instance.
+     *
+     * Plugin-extensible map of payback-method rail types (BTC, PayPal, …).
+     * Plugins register types against this during their `register()` phase;
+     * the validator + service consult it for non-core ids. Always returns
+     * the same instance within a process so plugin registrations stick
+     * for every subsequent resolver.
+     */
+    public function getPaybackMethodTypeRegistry(): \Eiou\Services\PaybackMethodTypeRegistry {
+        if (!isset($this->services['PaybackMethodTypeRegistry'])) {
+            $this->services['PaybackMethodTypeRegistry'] = new \Eiou\Services\PaybackMethodTypeRegistry();
+        }
+        return $this->services['PaybackMethodTypeRegistry'];
+    }
+
+    /**
+     * Get PaybackMethodCliHandler instance
+     *
+     * Thin CLI surface (list/add/show/edit/remove/share-policy) on top of the
+     * PaybackMethodService.
+     */
+    public function getPaybackMethodCliHandler(CliOutputManager $output): \Eiou\Cli\PaybackMethodCliHandler {
+        return new \Eiou\Cli\PaybackMethodCliHandler(
+            $this->getPaybackMethodService(),
+            $output
+        );
+    }
+
+    /**
+     * Get ContactCliHandler instance
+     *
+     * The full `eiou contact …` and `eiou contact currency …` subcommand
+     * tree. Handler is stateless beyond the injected $output; constructed
+     * per-invocation so tests can pass their own CliOutputManager.
+     */
+    public function getContactCliHandler(CliOutputManager $output): \Eiou\Cli\ContactCliHandler {
+        return new \Eiou\Cli\ContactCliHandler(
+            $this->getContactService(),
+            $this->getContactManagementService(),
+            $this->getContactDecisionService(),
+            $this->getContactStatusService(),
+            $this->getContactSyncService(),
+            $this->getCliService(),
+            $this->getRepositoryFactory()->get(ContactRepository::class),
+            $this->getRepositoryFactory()->get(ContactCurrencyRepository::class),
+            $output,
+        );
+    }
+
+    /**
+     * Get PluginCredentialService instance.
+     *
+     * Generates and stores the encrypted MySQL password for each plugin's
+     * isolated DB user. See docs/PLUGINS.md (Database Isolation).
+     */
+    public function getPluginCredentialService(): \Eiou\Services\PluginCredentialService {
+        if (!isset($this->services['PluginCredentialService'])) {
+            $this->services['PluginCredentialService'] = new \Eiou\Services\PluginCredentialService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PluginCredentialRepository::class)
+            );
+        }
+        return $this->services['PluginCredentialService'];
+    }
+
+    /**
+     * Get PluginSignatureVerifier instance.
+     *
+     * Verifies Ed25519 signatures on plugins against trusted public keys
+     * at /app/eiou/plugins/trusted-keys/ (baked-in, first-party) and
+     * /etc/eiou/plugins/trusted-keys/ (operator-added). See
+     * docs/PLUGINS.md (Plugin Signatures) for the trust model.
+     */
+    public function getPluginSignatureVerifier(): \Eiou\Services\PluginSignatureVerifier {
+        if (!isset($this->services['PluginSignatureVerifier'])) {
+            $this->services['PluginSignatureVerifier'] = new \Eiou\Services\PluginSignatureVerifier();
+        }
+        return $this->services['PluginSignatureVerifier'];
+    }
+
+    /**
+     * Get PluginDbUserService instance.
+     *
+     * Manages MySQL user lifecycle (create / grant / revoke / drop) for
+     * plugins that declare `database.user: true` in their manifest. Runs
+     * as the root/app PDO — user-management DDL is a privileged operation
+     * the plugin users themselves will never hold.
+     *
+     * See docs/PLUGINS.md (Database Isolation).
+     */
+    public function getPluginDbUserService(): \Eiou\Services\PluginDbUserService {
+        if (!isset($this->services['PluginDbUserService'])) {
+            $this->services['PluginDbUserService'] = new \Eiou\Services\PluginDbUserService(
+                $this->getPdo()
+            );
+        }
+        return $this->services['PluginDbUserService'];
+    }
+
+    /**
+     * Get the plugin-authenticated PDO factory. Plugins call
+     * `$container->getPluginPdo('my-plugin')` from their boot() or
+     * runtime code to obtain a PDO that authenticates as their own
+     * isolated MySQL user. Root/app credentials are never exposed to
+     * plugin code.
+     *
+     * Not to be confused with `getPdo()` — that returns the root/app
+     * PDO and should never be called from plugin code.
+     *
+     * See docs/PLUGINS.md (Database Isolation).
+     */
+    public function getPluginPdoFactory(): \Eiou\Services\PluginPdoFactory {
+        if (!isset($this->services['PluginPdoFactory'])) {
+            $this->services['PluginPdoFactory'] = new \Eiou\Services\PluginPdoFactory(
+                $this->getPluginCredentialService()
+            );
+        }
+        return $this->services['PluginPdoFactory'];
+    }
+
+    /**
+     * Get PluginUninstallService instance.
+     *
+     * Runs the full uninstall flow (onUninstall hook, revoke, drop tables,
+     * drop user, delete credentials, rm -rf plugin dir, clean state file).
+     * The plugin must be disabled first — the service refuses to uninstall
+     * an enabled plugin.
+     */
+    public function getPluginUninstallService(): \Eiou\Services\PluginUninstallService {
+        if (!isset($this->services['PluginUninstallService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PluginUninstallService'] = new \Eiou\Services\PluginUninstallService(
+                $app->pluginLoader,
+                $this->getPluginCredentialService(),
+                $this->getPluginDbUserService(),
+                $this->getPluginPdoFactory(),
+                $this->getPdo()
+            );
+        }
+        return $this->services['PluginUninstallService'];
+    }
+
+    /**
+     * Convenience wrapper that returns a PDO authenticated as the given
+     * plugin's MySQL user. Identical to calling
+     * `$container->getPluginPdoFactory()->getFor($pluginId)`. Cached
+     * per-plugin for the lifetime of the request.
+     *
+     * @throws \InvalidArgumentException Plugin id fails validation
+     * @throws \RuntimeException Plugin has no stored credentials, or connect failed
+     */
+    public function getPluginPdo(string $pluginId): \PDO {
+        return $this->getPluginPdoFactory()->getFor($pluginId);
+    }
+
+    /**
+     * Get ReceivedPaybackMethodService instance
+     *
+     * Handles the E2E contact-fetch flow for payback methods: outgoing
+     * requests, incoming request/response/revoke handlers, and the
+     * TTL-cached list surfaced by the contact-modal "Payback Options" view.
+     */
+    public function getReceivedPaybackMethodService(): \Eiou\Services\ReceivedPaybackMethodService {
+        if (!isset($this->services['ReceivedPaybackMethodService'])) {
+            $this->services['ReceivedPaybackMethodService'] = new \Eiou\Services\ReceivedPaybackMethodService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodReceivedRepository::class),
+                $this->getPaybackMethodService()
+            );
+        }
+        return $this->services['ReceivedPaybackMethodService'];
+    }
+
+    /**
      * Get BackupService instance
      *
      * Provides database backup and restore functionality with encryption.
@@ -831,6 +1211,7 @@ class ServiceContainer implements ContainerInterface {
         if (!isset($this->services['TransactionValidationService'])) {
             $this->services['TransactionValidationService'] = new TransactionValidationService(
                 $this->getRepositoryFactory()->get(TransactionRepository::class),
+                $this->getRepositoryFactory()->get(TransactionChainRepository::class),
                 $this->getContactService(),
                 $this->getUtilityContainer()->getValidationUtility(),
                 $this->getInputValidator(),

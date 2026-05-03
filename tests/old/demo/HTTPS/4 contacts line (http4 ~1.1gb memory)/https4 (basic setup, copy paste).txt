@@ -14,16 +14,16 @@ docker volume rm https3-mysql-data https3-config https3-backups https3-letsencry
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped  --network=demo-net --name https0 -v "https0-mysql-data:/var/lib/mysql" -v "https0-config:/etc/eiou/config" -v "https0-backups:/var/lib/eiou/backups" -v "https0-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https0 eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name https1 -v "https1-mysql-data:/var/lib/mysql" -v "https1-config:/etc/eiou/config" -v "https1-backups:/var/lib/eiou/backups" -v "https1-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https1 eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name https2 -v "https2-mysql-data:/var/lib/mysql" -v "https2-config:/etc/eiou/config" -v "https2-backups:/var/lib/eiou/backups" -v "https2-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https2 eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name https3 -v "https3-mysql-data:/var/lib/mysql" -v "https3-config:/etc/eiou/config" -v "https3-backups:/var/lib/eiou/backups" -v "https3-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https3 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name https0 -v "https0-mysql-data:/var/lib/mysql" -v "https0-config:/etc/eiou/config" -v "https0-plugins:/etc/eiou/plugins" -v "https0-backups:/var/lib/eiou/backups" -v "https0-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https0 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name https1 -v "https1-mysql-data:/var/lib/mysql" -v "https1-config:/etc/eiou/config" -v "https1-plugins:/etc/eiou/plugins" -v "https1-backups:/var/lib/eiou/backups" -v "https1-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https1 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name https2 -v "https2-mysql-data:/var/lib/mysql" -v "https2-config:/etc/eiou/config" -v "https2-plugins:/etc/eiou/plugins" -v "https2-backups:/var/lib/eiou/backups" -v "https2-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https2 eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name https3 -v "https3-mysql-data:/var/lib/mysql" -v "https3-config:/etc/eiou/config" -v "https3-plugins:/etc/eiou/plugins" -v "https3-backups:/var/lib/eiou/backups" -v "https3-letsencrypt:/etc/letsencrypt" -e QUICKSTART=https3 eiou/eiou
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts
-docker exec https0 eiou add https://https1 https1 0.1 1000 USD
-docker exec https1 eiou add https://https0 https0 0.1 1000 USD
-docker exec https1 eiou add https://https2 https2 0.1 1000 USD
-docker exec https2 eiou add https://https1 https1 0.1 1000 USD
-docker exec https2 eiou add https://https3 https3 0.1 1000 USD
-docker exec https3 eiou add https://https2 https2 0.1 1000 USD
+docker exec https0 eiou contact add https://https1 https1 --fee 0.1 --credit 1000 --currency USD
+docker exec https1 eiou contact add https://https0 https0 --fee 0.1 --credit 1000 --currency USD
+docker exec https1 eiou contact add https://https2 https2 --fee 0.1 --credit 1000 --currency USD
+docker exec https2 eiou contact add https://https1 https1 --fee 0.1 --credit 1000 --currency USD
+docker exec https2 eiou contact add https://https3 https3 --fee 0.1 --credit 1000 --currency USD
+docker exec https3 eiou contact add https://https2 https2 --fee 0.1 --credit 1000 --currency USD

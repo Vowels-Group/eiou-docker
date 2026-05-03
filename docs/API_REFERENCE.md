@@ -13,7 +13,8 @@ Complete API documentation for the eIOU Docker node REST API.
 7. [System Endpoints](#system-endpoints)
 8. [Tx Drop Endpoints](#tx-drop-endpoints)
 9. [Backup Endpoints](#backup-endpoints)
-10. [API Key Management](#api-key-management)
+10. [Payback Methods Endpoints](#payback-methods-endpoints)
+11. [API Key Management](#api-key-management)
 
 ---
 
@@ -973,6 +974,178 @@ Unblock a contact.
 
 ---
 
+### POST /api/v1/contacts/:hash/decisions
+
+Apply a batched mix of accept / decline / defer decisions on an incoming contact request — the API mirror of the GUI batched-apply modal and `eiou contact apply`. Implementation is shared via `ContactDecisionService::apply()` so all three surfaces have identical partition + declines-first + first-accept-via-add semantics.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{
+    "decisions": [
+        {"currency": "USD", "action": "accept", "fee": "0.01", "credit": "1000"},
+        {"currency": "EUR", "action": "decline"},
+        {"currency": "XRP", "action": "defer"}
+    ],
+    "is_new_contact": true,
+    "contact_address": "http://bob.local:8080",
+    "contact_name": "Bob"
+}
+```
+
+`defer` rows are intentional no-ops — drop them from the payload to skip a currency. `is_new_contact`, `contact_address`, `contact_name` are required only when the contact is still pending; for an already-accepted contact those three are ignored.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"accepted": ["USD"], "declined": ["EUR"], "errors": []}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/decline
+
+Decline every pending currency on an incoming contact request in one shot. Idempotent — returns a 200 with an empty `declined[]` if there were no pending currencies.
+
+**Permission:** `contacts:write`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Contact request declined", "declined": ["USD", "EUR"]}
+}
+```
+
+If a per-currency decline throws, the endpoint returns 500 with `partial_decline_failure` and both `declined` and `errors` in the error context so callers don't need to re-query.
+
+**Decline notifications.** Each declined currency triggers an async `contact_currency_declined` send to the requester so their outgoing-pending row is dropped without a manual retry on their side. After the per-currency loop, a single `contact_declined` is sent so the requester's contact transaction itself is rejected. Both sends are async-best-effort — first attempt synchronous, failures land in the DLQ. The next ping/pong cycle reconciles any drift via the `peerKnownCurrencies` payload field.
+
+---
+
+### GET /api/v1/contacts/:hash/currencies
+
+List every currency configured for a contact (incoming + outgoing, pending + accepted + declined). Mirrors `eiou contact currency list`.
+
+**Permission:** `contacts:read`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "pubkey_hash": "abc123...",
+        "currencies": [
+            {"currency": "USD", "status": "accepted", "direction": "incoming", "fee_percent": 100, "credit_limit": "1000"},
+            {"currency": "EUR", "status": "pending",  "direction": "incoming"}
+        ]
+    }
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currencies
+
+Propose a new currency to an already-accepted contact. Persists the local `contact_currency` row and sends a P2P request so the remote side can accept. Mirrors `eiou contact currency add`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR", "fee": "0.02", "credit": "500"}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Currency added", "currency": "EUR"}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currency-accept
+
+Accept a single pending currency. Routes through `ContactDecisionService::apply()` so the new-contact-first-accept-via-add semantics match the GUI batched-apply flow. Mirrors `eiou contact currency accept`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR", "fee": "0.02", "credit": "500"}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"accepted": ["EUR"], "declined": [], "errors": []}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currency-decline
+
+Decline a single pending currency. Mirrors `eiou contact currency decline`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR"}
+```
+
+A `contact_currency_declined` notification is sent to the requester so their outgoing-pending row clears immediately. If the message is lost in flight (DLQ exhausts retries), the next ping/pong reconciles via `peerKnownCurrencies`. The requester's retry succeeds in either case — `addContact`'s dispatcher detects a stale outgoing-pending row and routes it through `addCurrencyToExisting` instead of returning `CONTACT_EXISTS`.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Currency EUR declined", "currency": "EUR"}
+}
+```
+
+---
+
+### POST /api/v1/contacts/:hash/currency-remove
+
+Locally remove a currency configuration. Local-only — the peer is not notified. Use `currency-decline` to reject an incoming pending request, not this. Mirrors `eiou contact currency remove`.
+
+**Permission:** `contacts:write`
+
+**Request Body:**
+
+```json
+{"currency": "EUR"}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {"message": "Currency EUR removed locally", "currency": "EUR"}
+}
+```
+
+---
+
 ## Payment Request Endpoints
 
 Payment requests let a user ask a contact to pay them a specific amount. The recipient can approve (which triggers `sendEiou` automatically) or decline. Both sides store the request locally; status updates are delivered via `payment_request` messages.
@@ -1080,9 +1253,14 @@ Approve an incoming payment request. Internally calls `sendEiou` to the requeste
 
 ```json
 {
-  "request_id": "abc123def456..."
+  "request_id": "abc123def456...",
+  "payer_note": "paid via coinbase txid abc"
 }
 ```
+
+`payer_note` is **optional**. When supplied, it's appended to the on-chain transaction description with `" | "` so the final description becomes `"payment: <requester's description> | <your note>"`. The `"payment: "` prefix is dropped automatically if the joined string would otherwise exceed the 255-char on-chain ceiling.
+
+The note is length-capped *against this specific request's existing description* — `max_note = 255 − len(requester_description) − 3` (separator). The server rejects an over-long note with HTTP 400 + error code `payer_note_too_long` rather than silently truncating; if the requester's description already fills the budget the rejection message reads "Requester description leaves no room for a note". Whitespace-only notes are treated as no note.
 
 **Response:**
 
@@ -1096,7 +1274,7 @@ Approve an incoming payment request. Internally calls `sendEiou` to the requeste
 }
 ```
 
-Returns an error if: request not found, direction is not `incoming`, status is not `pending`, no return address on the request, or `sendEiou` fails.
+Returns an error if: request not found, direction is not `incoming`, status is not `pending`, no return address on the request, the supplied `payer_note` exceeds the dynamic cap, or `sendEiou` fails.
 
 ---
 
@@ -1379,7 +1557,7 @@ Get system settings.
 
 Update system settings.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Request Body:**
 
@@ -1533,7 +1711,7 @@ Trigger a manual update check against Docker Hub and GitHub Releases. Bypasses t
 
 Trigger a sync operation to synchronize data with contacts.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Request Body (optional):**
 
@@ -1566,7 +1744,7 @@ Trigger a sync operation to synchronize data with contacts.
 
 Shutdown background processors. The API remains responsive; only background workers (P2P, transaction processor, etc.) are terminated.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Response:**
 
@@ -1595,7 +1773,7 @@ Shutdown background processors. The API remains responsive; only background work
 
 Start background processors by removing the shutdown flag. The watchdog process will detect the flag removal and restart processors automatically.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Response (processors were stopped):**
 
@@ -1622,6 +1800,35 @@ Start background processors by removing the shutdown flag. The watchdog process 
     }
 }
 ```
+
+---
+
+### POST /api/v1/system/restart
+
+Request a full in-place node restart — both the background processors **and** the PHP-FPM workers. Required after toggling plugins (or any other state bound at boot) so event subscriptions rebind without a container reboot.
+
+The API runs as `www-data` and cannot signal the root-owned PHP-FPM master directly, so this endpoint writes a request marker that the root-side poller in `startup.sh` picks up within ~2 seconds and turns into the equivalent of `eiou restart`. Rate-limited to one restart per 10 seconds at the poller; rapid duplicate calls return success but only the first is acted on.
+
+**Permission:** `system:write` (or `admin`)
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Restart requested. The node will respawn its workers within a few seconds.",
+        "expected_restart_within_seconds": 5
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `request_write_failed` | 500 | The request marker could not be written |
+| `restart_error` | 500 | Unhandled exception while requesting the restart |
 
 ---
 
@@ -1788,9 +1995,11 @@ Propose a tx drop with a contact. This initiates the process of mutually droppin
 
 ### POST /api/v1/chaindrop/accept
 
-Accept a pending tx drop proposal.
+Accept a pending tx drop proposal. **Irreversible chain rewrite** — drops the missing transactions, re-signs surrounding transactions on both sides, recalculates balances. Asymmetric with `propose` (which is just a sent request, non-destructive on this node) and `reject` (declines, leaves gap).
 
-**Permission:** `wallet:send`
+The server-side auto-accept policy (env `EIOU_AUTO_CHAIN_DROP_ACCEPT`) handles the routine case automatically; this endpoint is for manual operator override.
+
+**Permission:** `admin` (not `wallet:send`, because of the chain-rewrite blast radius)
 
 **Request Body:**
 
@@ -2306,6 +2515,412 @@ Remove old backup files, keeping only the most recent (default: 3).
 
 ---
 
+## Payback Methods Endpoints
+
+Manage this node's own payback methods — the settlement rails (bank wire, PayPal, Bitcoin, custom free-text, etc.) you offer contacts so they can settle debts they owe you. Every row is encrypted at rest per-row (AES-256-GCM keyed to the wallet); sensitive fields only leave the node via the explicit `reveal` endpoint or when a contact fetches them over the E2E fetch flow.
+
+**Permissions:**
+
+| Scope | Grants |
+|-------|--------|
+| `payback:read` | `GET /api/v1/payback-methods`, `GET /api/v1/payback-methods/{id}` — list and view with masked sensitive fields |
+| `payback:write` | every mutation (`POST`, `PUT`, `DELETE`) **and** `GET /api/v1/payback-methods/{id}/reveal` — the reveal endpoint returns plaintext so it's treated as a write-class operation |
+| `admin` | everything above |
+
+Types on the wire: core ships `bank_wire` (sub-rails `sepa`, `faster_payments`, `ach`, `fednow`, `swift`) and `custom` (free-text ≤ 1024 chars). Plugins register additional rails (`btc`, `paypal`, `bizum`, `pix`, `upi`, etc.) — see `docs/PLUGINS.md`.
+
+### GET /api/v1/payback-methods
+
+List this node's payback methods. Sensitive fields are returned as a short `masked_display` string; the full field values are only accessible via `/reveal`.
+
+**Permission:** `payback:read`
+
+**Query Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `currency` | string | Filter to a single currency code (uppercase). If omitted, returns all currencies. |
+| `all` | `0` / `1` | Set to `1` to also include disabled rows. Default `0` (enabled-only). |
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "methods": [
+            {
+                "method_id": "pbm_01HV6...",
+                "type": "bank_wire",
+                "label": "Chase checking",
+                "currency": "USD",
+                "priority": 100,
+                "enabled": true,
+                "share_policy": "auto",
+                "settlement_min_unit": 1,
+                "settlement_min_unit_exponent": -2,
+                "masked_display": "••••4409",
+                "created_at": "2026-04-01T10:30:00Z",
+                "updated_at": "2026-04-01T10:30:00Z"
+            }
+        ],
+        "count": 1
+    }
+}
+```
+
+Rows are ordered by `priority ASC, created_at DESC`.
+
+---
+
+### POST /api/v1/payback-methods
+
+Create a new payback method.
+
+**Permission:** `payback:write`
+
+**Request Body:**
+
+```json
+{
+    "type": "bank_wire",
+    "label": "Chase checking",
+    "currency": "USD",
+    "fields": {
+        "rail": "ach",
+        "recipient_name": "Jane Doe",
+        "routing_number": "021000021",
+        "account_number": "1234567890",
+        "account_type": "checking"
+    },
+    "share_policy": "auto",
+    "priority": 100
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `type` | string | Yes | — | `bank_wire`, `custom`, or a plugin-registered type id |
+| `label` | string | Yes | — | Human label (≤ 128 chars) — not encrypted, shown in lists |
+| `currency` | string | Yes | — | ISO-4217 or declared asset code (uppercased server-side) |
+| `fields` | object | Yes | — | Type-specific fields. Shape depends on `type` / `rail` — see the relevant `PaybackMethodTypeContract` for the schema |
+| `share_policy` | string | No | `auto` | `auto` or `never` |
+| `priority` | integer | No | `100` | 0–9999, lower = preferred when multiple methods match the same currency |
+
+**Response (201 Created):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6..."
+    }
+}
+```
+
+**Validation errors (400):**
+
+```json
+{
+    "success": false,
+    "error": "validation_failed",
+    "message": "Validation failed",
+    "data": {
+        "errors": [
+            { "field": "fields.iban", "code": "iban_checksum", "message": "IBAN mod-97 checksum failed" }
+        ]
+    }
+}
+```
+
+---
+
+### GET /api/v1/payback-methods/:id
+
+Fetch a single payback method with sensitive fields masked.
+
+**Permission:** `payback:read`
+
+**Response:** same row shape as the list endpoint, wrapped in `{"method": {...}}`.
+
+**404 Not Found** if the `method_id` does not exist.
+
+---
+
+### GET /api/v1/payback-methods/:id/reveal
+
+Fetch a single payback method with **all fields decrypted** to plaintext. Use this when the caller needs to actually display or copy the IBAN / account number / Bitcoin address / etc.
+
+**Permission:** `payback:write` — reveal exposes sensitive plaintext and is treated as a write-class operation so a read-only key cannot exfiltrate it.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method": {
+            "method_id": "pbm_01HV6...",
+            "type": "bank_wire",
+            "label": "Chase checking",
+            "currency": "USD",
+            "priority": 100,
+            "share_policy": "auto",
+            "fields": {
+                "rail": "ach",
+                "recipient_name": "Jane Doe",
+                "routing_number": "021000021",
+                "account_number": "1234567890",
+                "account_type": "checking"
+            },
+            "settlement_min_unit": 1,
+            "settlement_min_unit_exponent": -2,
+            "created_at": "2026-04-01T10:30:00Z",
+            "updated_at": "2026-04-01T10:30:00Z"
+        }
+    }
+}
+```
+
+---
+
+### PUT /api/v1/payback-methods/:id
+
+Update an existing payback method. All fields in the body are optional — only those present are applied. To atomically re-encrypt the sensitive fields, send the complete `fields` object (partial field updates are not supported since the encrypted blob is rewritten wholesale).
+
+**Permission:** `payback:write`
+
+**Request Body (all fields optional):**
+
+```json
+{
+    "label": "Chase – primary",
+    "share_policy": "auto",
+    "priority": 50,
+    "enabled": true,
+    "fields": { ... }
+}
+```
+
+Only `label`, `share_policy`, `priority`, `enabled`, and `fields` are accepted — every other key in the body is silently ignored.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6..."
+    }
+}
+```
+
+**404 Not Found** if the id does not exist. Validation errors follow the same shape as `POST`.
+
+---
+
+### PUT /api/v1/payback-methods/:id/share-policy
+
+Update only the share policy on an existing method. Equivalent to `PUT /api/v1/payback-methods/:id` with `{"share_policy": "..."}` but scoped so automation that only touches share policies can document intent clearly.
+
+**Permission:** `payback:write`
+
+**Request Body:**
+
+```json
+{
+    "share_policy": "never"
+}
+```
+
+Accepted values: `auto`, `prompt`, `never`.
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6...",
+        "share_policy": "never"
+    }
+}
+```
+
+---
+
+### DELETE /api/v1/payback-methods/:id
+
+Permanently delete a payback method. The encrypted row is dropped; there is no soft-delete / tombstone — a fresh ID is issued if you recreate a method with the same label.
+
+**Permission:** `payback:write`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "method_id": "pbm_01HV6...",
+        "deleted": true
+    }
+}
+```
+
+**404 Not Found** if the id does not exist.
+
+---
+
+## Plugin Endpoints
+
+Plugin management endpoints. All require `admin`. Toggling a plugin's enabled flag does **not** restart the node — follow up with `POST /api/v1/system/restart` (or `eiou restart` on the host) for the change to take effect, since event subscriptions bind during boot.
+
+The plugin name is validated against `^[a-z0-9][a-z0-9-_]{0,63}$` (kebab-case alphanumerics).
+
+---
+
+### GET /api/v1/plugins
+
+List every discovered plugin with full metadata (author, homepage, changelog, license, has_changelog).
+
+**Permission:** `admin`
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugins": [
+            {
+                "name": "hello-eiou",
+                "version": "0.1.0",
+                "enabled": true,
+                "status": "active",
+                "license": "MIT",
+                "author": "Example Author",
+                "homepage": "https://example.org/hello-eiou",
+                "has_changelog": true
+            }
+        ]
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `plugin_loader_unavailable` | 500 | Plugin system is not initialized on this node |
+
+---
+
+### POST /api/v1/plugins/:name/enable
+
+Persist `enabled = true` for the named plugin. Does not restart.
+
+**Permission:** `admin`
+
+**Path parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | string | Plugin name (kebab-case alphanumerics, ≤ 64 chars) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugin": "hello-eiou",
+        "enabled": true,
+        "restart_required": true,
+        "message": "Plugin state persisted. POST /api/v1/system/restart to apply."
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `invalid_name` | 400 | Plugin name failed the regex validation |
+| `unknown_plugin` | 404 | Plugin not found in the discovered set |
+| `persist_failed` | 500 | Could not write the plugin state to disk |
+| `plugin_loader_unavailable` | 500 | Plugin system is not initialized on this node |
+
+---
+
+### POST /api/v1/plugins/:name/disable
+
+Persist `enabled = false` for the named plugin. Does not restart.
+
+**Permission:** `admin`
+
+Same path parameters and response shape as `enable`, with `enabled: false`.
+
+---
+
+### DELETE /api/v1/plugins/:name
+
+Permanently uninstall a plugin. The plugin must be disabled first; an attempt to uninstall an enabled plugin returns 409 Conflict.
+
+Runs the full step sequence: `onUninstall` hook → revoke MySQL grants → drop tables → drop user → delete credentials → remove files → clean state. The response carries a per-step status so partial failures (e.g. plugin files removed but a DB-side cleanup step reported an error) are surfacable.
+
+**Permission:** `admin`
+
+**Path parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | string | Plugin name (kebab-case alphanumerics, ≤ 64 chars) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugin": "hello-eiou",
+        "uninstalled": true,
+        "steps": {
+            "on_uninstall_hook": "ok",
+            "revoke_grants": "ok",
+            "drop_tables": "ok",
+            "drop_user": "ok",
+            "delete_credentials": "ok",
+            "remove_files": "ok",
+            "clean_state": "ok"
+        }
+    }
+}
+```
+
+**Response (partial failure — `success: false` with `200`):** plugin files were removed on disk but at least one MySQL-side step reported an error. Inspect `steps` and resolve manually; the plugin is gone.
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `invalid_name` | 400 | Plugin name failed the regex validation |
+| `unknown_plugin` | 404 | Plugin not found |
+| `plugin_enabled` | 409 | Plugin is still enabled — disable first |
+
+---
+
+### Plugin-owned endpoints
+
+Plugins can register their own routes via `PluginApiRegistry`. Shape:
+
+```
+ANY /api/v1/plugins/:name/:action
+```
+
+Permission gating is set by the registering plugin (typically `admin`). Failures from a misbehaving plugin return a clean error response — they cannot tear down the controller.
+
+---
+
 ## API Key Management
 
 These endpoints require `admin` permission.
@@ -2369,17 +2984,23 @@ Create a new API key.
 | Permission | Description |
 |------------|-------------|
 | `wallet:read` | Read wallet balances and transactions |
-| `wallet:send` | Send transactions |
-| `wallet:*` | All wallet permissions |
-| `contacts:read` | Read contacts |
-| `contacts:write` | Add, update, delete contacts |
-| `contacts:*` | All contact permissions |
-| `system:read` | Read system status and metrics |
-| `backup:read` | Read backup status and list, verify backups |
-| `backup:write` | Create, restore, delete backups, enable/disable auto-backup |
-| `backup:*` | All backup permissions |
-| `admin` | Full administrative access |
-| `all` | All permissions |
+| `wallet:send` | Send transactions, propose/accept/reject chain drops, approve/reject P2P |
+| `wallet:*` | Both `wallet:read` and `wallet:send` |
+| `contacts:read` | List, view, search, and ping contacts |
+| `contacts:write` | Add, update, delete, block/unblock contacts; per-currency operations |
+| `contacts:*` | Both `contacts:read` and `contacts:write` |
+| `system:read` | Read system status, metrics, and settings; download debug reports; trigger update-check |
+| `system:write` | Trigger sync, shutdown/start/restart, change settings (operational control of this node) |
+| `system:*` | Both `system:read` and `system:write` |
+| `backup:read` | Read backup status/list, verify backups |
+| `backup:write` | Create, restore, delete, enable/disable backups, cleanup |
+| `backup:*` | Both `backup:read` and `backup:write` |
+| `payback:read` | List/read your own payback methods (sensitive fields redacted) |
+| `payback:write` | Create/edit/delete methods, AND reveal plaintext via `GET /payback-methods/:id/reveal` (write-class because it returns secrets) |
+| `payback:*` | Both `payback:read` and `payback:write` |
+| `admin` | Full administrative access (settings, sync, shutdown/start/restart, key management, plugin management). Implies every other scope. |
+
+> **Wildcard semantics:** `<category>:*` grants any `<category>:<verb>` request — `wallet:*` covers anything that requires `wallet:read` or `wallet:send`. There is currently no `plugin:*` scope; key management (`/keys/*`) and plugin management (`/plugins/*`) require `admin`. Operational control (`/system/sync`, `shutdown`, `start`, `restart`, `PUT /system/settings`) was carved out from `admin` into `system:write` so a CI/automation key can poke the node without also unlocking key minting and plugin install.
 
 **Response (201 Created):**
 

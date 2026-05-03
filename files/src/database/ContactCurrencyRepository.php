@@ -415,7 +415,7 @@ class ContactCurrencyRepository extends AbstractRepository {
     public function getPendingCurrencies(string $pubkeyHash, ?string $direction = null): array {
         $params = [':pubkey_hash' => $pubkeyHash];
 
-        $query = "SELECT currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction
+        $query = "SELECT currency, fee_percent, credit_limit_whole, credit_limit_frac, status, direction, created_at
                   FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash AND status = 'pending'";
 
@@ -443,6 +443,7 @@ class ContactCurrencyRepository extends AbstractRepository {
                     : null,
                 'status' => $row['status'],
                 'direction' => $row['direction'],
+                'created_at' => $row['created_at'] ?? null,
             ];
         }, $rows);
     }
@@ -511,6 +512,59 @@ class ContactCurrencyRepository extends AbstractRepository {
      * @param string $currency Currency code (e.g. 'MXN')
      * @return bool True if a row was deleted
      */
+    /**
+     * Currency codes the responder advertises in the `peerKnownCurrencies`
+     * pong field. Only includes rows that are *useful* to the requesting
+     * peer's reconciliation:
+     *
+     *   - direction='incoming'  AND status='pending'  — peer's outgoing-pending
+     *     should still be in flight; matches their row, no reconcile.
+     *   - status='accepted'     (any direction)       — both sides agreed;
+     *     matches the peer's pending or accepted row.
+     *
+     * Excluded:
+     *   - direction='outgoing' AND status='pending' — these are MY own
+     *     not-yet-delivered requests; the peer doesn't need to know about
+     *     them yet. Telling them prematurely would leak that "I'm planning
+     *     to ask you something" before the actual request arrives. They
+     *     find out via the request message itself.
+     *
+     * @param string $pubkeyHash The peer's pubkey hash
+     * @return string[] Currency codes, unsorted
+     */
+    public function getPeerVisibleCurrencyCodes(string $pubkeyHash): array {
+        $stmt = $this->execute(
+            "SELECT DISTINCT currency FROM {$this->tableName}
+             WHERE pubkey_hash = :pubkey_hash
+               AND (
+                   status = 'accepted'
+                   OR (direction = 'incoming' AND status = 'pending')
+               )",
+            [':pubkey_hash' => $pubkeyHash]
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return is_array($rows) ? array_values(array_filter($rows, 'is_string')) : [];
+    }
+
+    public function deletePendingOutgoingCurrency(string $pubkeyHash, string $currency): bool {
+        $query = "DELETE FROM {$this->tableName}
+                  WHERE pubkey_hash = :pubkey_hash
+                    AND currency = :currency
+                    AND direction = 'outgoing'
+                    AND status = 'pending'";
+        $stmt = $this->execute($query, [
+            ':pubkey_hash' => $pubkeyHash,
+            ':currency' => $currency,
+        ]);
+        if (!$stmt) {
+            return false;
+        }
+        return $stmt->rowCount() > 0;
+    }
+
     public function declineIncomingCurrency(string $pubkeyHash, string $currency): bool {
         $query = "DELETE FROM {$this->tableName}
                   WHERE pubkey_hash = :pubkey_hash

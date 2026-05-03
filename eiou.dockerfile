@@ -205,6 +205,16 @@ COPY files/src/ /app/eiou/src/
 # Copy scripts (analytics-cron, backup-cron, update-check-cron, validate-autoload)
 COPY files/scripts/ /app/eiou/scripts/
 
+# Copy bundled plugins (e.g. hello-eiou). Seeded into /etc/eiou/plugins/ at
+# startup if not already present, so users can override or remove them.
+COPY files/plugins/ /app/plugins/
+
+# Baked-in trusted plugin-signing keys (read-only, shipped with the image).
+# Only first-party / eIOU-official keys belong here; operators add their
+# own trusted keys to /etc/eiou/plugins/trusted-keys/ on the plugins volume.
+# See docs/PLUGINS.md → Plugin Signatures.
+COPY files/trusted-plugin-keys/ /app/eiou/plugins/trusted-keys/
+
 # Copy composer.json (needed for autoloader path reference)
 COPY files/composer.json /app/eiou/composer.json
 
@@ -264,12 +274,15 @@ RUN printf '/var/log/nginx/*.log {\n    weekly\n    rotate 4\n    compress\n    
 # Persistent volumes:
 # - /var/lib/mysql: Database files (transactions, contacts, balances)
 # - /etc/eiou/config: Wallet configuration, encryption keys
+# - /etc/eiou/plugins: Installed plugins (seeded from /app/plugins/ on first boot
+#   via startup.sh using `cp -rn`, so operator-installed plugins survive image
+#   upgrades and bundled-plugin removals persist)
 # - /var/lib/eiou/backups: Encrypted database backups
 # - /etc/letsencrypt: Let's Encrypt certificates and renewal state
 #
 # Source code is NOT in a volume — it lives in /app/eiou/ (image filesystem)
 # and updates automatically with each new image build.
-VOLUME ["/var/lib/mysql", "/etc/eiou/config", "/var/lib/eiou/backups", "/etc/letsencrypt"]
+VOLUME ["/var/lib/mysql", "/etc/eiou/config", "/etc/eiou/plugins", "/var/lib/eiou/backups", "/etc/letsencrypt"]
 
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/

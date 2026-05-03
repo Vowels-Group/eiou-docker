@@ -11,8 +11,10 @@ use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Database\DebugRepository;
 use Eiou\Services\DebugReportService;
+use Eiou\Services\GuiActionRegistry;
 use PDO;
 use Exception;
+use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Helpers\MessageHelper;
 
 /**
@@ -49,6 +51,84 @@ class SettingsController
     }
 
     /**
+     * Register every action this controller owns with the shared
+     * GuiActionRegistry so Functions.php's dispatcher can route POSTs
+     * via the registry instead of a hardcoded if-ladder.
+     *
+     * Tier choice preserves existing behavior verbatim — the migration
+     * is structural, not policy. HTML-redirect handlers register at
+     * TIER_AUTH and keep their inline verifyCSRFToken() call so:
+     *   - the token still rotates on success (registry's CSRF check
+     *     does not rotate);
+     *   - CSRF failure still emits a plain-text 403, not the registry's
+     *     JSON envelope (which would render as raw JSON in the user's
+     *     browser after a form submit).
+     * JSON-AJAX handlers register at TIER_CSRF — the registry's
+     * non-rotating check + JSON-on-failure response shape matches what
+     * AJAX callers already expect.
+     */
+    public function registerActions(GuiActionRegistry $registry): void
+    {
+        // HTML-redirect actions — TIER_AUTH preserves rotate-on-success
+        // and the plain-text 403 failure response.
+        $registry->register('updateSettings',     [$this, 'handleUpdateSettings'],     GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('resetToDefaults',    [$this, 'handleResetToDefaults'],    GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('clearDebugLogs',     [$this, 'handleClearDebugLogs'],     GuiActionRegistry::TIER_AUTH, 'core');
+        $registry->register('sendDebugReport',    [$this, 'handleSendDebugReport'],    GuiActionRegistry::TIER_AUTH, 'core');
+
+        // JSON-AJAX actions — TIER_CSRF aligns with the existing
+        // non-rotating check. The handlers' own inline CSRF checks
+        // (where present) become redundant on the success path; we
+        // keep them for now (defense-in-depth + zero behavior change).
+        //
+        // Each is wrapped in a closure that:
+        //   (a) sets `Content-Type: application/json` BEFORE the handler
+        //       runs (Functions.php's pre-dispatch branches did this for
+        //       defense-in-depth; preserve so a handler that dies before
+        //       its own header() call still emits valid JSON);
+        //   (b) catches Exception and emits the LEGACY error envelope
+        //       (`{"success": false, "error": "Server error: …"}` for
+        //       analyticsConsent, `{"error": "Server error: …"}` for the
+        //       debug-report endpoints) so JS clients reading
+        //       `parsedData.error` get byte-identical text to today.
+        // The registry's own catch (in Functions.php) would emit a
+        // different envelope shape (`{"success":false,"error":"server_error","message":"…"}`)
+        // which is fine for plugin handlers but a UX regression for
+        // these long-standing core endpoints.
+        $registry->register('analyticsConsent', function (array $request): void {
+            try {
+                $this->handleAnalyticsConsent();
+                exit;
+            } catch (Exception $e) {
+                // GuiErrorResponse keeps `error` as the human-readable
+                // string the legacy JS reader expects AND adds a `code`
+                // field for forward dispatch.
+                GuiErrorResponse::send('analytics_consent_failed', 'Server error: ' . $e->getMessage(), 500);
+            }
+        }, GuiActionRegistry::TIER_CSRF, 'core');
+
+        $registry->register('getDebugReportJson', function (array $request): void {
+            header('Content-Type: application/json');
+            try {
+                $this->handleGetDebugReportJson();
+            } catch (Exception $e) {
+                echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+            }
+            exit;
+        }, GuiActionRegistry::TIER_CSRF, 'core');
+
+        $registry->register('submitDebugReport', function (array $request): void {
+            header('Content-Type: application/json');
+            try {
+                $this->handleSubmitDebugReport();
+            } catch (Exception $e) {
+                echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+            }
+            exit;
+        }, GuiActionRegistry::TIER_CSRF, 'core');
+    }
+
+    /**
      * Get the PDO database connection
      *
      * @return PDO|null Database connection or null if not provided
@@ -56,6 +136,33 @@ class SettingsController
     private function getPdoConnection(): ?PDO
     {
         return $this->pdo;
+    }
+
+    /**
+     * Sensitive-access gate for HTML-redirect (form-submit) handlers.
+     *
+     * Mirrors `ApiKeysController::requireSensitive()` but emits the
+     * legacy MessageHelper redirect-with-flash flow instead of a
+     * JSON 401 — this controller's handlers redirect after success,
+     * so the failure path needs to match.
+     *
+     * Calling this from a handler that's already verified the CSRF
+     * token guarantees: stolen-session-cookie alone cannot trigger
+     * settings mutations (the user must re-enter their auth code via
+     * the sensitive-access modal first). Existing sensitive-access
+     * grants persist for SENSITIVE_ACCESS_TTL_SECONDS so a user can
+     * make several edits in a row without re-prompting.
+     */
+    private function requireSensitiveAccessForRedirect(): void
+    {
+        if (!$this->session->hasSensitiveAccess()) {
+            MessageHelper::redirectMessage(
+                'Please re-enter your auth code to continue (sensitive action).',
+                'error'
+            );
+            // redirectMessage() exits, but be explicit for static analysis.
+            exit;
+        }
     }
 
     /**
@@ -85,6 +192,14 @@ class SettingsController
     {
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
+
+        // Sensitive-access gate. Settings span the wallet's most
+        // privileged knobs (auth-code rotation, fee defaults, network
+        // basics) so a stolen session cookie shouldn't be enough to
+        // mutate them — the user must re-enter their auth code via
+        // the sensitive-access modal first. Mirrors what ApiKeys-
+        // Controller already does for its mutating actions.
+        $this->requireSensitiveAccessForRedirect();
 
         // Import validation and security classes
 
@@ -561,6 +676,10 @@ class SettingsController
         // CSRF Protection
         $this->session->verifyCSRFToken();
 
+        // Sensitive-access gate — clearing debug logs wipes operator-
+        // visible state and could mask incident traces.
+        $this->requireSensitiveAccessForRedirect();
+
         try {
             $debugRepo = new DebugRepository($this->getPdoConnection());
 
@@ -585,6 +704,11 @@ class SettingsController
     public function handleResetToDefaults(): void
     {
         $this->session->verifyCSRFToken();
+
+        // Sensitive-access gate — this is the most destructive
+        // settings action; a stolen session cookie should never be
+        // enough to wipe every saved preference.
+        $this->requireSensitiveAccessForRedirect();
 
         try {
             UserContext::getInstance()->resetToDefaults();
@@ -691,7 +815,12 @@ class SettingsController
 
         } catch (Exception $e) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'key' => null, 'error' => $e->getMessage()]);
+            // Emits the canonical envelope plus the legacy `key => null`
+            // field that the debug-report submit JS still reads.
+            echo json_encode(array_merge(
+                GuiErrorResponse::make('debug_report_submit_failed', $e->getMessage()),
+                ['key' => null]
+            ));
             exit;
         }
     }
@@ -739,7 +868,7 @@ class SettingsController
      *
      * @return void
      */
-    private function handleAnalyticsConsent(): void
+    public function handleAnalyticsConsent(): void
     {
         $this->session->verifyCSRFToken(false);
 
@@ -764,7 +893,10 @@ class SettingsController
         header('Content-Type: application/json');
 
         if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
-            echo json_encode(['success' => false, 'error' => 'Failed to save preference']);
+            echo json_encode(GuiErrorResponse::make(
+                'analytics_consent_save_failed',
+                'Failed to save preference'
+            ));
             return;
         }
 

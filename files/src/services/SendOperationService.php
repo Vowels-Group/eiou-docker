@@ -19,6 +19,8 @@ use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\P2pRepository;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\TransactionEvents;
 use Eiou\Database\RepositoryFactory;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -377,6 +379,8 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             $payload = $this->transactionPayload->build($data);
             $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
             $this->transactionRepository->updateTrackingFields($data['txid'], $data['end_recipient_address'] ?? null, $data['initial_sender_address'] ?? null);
+
+            $this->dispatchTransactionCreated($data, $contactInfo, 'direct');
         } catch (\InvalidArgumentException $e) {
             $output->error("Cannot send transaction: " . $e->getMessage(), ErrorCodes::NO_VIABLE_TRANSPORT, 400, ['recipient' => $request[2] ?? null]);
             return;
@@ -449,9 +453,34 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
             $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
             $this->transactionRepository->updateTrackingFields($data['txid'], $data['end_recipient_address'] ?? null, $data['initial_sender_address'] ?? null);
+
+            $this->dispatchTransactionCreated($data, [], 'p2p');
         } finally {
             $this->releaseContactSendLock($contactPubkeyHash);
         }
+    }
+
+    /**
+     * Dispatch TRANSACTION_CREATED after a pending tx is inserted.
+     *
+     * Both the direct route and the P2P route commit into the same
+     * `transactions` table via `insertTransaction()`, and both do so from
+     * this service — so a single private helper covers both call sites and
+     * keeps the payload shape consistent. Kept out of the try/finally
+     * block's catch because a listener exception shouldn't leak into the
+     * send path (EventDispatcher already isolates listener failures).
+     */
+    private function dispatchTransactionCreated(array $data, array $contactInfo, string $route): void
+    {
+        $amount = $data['amount'] ?? null;
+        EventDispatcher::getInstance()->dispatch(TransactionEvents::TRANSACTION_CREATED, [
+            'txid' => $data['txid'] ?? '',
+            'amount' => is_object($amount) && method_exists($amount, 'toMajorUnits') ? $amount->toMajorUnits() : $amount,
+            'currency' => $data['currency'] ?? null,
+            'recipient_address' => $data['receiverAddress'] ?? ($data['end_recipient_address'] ?? null),
+            'recipient_pubkey' => $contactInfo['receiverPublicKey'] ?? null,
+            'route' => $route,
+        ]);
     }
 
     /** Send a transaction message with optional delivery tracking */

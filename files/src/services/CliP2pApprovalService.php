@@ -33,10 +33,21 @@ class CliP2pApprovalService
     private ?Rp2pCandidateRepository $rp2pCandidateRepository = null;
     private ?P2pTransactionSenderInterface $p2pTransactionSender = null;
     private ?P2pServiceInterface $p2pService = null;
+    private ?P2pApprovalService $approvalService = null;
 
     public function __construct(CurrencyUtilityService $currencyUtility)
     {
         $this->currencyUtility = $currencyUtility;
+    }
+
+    /**
+     * Inject the shared approve/reject commit-point service. When set,
+     * approveP2p()/rejectP2p() delegate to it so event dispatch and the
+     * side-effect sequence stay in one place across CLI/API/GUI.
+     */
+    public function setApprovalService(P2pApprovalService $service): void
+    {
+        $this->approvalService = $service;
     }
 
     /**
@@ -215,9 +226,8 @@ class CliP2pApprovalService
     {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if ($this->p2pRepository === null || $this->rp2pCandidateRepository === null
-            || $this->p2pTransactionSender === null) {
-            $output->error('P2P approval dependencies not configured', ErrorCodes::GENERAL_ERROR);
+        if ($this->approvalService === null) {
+            $output->error('P2P approval service not configured', ErrorCodes::GENERAL_ERROR);
             return;
         }
 
@@ -227,136 +237,24 @@ class CliP2pApprovalService
             return;
         }
 
-        $p2p = $this->p2pRepository->getAwaitingApproval($hash);
-        if (!$p2p) {
-            $output->error('Transaction not found or not awaiting approval', ErrorCodes::NOT_FOUND, 404);
+        $candidateIndex = isset($argv[4]) ? (int) $argv[4] : null;
+        $result = $this->approvalService->approve($hash, $candidateIndex);
+
+        if (!$result['success']) {
+            $output->error($result['message'], $this->mapErrorCode($result['code']), $result['status'] ?? 500);
             return;
         }
 
-        if (empty($p2p['destination_address'])) {
-            $output->error('Only the transaction originator can approve', ErrorCodes::PERMISSION_DENIED, 403);
-            return;
+        $summary = [
+            'hash' => $result['hash'],
+            'sender_address' => $result['sender_address'] ?? null,
+        ];
+        if (isset($result['candidate_index']) && $result['candidate_index'] !== null) {
+            $summary['candidate_index'] = $result['candidate_index'];
         }
-
-        $candidateIndex = isset($argv[4]) ? (int) $argv[4] : 0;
-
-        if ($candidateIndex > 0) {
-            // User selected a specific candidate by 1-based index
-            $candidates = $this->rp2pCandidateRepository->getCandidatesByHash($hash);
-            if (empty($candidates)) {
-                $output->error('No candidates available for this transaction', ErrorCodes::NOT_FOUND, 404);
-                return;
-            }
-
-            if ($candidateIndex < 1 || $candidateIndex > count($candidates)) {
-                $output->error("Invalid candidate index. Choose between 1 and " . count($candidates), ErrorCodes::VALIDATION_ERROR, 400);
-                return;
-            }
-
-            $candidate = $candidates[$candidateIndex - 1];
-
-            $request = [
-                'hash' => $candidate['hash'],
-                'time' => $candidate['time'],
-                'amount' => $candidate['amount'],
-                'currency' => $candidate['currency'],
-                'senderPublicKey' => $candidate['sender_public_key'],
-                'senderAddress' => $candidate['sender_address'],
-                'signature' => $candidate['sender_signature'],
-            ];
-
-            // Candidate amount already includes the originator's fee from handleRp2pCandidate.
-            // Insert rp2p record (required by daemon's processOutgoingP2p for the 'time' field).
-
-            try {
-                $this->rp2pRepository->insertRp2pRequest($request);
-                $this->p2pRepository->updateStatus($hash, 'found');
-                $this->p2pTransactionSender->sendP2pEiou($request);
-                $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
-
-                $output->success('P2P transaction approved and sent', [
-                    'hash' => $hash,
-                    'candidate_index' => $candidateIndex,
-                    'sender_address' => $candidate['sender_address'],
-                ], "P2P transaction {$hash} approved (candidate #{$candidateIndex})");
-            } catch (\Throwable $e) {
-                $output->error('Failed to send transaction: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
-            }
-            return;
-        }
-
-        // No index provided - check for single rp2p (fast mode)
-        $candidates = $this->rp2pCandidateRepository->getCandidatesByHash($hash);
-
-        if (!empty($candidates) && count($candidates) > 1) {
-            $output->error(
-                'Multiple route candidates available. Specify an index: eiou p2p approve ' . $hash . ' <1-' . count($candidates) . '>',
-                ErrorCodes::VALIDATION_ERROR,
-                400
-            );
-            return;
-        }
-
-        if (!empty($candidates) && count($candidates) === 1) {
-            // Single candidate in best-fee mode - use it
-            $candidate = $candidates[0];
-
-            $request = [
-                'hash' => $candidate['hash'],
-                'time' => $candidate['time'],
-                'amount' => $candidate['amount'],
-                'currency' => $candidate['currency'],
-                'senderPublicKey' => $candidate['sender_public_key'],
-                'senderAddress' => $candidate['sender_address'],
-                'signature' => $candidate['sender_signature'],
-            ];
-
-            try {
-                $this->rp2pRepository->insertRp2pRequest($request);
-                $this->p2pRepository->updateStatus($hash, 'found');
-                $this->p2pTransactionSender->sendP2pEiou($request);
-                $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
-
-                $output->success('P2P transaction approved and sent', [
-                    'hash' => $hash,
-                    'sender_address' => $candidate['sender_address'],
-                ], "P2P transaction {$hash} approved");
-            } catch (\Throwable $e) {
-                $output->error('Failed to send transaction: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
-            }
-            return;
-        }
-
-        // No candidates - check for single rp2p (fast mode)
-        if ($this->rp2pRepository !== null) {
-            $rp2p = $this->rp2pRepository->getByHash($hash);
-            if ($rp2p) {
-                $request = [
-                    'hash' => $rp2p['hash'],
-                    'time' => $rp2p['time'],
-                    'amount' => $rp2p['amount'],
-                    'currency' => $rp2p['currency'],
-                    'senderPublicKey' => $rp2p['sender_public_key'],
-                    'senderAddress' => $rp2p['sender_address'],
-                    'signature' => $rp2p['sender_signature'],
-                ];
-
-                try {
-                    $this->p2pRepository->updateStatus($hash, 'found');
-                    $this->p2pTransactionSender->sendP2pEiou($request);
-
-                    $output->success('P2P transaction approved and sent', [
-                        'hash' => $hash,
-                        'sender_address' => $rp2p['sender_address'],
-                    ], "P2P transaction {$hash} approved (fast mode)");
-                } catch (\Throwable $e) {
-                    $output->error('Failed to send transaction: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
-                }
-                return;
-            }
-        }
-
-        $output->error('No route available for this transaction. Routes may still be arriving.', ErrorCodes::NOT_FOUND, 404);
+        $modeSuffix = $result['mode'] === 'fast' ? ' (fast mode)' : '';
+        $output->success('P2P transaction approved and sent', $summary,
+            "P2P transaction {$hash} approved{$modeSuffix}");
     }
 
     /**
@@ -369,8 +267,8 @@ class CliP2pApprovalService
     {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if ($this->p2pRepository === null) {
-            $output->error('P2P repository not available', ErrorCodes::GENERAL_ERROR);
+        if ($this->approvalService === null) {
+            $output->error('P2P approval service not configured', ErrorCodes::GENERAL_ERROR);
             return;
         }
 
@@ -380,36 +278,29 @@ class CliP2pApprovalService
             return;
         }
 
-        $p2p = $this->p2pRepository->getAwaitingApproval($hash);
-        if (!$p2p) {
-            $output->error('Transaction not found or not awaiting approval', ErrorCodes::NOT_FOUND, 404);
+        $result = $this->approvalService->reject($hash);
+        if (!$result['success']) {
+            $output->error($result['message'], $this->mapErrorCode($result['code']), $result['status'] ?? 500);
             return;
         }
 
-        if (empty($p2p['destination_address'])) {
-            $output->error('Only the transaction originator can reject', ErrorCodes::PERMISSION_DENIED, 403);
-            return;
-        }
+        $output->success('P2P transaction rejected', ['hash' => $hash],
+            "P2P transaction {$hash} rejected and cancelled");
+    }
 
-        try {
-            $this->p2pRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
-
-            // Propagate full cancel downstream to all contacts
-            // (originator has destination_address set, so upstream cancel is not applicable)
-            if ($this->p2pService !== null) {
-                $this->p2pService->broadcastFullCancelForHash($hash);
-            }
-
-            // Clean up any remaining candidates
-            if ($this->rp2pCandidateRepository !== null) {
-                $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
-            }
-
-            $output->success('P2P transaction rejected', [
-                'hash' => $hash,
-            ], "P2P transaction {$hash} rejected and cancelled");
-        } catch (\Throwable $e) {
-            $output->error('Failed to reject transaction: ' . $e->getMessage(), ErrorCodes::GENERAL_ERROR, 500);
-        }
+    /**
+     * Map the shared service's error code strings to the CLI's ErrorCodes
+     * constants. Kept here because the shared service stays agnostic of
+     * caller-specific error-code vocabularies.
+     */
+    private function mapErrorCode(string $serviceCode): string
+    {
+        return match ($serviceCode) {
+            'not_found', 'no_candidates', 'no_route'    => ErrorCodes::NOT_FOUND,
+            'not_originator'                            => ErrorCodes::PERMISSION_DENIED,
+            'invalid_candidate_index',
+            'candidate_selection_required'              => ErrorCodes::VALIDATION_ERROR,
+            default                                     => ErrorCodes::GENERAL_ERROR,
+        };
     }
 }

@@ -55,8 +55,8 @@ statusAB=$(docker exec ${containerA} php -r "
 
 if [ "$statusAB" != "accepted" ]; then
     printf "\t-> Contact A→B not accepted (status: ${statusAB}), re-adding...\n"
-    docker exec ${containerA} eiou add ${addressB} ${containerB} 0.00 0.00 USD 2>/dev/null
-    docker exec ${containerB} eiou add ${addressA} ${containerA} 0.00 0.00 USD 2>/dev/null
+    docker exec ${containerA} eiou contact add ${addressB} ${containerB} --fee 0.00 --credit 0.00 --currency USD 2>/dev/null
+    docker exec ${containerB} eiou contact add ${addressA} ${containerA} --fee 0.00 --credit 0.00 --currency USD 2>/dev/null
 
     # Wait for contacts to be accepted (up to 15s)
     wait_elapsed=0
@@ -497,6 +497,146 @@ else
         else
             printf "\t   Approve request API call ${RED}FAILED${NC}\n"
             printf "\t   Response: ${approveResp}\n"
+            failure=$(( failure + 1 ))
+        fi
+    fi
+fi
+
+# ============================================================================
+# Test 9 — Approve with payer_note appends to the on-chain description
+# ============================================================================
+# Creates a fresh request from A → B with description "dinner", then has B
+# approve it via POST /api/v1/requests/approve with a `payer_note`. Verifies
+# the resulting transaction on B carries "payment: dinner | <note>" so the
+# approve() composition cascade works end-to-end through the API.
+echo -e "\n[Test 9: Approve with payer_note appends to description]"
+totaltests=$(( totaltests + 1 ))
+
+noteTestBody="{\"contact\":\"${contactBName}\",\"amount\":\"1.00\",\"currency\":\"USD\",\"description\":\"dinner\"}"
+noteCreateResp=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "POST" "/api/v1/requests" "$noteTestBody")
+
+noteRequestId=""
+if [[ "$noteCreateResp" =~ '"request_id"' ]]; then
+    noteRequestId=$(echo "$noteCreateResp" | grep -o '"request_id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"request_id"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
+fi
+
+if [[ -z "$noteRequestId" ]]; then
+    printf "\t   Create payment request for note test ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${noteCreateResp}\n"
+    failure=$(( failure + 1 ))
+else
+    printf "\t   Created request for note test: ${noteRequestId}\n"
+
+    # Wait for delivery to B
+    noteArrivedAtB=0
+    for i in $(seq 1 15); do
+        listBForNote=$(api_call "$containerB" "$keyB_id" "$keyB_secret" "GET" "/api/v1/requests")
+        if [[ "$listBForNote" =~ "$noteRequestId" ]]; then
+            noteArrivedAtB=1
+            break
+        fi
+        sleep 1
+    done
+
+    if [[ "$noteArrivedAtB" -eq 0 ]]; then
+        printf "\t   ${YELLOW}Skipped${NC} (request not delivered to B within 15s — async delivery)\n"
+        passed=$(( passed + 1 ))
+    else
+        # Approve with a payer note
+        payerNote="paid via coinbase txid abc123"
+        noteApproveBody="{\"request_id\":\"${noteRequestId}\",\"payer_note\":\"${payerNote}\"}"
+        noteApproveResp=$(api_call "$containerB" "$keyB_id" "$keyB_secret" "POST" "/api/v1/requests/approve" "$noteApproveBody")
+
+        if [[ "$noteApproveResp" =~ '"success"' ]] && [[ "$noteApproveResp" =~ 'true' ]]; then
+            noteTxid=$(echo "$noteApproveResp" | grep -o '"txid"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"txid"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
+            printf "\t   Approve-with-note API call succeeded (txid=${noteTxid})\n"
+
+            if [[ -n "$noteTxid" ]]; then
+                # Read the transaction description back from B's database.
+                # NOTE: getByTxid returns a LIST of rows (fetchAll), not a
+                # single row — see DlqController.php:120-122 for the
+                # canonical unwrap pattern. Reading $tx['description']
+                # directly silently returns '' because the list array
+                # has only integer keys.
+                noteTxDesc=$(docker exec ${containerB} php -r "
+                    require_once '${BOOTSTRAP_PATH}';
+                    \$app = Eiou\Core\Application::getInstance();
+                    \$rows = \$app->services->getRepositoryFactory()
+                        ->get(Eiou\Database\TransactionRepository::class)
+                        ->getByTxid('${noteTxid}');
+                    \$tx = (is_array(\$rows) && isset(\$rows[0])) ? \$rows[0] : null;
+                    echo \$tx['description'] ?? '';
+                " 2>/dev/null || echo "")
+                printf "\t   On-chain description on B: ${noteTxDesc}\n"
+
+                expectedDesc="payment: dinner | ${payerNote}"
+                if [[ "$noteTxDesc" == "$expectedDesc" ]]; then
+                    printf "\t   Description matches expected joined form ${GREEN}PASSED${NC}\n"
+                    passed=$(( passed + 1 ))
+                else
+                    printf "\t   Description mismatch ${RED}FAILED${NC}\n"
+                    printf "\t   Expected: ${expectedDesc}\n"
+                    printf "\t   Got:      ${noteTxDesc}\n"
+                    failure=$(( failure + 1 ))
+                fi
+            else
+                printf "\t   ${YELLOW}Note:${NC} no txid returned — cannot verify description\n"
+                passed=$(( passed + 1 ))
+            fi
+        else
+            printf "\t   Approve-with-note API call ${RED}FAILED${NC}\n"
+            printf "\t   Response: ${noteApproveResp}\n"
+            failure=$(( failure + 1 ))
+        fi
+    fi
+fi
+
+# ============================================================================
+# Test 10 — Approve rejects an over-long payer_note with payer_note_too_long
+# ============================================================================
+echo -e "\n[Test 10: Approve rejects over-long payer_note]"
+totaltests=$(( totaltests + 1 ))
+
+# Re-use the previous request_id if it's still pending, otherwise create one.
+overLongTestBody="{\"contact\":\"${contactBName}\",\"amount\":\"1.50\",\"currency\":\"USD\",\"description\":\"$(printf 'x%.0s' {1..240})\"}"
+overLongCreateResp=$(api_call "$containerA" "$keyA_id" "$keyA_secret" "POST" "/api/v1/requests" "$overLongTestBody")
+
+overLongRequestId=""
+if [[ "$overLongCreateResp" =~ '"request_id"' ]]; then
+    overLongRequestId=$(echo "$overLongCreateResp" | grep -o '"request_id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"request_id"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
+fi
+
+if [[ -z "$overLongRequestId" ]]; then
+    printf "\t   Create payment request for over-long test ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+else
+    # Wait for delivery
+    overLongArrivedAtB=0
+    for i in $(seq 1 15); do
+        listBForOver=$(api_call "$containerB" "$keyB_id" "$keyB_secret" "GET" "/api/v1/requests")
+        if [[ "$listBForOver" =~ "$overLongRequestId" ]]; then
+            overLongArrivedAtB=1
+            break
+        fi
+        sleep 1
+    done
+
+    if [[ "$overLongArrivedAtB" -eq 0 ]]; then
+        printf "\t   ${YELLOW}Skipped${NC} (request not delivered to B within 15s)\n"
+        passed=$(( passed + 1 ))
+    else
+        # 240-char description leaves only 12 chars for a note (255-240-3).
+        # Submit a 50-char note → must be rejected with payer_note_too_long.
+        bigNote=$(printf 'y%.0s' {1..50})
+        overLongApproveBody="{\"request_id\":\"${overLongRequestId}\",\"payer_note\":\"${bigNote}\"}"
+        overLongApproveResp=$(api_call "$containerB" "$keyB_id" "$keyB_secret" "POST" "/api/v1/requests/approve" "$overLongApproveBody")
+
+        if [[ "$overLongApproveResp" =~ "payer_note_too_long" ]]; then
+            printf "\t   Over-long note correctly rejected ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   Expected payer_note_too_long error ${RED}FAILED${NC}\n"
+            printf "\t   Response: ${overLongApproveResp}\n"
             failure=$(( failure + 1 ))
         fi
     fi

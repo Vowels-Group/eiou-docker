@@ -393,7 +393,7 @@ echo -e "\n[Pending Command Test]"
 # Test: pending (regular output)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'pending' command (regular output)"
-pendingOutput=$(docker exec ${testContainer} eiou pending 2>&1)
+pendingOutput=$(docker exec ${testContainer} eiou contact pending 2>&1)
 
 # Check for either "Pending Contact Requests" or "No pending" (both are valid)
 if [[ "$pendingOutput" =~ "Pending" ]] || [[ "$pendingOutput" =~ "pending" ]] || [[ "$pendingOutput" =~ "Incoming" ]] || [[ "$pendingOutput" =~ "Outgoing" ]] || [[ "$pendingOutput" =~ "No pending" ]]; then
@@ -408,7 +408,7 @@ fi
 # Test: pending (JSON output)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'pending' command (JSON output)"
-pendingJsonOutput=$(docker exec ${testContainer} eiou pending --json 2>&1)
+pendingJsonOutput=$(docker exec ${testContainer} eiou contact pending --json 2>&1)
 
 # Check for success and pending data structure
 if [[ "$pendingJsonOutput" =~ '"success"' ]] && [[ "$pendingJsonOutput" =~ 'true' ]] && [[ "$pendingJsonOutput" =~ '"incoming"' ]] && [[ "$pendingJsonOutput" =~ '"outgoing"' ]]; then
@@ -473,7 +473,7 @@ echo -e "\n[Search Command Test]"
 # Test 15: search (regular output - no results expected without setup)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'search' command (regular output)"
-searchOutput=$(docker exec ${testContainer} eiou search 2>&1)
+searchOutput=$(docker exec ${testContainer} eiou contact search 2>&1)
 
 # Command should execute without error, may return no results
 if [[ "$searchOutput" =~ "Contact" ]] || [[ "$searchOutput" =~ "No contact" ]] || [[ "$searchOutput" =~ "found" ]] || [[ -z "$searchOutput" ]] || [[ "$searchOutput" =~ "Search" ]]; then
@@ -488,7 +488,7 @@ fi
 # Test 16: search (JSON output)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'search' command (JSON output)"
-searchJsonOutput=$(docker exec ${testContainer} eiou search --json 2>&1)
+searchJsonOutput=$(docker exec ${testContainer} eiou contact search --json 2>&1)
 
 # Check for success and contacts data structure
 if [[ "$searchJsonOutput" =~ '"success"' ]] && [[ "$searchJsonOutput" =~ 'true' ]] && [[ "$searchJsonOutput" =~ '"contacts"' ]]; then
@@ -577,7 +577,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     # Test: viewcontact (regular output)
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing 'viewcontact ${targetAddress}' command (regular output)"
-    viewContactOutput=$(docker exec ${sourceContainer} eiou viewcontact ${targetAddress} 2>&1)
+    viewContactOutput=$(docker exec ${sourceContainer} eiou contact view ${targetAddress} 2>&1)
 
     if [[ "$viewContactOutput" =~ "Contact" ]] || [[ "$viewContactOutput" =~ "Name" ]] || [[ "$viewContactOutput" =~ "Address" ]] || [[ "$viewContactOutput" =~ "not found" ]]; then
         printf "\t   viewcontact command (regular) ${GREEN}PASSED${NC}\n"
@@ -591,7 +591,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     # Test: viewcontact (JSON output)
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing 'viewcontact ${targetAddress}' command (JSON output)"
-    viewContactJsonOutput=$(docker exec ${sourceContainer} eiou viewcontact ${targetAddress} --json 2>&1)
+    viewContactJsonOutput=$(docker exec ${sourceContainer} eiou contact view ${targetAddress} --json 2>&1)
 
     # Check for success and contact data structure
     if [[ "$viewContactJsonOutput" =~ '"success"' ]] && [[ "$viewContactJsonOutput" =~ 'true' ]] && [[ "$viewContactJsonOutput" =~ '"contact"' ]]; then
@@ -614,7 +614,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     if [[ -n "$contactName" ]]; then
         totaltests=$(( totaltests + 1 ))
         echo -e "\n\t-> Testing 'viewcontact ${contactName}' command by NAME (regular output)"
-        viewContactByNameOutput=$(docker exec ${sourceContainer} eiou viewcontact "${contactName}" 2>&1)
+        viewContactByNameOutput=$(docker exec ${sourceContainer} eiou contact view "${contactName}" 2>&1)
 
         if [[ "$viewContactByNameOutput" =~ "Contact" ]] || [[ "$viewContactByNameOutput" =~ "Name" ]] || [[ "$viewContactByNameOutput" =~ "Address" ]]; then
             printf "\t   viewcontact by name (regular) ${GREEN}PASSED${NC}\n"
@@ -628,7 +628,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
         # Test: viewcontact by NAME (JSON output)
         totaltests=$(( totaltests + 1 ))
         echo -e "\n\t-> Testing 'viewcontact ${contactName}' command by NAME (JSON output)"
-        viewContactByNameJsonOutput=$(docker exec ${sourceContainer} eiou viewcontact "${contactName}" --json 2>&1)
+        viewContactByNameJsonOutput=$(docker exec ${sourceContainer} eiou contact view "${contactName}" --json 2>&1)
 
         if [[ "$viewContactByNameJsonOutput" =~ '"success"' ]] && [[ "$viewContactByNameJsonOutput" =~ 'true' ]] && [[ "$viewContactByNameJsonOutput" =~ '"contact"' ]]; then
             printf "\t   viewcontact by name (JSON) ${GREEN}PASSED${NC}\n"
@@ -716,7 +716,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     # Test: block by ADDRESS
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing 'block ${targetAddress}' command (address)"
-    blockAddrOutput=$(docker exec ${sourceContainer} eiou block ${targetAddress} --json 2>&1)
+    blockAddrOutput=$(docker exec ${sourceContainer} eiou contact block ${targetAddress} --json 2>&1)
 
     if [[ "$blockAddrOutput" =~ '"success"' ]] && [[ "$blockAddrOutput" =~ 'true' ]]; then
         printf "\t   block by address ${GREEN}PASSED${NC}\n"
@@ -725,7 +725,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
         # Test: unblock by ADDRESS (to restore state)
         totaltests=$(( totaltests + 1 ))
         echo -e "\n\t-> Testing 'unblock ${targetAddress}' command (address)"
-        unblockAddrOutput=$(docker exec ${sourceContainer} eiou unblock ${targetAddress} --json 2>&1)
+        unblockAddrOutput=$(docker exec ${sourceContainer} eiou contact unblock ${targetAddress} --json 2>&1)
 
         if [[ "$unblockAddrOutput" =~ '"success"' ]] && [[ "$unblockAddrOutput" =~ 'true' ]]; then
             printf "\t   unblock by address ${GREEN}PASSED${NC}\n"
@@ -743,7 +743,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     if [[ -n "$contactName" ]]; then
         totaltests=$(( totaltests + 1 ))
         echo -e "\n\t-> Testing 'block ${contactName}' command (name)"
-        blockNameOutput=$(docker exec ${sourceContainer} eiou block "${contactName}" --json 2>&1)
+        blockNameOutput=$(docker exec ${sourceContainer} eiou contact block "${contactName}" --json 2>&1)
 
         if [[ "$blockNameOutput" =~ '"success"' ]] && [[ "$blockNameOutput" =~ 'true' ]]; then
             printf "\t   block by name ${GREEN}PASSED${NC}\n"
@@ -752,7 +752,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
             # Test: unblock by NAME (to restore state)
             totaltests=$(( totaltests + 1 ))
             echo -e "\n\t-> Testing 'unblock ${contactName}' command (name)"
-            unblockNameOutput=$(docker exec ${sourceContainer} eiou unblock "${contactName}" --json 2>&1)
+            unblockNameOutput=$(docker exec ${sourceContainer} eiou contact unblock "${contactName}" --json 2>&1)
 
             if [[ "$unblockNameOutput" =~ '"success"' ]] && [[ "$unblockNameOutput" =~ 'true' ]]; then
                 printf "\t   unblock by name ${GREEN}PASSED${NC}\n"
@@ -784,7 +784,7 @@ nonExistingName="NonExistingContactName12345"
 # Test: viewcontact with non-existing ADDRESS
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'viewcontact' with non-existing address"
-viewContactNonExistAddrOutput=$(docker exec ${testContainer} eiou viewcontact ${nonExistingAddress} --json 2>&1)
+viewContactNonExistAddrOutput=$(docker exec ${testContainer} eiou contact view ${nonExistingAddress} --json 2>&1)
 
 # Must return valid JSON response (not crash)
 if [[ "$viewContactNonExistAddrOutput" =~ '"success"' ]] && [[ "$viewContactNonExistAddrOutput" =~ '"' ]]; then
@@ -799,7 +799,7 @@ fi
 # Test: viewcontact with non-existing NAME
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'viewcontact' with non-existing name"
-viewContactNonExistNameOutput=$(docker exec ${testContainer} eiou viewcontact "${nonExistingName}" --json 2>&1)
+viewContactNonExistNameOutput=$(docker exec ${testContainer} eiou contact view "${nonExistingName}" --json 2>&1)
 
 if [[ "$viewContactNonExistNameOutput" =~ '"success"' ]] && [[ "$viewContactNonExistNameOutput" =~ '"' ]]; then
     printf "\t   viewcontact non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
@@ -842,7 +842,7 @@ fi
 # Test: block with non-existing ADDRESS
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'block' with non-existing address"
-blockNonExistAddrOutput=$(docker exec ${testContainer} eiou block ${nonExistingAddress} --json 2>&1)
+blockNonExistAddrOutput=$(docker exec ${testContainer} eiou contact block ${nonExistingAddress} --json 2>&1)
 
 if [[ "$blockNonExistAddrOutput" =~ '"success"' ]] && [[ "$blockNonExistAddrOutput" =~ '"' ]]; then
     printf "\t   block non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
@@ -856,7 +856,7 @@ fi
 # Test: block with non-existing NAME
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'block' with non-existing name"
-blockNonExistNameOutput=$(docker exec ${testContainer} eiou block "${nonExistingName}" --json 2>&1)
+blockNonExistNameOutput=$(docker exec ${testContainer} eiou contact block "${nonExistingName}" --json 2>&1)
 
 if [[ "$blockNonExistNameOutput" =~ '"success"' ]] && [[ "$blockNonExistNameOutput" =~ '"' ]]; then
     printf "\t   block non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
@@ -870,7 +870,7 @@ fi
 # Test: unblock with non-existing ADDRESS
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'unblock' with non-existing address"
-unblockNonExistAddrOutput=$(docker exec ${testContainer} eiou unblock ${nonExistingAddress} --json 2>&1)
+unblockNonExistAddrOutput=$(docker exec ${testContainer} eiou contact unblock ${nonExistingAddress} --json 2>&1)
 
 if [[ "$unblockNonExistAddrOutput" =~ '"success"' ]] && [[ "$unblockNonExistAddrOutput" =~ '"' ]]; then
     printf "\t   unblock non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
@@ -884,7 +884,7 @@ fi
 # Test: unblock with non-existing NAME
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'unblock' with non-existing name"
-unblockNonExistNameOutput=$(docker exec ${testContainer} eiou unblock "${nonExistingName}" --json 2>&1)
+unblockNonExistNameOutput=$(docker exec ${testContainer} eiou contact unblock "${nonExistingName}" --json 2>&1)
 
 if [[ "$unblockNonExistNameOutput" =~ '"success"' ]] && [[ "$unblockNonExistNameOutput" =~ '"' ]]; then
     printf "\t   unblock non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
@@ -954,7 +954,7 @@ fi
 # Test: delete with non-existing ADDRESS
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'delete' with non-existing address"
-deleteNonExistAddrOutput=$(docker exec ${testContainer} eiou delete ${nonExistingAddress} --json 2>&1)
+deleteNonExistAddrOutput=$(docker exec ${testContainer} eiou contact delete ${nonExistingAddress} --json 2>&1)
 
 if [[ "$deleteNonExistAddrOutput" =~ '"success"' ]] && [[ "$deleteNonExistAddrOutput" =~ '"' ]]; then
     printf "\t   delete non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
@@ -968,7 +968,7 @@ fi
 # Test: delete with non-existing NAME
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'delete' with non-existing name"
-deleteNonExistNameOutput=$(docker exec ${testContainer} eiou delete "${nonExistingName}" --json 2>&1)
+deleteNonExistNameOutput=$(docker exec ${testContainer} eiou contact delete "${nonExistingName}" --json 2>&1)
 
 if [[ "$deleteNonExistNameOutput" =~ '"success"' ]] && [[ "$deleteNonExistNameOutput" =~ '"' ]]; then
     printf "\t   delete non-existing name ${GREEN}PASSED${NC} (handled properly)\n"

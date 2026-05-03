@@ -898,32 +898,21 @@ class ApiKeyRepositoryTest extends TestCase
     }
 
     /**
-     * Test hasPermission returns true for 'all' permission
+     * Test hasPermission rejects the removed 'all' synonym (use 'admin').
      */
-    public function testHasPermissionReturnsTrueForAllPermission(): void
+    public function testHasPermissionRejectsLegacyAllPermission(): void
     {
         $permissions = ['all'];
-
-        $result = ApiKeyRepository::hasPermission($permissions, 'wallet:read');
-        $this->assertTrue($result);
-
-        $result = ApiKeyRepository::hasPermission($permissions, 'admin');
-        $this->assertTrue($result);
-
-        $result = ApiKeyRepository::hasPermission($permissions, 'any:permission');
-        $this->assertTrue($result);
+        $this->assertFalse(ApiKeyRepository::hasPermission($permissions, 'wallet:read'));
     }
 
     /**
-     * Test hasPermission returns true for legacy '*' permission
+     * Test hasPermission rejects the removed '*' shorthand (use 'admin').
      */
-    public function testHasPermissionReturnsTrueForLegacyStarPermission(): void
+    public function testHasPermissionRejectsLegacyStarPermission(): void
     {
         $permissions = ['*'];
-
-        $result = ApiKeyRepository::hasPermission($permissions, 'wallet:read');
-
-        $this->assertTrue($result);
+        $this->assertFalse(ApiKeyRepository::hasPermission($permissions, 'wallet:read'));
     }
 
     /**

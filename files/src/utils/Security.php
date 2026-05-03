@@ -353,18 +353,28 @@ class Security {
     }
 
     /**
-     * Get client IP address, only trusting proxy headers from trusted proxies
+     * Get client IP address, only trusting proxy headers from trusted proxies.
      *
-     * If REMOTE_ADDR is in the trusted proxies list, checks proxy headers
-     * (CF-Connecting-IP, X-Forwarded-For). Otherwise returns REMOTE_ADDR directly.
+     * If REMOTE_ADDR is in the trusted-proxies allowlist, the configured
+     * proxy headers (CF-Connecting-IP, X-Forwarded-For) are honored.
+     * Otherwise returns REMOTE_ADDR verbatim.
      *
+     * @param \Eiou\Core\AppConfig $appConfig Typed config snapshot (the
+     *     callers in `ApiAuthService::getClientIp()` and
+     *     `RateLimiterService::getClientIp()` thread this through; early-
+     *     boot scripts that pre-date the service container can construct
+     *     one inline via `AppConfig::fromEnvironment()`).
      * @return string Client IP address
      */
-    public static function getClientIp(): string {
+    public static function getClientIp(\Eiou\Core\AppConfig $appConfig): string {
         $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        // Parse trusted proxies from: env var > persisted config > constant
-        $trustedProxiesStr = getenv('TRUSTED_PROXIES') ?: '';
+        // Trusted-proxy source priority: typed AppConfig → persisted
+        // user/operator config (UserContext) → empty list (= no proxy
+        // headers honored). The previous `getenv('TRUSTED_PROXIES')`
+        // fallback was removed once every caller in the chain threads
+        // AppConfig — see AUDIT_REFACTOR finding #6 for the rewiring.
+        $trustedProxiesStr = $appConfig->trustedProxies;
         if ($trustedProxiesStr === '') {
             $trustedProxiesStr = UserContext::getInstance()->getTrustedProxies();
         }

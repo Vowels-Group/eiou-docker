@@ -42,9 +42,14 @@ function getContactsTableSchema() {
 
 // Address table
 function getAddressTableSchema(){
+    /* pubkey_hash is a SHA-256 hex digest — always exactly 64 chars.
+       Stored as VARCHAR(64) (matching contacts/contact_credit/etc.) so
+       the JOIN against contacts.pubkey_hash uses the same column type
+       (no implicit conversion) and idx_addresses_pubkey is a real
+       full-key equality index instead of a TEXT-prefix index. */
     return "CREATE TABLE IF NOT EXISTS addresses (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash TEXT NOT NULL,
+        pubkey_hash VARCHAR(64) NOT NULL,
         http VARCHAR(255) UNIQUE DEFAULT NULL,
         https VARCHAR(255) UNIQUE DEFAULT NULL,
         tor VARCHAR(255) UNIQUE DEFAULT NULL,
@@ -83,15 +88,26 @@ function getContactCurrenciesTableSchema() {
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE INDEX idx_cc_hash_currency (pubkey_hash, currency),
-        INDEX idx_cc_pubkey_hash (pubkey_hash)
+        INDEX idx_cc_pubkey_hash (pubkey_hash),
+        /* Covers per-contact pending-currency lookups in
+           ContactCurrencyRepository (WHERE pubkey_hash = ? AND status
+           = pending). Pre-existing pubkey_hash-only index forces a
+           status filter post-scan; this composite lets the optimizer
+           index-range straight to the rows. */
+        INDEX idx_cc_hash_status (pubkey_hash, status)
     )";
 }
 
 // Balance table - per-contact sent/received totals, joined on pubkey_hash
 function getBalancesTableSchema() {
+    /* pubkey_hash is a SHA-256 hex digest — always exactly 64 chars.
+       Stored as VARCHAR(64) so balances joins line up with contacts /
+       contact_credit on the same column type (avoids implicit type
+       coercion) and idx_balances_pubkey_hash works as a full-key
+       equality index. */
     return "CREATE TABLE IF NOT EXISTS balances (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey_hash TEXT NOT NULL,
+        pubkey_hash VARCHAR(64) NOT NULL,
         received_whole BIGINT NOT NULL,
         received_frac BIGINT NOT NULL,
         sent_whole BIGINT NOT NULL,
@@ -464,7 +480,13 @@ function getDeadLetterQueueTableSchema() {
         INDEX idx_dlq_status (status),
         INDEX idx_dlq_message_type (message_type),
         INDEX idx_dlq_created_at (created_at),
-        INDEX idx_dlq_status_created (status, created_at)
+        INDEX idx_dlq_status_created (status, created_at),
+        /* Covers the duplicate-detection lookup at line ~64 of
+           DeadLetterQueueRepository.php:
+             WHERE message_id = ? AND status IN ('pending','retrying')
+           Without this composite, every DLQ retry click does a status-
+           filtered full-table scan of the dead_letter_queue table. */
+        INDEX idx_dlq_message_status (message_id, status)
     )";
 }
 
@@ -779,4 +801,81 @@ function getRouteCancellationsTableSchema() {
         INDEX idx_route_cancel_hash (hash),
         INDEX idx_route_cancel_status (status)
     )";
+}
+
+// ============================================================================
+// PAYBACK METHODS
+// User-defined settlement methods. Core ships bank_wire + custom; additional
+// rail types (BTC, PayPal, etc.) are expected to land as plugins that register
+// themselves against the payback-methods plugin API.
+// Sensitive fields are encrypted via KeyEncryption; row-level AAD binds the
+// ciphertext to method_id to prevent cross-row ciphertext swapping.
+// ============================================================================
+
+// Payback Methods table - local profile of how the user accepts settlement
+function getPaybackMethodsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS payback_methods (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        method_id VARCHAR(36) UNIQUE NOT NULL,           /* uuid v4 — stable id used in API / AAD */
+        type VARCHAR(32) NOT NULL,                       /* e.g. bank_wire, custom, or plugin-registered */
+        label VARCHAR(128) NOT NULL,                     /* user-friendly nickname */
+        currency VARCHAR(8) NOT NULL,                    /* ISO 4217 or asset code (BTC, ETH, USDT, ...) */
+        encrypted_fields JSON NOT NULL,                  /* KeyEncryption result: {ciphertext, iv, tag, aad, version} */
+        fields_version TINYINT NOT NULL DEFAULT 1,       /* Ciphertext format version — for future re-keying */
+        settlement_min_unit BIGINT NOT NULL DEFAULT 1,   /* Smallest settleable integer unit in this currency */
+        settlement_min_unit_exponent TINYINT NOT NULL DEFAULT -8, /* base-10 exponent relative to currency major unit */
+        priority INT NOT NULL DEFAULT 100,               /* lower = preferred when multiple methods match */
+        enabled TINYINT(1) NOT NULL DEFAULT 1,
+        share_policy ENUM('auto', 'never') NOT NULL DEFAULT 'auto',
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+        INDEX idx_pbm_method_id (method_id),
+        INDEX idx_pbm_currency_enabled (currency, enabled),
+        INDEX idx_pbm_priority (priority),
+        INDEX idx_pbm_type (type)
+    )";
+}
+
+// Payback Methods Received table - cache of methods fetched from contacts over E2E
+function getPaybackMethodsReceivedTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS payback_methods_received (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        contact_pubkey_hash VARCHAR(64) NOT NULL,        /* Source contact identity */
+        remote_method_id VARCHAR(36) NOT NULL,           /* method_id on the source node */
+        type VARCHAR(32) NOT NULL,
+        label VARCHAR(128) NOT NULL,
+        currency VARCHAR(8) NOT NULL,
+        fields_json TEXT NOT NULL,                       /* Decrypted plaintext fields (at-rest protected by MariaDB TDE) */
+        settlement_min_unit BIGINT NOT NULL DEFAULT 1,
+        settlement_min_unit_exponent TINYINT NOT NULL DEFAULT -8,
+        priority INT NOT NULL DEFAULT 100,
+        received_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        expires_at TIMESTAMP(6) NOT NULL,                /* TTL-based re-fetch */
+        revoked_at TIMESTAMP(6) NULL,
+        UNIQUE INDEX idx_pmr_contact_remote (contact_pubkey_hash, remote_method_id),
+        INDEX idx_pmr_contact_currency (contact_pubkey_hash, currency),
+        INDEX idx_pmr_expires (expires_at)
+    )";
+}
+
+// Plugin credentials table — holds the encrypted MySQL password for each
+// plugin's isolated DB user. The password is wrapped via KeyEncryption with
+// the plugin_id as AAD so ciphertext cannot be swapped between rows. The
+// encrypted_password column carries the full KeyEncryption envelope
+// ({ciphertext, iv, tag, aad, version}) so decryption is self-describing.
+//
+// Bootstrap: this table is accessed after the master key is loaded (same
+// order as every other encrypted-at-rest table in the schema), so no extra
+// sequencing is needed. Operators wanting volume-level passphrase protection
+// get it for free via EIOU_VOLUME_KEY — the master key itself is encrypted
+// at rest, which transitively protects every wrapped blob in this table.
+//
+// See docs/PLUGINS.md (Database Isolation)for rationale.
+function getPluginCredentialsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS plugin_credentials (
+        plugin_id VARCHAR(64) NOT NULL PRIMARY KEY,      /* Matches the plugin's manifest `name` field */
+        encrypted_password JSON NOT NULL,                /* KeyEncryption envelope: {ciphertext, iv, tag, aad, version} */
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+        rotated_at TIMESTAMP(6) NULL                     /* Set on rotate(); null on initial create */
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 }

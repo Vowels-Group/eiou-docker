@@ -233,7 +233,7 @@ for containersLinkKey in "${containersLinkKeys[@]:0:3}"; do  # Test first 3 link
 
     echo -e "\n\t-> ${containerKeys[0]} viewing contact ${containerKeys[1]}"
 
-    viewOutput=$(docker exec ${containerKeys[0]} eiou viewcontact ${containerAddresses[${containerKeys[1]}]} 2>&1)
+    viewOutput=$(docker exec ${containerKeys[0]} eiou contact view ${containerAddresses[${containerKeys[1]}]} 2>&1)
 
     if [[ ! "$viewOutput" =~ "error" ]] && [[ ! "$viewOutput" =~ "Error" ]] && [[ ! "$viewOutput" =~ "not found" ]]; then
         printf "\t   View contact details ${GREEN}PASSED${NC}\n"

@@ -1,0 +1,68 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<?php
+/**
+ * Plugins section — uses renderSection() for the standard wrapper +
+ * `gui.section.before.plugins-section` / `gui.section.after.plugins-section`
+ * hooks, so plugins can inject content around it without forking.
+ */
+
+ob_start();
+?>
+    <div id="plugins-restart-banner" class="alert alert-warning d-none" role="status">
+        <div class="plugins-restart-banner-row">
+            <span>
+                <i class="fas fa-info-circle"></i>
+                Plugin changes are saved. Restart the node for them to take effect.
+            </span>
+            <button type="button" class="btn btn-warning btn-compact" data-action="restartNodeFromPlugins">
+                <i class="fas fa-power-off"></i> Restart node
+            </button>
+        </div>
+    </div>
+
+    <div id="plugins-empty" class="api-keys-empty text-muted">
+        <i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;
+    </div>
+
+    <?php
+    echo renderTable([
+        'id'           => 'plugins-table-wrapper',
+        'wrapperClass' => 'contacts-table-wrapper d-none',
+        'variant'      => 'plugins',
+        'headers'      =>
+              '<tr>'
+            . '<th class="col-plugin-dot text-center" aria-label="Enabled"></th>'
+            . '<th class="col-name">Name</th>'
+            . '<th class="col-version">Version</th>'
+            . '<th class="col-description">Description</th>'
+            . '<th class="col-enabled text-right">Enabled</th>'
+            . '</tr>',
+        'body'         => '',
+        'tbodyId'      => 'plugins-tbody',
+    ]);
+    ?>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'plugins-section',
+    'icon'  => 'fas fa-puzzle-piece',
+    'title' => 'Plugins',
+    'headerExtras' => '<button type="button" class="btn btn-secondary btn-compact" data-action="reloadPlugins" title="Refresh the list from disk">'
+                   . '<i class="fas fa-sync"></i> Refresh'
+                   . '</button>',
+    'introTitle' => 'About Plugins',
+    'intro' => 'Plugins live under <code>/etc/eiou/plugins/</code>. They subscribe to '
+             . 'internal events (sync, transactions, contacts) and add capabilities '
+             . 'without modifying the core code.'
+             . '<br><br>'
+             . '<strong>Plugins are disabled by default.</strong> A new plugin '
+             . 'sitting in the directory will not run until you enable it here '
+             . 'and restart the node. This way a buggy or untrusted plugin '
+             . 'cannot crash the node on its first boot &mdash; you opt in '
+             . 'deliberately, with the chance to read the manifest first. '
+             . 'Toggles persist immediately but take effect only after a restart, '
+             . 'since event subscriptions are wired during startup.',
+    'body'  => $body,
+]);

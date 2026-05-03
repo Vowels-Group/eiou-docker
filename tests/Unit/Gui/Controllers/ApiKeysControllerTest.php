@@ -79,7 +79,10 @@ class ApiKeysControllerTest extends TestCase
 
         $this->assertSame(403, $result['status']);
         $this->assertFalse($result['payload']['success']);
-        $this->assertSame('csrf_error', $result['payload']['error']);
+        // Post-canonical-envelope: machine code lives at `code`; `error`
+        // carries the human-readable message. Note the code rename from
+        // legacy `csrf_error` to canonical `csrf_invalid` (matches DLQ).
+        $this->assertSame('csrf_invalid', $result['payload']['code']);
     }
 
     #[Test]
@@ -91,7 +94,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('unknown_action', $result['payload']['error']);
+        $this->assertSame('unknown_action', $result['payload']['code']);
     }
 
     #[Test]
@@ -143,7 +146,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(401, $result['status']);
-        $this->assertSame('sensitive_access_required', $result['payload']['error']);
+        $this->assertSame('sensitive_access_required', $result['payload']['code']);
     }
 
     #[Test]
@@ -196,7 +199,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('invalid_permission', $result['payload']['error']);
+        $this->assertSame('invalid_permission', $result['payload']['code']);
     }
 
     #[Test]
@@ -214,7 +217,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('invalid_name', $result['payload']['error']);
+        $this->assertSame('invalid_name', $result['payload']['code']);
     }
 
     #[Test]
@@ -233,7 +236,7 @@ class ApiKeysControllerTest extends TestCase
         $result = $this->dispatch();
 
         $this->assertSame(400, $result['status']);
-        $this->assertSame('invalid_key_id', $result['payload']['error']);
+        $this->assertSame('invalid_key_id', $result['payload']['code']);
     }
 
     #[Test]
@@ -296,5 +299,29 @@ class ApiKeysControllerTest extends TestCase
         $this->assertSame(200, $result['status']);
         $this->assertTrue($result['payload']['sensitive_access']);
         $this->assertSame(123, $result['payload']['seconds_remaining']);
+    }
+
+    /**
+     * registerActions populates the shared registry with every owned
+     * apiKeys* action at TIER_AUTH so the dispatcher's CSRF gate
+     * doesn't fire — routeAction() does its own non-rotating CSRF
+     * check + sensitive-access gate internally.
+     */
+    public function testRegisterActionsPopulatesRegistryWithCorrectTiers(): void
+    {
+        $registry = new \Eiou\Services\GuiActionRegistry();
+
+        $this->controller->registerActions($registry);
+
+        foreach ([
+            'apiKeysStatus', 'apiKeysVerify', 'apiKeysClearAccess',
+            'apiKeysList', 'apiKeysCreate', 'apiKeysToggle',
+            'apiKeysDelete', 'apiKeysUpdate', 'apiKeysDisableAll',
+            'apiKeysDeleteAll',
+        ] as $a) {
+            $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
+            $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
+            $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
+        }
     }
 }

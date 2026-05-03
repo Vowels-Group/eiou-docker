@@ -317,7 +317,7 @@ echo -e "\n\t-> Testing CLI exit code for invalid search name"
 
 # Use a name with invalid characters that should trigger ValidationServiceException
 # Using @ and ! which are not in the allowed character set [a-zA-Z0-9_\s-]
-docker exec ${testContainer} eiou search 'invalid@name!test' --json >/dev/null 2>&1
+docker exec ${testContainer} eiou contact search 'invalid@name!test' --json >/dev/null 2>&1
 exitCode=$?
 
 if [[ "$exitCode" == "1" ]]; then
@@ -349,7 +349,7 @@ echo -e "\n\t-> Testing CLI exit code for invalid viewcontact address"
 
 # Use an address that IS recognized as an address format (http://) but contains invalid characters
 # This will pass isAddress() check but fail validateAddress()
-docker exec ${testContainer} eiou viewcontact 'http://invalid<script>address' --json >/dev/null 2>&1
+docker exec ${testContainer} eiou contact view 'http://invalid<script>address' --json >/dev/null 2>&1
 exitCode=$?
 
 if [[ "$exitCode" == "1" ]]; then
@@ -369,7 +369,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing error message contains error code"
 
 # Use invalid characters that trigger validation error
-errorOutput=$(docker exec ${testContainer} eiou search 'test@invalid!' --json 2>&1)
+errorOutput=$(docker exec ${testContainer} eiou contact search 'test@invalid!' --json 2>&1)
 
 if [[ "$errorOutput" =~ "INVALID" ]] || [[ "$errorOutput" =~ "error" ]] || [[ "$errorOutput" =~ "invalid" ]]; then
     printf "\t   Error message contains error code ${GREEN}PASSED${NC}\n"
@@ -385,7 +385,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing error output is valid JSON"
 
 jsonValid=$(docker exec ${testContainer} php -r "
-    \$output = shell_exec('eiou search \"test@invalid\" --json 2>&1');
+    \$output = shell_exec('eiou contact search \"test@invalid\" --json 2>&1');
     \$decoded = json_decode(\$output, true);
     if (\$decoded !== null && isset(\$decoded['success'])) {
         echo 'SUCCESS';

@@ -18,10 +18,12 @@ use Eiou\Gui\Helpers\MessageHelper;
 use Eiou\Gui\Helpers\ViewHelper;
 use Eiou\Gui\Controllers\ContactController;
 use Eiou\Gui\Controllers\DlqController;
+use Eiou\Gui\Controllers\PaybackMethodsController;
 use Eiou\Gui\Controllers\PaymentRequestController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
 use Eiou\Gui\Controllers\ApiKeysController;
+use Eiou\Gui\Controllers\PluginController;
 
 if (!file_exists("/etc/eiou/config/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
@@ -48,6 +50,7 @@ $user = UserContext::getInstance();
 
 // Create controllers
 $contactController = new ContactController($secureSession, $contactService);
+$contactController->registerActions($serviceContainer->getActionRegistry());
 $transactionController = new TransactionController($secureSession, $contactService, $transactionService);
 $repoFactory = $serviceContainer->getRepositoryFactory();
 $transactionController->setP2pApprovalDependencies(
@@ -57,15 +60,24 @@ $transactionController->setP2pApprovalDependencies(
     $serviceContainer->getP2pService(),
     $repoFactory->get(Eiou\Database\Rp2pCandidateRepository::class)
 );
+$transactionController->setApprovalService($serviceContainer->getP2pApprovalService());
+$transactionController->registerActions($serviceContainer->getActionRegistry());
 $settingsController = new SettingsController($secureSession);
+// Register settings actions in the shared GuiActionRegistry so the
+// dispatcher in Functions.php routes via the registry instead of the
+// hardcoded if-ladder. Each entry preserves the existing tier and
+// response shape verbatim — see SettingsController::registerActions.
+$settingsController->registerActions($serviceContainer->getActionRegistry());
 $apiKeysController = new ApiKeysController(
     $secureSession,
     $repoFactory->get(Eiou\Database\ApiKeyRepository::class)
 );
+$apiKeysController->registerActions($serviceContainer->getActionRegistry());
 $paymentRequestController = new PaymentRequestController(
     $secureSession,
     $serviceContainer->getPaymentRequestService()
 );
+$paymentRequestController->registerActions($serviceContainer->getActionRegistry());
 $dlqController = new DlqController(
     $secureSession,
     $repoFactory->get(Eiou\Database\DeadLetterQueueRepository::class),
@@ -73,6 +85,44 @@ $dlqController = new DlqController(
     $app->utilityServices->getTransportUtility(),
     $repoFactory->get(Eiou\Database\TransactionRepository::class)
 );
+$dlqController->registerActions($serviceContainer->getActionRegistry());
+
+// Payback-methods controller — was lazy-instantiated in Functions.php
+// pre-migration. Eager construction is cheap (just holds a service
+// ref) and lets registerActions() run at boot like the others.
+$paybackMethodsController = new PaybackMethodsController(
+    $secureSession,
+    $serviceContainer->getPaybackMethodService()
+);
+$paybackMethodsController->registerActions($serviceContainer->getActionRegistry());
+// Plugin controller — uses Application's PluginLoader so toggles flow to the
+// same state file the loader reads from at boot. If discover() never ran (no
+// userconfig.json yet) the loader is null and this controller stays absent;
+// the GUI section gracefully shows the loading state in that case.
+$pluginController = $app->pluginLoader !== null
+    ? new PluginController(
+        $secureSession,
+        $app->pluginLoader,
+        null,
+        // Wire the uninstall service when the container is ready so the
+        // GUI's pluginsUninstall action has the service behind it. If the
+        // container isn't yet available (early-boot / no-wallet state)
+        // the null fallback degrades gracefully.
+        $app->services !== null
+            ? $app->services->getPluginUninstallService()
+            : null
+    )
+    : null;
+
+// Register plugin* actions: live controller when the loader is
+// available, otherwise stubs that emit the legacy
+// "plugin_loader_unavailable" envelope. Either way, the registry has
+// entries for every plugin* action so the dispatcher routes them.
+if ($pluginController !== null) {
+    $pluginController->registerActions($serviceContainer->getActionRegistry());
+} else {
+    PluginController::registerUnavailableStubs($serviceContainer->getActionRegistry());
+}
 
 // Handle logout request
 if (isset($_GET['logout'])) {
@@ -129,7 +179,7 @@ if (!$secureSession->isAuthenticated()
     && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
     // Rate limit GUI login attempts
     $rateLimiter = $serviceContainer->getRateLimiterService();
-    $clientIp = \Eiou\Utils\Security::getClientIp();
+    $clientIp = \Eiou\Utils\Security::getClientIp($serviceContainer->getAppConfig());
     $rateResult = $rateLimiter->checkLimit($clientIp, 'gui_login');
 
     if (!$rateResult['allowed']) {

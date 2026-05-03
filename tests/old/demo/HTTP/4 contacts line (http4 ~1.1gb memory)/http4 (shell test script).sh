@@ -72,7 +72,7 @@ docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-config:/etc/eiou/config" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" -e QUICKSTART=$container eiou/eiou
+    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-config:/etc/eiou/config" -v "${container}-plugins:/etc/eiou/plugins" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" -e QUICKSTART=$container eiou/eiou
 done
 
 # Save container Addresses in the associative array containerAddresses
@@ -92,7 +92,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
     containerKeys=(${containersLinkKey//,/ })    
     echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
-    docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
+    docker exec ${containerKeys[0]} eiou contact add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} --fee ${values[0]} --credit ${values[1]} --currency ${values[2]}
 done
 
 # Send money
@@ -108,12 +108,12 @@ echo -e "\nTesting other functions..."
 
 # View contacts
 echo -e "\nViewing contacts..."
-docker exec httpA eiou viewcontact ${containerAddresses[httpB]}
-docker exec httpB eiou viewcontact ${containerAddresses[httpA]}
-docker exec httpB eiou viewcontact ${containerAddresses[httpC]}
-docker exec httpC eiou viewcontact ${containerAddresses[httpB]}
-docker exec httpC eiou viewcontact ${containerAddresses[httpD]}
-docker exec httpD eiou viewcontact ${containerAddresses[httpC]}
+docker exec httpA eiou contact view ${containerAddresses[httpB]}
+docker exec httpB eiou contact view ${containerAddresses[httpA]}
+docker exec httpB eiou contact view ${containerAddresses[httpC]}
+docker exec httpC eiou contact view ${containerAddresses[httpB]}
+docker exec httpC eiou contact view ${containerAddresses[httpD]}
+docker exec httpD eiou contact view ${containerAddresses[httpC]}
 
 # View balances
 echo -e "\nViewing balances..."

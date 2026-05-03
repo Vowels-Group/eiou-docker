@@ -401,6 +401,43 @@ class BackupServiceTest extends TestCase
         $this->assertEquals('00:00:00', $resultDate->format('H:i:s'));
     }
 
+    /**
+     * Demonstrates the new clock injection seam — passing a frozen-time
+     * fake clock makes getNextScheduledBackup() deterministic. Pre-fix
+     * this method called `new DateTime()` twice; the test couldn't
+     * pin "now" without monkeypatching.
+     */
+    public function testGetNextScheduledBackupHonoursInjectedClock(): void
+    {
+        // Frozen-time fake — every call to now() returns the same moment.
+        $frozenClock = new class implements \Psr\Clock\ClockInterface {
+            public function now(): \DateTimeImmutable
+            {
+                // 2030-06-15 12:00:00 UTC — well after the BACKUP_CRON_HOUR
+                // default (0 = midnight), so getNextScheduledBackup() should
+                // return *tomorrow* at midnight from this clock's perspective.
+                return new \DateTimeImmutable('2030-06-15T12:00:00+00:00');
+            }
+        };
+
+        // Use the existing reflection helper that bypasses
+        // ensureBackupDirectory(), then drop the frozen clock onto
+        // the private $clock property.
+        $service = $this->createBackupServiceWithoutFilesystem();
+        $clockProp = (new \ReflectionClass(\Eiou\Services\BackupService::class))->getProperty('clock');
+        $clockProp->setAccessible(true);
+        $clockProp->setValue($service, $frozenClock);
+
+        $result = $this->getNextScheduledBackupMethod->invoke($service);
+
+        $resultDate = new \DateTimeImmutable($result);
+
+        // The frozen clock says "now is 12:00 on 2030-06-15"; midnight
+        // has already passed today, so the next scheduled backup must
+        // be 2030-06-16T00:00:00.
+        $this->assertSame('2030-06-16T00:00:00', $resultDate->format('Y-m-d\TH:i:s'));
+    }
+
     // =========================================================================
     // Integration-style Tests for Utility Logic
     // =========================================================================

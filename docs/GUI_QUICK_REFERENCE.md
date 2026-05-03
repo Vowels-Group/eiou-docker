@@ -212,7 +212,7 @@ fetch(window.location.href, {
 
 | Parameter | Value |
 |-----------|-------|
-| Name | `EIOU_WALLET_SESSION` |
+| Name | `EIOU_WALLET_SESSION_<nodeHash>` (per-node suffix; see GUI_REFERENCE) |
 | HttpOnly | `true` |
 | SameSite | `Strict` |
 | Secure | Auto (HTTPS only when available) |

@@ -43,108 +43,88 @@ class CliHelpService
                 ],
                 'note' => 'The auth code is never exposed in command output to prevent leaks via Docker logs, shell history, or screen sharing. With --show-auth, the code is stored in a memory-only temp file (/dev/shm/) that auto-deletes after 5 minutes.'
             ],
-            'add' => [
-                'description' => 'Add a new contact or accept an incoming contact request',
-                'usage' => 'add [address] [name] [fee] [credit] [currency] [message]',
+            'contact' => [
+                'description' => 'Manage contacts and per-currency relationships (add, accept, apply, decline, list, view, update, delete, block/unblock, ping, search, currency …)',
+                'usage' => 'contact <subcommand> [args...]',
                 'arguments' => [
-                    'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor .onion)'],
-                    'name' => ['type' => 'required', 'description' => 'Contact name (use quotes for multi-word names: "John Doe")'],
-                    'fee' => ['type' => 'required', 'description' => 'Fee percentage for relaying transactions through you (e.g., 1.0 = 1%)'],
-                    'credit' => ['type' => 'required', 'description' => 'Credit limit you extend to this contact'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code (e.g., USD)'],
-                    'message' => ['type' => 'optional', 'description' => 'A short message sent with the contact request (E2E encrypted for non-Tor, transport-encrypted for Tor)']
+                    'subcommand' => ['type' => 'required', 'description' => 'add | accept | apply | decline | list | pending | view | update | delete | block | unblock | ping | search | currency'],
+                ],
+                'actions' => [
+                    'add' => [
+                        'usage' => 'contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]',
+                        'description' => 'Send an outbound contact request. Flags can appear in any order. --requested-credit RC asks the receiver to extend you a credit limit of RC in this currency (a suggestion sent over the wire — receiver chooses what to actually grant on accept).',
+                    ],
+                    'accept' => [
+                        'usage' => 'contact accept <pubkey-hash|address|name> --currency CCY --fee F --credit C [--currency CCY --fee F --credit C ...]',
+                        'description' => 'Accept an incoming contact request. Repeat the --currency/--fee/--credit triplet to accept several currencies in one call.',
+                    ],
+                    'apply' => [
+                        'usage' => 'contact apply <pubkey-hash|address|name> --from <file.json|->  |  [--accept CCY:fee:credit ...] [--decline CCY ...] [--defer CCY ...]',
+                        'description' => 'Apply a batched mix of accept / decline / defer decisions in one call. Mirrors the GUI batched-apply modal; pipe modal payload via --from -.',
+                    ],
+                    'decline' => [
+                        'usage' => 'contact decline <pubkey-hash|address|name>',
+                        'description' => 'Decline every pending currency on an incoming contact request.',
+                    ],
+                    'list' => [
+                        'usage' => 'contact list [--status accepted|pending|blocked]',
+                        'description' => 'List contacts grouped by status (omit --status to see all buckets).',
+                    ],
+                    'pending' => [
+                        'usage' => 'contact pending [--incoming|--outgoing]',
+                        'description' => 'Show pending contact requests. Each incoming row prints a paste-ready accept/decline command line.',
+                    ],
+                    'view' => [
+                        'usage' => 'contact view <name|address|pubkey-hash>',
+                        'description' => 'View detailed contact info: per-currency balances, fee/credit settings, your/their available credit (refreshed via ping/pong).',
+                    ],
+                    'update' => [
+                        'usage' => 'contact update <name|address> <name|fee|credit|all> <values…>',
+                        'description' => 'Local-only update. fee/credit require a trailing currency code; all takes <new-name> <fee> <credit> [<CCY>].',
+                    ],
+                    'delete' => [
+                        'usage' => 'contact delete <name|address>',
+                        'description' => 'Permanently remove the contact (transaction history is preserved).',
+                    ],
+                    'block' => [
+                        'usage' => 'contact block <name|address>',
+                        'description' => 'Block incoming transactions and P2P relay traffic from this contact.',
+                    ],
+                    'unblock' => [
+                        'usage' => 'contact unblock <name|address>',
+                        'description' => 'Restore the contact to its previous (accepted or pending) status.',
+                    ],
+                    'ping' => [
+                        'usage' => 'contact ping <name|address>',
+                        'description' => 'Check online status, exchange per-currency available credit, and verify chain heads. Mismatches trigger sync; unrecoverable gaps auto-propose a tx drop.',
+                    ],
+                    'search' => [
+                        'usage' => 'contact search [query]',
+                        'description' => 'Substring search by name (omit query to list all).',
+                    ],
+                    'currency' => [
+                        'usage' => 'contact currency <add|accept|decline|list|remove> <contact> [<currency>] [--fee F --credit C]',
+                        'description' => 'Per-currency operations on an already-accepted contact (add proposes a new currency, accept/decline/list/remove handle the remote-acked lifecycle).',
+                    ],
                 ],
                 'examples' => [
-                    'add http://bob:8080 Bob 1.0 100 USD' => 'Add a new contact',
-                    'add http://bob:8080 "Jane Doe" 1.0 100 USD' => 'Add with a multi-word name',
-                    'add abc123...onion Alice 0.5 500 USD' => 'Add via Tor address',
-                    'add http://charlie:8080 Charlie 1 200 USD "Hey its me Dave"' => 'Add with a message',
-                    'add http://charlie:8080 Charlie 1 200 USD --json' => 'JSON output'
+                    'contact' => 'Show the full contact subcommand tree (same as `contact help`)',
+                    'contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD' => 'Send a contact request to Bob (USD)',
+                    'contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD --requested-credit 500' => 'Same request, asking Bob to extend you a 500 USD credit limit',
+                    'contact pending --json | jq .data.incoming[0].pubkey_hash' => 'Pull the requester\'s pubkey-hash for accept',
+                    'contact accept abc123hash --currency USD --fee 0.1 --credit 1000' => 'Accept a single-currency incoming request',
+                    'contact accept abc123hash --currency USD --fee 0.1 --credit 1000 --currency EUR --fee 0.05 --credit 500' => 'Accept multiple currencies in one call',
+                    'contact apply abc123hash --accept USD:0.1:1000 --decline EUR --defer XRP' => 'Batched accept/decline/defer',
+                    'contact decline abc123hash' => 'Decline every pending currency on the request',
+                    'contact list --status accepted' => 'Show only accepted contacts',
+                    'contact view Bob' => 'View Bob\'s details by name',
+                    'contact update Bob name Robert' => 'Rename Bob locally',
+                    'contact update Bob fee 1.5 USD' => 'Change the fee percentage you charge to relay Bob\'s USD txs',
+                    'contact ping Bob' => 'Check Bob\'s online status + chain validity',
+                    'contact currency add Bob EUR --fee 0.05 --credit 500' => 'Propose a new currency on an accepted contact',
+                    'contact currency accept Bob EUR --fee 0.05 --credit 500' => 'Accept Bob\'s incoming per-currency proposal',
                 ],
-                'note' => 'Creates a pending contact request that the recipient must accept. To accept an incoming request, use add with the sender\'s address. Rate limited: 20 additions per minute.'
-            ],
-            'search' => [
-                'description' => 'Search for contacts by name (partial match) or list all contacts',
-                'usage' => 'search ([name])',
-                'arguments' => [
-                    'name' => ['type' => 'optional', 'description' => 'Search term (partial name match). Omit to list all contacts.']
-                ],
-                'examples' => [
-                    'search bob' => 'Search for contacts containing "bob"',
-                    'search' => 'List all contacts',
-                    'search alice --json' => 'JSON output'
-                ],
-                'note' => 'Shows name, address(es), status, fee percentage, credit limit, currency, your available credit (from pong), and their available credit (calculated).'
-            ],
-            'viewcontact' => [
-                'description' => 'View detailed information about a specific contact',
-                'usage' => 'viewcontact [address/name]',
-                'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or display name']
-                ],
-                'examples' => [
-                    'viewcontact Bob' => 'View by name',
-                    'viewcontact http://bob:8080' => 'View by address',
-                    'viewcontact --json Bob' => 'JSON output'
-                ],
-                'note' => 'Shows name, status, addresses, public key, balance (received/sent/net), fee percentage, credit limit, your available credit with them (from pong, ~5 min refresh), and their available credit with you (calculated).'
-            ],
-            'update' => [
-                'description' => 'Update contact settings (name, fee, credit limit, or all at once)',
-                'usage' => 'update [address/name] [name/fee/credit/all] [values...] [currency]',
-                'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or display name'],
-                    'field' => ['type' => 'required', 'description' => 'Field to update: name, fee, credit, or all'],
-                    'values' => ['type' => 'required', 'description' => 'New value(s) for the field(s)'],
-                    'currency' => ['type' => 'required for fee/credit', 'description' => 'Currency code (e.g., USD, EUR). Optional for "all" (defaults to contact\'s current currency)']
-                ],
-                'examples' => [
-                    'update Bob name Robert' => 'Rename contact',
-                    'update Bob fee 1.5 USD' => 'Change fee percentage for USD',
-                    'update Bob credit 500 EUR' => 'Change credit limit for EUR',
-                    'update Bob all NewName 2.0 1000 USD' => 'Update all fields at once for USD',
-                    'update Bob all NewName 2.0 1000' => 'Update all (currency defaults to contact\'s)',
-                    'update http://bob:8080 fee 2.0 USD --json' => 'Update by address with JSON output'
-                ],
-                'note' => 'Changes are local only — the contact is not notified. Fee percentage controls what you charge for relaying transactions through you for this contact. Credit limit is the maximum amount you allow this contact to owe you. Currency is required for fee and credit updates to specify which currency\'s settings to modify.'
-            ],
-            'block' => [
-                'description' => 'Block a contact from sending transactions to you',
-                'usage' => 'block [address/name]',
-                'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to block']
-                ],
-                'examples' => [
-                    'block SpamUser' => 'Block by name',
-                    'block http://badactor:8080' => 'Block by address',
-                    'block http://badactor:8080 --json' => 'JSON output'
-                ],
-                'note' => 'Blocked contacts cannot send you transactions or P2P requests. Incoming transactions from blocked contacts are rejected.'
-            ],
-            'unblock' => [
-                'description' => 'Unblock a previously blocked contact',
-                'usage' => 'unblock [address/name]',
-                'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to unblock']
-                ],
-                'examples' => [
-                    'unblock SpamUser' => 'Unblock by name',
-                    'unblock http://user:8080 --json' => 'JSON output'
-                ],
-                'note' => 'Restores the contact to their previous status (accepted or pending). They can resume sending transactions and P2P requests.'
-            ],
-            'delete' => [
-                'description' => 'Delete a contact permanently',
-                'usage' => 'delete [address/name]',
-                'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to delete']
-                ],
-                'examples' => [
-                    'delete OldContact' => 'Delete by name',
-                    'delete http://old:8080' => 'Delete by address',
-                    'delete OldContact --json' => 'JSON output'
-                ],
-                'note' => 'Removes the contact and their addresses. Transaction history and balances are preserved. The contact can re-add you, which will appear as a new pending request.'
+                'note' => 'Subcommand-specific help is served by `eiou contact` (or `eiou contact help`) and `eiou contact currency`. There is no `eiou help contact <subcmd>` form. The legacy top-level verbs (eiou add / delete / block / unblock / viewcontact / update / search / ping / pending / accept) were dropped in v0.1.14 — every contact operation lives under this namespace now. Rate limited: 20 contact ops per minute (the `contact` rate-limit bucket).'
             ],
             'send' => [
                 'description' => 'Send an eIOU transaction to a contact (direct or P2P relayed)',
@@ -192,16 +172,6 @@ class CliHelpService
                     'history --json' => 'JSON output'
                 ],
                 'note' => 'Shows transaction ID, direction (sent/received), amount, currency, timestamp, and contact name. Default limit is controlled by the maxOutput setting. Transactions are shown newest first.'
-            ],
-            'pending' => [
-                'description' => 'View pending contact requests (incoming and outgoing)',
-                'usage' => 'pending',
-                'arguments' => [],
-                'examples' => [
-                    'pending' => 'View all pending requests',
-                    'pending --json' => 'JSON output'
-                ],
-                'note' => 'Shows incoming requests (from others awaiting your acceptance) and outgoing requests (your requests awaiting others). After a wallet restore, prior contacts that ping your node appear here as incoming requests. Contacts with transaction history are prior contacts that can be re-accepted with the add command.'
             ],
             'p2p' => [
                 'description' => 'Manage P2P transactions awaiting approval',
@@ -385,19 +355,6 @@ class CliHelpService
                 ],
                 'note' => 'Requires EIOU_TEST_MODE=true. Processes held transactions that may have completed sync. Used for testing and debugging.'
             ],
-            'ping' => [
-                'description' => 'Check if a contact is online, verify chain validity, and retrieve available credit',
-                'usage' => 'ping [address/name]',
-                'arguments' => [
-                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to ping']
-                ],
-                'examples' => [
-                    'ping Bob' => 'Ping by name',
-                    'ping http://bob:8080' => 'Ping by address',
-                    'ping --json Alice' => 'JSON output'
-                ],
-                'note' => 'Returns online status (online, partial, or offline). Verifies local chain integrity and compares chain heads with the remote contact. If a mismatch or gap is detected, auto-triggers sync (with backup recovery). If sync fails, auto-proposes a chain drop. The pong response also includes the available credit the contact extends to you (~5 min auto-refresh).'
-            ],
             'apikey' => [
                 'description' => 'Manage API keys for external API access',
                 'usage' => 'apikey [action] ([args...])',
@@ -456,13 +413,18 @@ class CliHelpService
                 'permissions' => [
                     'wallet:read' => 'Read wallet balance, info, and transactions',
                     'wallet:send' => 'Send transactions, manage chain drops',
+                    'wallet:*' => 'Both wallet:read and wallet:send',
                     'contacts:read' => 'List, view, search, and ping contacts',
                     'contacts:write' => 'Add, update, delete, block/unblock contacts',
+                    'contacts:*' => 'Both contacts:read and contacts:write',
                     'system:read' => 'View system status, metrics, and settings',
                     'backup:read' => 'Read backup status/list, verify backups',
                     'backup:write' => 'Create, restore, delete, enable/disable backups',
-                    'admin' => 'Full administrative access (settings, sync, shutdown, keys)',
-                    'all' => 'All permissions (same as admin)'
+                    'backup:*' => 'Both backup:read and backup:write',
+                    'payback:read' => 'List/read your own payback methods (sensitive fields redacted)',
+                    'payback:write' => 'Create/edit/delete payback methods, AND reveal plaintext via /payback-methods/:id/reveal (write-class because it returns secrets)',
+                    'payback:*' => 'Both payback:read and payback:write',
+                    'admin' => 'Full administrative access (settings, sync, shutdown/start/restart, keys, plugins). Implies every other scope.',
                 ],
                 'api_usage' => [
                     'base_url' => 'http://your-node/api/v1/...',
@@ -545,6 +507,45 @@ class CliHelpService
                     'start --json' => 'JSON output'
                 ],
                 'note' => 'Removes the shutdown flag. The watchdog detects this and restarts all processors within 30 seconds. If no shutdown flag exists (processors already running), reports that and exits.'
+            ],
+            'restart' => [
+                'description' => 'Restart processors AND PHP-FPM workers in-place (apply plugin/config changes without a container reboot)',
+                'usage' => 'restart',
+                'arguments' => [],
+                'examples' => [
+                    'restart' => 'Restart everything in-place',
+                    'restart --json' => 'JSON output'
+                ],
+                'note' => 'SIGTERMs the processors (the watchdog respawns them within ~30s) and sends SIGUSR2 to the PHP-FPM master to gracefully recycle all worker processes. In-flight HTTP requests finish before workers exit. Required when toggling plugins, since event subscriptions bind during boot. Must run as root inside the container — the CLI does, calling from a PHP-FPM worker (GUI) does not.'
+            ],
+            'plugin' => [
+                'description' => 'Manage plugins: list installed ones and toggle their enabled flag',
+                'usage' => 'plugin [list|enable|disable] [name]',
+                'arguments' => [
+                    'subcommand' => ['type' => 'optional', 'description' => 'Subcommand: list (default), enable, disable'],
+                    'name' => ['type' => 'conditional', 'description' => 'Plugin name — required for enable/disable']
+                ],
+                'actions' => [
+                    'list' => [
+                        'usage' => 'plugin [list]',
+                        'description' => 'List every installed plugin with version, enabled flag, status, license',
+                    ],
+                    'enable' => [
+                        'usage' => 'plugin enable <name>',
+                        'description' => 'Persist the enabled flag as true for the named plugin',
+                    ],
+                    'disable' => [
+                        'usage' => 'plugin disable <name>',
+                        'description' => 'Persist the enabled flag as false for the named plugin',
+                    ],
+                ],
+                'examples' => [
+                    'plugin' => 'List all plugins (table)',
+                    'plugin list --json' => 'List all plugins (JSON with full metadata)',
+                    'plugin enable hello-eiou' => 'Enable hello-eiou',
+                    'plugin disable hello-eiou' => 'Disable hello-eiou',
+                ],
+                'note' => 'Enable/disable persists to /etc/eiou/config/plugins.json immediately but does NOT take effect until the next restart — event subscriptions bind during boot. Run `eiou restart` (or hit POST /api/v1/system/restart, or use the GUI restart button) once you are done toggling.'
             ],
             'chaindrop' => [
                 'description' => 'Manage chain drop agreements for resolving transaction chain gaps',
@@ -692,9 +693,10 @@ class CliHelpService
                     ],
                     'approve' => [
                         'description' => 'Approve an incoming request (sends the eIOU)',
-                        'usage' => 'request approve <request_id>',
+                        'usage' => 'request approve <request_id> [note]',
                         'arguments' => [
-                            'request_id' => ['type' => 'required', 'description' => 'The request ID to approve']
+                            'request_id' => ['type' => 'required', 'description' => 'The request ID to approve'],
+                            'note' => ['type' => 'optional', 'description' => 'Free-form payer note appended to the on-chain description with " | " (e.g. "paid via coinbase txid abc"). Length is capped against whatever space the requester\'s description leaves under the 255-char ceiling; over-long notes are rejected.']
                         ]
                     ],
                     'decline' => [
@@ -716,6 +718,7 @@ class CliHelpService
                     'request list' => 'List all payment requests',
                     'request create "Alice" 25.00 USD "Dinner"' => 'Request 25 USD from Alice',
                     'request approve req_abc123' => 'Approve and pay the request',
+                    'request approve req_abc123 "paid via coinbase txid abc"' => 'Approve and append a payer note to the on-chain description',
                     'request decline req_abc123' => 'Decline the request',
                     'request cancel req_abc123' => 'Cancel your outgoing request',
                     'request --json' => 'JSON output'
@@ -760,6 +763,31 @@ class CliHelpService
                     'dlq --json' => 'JSON output with statistics',
                 ],
                 'note' => 'The DLQ captures messages that could not be delivered after ' . Constants::DELIVERY_MAX_RETRIES . ' automatic attempts. All items originated from this node. Retry re-sends the original signed payload directly to the recipient.'
+            ],
+            'payback' => [
+                'description' => 'Manage your payback methods (settlement rails — bank wire, custom free-text, plugin-provided types).',
+                'usage' => 'payback <action> [args...]',
+                'arguments' => [
+                    'action' => ['type' => 'required', 'description' => 'list | add | show | edit | remove | share-policy | help'],
+                ],
+                'examples' => [
+                    'payback' => 'Run `eiou payback help` for the full subcommand tree.',
+                    'payback list' => 'List all enabled payback methods',
+                    'payback list --currency USD --all' => 'Filter by currency, include disabled',
+                    'payback add bank_wire "My Revolut" EUR' => 'Add a SEPA bank-wire method (prompts for type-specific fields)',
+                    'payback show pbm_abc123' => 'Reveal a method\'s decrypted plaintext fields',
+                ],
+                'note' => 'Run `eiou payback help` for full details. Sensitive fields are encrypted at rest per row; the CLI is treated as already-authenticated by virtue of shell access. Plugins can register additional rail types (btc, paypal, lightning, …) — see docs/PLUGINS.md.'
+            ],
+            'verify-chain' => [
+                'description' => 'Walk every bilateral chain end-to-end and verify each pair\'s archive hash against the stored checkpoint.',
+                'usage' => 'verify-chain',
+                'arguments' => [],
+                'examples' => [
+                    'verify-chain' => 'Audit every pair (exits 1 if any pair has a chain gap or hash mismatch)',
+                    'verify-chain --json' => 'JSON output',
+                ],
+                'note' => 'O(all-history) per pair — bypasses the hot-path checkpoint optimization, so run deliberately. Useful after a restore or when investigating pairs_skipped_gap from the archival cron.'
             ],
             'global_options' => [
                 'description' => 'Global options available for all commands',
@@ -898,11 +926,18 @@ Create a new API key:
   Available permissions:
     - wallet:read     Read wallet balance and transactions
     - wallet:send     Send transactions
+    - wallet:*        Both wallet:read and wallet:send
     - contacts:read   List and view contacts
     - contacts:write  Add, update, delete contacts
-    - system:read     View system status and metrics
-    - admin           Full administrative access
-    - all             All permissions (same as admin)
+    - contacts:*      Both contacts:read and contacts:write
+    - system:read     View system status, metrics, and settings
+    - backup:read     Read backup status/list, verify backups
+    - backup:write    Create, restore, delete, enable/disable backups
+    - backup:*        Both backup:read and backup:write
+    - payback:read    List/read your own payback methods (redacted)
+    - payback:write   Create/edit/delete + reveal plaintext (write-class)
+    - payback:*       Both payback:read and payback:write
+    - admin           Full administrative access (settings, sync, shutdown/start/restart, keys, plugins) — implies every other scope
 
 List all API keys:
   eiou apikey list

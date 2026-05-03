@@ -17,6 +17,7 @@ namespace Eiou\Tests\Services;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
+use Eiou\Core\AppConfig;
 use Eiou\Services\CliService;
 use Eiou\Services\CliSettingsService;
 use Eiou\Services\CliHelpService;
@@ -76,7 +77,7 @@ class CliServiceTest extends TestCase
         );
 
         // Inject sub-services for delegation (ARCH-04)
-        $this->service->setSettingsService(new CliSettingsService($this->userContext));
+        $this->service->setSettingsService(new CliSettingsService($this->userContext, AppConfig::fromEnvironment()));
         $this->service->setHelpService(new CliHelpService());
     }
 
@@ -451,6 +452,34 @@ class CliServiceTest extends TestCase
         $this->assertStringContainsString('Outgoing Requests (1)', $output);
         $this->assertStringContainsString('http://incoming.test', $output);
         $this->assertStringContainsString('Outgoing Contact', $output);
+    }
+
+    /**
+     * Pending hint text was rewritten as part of the contact-CLI rework:
+     * the old "eiou add <addr> [name] [fee] [credit] [currency]" guidance
+     * is replaced by the new namespace ("eiou contact accept …" plus a
+     * "decline" hint), preferring pubkey-hash when the row carries one.
+     */
+    public function testDisplayPendingContactsHintsAtNewContactNamespace(): void
+    {
+        $this->outputManager->method('isJsonMode')->willReturn(false);
+        $this->contactRepository->method('getPendingContactRequests')
+            ->willReturn([
+                [
+                    'http' => 'http://incoming.test',
+                    'pubkey_hash' => 'abc123',
+                    'created_at' => '2025-01-01 10:00:00',
+                ],
+            ]);
+        $this->contactRepository->method('getUserPendingContactRequests')->willReturn([]);
+
+        ob_start();
+        $this->service->displayPendingContacts(['eiou', 'pending'], $this->outputManager);
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('eiou contact accept abc123 --currency CCY --fee F --credit C', $output);
+        $this->assertStringContainsString('eiou contact decline abc123', $output);
+        $this->assertStringNotContainsString('eiou add http://incoming.test', $output);
     }
 
     /**

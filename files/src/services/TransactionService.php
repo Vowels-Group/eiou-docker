@@ -570,20 +570,21 @@ class TransactionService implements TransactionServiceInterface {
         return $this->transactionRepository->searchTransactions($term, $direction, $txType, $status, $maxResults);
     }
 
-    public function getTransactionHistory(int $limit = 10, int $offset = 0): array {
+    public function getTransactionHistory(int $limit = 10, int $offset = 0, ?array $cursor = null): array {
         // Over-fetch from the primary table so the cancelled-P2P merge still
         // has a stable `$limit` rows of material after slicing. Offset is
         // applied to the primary table query; cancelled P2Ps are only
-        // fetched on the first page (offset === 0) because they're a small
-        // supplementary set that doesn't paginate cleanly.
-        $transactions = $this->transactionRepository->getTransactionHistory($limit, null, $offset);
+        // fetched on the first page (offset === 0 AND no cursor) because
+        // they're a small supplementary set that doesn't paginate cleanly.
+        $transactions = $this->transactionRepository->getTransactionHistory($limit, null, $offset, $cursor);
 
         // Merge in cancelled/expired originator P2Ps that never created a transaction,
         // so failed P2P attempts are visible in the Recent Transactions view.
         // Only on the first page — subsequent pages keep the primary-table
         // ordering without reshuffling in older cancelled P2Ps.
+        $isFirstPage = ($cursor === null) && ($offset === 0);
         try {
-            $cancelledP2ps = $offset === 0 ? $this->p2pRepository->getCancelledOriginatorP2ps($limit) : [];
+            $cancelledP2ps = $isFirstPage ? $this->p2pRepository->getCancelledOriginatorP2ps($limit) : [];
             foreach ($cancelledP2ps as $p2p) {
                 $amount = ($p2p['amount'] instanceof SplitAmount) ? $p2p['amount'] : SplitAmount::from($p2p['amount'] ?? 0);
                 $transactions[] = [

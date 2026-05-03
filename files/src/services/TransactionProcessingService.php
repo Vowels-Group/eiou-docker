@@ -18,6 +18,9 @@ use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\P2pEvents;
+use Eiou\Events\TransactionEvents;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
@@ -165,6 +168,14 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
 
         $this->transactionRepository->insertTransaction($request, 'received');
         $this->transactionRepository->updateTrackingFields($request['txid'], $myAddress, $request['senderAddress']);
+
+        EventDispatcher::getInstance()->dispatch(TransactionEvents::TRANSACTION_RECEIVED, [
+            'txid' => $request['txid'],
+            'amount' => $request['amount'] ?? null,
+            'currency' => $request['currency'] ?? null,
+            'sender_pubkey' => $request['senderPublicKey'] ?? null,
+            'sender_address' => $request['senderAddress'] ?? null,
+        ]);
     }
 
     private function processP2pIncoming(array $request): void
@@ -173,14 +184,26 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         $rP2pResult = $this->rp2pRepository->getByHash($memo);
 
         if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
-            // Relay transaction
+            // Relay transaction — fires P2P_RECEIVED so relay-path plugins
+            // (e.g. hop-tracing or relay-fee analytics) can observe the leg.
             $insertTransactionResponse = json_decode(
                 $this->transactionRepository->insertTransaction($request, 'relay'),
                 true
             );
             output(outputTransactionInsertion($insertTransactionResponse));
+
+            EventDispatcher::getInstance()->dispatch(P2pEvents::P2P_RECEIVED, [
+                'p2p_id' => $memo,
+                'txid' => $request['txid'] ?? '',
+                'amount' => $request['amount'] ?? null,
+                'currency' => $request['currency'] ?? null,
+                'sender_pubkey' => $request['senderPublicKey'] ?? null,
+            ]);
         } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
-            // End-recipient
+            // End-recipient — fires both P2P_RECEIVED and P2P_COMPLETED; the
+            // former keeps symmetry with the relay path, the latter signals
+            // that this node is the final hop (useful for "tx finished"
+            // notifications, settlement triggers, etc.).
             $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
             if (!isset($request['recipientSignature'])) {
@@ -193,6 +216,16 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             );
             output(outputTransactionInsertion($insertTransactionResponse));
             $this->transactionRepository->updateTrackingFields($request['txid'], $myAddress, null);
+
+            $payload = [
+                'p2p_id' => $memo,
+                'txid' => $request['txid'] ?? '',
+                'amount' => $request['amount'] ?? null,
+                'currency' => $request['currency'] ?? null,
+                'sender_pubkey' => $request['senderPublicKey'] ?? null,
+            ];
+            EventDispatcher::getInstance()->dispatch(P2pEvents::P2P_RECEIVED, $payload);
+            EventDispatcher::getInstance()->dispatch(P2pEvents::P2P_COMPLETED, $payload);
         }
     }
 
@@ -303,6 +336,19 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             // back to 'sending' when the user retries, so cancelling here is safe.
             if (!empty($sendResult['tracking']['dlq'])) {
                 $this->transactionRepository->updateStatus($txid, Constants::STATUS_CANCELLED, true);
+            }
+
+            // TRANSACTION_FAILED fires only once attempts are exhausted (DLQ
+            // flag set). A transient failure that will retry is not a
+            // terminal failure — plugins subscribed to this event should be
+            // able to trust that it's the final word on this tx.
+            if (!empty($sendResult['tracking']['dlq'])) {
+                EventDispatcher::getInstance()->dispatch(TransactionEvents::TRANSACTION_FAILED, [
+                    'txid' => $txid,
+                    'error' => $sendResult['tracking']['error'] ?? 'delivery failed',
+                    'attempts' => (int) ($sendResult['tracking']['attempts'] ?? 0),
+                    'recipient_address' => $message['receiver_address'] ?? null,
+                ]);
             }
         }
 
@@ -515,6 +561,17 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         if (isset($response['recipientSignature'])) {
             $this->transactionRepository->updateRecipientSignature($txid, $response['recipientSignature']);
         }
+
+        // Fetch the tx so the event carries business data (amount, currency,
+        // recipient) without requiring subscribers to do a round-trip.
+        $tx = $this->transactionRepository->getByTxid($txid);
+        EventDispatcher::getInstance()->dispatch(TransactionEvents::TRANSACTION_SENT, [
+            'txid' => $txid,
+            'amount' => $tx['amount'] ?? null,
+            'currency' => $tx['currency'] ?? null,
+            'recipient_address' => $tx['receiver_address'] ?? null,
+            'response' => $response,
+        ]);
     }
 
     private function handleInvalidPreviousTxidDirect(array $message, array $response, string $txid): bool

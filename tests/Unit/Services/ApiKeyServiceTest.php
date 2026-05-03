@@ -213,13 +213,20 @@ class ApiKeyServiceTest extends TestCase
         $expectedPermissions = [
             'wallet:read',
             'wallet:send',
+            'wallet:*',
             'contacts:read',
             'contacts:write',
+            'contacts:*',
             'system:read',
+            'system:write',
+            'system:*',
             'backup:read',
             'backup:write',
+            'backup:*',
+            'payback:read',
+            'payback:write',
+            'payback:*',
             'admin',
-            'all'
         ];
 
         $this->assertEquals($expectedPermissions, $permissionsProperty);
@@ -250,15 +257,57 @@ class ApiKeyServiceTest extends TestCase
     }
 
     /**
-     * Test PERMISSIONS constant includes admin permissions
+     * Test PERMISSIONS constant includes admin (the sole god-scope).
+     * The legacy 'all' synonym was removed in favour of 'admin'.
      */
-    public function testPermissionsConstantIncludesAdminPermissions(): void
+    public function testPermissionsConstantIncludesAdminPermission(): void
     {
         $reflection = new ReflectionClass(ApiKeyService::class);
         $permissions = $reflection->getConstant('PERMISSIONS');
 
         $this->assertContains('admin', $permissions);
-        $this->assertContains('all', $permissions);
+        $this->assertNotContains('all', $permissions);
+    }
+
+    /**
+     * Test PERMISSIONS constant includes the new payback scopes.
+     */
+    public function testPermissionsConstantIncludesPaybackPermissions(): void
+    {
+        $reflection = new ReflectionClass(ApiKeyService::class);
+        $permissions = $reflection->getConstant('PERMISSIONS');
+
+        $this->assertContains('payback:read', $permissions);
+        $this->assertContains('payback:write', $permissions);
+        $this->assertContains('payback:*', $permissions);
+    }
+
+    /**
+     * Test PERMISSIONS constant includes system:write (split out from admin).
+     */
+    public function testPermissionsConstantIncludesSystemWrite(): void
+    {
+        $reflection = new ReflectionClass(ApiKeyService::class);
+        $permissions = $reflection->getConstant('PERMISSIONS');
+
+        $this->assertContains('system:read', $permissions);
+        $this->assertContains('system:write', $permissions);
+        $this->assertContains('system:*', $permissions);
+    }
+
+    /**
+     * Test category wildcards are in the whitelist (so they can be granted).
+     */
+    public function testPermissionsConstantIncludesCategoryWildcards(): void
+    {
+        $reflection = new ReflectionClass(ApiKeyService::class);
+        $permissions = $reflection->getConstant('PERMISSIONS');
+
+        $this->assertContains('wallet:*', $permissions);
+        $this->assertContains('contacts:*', $permissions);
+        $this->assertContains('backup:*', $permissions);
+        $this->assertContains('payback:*', $permissions);
+        $this->assertContains('system:*', $permissions);
     }
 
     // =========================================================================
@@ -794,10 +843,12 @@ class ApiKeyServiceTest extends TestCase
         $this->assertStringContainsString('contacts:read', $output);
         $this->assertStringContainsString('contacts:write', $output);
         $this->assertStringContainsString('system:read', $output);
+        $this->assertStringContainsString('system:write', $output);
         $this->assertStringContainsString('backup:read', $output);
         $this->assertStringContainsString('backup:write', $output);
+        $this->assertStringContainsString('payback:read', $output);
+        $this->assertStringContainsString('payback:write', $output);
         $this->assertStringContainsString('admin', $output);
-        $this->assertStringContainsString('all', $output);
     }
 
     /**

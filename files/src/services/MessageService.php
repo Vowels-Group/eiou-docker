@@ -410,6 +410,54 @@ class MessageService implements MessageServiceInterface {
         elseif($request['typeMessage'] === "payment_request"){
             $this->handlePaymentRequestMessage($request);
         }
+        // Handle Payback Methods messages (E2E fetch + response + revoke)
+        elseif($request['typeMessage'] === "payback_methods"){
+            $this->handlePaybackMethodsMessage($request);
+        }
+    }
+
+    /**
+     * Handle payback_methods messages
+     *
+     * Routes to ReceivedPaybackMethodService based on the action field:
+     *   action=request  → responder side — build and send a response
+     *   action=response → requester side — cache received methods with TTL
+     *   action=revoke   → requester side — mark received methods revoked
+     *
+     * The response dispatch itself is left to the message delivery layer —
+     * this handler produces the response payload and logs the decision.
+     */
+    private function handlePaybackMethodsMessage(array $request): void {
+        $service = null;
+        try {
+            $service = \Eiou\Services\ServiceContainer::getInstance()->getReceivedPaybackMethodService();
+        } catch (\Throwable $e) {
+            Logger::getInstance()->warning("payback_methods message received but service unavailable", [
+                'error' => $e->getMessage(),
+            ]);
+            return;
+        }
+
+        $senderPubkeyHash = (string) ($request['senderPubkeyHash'] ?? $request['senderPublicKeyHash'] ?? '');
+        $action = $request['action'] ?? null;
+        $payload = $request['payload'] ?? $request;
+
+        switch ($action) {
+            case 'request':
+                $response = $service->handleIncomingRequest($senderPubkeyHash, $payload);
+                echo json_encode(['success' => true, 'status' => 'received', 'response' => $response]);
+                return;
+            case 'response':
+                $count = $service->handleIncomingResponse($senderPubkeyHash, $payload);
+                echo json_encode(['success' => true, 'status' => 'received', 'methods_cached' => $count]);
+                return;
+            case 'revoke':
+                $count = $service->handleIncomingRevoke($senderPubkeyHash, $payload);
+                echo json_encode(['success' => true, 'status' => 'received', 'methods_revoked' => $count]);
+                return;
+            default:
+                Logger::getInstance()->warning("Unknown payback_methods action", ['action' => $action]);
+        }
     }
 
     /**
@@ -609,15 +657,22 @@ class MessageService implements MessageServiceInterface {
                 ]);
             }
 
-            // Complete the contact transaction (update status from 'sent' to 'completed')
-            $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
+            // Complete the contact transaction (update status from 'sent' to 'completed').
+            // Filter by the acked currency when the message names one — without
+            // it a USD ack would also flip a still-pending EUR row on the same
+            // pair. Fall back to the legacy bulk update when no currency is
+            // attached (older peers / inquiry flow).
+            $acceptedCurrency = $decodedMessage['currency'] ?? null;
+            $this->transactionContactRepository->completeContactTransaction(
+                $senderPublicKey,
+                $acceptedCurrency
+            );
 
             // Update outgoing currency entries to 'accepted' when remote accepts our request
             if ($this->contactCurrencyRepository !== null) {
                 $senderPubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
                 // If the acceptance message includes a specific currency, mark that one as accepted
-                $acceptedCurrency = $decodedMessage['currency'] ?? null;
                 if ($acceptedCurrency) {
                     $this->contactCurrencyRepository->updateCurrencyStatus(
                         $senderPubkeyHash, $acceptedCurrency, 'accepted', 'outgoing'
@@ -663,6 +718,82 @@ class MessageService implements MessageServiceInterface {
 
             // Return acknowledgment with our available credit for delivery tracking
             echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress, $ackCreditByCurrency, $ackCreditCalculatedAt);
+        } elseif ($status === 'declined') {
+            // Remote peer rejected our request. Two flavours:
+            //   - currency present → just that currency was declined
+            //     (e.g. an `addCurrencyToExisting` proposal). Drop the
+            //     stale outgoing-pending row so a retry doesn't trip
+            //     the legacy CONTACT_EXISTS path. Reject the
+            //     corresponding contact transaction so the activity
+            //     log reflects the outcome.
+            //   - currency absent → the whole contact request was
+            //     declined. Reject every still-pending outgoing
+            //     contact transaction with this peer + drop any
+            //     orphan outgoing-pending currency rows.
+            $declinedCurrency = $decodedMessage['currency'] ?? null;
+            $senderPubkeyHashLocal = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+            if ($declinedCurrency !== null && $declinedCurrency !== '') {
+                if ($this->contactCurrencyRepository !== null) {
+                    $this->contactCurrencyRepository->deletePendingOutgoingCurrency(
+                        $senderPubkeyHashLocal,
+                        $declinedCurrency
+                    );
+                }
+                $this->transactionContactRepository->rejectSentContactTransaction(
+                    $senderPublicKey,
+                    $declinedCurrency
+                );
+                // Drop the pre-emptive contact_credit row created by
+                // ContactManagementService::addCurrencyToContact when
+                // the user proposed this currency. Aggregation queries
+                // already filter to status='accepted' so a stale row
+                // doesn't show up on dashboards, but we still delete
+                // here to keep the table tight.
+                if ($this->contactCreditRepository !== null) {
+                    $this->contactCreditRepository->deleteForContactCurrency(
+                        $senderPubkeyHashLocal,
+                        $declinedCurrency
+                    );
+                }
+                Logger::getInstance()->info("Currency-decline notification processed", [
+                    'sender_address' => $senderAddress,
+                    'currency' => $declinedCurrency,
+                ]);
+            } else {
+                if ($this->contactCurrencyRepository !== null) {
+                    foreach ($this->contactCurrencyRepository->getPendingCurrencies($senderPubkeyHashLocal, 'outgoing') as $row) {
+                        $ccy = strtoupper((string) ($row['currency'] ?? ''));
+                        if ($ccy === '') {
+                            continue;
+                        }
+                        $this->contactCurrencyRepository->deletePendingOutgoingCurrency(
+                            $senderPubkeyHashLocal,
+                            $ccy
+                        );
+                        $this->transactionContactRepository->rejectSentContactTransaction(
+                            $senderPublicKey,
+                            $ccy
+                        );
+                        if ($this->contactCreditRepository !== null) {
+                            $this->contactCreditRepository->deleteForContactCurrency(
+                                $senderPubkeyHashLocal,
+                                $ccy
+                            );
+                        }
+                    }
+                }
+                Logger::getInstance()->info("Whole-contact decline notification processed", [
+                    'sender_address' => $senderAddress,
+                ]);
+            }
+
+            echo json_encode([
+                'status' => Constants::DELIVERY_RECEIVED,
+                'message' => 'Decline notification received',
+                'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
+                'senderPublicKey' => $this->currentUser->getPublicKey(),
+            ]);
         } elseif ($status === Constants::DELIVERY_CONTACT_DESCRIPTION) {
             // E2E encrypted contact description follow-up
             // The sender omitted the description from the initial cleartext contact request (non-TOR)

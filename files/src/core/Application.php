@@ -9,6 +9,8 @@ use Eiou\Utils\Security;
 use Eiou\Security\KeyEncryption;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
+use Eiou\Services\PluginLoader;
+use Eiou\Services\NodeRestartService;
 use Eiou\Services\RateLimiterService;
 use Eiou\Processors\CleanupMessageProcessor;
 use Eiou\Processors\P2pMessageProcessor;
@@ -65,6 +67,11 @@ class Application {
     public array $utils = [];
 
     /**
+     * @var PluginLoader|null Plugin discovery and lifecycle manager
+     */
+    public ?PluginLoader $pluginLoader = null;
+
+    /**
      * Private constructor for singleton pattern
      *
      * @throws RuntimeException If database setup fails during initialization
@@ -114,6 +121,14 @@ class Application {
         // Migrate default config to add any new configurable keys
         $this->migrateDefaultConfig();
 
+        // Validate the four-layer configuration (Constants -> env -> JSON ->
+        // UserContext) once at boot. Surfaces SSL-verify-off in production,
+        // unreadable JSON config files, missing CA bundles, malformed
+        // TRUSTED_PROXIES entries, etc. — all of which would otherwise show up
+        // as opaque downstream failures. Non-fatal: issues are logged so the
+        // operator can see them at startup without locking the wallet.
+        ConfigValidator::fromEnvironment()->validateAndLog($this->getLogger());
+
         // Setup user config
         if(file_exists('/etc/eiou/config/userconfig.json') && !$this->currentUserLoaded()){
             // Get UserContext instance
@@ -121,8 +136,38 @@ class Application {
             // Get ServiceContainer instance
             $this->loadserviceContainer();
             $this->loadUtilityServiceContainer();
+            // Discover plugins and run their register() phase BEFORE wireAllServices
+            // so plugins can add services that participate in dependency wiring.
+            $this->pluginLoader = new PluginLoader();
+            // Wire isolation services before setEnabled() can be called from
+            // CLI/REST/GUI. These fire the CREATE USER / GRANT / REVOKE DDL
+            // on every enable/disable when the plugin's manifest declares
+            // `database.user: true`. See docs/PLUGINS.md (Database Isolation).
+            $this->pluginLoader->setIsolationServices(
+                $this->services->getPluginCredentialService(),
+                $this->services->getPluginDbUserService()
+            );
+            // Wire the signature verifier with the configured mode. Default
+            // 'off' keeps backwards compat; operators opt in via Constants
+            // (will move to userconfig.json in a follow-up once other
+            // runtime-configurable plugin settings land).
+            $this->pluginLoader->setSignatureVerifier(
+                $this->services->getPluginSignatureVerifier(),
+                \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
+            );
+            $this->pluginLoader->discover();
+            // Reconcile MySQL users / grants against the on-disk manifest +
+            // plugin_credentials table. Self-heals after a mysql-data volume
+            // rebuild, a manual DROP USER, or an operator db_limits edit in
+            // plugins.json. Runs before registerAll() so plugins needing DB
+            // access during register() find their user ready.
+            $this->pluginLoader->reconcileIsolation();
+            $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services
             $this->services->wireAllServices();
+            // Plugin boot() runs after wiring so all core services are available
+            // when plugins subscribe to events or decorate services.
+            $this->pluginLoader->bootAll($this->services);
 
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)
             // This prevents unnecessary recovery runs and potential race conditions on every API call
@@ -730,6 +775,47 @@ class Application {
             'pid_files_cleaned' => count($pidFiles),
             'resources_released' => true
         ], "All resources have been released");
+    }
+
+    /**
+     * Full node restart: respawn PHP-FPM workers AND background processors so
+     * startup-bound state (plugin subscriptions, freshly wired services, etc.)
+     * picks up changes without a container reboot.
+     *
+     * Delegates to NodeRestartService for the actual signaling — see that
+     * class for the wire-level details and its unit tests for coverage.
+     *
+     * Caller permissions: signaling the PHP-FPM master requires running as the
+     * same UID as the master (root inside the container). The CLI runs as root,
+     * so `eiou restart` works. Calling this from a PHP-FPM worker (GUI/API)
+     * would fail to signal the master and is not currently supported.
+     *
+     * @param CliOutputManager|null   $output  Optional output manager for JSON support
+     * @param NodeRestartService|null $service Inject for testing; defaults to a fresh instance
+     * @return array{processors_terminated:int, fpm_reloaded:bool, fpm_master_pid:?int}
+     */
+    public function restart(?CliOutputManager $output = null, ?NodeRestartService $service = null): array {
+        $output = $output ?? CliOutputManager::getInstance();
+        $service = $service ?? new NodeRestartService();
+
+        $result = $service->restart();
+
+        if ($result['fpm_reloaded']) {
+            $output->success(
+                "Node restart initiated",
+                $result,
+                "Processors will respawn within ~30s. PHP-FPM workers are reloading gracefully."
+            );
+        } else {
+            $output->success(
+                "Partial restart: processors restarted, PHP-FPM reload skipped",
+                $result,
+                "Could not signal PHP-FPM master (PID lookup or permission failure). " .
+                "Run as root inside the container, or restart the container manually."
+            );
+        }
+
+        return $result;
     }
 
     /**

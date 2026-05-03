@@ -42,7 +42,7 @@ class ContactCreditRepositoryTest extends TestCase
 
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SELECT available_credit_whole'))
+            ->with($this->stringContains('SELECT cc.available_credit_whole'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -65,7 +65,7 @@ class ContactCreditRepositoryTest extends TestCase
     {
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SELECT available_credit_whole'))
+            ->with($this->stringContains('SELECT cc.available_credit_whole'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -223,8 +223,8 @@ class ContactCreditRepositoryTest extends TestCase
         $this->pdo->expects($this->once())
             ->method('prepare')
             ->with($this->logicalAnd(
-                $this->stringContains('SUM(available_credit_whole)'),
-                $this->stringContains('GROUP BY currency')
+                $this->stringContains('SUM(cc.available_credit_whole)'),
+                $this->stringContains('GROUP BY cc.currency')
             ))
             ->willReturn($this->stmt);
 
@@ -316,7 +316,7 @@ class ContactCreditRepositoryTest extends TestCase
 
         $this->pdo->expects($this->once())
             ->method('prepare')
-            ->with($this->stringContains('SELECT available_credit_whole'))
+            ->with($this->stringContains('SELECT cc.available_credit_whole'))
             ->willReturn($this->stmt);
 
         $this->stmt->expects($this->once())
@@ -476,5 +476,130 @@ class ContactCreditRepositoryTest extends TestCase
 
         // 9999 * 100 = 999900 microseconds
         $this->assertStringEndsWith('.999900', $result);
+    }
+
+    // =========================================================================
+    // upsertAvailableCreditBatch() Tests
+    // =========================================================================
+
+    public function testUpsertAvailableCreditBatchEmptyEntriesShortCircuitsToTrue(): void
+    {
+        // Should not even prepare a statement when there's nothing to write.
+        $this->pdo->expects($this->never())->method('prepare');
+
+        $result = $this->repository->upsertAvailableCreditBatch('hash-1', []);
+
+        $this->assertTrue($result);
+    }
+
+    public function testUpsertAvailableCreditBatchEmitsSingleMultiRowInsert(): void
+    {
+        // Capture the SQL so we can assert exactly one prepare with the
+        // expected number of value-row placeholders.
+        $capturedQuery = null;
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturnCallback(function ($q) use (&$capturedQuery) {
+                $capturedQuery = $q;
+                return $this->stmt;
+            });
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+
+        $entries = [
+            'USD' => new SplitAmount(5000, 0),
+            'EUR' => new SplitAmount(4200, 50),
+            'GBP' => new SplitAmount(3700, 0),
+        ];
+
+        $result = $this->repository->upsertAvailableCreditBatch('hash-1', $entries);
+
+        $this->assertTrue($result);
+        $this->assertStringContainsString('INSERT INTO', $capturedQuery);
+        $this->assertStringContainsString('ON DUPLICATE KEY UPDATE', $capturedQuery);
+        // 3 currencies => 3 placeholder-row groups separated by commas
+        $this->assertSame(3, substr_count($capturedQuery, '(?, ?, ?, ?, NOW(6))'));
+    }
+
+    public function testUpsertAvailableCreditBatchPassesFlatPositionalParamsInOrder(): void
+    {
+        $boundParams = null;
+        $this->pdo->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('execute')->willReturnCallback(function ($params) use (&$boundParams) {
+            $boundParams = $params;
+            return true;
+        });
+
+        $entries = [
+            'USD' => new SplitAmount(100, 0),
+            'EUR' => new SplitAmount(200, 50),
+        ];
+        $this->repository->upsertAvailableCreditBatch('hash-X', $entries);
+
+        // 5 cols × 2 rows; column order: pubkey, whole, frac, currency, [NOW(6) hardcoded].
+        // Flat array therefore has 4 params per row * 2 rows = 8.
+        $this->assertCount(8, $boundParams);
+        $this->assertSame(['hash-X', 100, 0, 'USD', 'hash-X', 200, 50, 'EUR'], $boundParams);
+    }
+
+    // =========================================================================
+    // upsertAvailableCreditIfNewerBatch() Tests
+    // =========================================================================
+
+    public function testUpsertAvailableCreditIfNewerBatchEmptyShortCircuits(): void
+    {
+        $this->pdo->expects($this->never())->method('prepare');
+        $this->assertTrue($this->repository->upsertAvailableCreditIfNewerBatch('h', [], 17417499042270));
+    }
+
+    public function testUpsertAvailableCreditIfNewerBatchUsesPerRowValuesGuard(): void
+    {
+        $capturedQuery = null;
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturnCallback(function ($q) use (&$capturedQuery) {
+                $capturedQuery = $q;
+                return $this->stmt;
+            });
+        $this->stmt->expects($this->once())->method('execute')->willReturn(true);
+
+        $entries = [
+            'USD' => new SplitAmount(5000, 0),
+            'EUR' => new SplitAmount(4200, 50),
+        ];
+        $this->repository->upsertAvailableCreditIfNewerBatch('hash-1', $entries, 17417499042270);
+
+        // The whole point of the batched form: each row's update is
+        // gated by VALUES(updated_at) > updated_at, NOT by a literal
+        // timestamp parameter. Means each currency is independently
+        // newer-checked.
+        $this->assertStringContainsString('VALUES(updated_at) > updated_at', $capturedQuery);
+        // Two value-row placeholder groups
+        $this->assertSame(2, substr_count($capturedQuery, '(?, ?, ?, ?, ?)'));
+    }
+
+    public function testUpsertAvailableCreditIfNewerBatchSharesTimestampAcrossAllRows(): void
+    {
+        $boundParams = null;
+        $this->pdo->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('execute')->willReturnCallback(function ($params) use (&$boundParams) {
+            $boundParams = $params;
+            return true;
+        });
+
+        $entries = [
+            'USD' => new SplitAmount(100, 0),
+            'EUR' => new SplitAmount(200, 50),
+        ];
+        $this->repository->upsertAvailableCreditIfNewerBatch('hash-X', $entries, 17417499042270);
+
+        // 5 cols * 2 rows = 10 positional params.
+        // Column order: pubkey, whole, frac, currency, updated_at (timestamp).
+        $this->assertCount(10, $boundParams);
+        // Last column of each row is the converted timestamp; both should match.
+        $this->assertSame($boundParams[4], $boundParams[9], 'Both rows share the same calculatedAt timestamp');
+        // Spot-check the first row's other columns.
+        $this->assertSame('hash-X', $boundParams[0]);
+        $this->assertSame(100, $boundParams[1]);
+        $this->assertSame('USD', $boundParams[3]);
     }
 }

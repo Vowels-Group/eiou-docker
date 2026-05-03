@@ -111,6 +111,186 @@ function fetchDlqActiveTxMessageIds($serviceContainer): array
     }
 }
 
+/**
+ * Status-icon map shared between every transaction-row renderer
+ * (initial wallet render, search results, load-older append). Keeping
+ * one definition stops the icon set from drifting between code paths.
+ *
+ * @return array<string, string>
+ */
+function transactionRowStatusIcons(): array
+{
+    return [
+        'pending'   => 'fa-hourglass-half',
+        'sending'   => 'fa-paper-plane',
+        'sent'      => 'fa-check',
+        'accepted'  => 'fa-check',
+        'completed' => 'fa-check-double',
+        'rejected'  => 'fa-times',
+        'cancelled' => 'fa-ban',
+    ];
+}
+
+/**
+ * Status-icon map for payment-request rows (initial render, search,
+ * load-older). Symmetric counterpart to transactionRowStatusIcons().
+ *
+ * @return array<string, string>
+ */
+function paymentRequestRowStatusIcons(): array
+{
+    return [
+        'approved'  => 'fa-check',
+        'declined'  => 'fa-times-circle',
+        'cancelled' => 'fa-ban',
+        'pending'   => 'fa-clock',
+    ];
+}
+
+/**
+ * Render a batch of transaction rows for an AJAX response (search or
+ * load-older). Builds the contact lookup maps, fetches DLQ ids,
+ * iterates the rows through the shared partial, and assembles the
+ * client-side `transactionData[]` JSON shape openTransactionModal()
+ * expects.
+ *
+ * @param array $transactions  Rows returned by transactionService->search/getHistory.
+ * @param int   $offset        First-row index in the client-side transactionData[]
+ *                             (0 for "replace" search results, $_POST['offset']
+ *                             for append-after-current-page load-more).
+ * @param object $contactService    DI handle for getContactsGroupedByStatus().
+ * @param object $transactionService DI handle for contactBalanceConversion().
+ * @param object $serviceContainer  DI handle for fetchDlqActiveTxMessageIds().
+ * @param object $user              UserContext for avatar style.
+ * @return array { html: string, rows: array } — `html` is the rendered
+ *               table fragment, `rows` is the array of per-tx data the
+ *               client splices into transactionData[].
+ */
+function renderTransactionRowsForAjax(
+    array $transactions,
+    int $offset,
+    $contactService,
+    $transactionService,
+    $serviceContainer,
+    $user
+): array {
+    // Build the same lookup maps the full template uses so avatar
+    // resolution, contact names, and counterparty links match the
+    // initial server render 1:1. Must pass the *enriched* arrays
+    // (after contactBalanceConversion) — the raw contacts table has
+    // no http/https/tor columns (those live in the addresses table
+    // and are merged in by contactBalanceConversion).
+    $contactsByStatus = $contactService->getContactsGroupedByStatus();
+    $accepted    = $transactionService->contactBalanceConversion($contactsByStatus['accepted']     ?? [], 0);
+    $pendingUser = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'] ?? [], 0);
+    $blocked     = $transactionService->contactBalanceConversion($contactsByStatus['blocked']      ?? [], 0);
+    $lookups = buildTxContactLookupMaps($accepted, $pendingUser, $blocked);
+    $txContactsByAddress   = $lookups['byAddress'];
+    $txContactsByName      = $lookups['byName'];
+    $txContactsByHash      = $lookups['byHash'];
+    $txAvatarStyle         = $user->getContactAvatarStyle();
+    $dlqActiveTxMessageIds = fetchDlqActiveTxMessageIds($serviceContainer);
+    $statusIcons           = transactionRowStatusIcons();
+
+    $rowDataOut = [];
+    ob_start();
+    foreach ($transactions as $i => $tx) {
+        $index = $offset + $i;
+        require __DIR__ . '/../layout/walletSubParts/_transactionHistoryRow.html';
+
+        $inDlq = false;
+        if (!empty($tx['txid']) && !empty($dlqActiveTxMessageIds)) {
+            foreach ($dlqActiveTxMessageIds as $dlqMsgId) {
+                if (strpos($dlqMsgId, $tx['txid']) !== false) { $inDlq = true; break; }
+            }
+        }
+        $isTxSent = (($tx['type'] ?? '') === 'sent');
+        $cpAddr = $isTxSent ? ($tx['receiver_address'] ?? '') : ($tx['sender_address'] ?? '');
+        $cpHash = $isTxSent ? ($tx['receiver_public_key_hash'] ?? '') : ($tx['sender_public_key_hash'] ?? '');
+        $cpName = $tx['counterparty_name'] ?? '';
+        $cpContact = null;
+        if ($cpName && isset($txContactsByName[strtolower($cpName)])) {
+            $cpContact = $txContactsByName[strtolower($cpName)];
+        } elseif ($cpAddr && isset($txContactsByAddress[$cpAddr])) {
+            $cpContact = $txContactsByAddress[$cpAddr];
+        } elseif ($cpHash && isset($txContactsByHash[$cpHash])) {
+            $cpContact = $txContactsByHash[$cpHash];
+        }
+        $endAddr = $isTxSent ? ($tx['end_recipient_address'] ?? '') : ($tx['initial_sender_address'] ?? '');
+        $endContact = ($endAddr && isset($txContactsByAddress[$endAddr])) ? $txContactsByAddress[$endAddr] : null;
+
+        $rowDataOut[] = [
+            'txid'                          => $tx['txid'] ?? '',
+            'tx_type'                       => $tx['tx_type'] ?? 'standard',
+            'direction'                     => $tx['direction'] ?? $tx['type'],
+            'status'                        => $tx['status'] ?? 'completed',
+            'date'                          => !empty($tx['date']) ? formatTimestamp($tx['date']) : '',
+            'type'                          => $tx['type'] ?? '',
+            'amount'                        => $tx['amount'] ?? 0,
+            'currency'                      => $tx['currency'] ?? 'USD',
+            'counterparty'                  => $tx['counterparty'] ?? '',
+            'counterparty_address'          => $tx['counterparty_address'] ?? '',
+            'counterparty_name'             => $tx['counterparty_name'] ?? '',
+            'counterparty_contact_id'       => $cpContact['contact_id'] ?? null,
+            'sender_address'                => $tx['sender_address'] ?? '',
+            'receiver_address'              => $tx['receiver_address'] ?? '',
+            'memo'                          => $tx['memo'] ?? '',
+            'description'                   => $tx['description'] ?? '',
+            'previous_txid'                 => $tx['previous_txid'] ?? '',
+            'initial_sender_address'        => $tx['initial_sender_address'] ?? null,
+            'end_recipient_address'         => $tx['end_recipient_address'] ?? null,
+            'p2p_destination'               => $tx['p2p_destination'] ?? null,
+            'p2p_destination_contact_id'    => $endContact['contact_id'] ?? null,
+            'p2p_destination_contact_name'  => $endContact['name'] ?? null,
+            'p2p_amount'                    => $tx['p2p_amount'] ?? null,
+            'p2p_fee'                       => $tx['p2p_fee'] ?? null,
+            'in_dlq'                        => $inDlq,
+        ];
+    }
+    return ['html' => ob_get_clean(), 'rows' => $rowDataOut];
+}
+
+/**
+ * Render a batch of payment-request rows for an AJAX response. Builds
+ * the per-hash contact lookup the partial reads from `$prContactsByHash`
+ * + `$prAvatarStyle` + `$prStatusIcons`, then iterates the rows
+ * through `_paymentRequestRow.html`.
+ *
+ * @return string Rendered table fragment.
+ */
+function renderPaymentRequestRowsForAjax(
+    array $rows,
+    $contactService,
+    $transactionService,
+    $user
+): string {
+    $contactsByStatus = $contactService->getContactsGroupedByStatus();
+    $accepted    = $transactionService->contactBalanceConversion($contactsByStatus['accepted']     ?? [], 0);
+    $pendingUser = $transactionService->contactBalanceConversion($contactsByStatus['user_pending'] ?? [], 0);
+    $blocked     = $transactionService->contactBalanceConversion($contactsByStatus['blocked']      ?? [], 0);
+    $prContactsByHash = [];
+    // Accepted last so it wins on key collisions (restored / re-accepted
+    // contacts keep their current display state).
+    foreach ([$blocked, $pendingUser, $accepted] as $bucket) {
+        foreach ($bucket as $tc) {
+            if (!empty($tc['pubkey_hash'])) {
+                $prContactsByHash[$tc['pubkey_hash']] = $tc;
+            }
+        }
+    }
+    $prAvatarStyle = $user->getContactAvatarStyle();
+    $prStatusIcons = paymentRequestRowStatusIcons();
+
+    ob_start();
+    foreach ($rows as $row) {
+        // Tag direction onto `_direction` — the partial reads that field.
+        $row['_direction'] = $row['direction'] ?? '';
+        $req = $row;
+        require __DIR__ . '/../layout/walletSubParts/_paymentRequestRow.html';
+    }
+    return ob_get_clean();
+}
+
 function validTransportIndices(): array {
     return \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
 }

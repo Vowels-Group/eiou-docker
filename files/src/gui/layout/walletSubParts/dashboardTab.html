@@ -1,0 +1,33 @@
+<?php
+/**
+ * Dashboard tab body — registered with TabRegistry at id 'dashboard'.
+ * Wraps the existing wallet-information + payback-methods partials so
+ * the registry-driven render loop in wallet.html can include this
+ * single file per tab. Plugins inject extra widgets via the
+ * `gui.dashboard.before` / `gui.dashboard.after` render hooks (fired
+ * around the core widgets) and the `gui.dashboard.widgets` filter
+ * (between them, for ordered/decorated widget chunks).
+ */
+?>
+<?= $hooks->doRender('gui.dashboard.before', ['user' => $user]) ?>
+<?php
+require_once("/app/eiou/src/gui/layout/walletSubParts/walletInformation.html");
+require_once("/app/eiou/src/gui/layout/walletSubParts/paybackMethodsSection.html");
+
+// gui.dashboard.widgets — value-pipeline filter that lets plugins
+// contribute widget HTML chunks the host renders one after another.
+// Different from gui.dashboard.after (raw render-hook concatenation):
+// each widget is an associative array {id, html, order} so future
+// hooks can sort / hide / decorate by id without re-parsing strings.
+// See docs/PLUGIN_GUI_HOOKS.md.
+$dashboardWidgets = $hooks->applyFilter('gui.dashboard.widgets', [], ['user' => $user]);
+if (!empty($dashboardWidgets) && is_array($dashboardWidgets)) {
+    usort($dashboardWidgets, fn($a, $b) => (int)($a['order'] ?? 100) <=> (int)($b['order'] ?? 100));
+    foreach ($dashboardWidgets as $widget) {
+        if (is_array($widget) && !empty($widget['html']) && is_string($widget['html'])) {
+            echo $widget['html'];
+        }
+    }
+}
+?>
+<?= $hooks->doRender('gui.dashboard.after', ['user' => $user]) ?>

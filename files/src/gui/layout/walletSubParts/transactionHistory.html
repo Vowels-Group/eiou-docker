@@ -1,62 +1,9 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!-- Transaction History -->
-<div id="transactions" class="transactions-section fade-in-up">
-    <div class="section-header">
-        <h2><i class="fas fa-history"></i> Recent Transactions</h2>
-        <div class="section-header-actions">
-            <span id="tx-auto-refresh-status" class="tx-refresh-indicator" title="Auto-refresh active when transactions are in progress">
-                <i class="fas fa-sync-alt"></i>
-            </span>
-            <button type="button" class="btn btn-primary btn-sm" data-action="reloadWithHash" data-hash="transactions">
-                <i class="fas fa-sync-alt"></i> Refresh
-            </button>
-        </div>
-    </div>
-    <details class="section-intro text-muted">
-        <summary>
-            <i class="fas fa-info-circle"></i>
-            <span>About Recent Transactions</span>
-        </summary>
-        <div class="section-intro-body">
-            Your most recent transactions across every contact and routing hop —
-            direct sends, P2P relays, contact-request transactions, and pending
-            items are all shown here. Search by counterparty name, address, or
-            description; filter by direction, type, or status; click any row to
-            open the full transaction detail.
-            <br><br>
-            <strong>Search database.</strong> The search bar above filters the
-            rows currently loaded on this page. If the transaction you&rsquo;re
-            looking for is older than the currently visible window, click
-            <strong>Search database</strong> (or press Enter) to run a
-            server-side search across your entire transaction history —
-            it respects the direction / type / status filters you&rsquo;ve
-            selected, replaces the table with matches (capped at 500),
-            and adds a <em>Clear search</em> link to return to the
-            default view.
-            <br><br>
-            <small>
-                <strong>Subnote on counterparty names.</strong>
-                <strong>Unknown</strong> means the other side isn&rsquo;t in your contacts
-                anymore — typically a P2P send, a relay hop, or a contact you&rsquo;ve
-                since deleted. <strong>RestoredContact&lt;N&gt;</strong> names are
-                auto-assigned when a contact reappears after deletion or when this
-                node is re-seeded — rename them from the Contacts tab.
-            </small>
-            <br><br>
-            <small>
-                <strong>Subnote on &ldquo;&mdash;&rdquo; in the Amount column.</strong>
-                Rows showing an em-dash instead of a number are <strong>contact-request
-                transactions</strong> &mdash; the first transaction exchanged to establish
-                a bilateral relationship. They carry no money (the amount is zero by
-                construction), which is why the amount is suppressed. The <strong>Type</strong>
-                column flags them as &ldquo;Contact&rdquo; on desktop; on narrow viewports
-                that column is hidden, so the em-dash is replaced with a
-                <em>Contact request</em> label instead.
-            </small>
-        </div>
-    </details>
-
+<?php
+ob_start();
+?>
     <!-- In-Progress Transactions Banner (within section) -->
     <?php if (!empty($inProgressTransactions)): ?>
     <div class="tx-in-progress-section" id="tx-in-progress-section">
@@ -320,7 +267,10 @@
                 $type = $tx['type'] ?? ($tx['tx_type'] ?? '');
                 if ($type !== 'contact') continue;
                 $desc = trim((string) ($tx['description'] ?? ''));
-                $isPlaceholder = ($desc === '' || $desc === 'Contact request' || $desc === 'Contact request transaction');
+                $isPlaceholder = ($desc === ''
+                    || $desc === 'Contact request'
+                    || $desc === 'Contact request transaction'
+                    || preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) === 1);
                 if ($isPlaceholder) continue;
                 // Group key: (counterparty address, integer-second timestamp).
                 $counter = $tx['counterparty_address'] ?? ($tx['sender_address'] ?? ($tx['receiver_address'] ?? ''));
@@ -334,7 +284,10 @@
                 $type = $tx['type'] ?? ($tx['tx_type'] ?? '');
                 if ($type !== 'contact') continue;
                 $desc = trim((string) ($tx['description'] ?? ''));
-                $isPlaceholder = ($desc === '' || $desc === 'Contact request' || $desc === 'Contact request transaction');
+                $isPlaceholder = ($desc === ''
+                    || $desc === 'Contact request'
+                    || $desc === 'Contact request transaction'
+                    || preg_match('/^Contact request \([A-Z0-9]{3,9}\)$/', $desc) === 1);
                 if (!$isPlaceholder) continue;
                 $counter = $tx['counterparty_address'] ?? ($tx['sender_address'] ?? ($tx['receiver_address'] ?? ''));
                 $tsKey = is_string($tx['timestamp'] ?? null) ? substr($tx['timestamp'], 0, 19) : (string) ($tx['timestamp'] ?? '');
@@ -354,7 +307,63 @@
     <!-- Paginator controls — populated by Paginator.create('transactions', …) -->
     <div id="tx-paginator" class="paginator-container"></div>
     <?php endif; ?>
-</div>
+<?php
+$body = ob_get_clean();
+
+echo renderSection([
+    'id'    => 'transactions',
+    'class' => 'transactions-section fade-in-up',
+    'icon'  => 'fas fa-history',
+    'title' => 'Recent Transactions',
+    'headerExtras' =>
+          '<div class="section-header-actions">'
+        . '<span id="tx-auto-refresh-status" class="tx-refresh-indicator" title="Auto-refresh active when transactions are in progress">'
+        . '<i class="fas fa-sync-alt"></i>'
+        . '</span>'
+        . '<button type="button" class="btn btn-primary btn-sm" data-action="reloadWithHash" data-hash="transactions">'
+        . '<i class="fas fa-sync-alt"></i> Refresh'
+        . '</button>'
+        . '</div>',
+    'introTitle' => 'About Recent Transactions',
+    'intro' =>
+          'Your most recent transactions across every contact and routing hop — '
+        . 'direct sends, P2P relays, contact-request transactions, and pending '
+        . 'items are all shown here. Search by counterparty name, address, or '
+        . 'description; filter by direction, type, or status; click any row to '
+        . 'open the full transaction detail.'
+        . '<br><br>'
+        . '<strong>Search database.</strong> The search bar above filters the '
+        . 'rows currently loaded on this page. If the transaction you&rsquo;re '
+        . 'looking for is older than the currently visible window, click '
+        . '<strong>Search database</strong> (or press Enter) to run a '
+        . 'server-side search across your entire transaction history — '
+        . 'it respects the direction / type / status filters you&rsquo;ve '
+        . 'selected, replaces the table with matches (capped at 500), '
+        . 'and adds a <em>Clear search</em> link to return to the '
+        . 'default view.'
+        . '<br><br>'
+        . '<small>'
+        . '<strong>Subnote on counterparty names.</strong> '
+        . '<strong>Unknown</strong> means the other side isn&rsquo;t in your contacts '
+        . 'anymore — typically a P2P send, a relay hop, or a contact you&rsquo;ve '
+        . 'since deleted. <strong>RestoredContact&lt;N&gt;</strong> names are '
+        . 'auto-assigned when a contact reappears after deletion or when this '
+        . 'node is re-seeded — rename them from the Contacts tab.'
+        . '</small>'
+        . '<br><br>'
+        . '<small>'
+        . '<strong>Subnote on &ldquo;&mdash;&rdquo; in the Amount column.</strong> '
+        . 'Rows showing an em-dash instead of a number are <strong>contact-request '
+        . 'transactions</strong> &mdash; the first transaction exchanged to establish '
+        . 'a bilateral relationship. They carry no money (the amount is zero by '
+        . 'construction), which is why the amount is suppressed. The <strong>Type</strong> '
+        . 'column flags them as &ldquo;Contact&rdquo; on desktop; on narrow viewports '
+        . 'that column is hidden, so the em-dash is replaced with a '
+        . '<em>Contact request</em> label instead.'
+        . '</small>',
+    'body' => $body,
+]);
+?>
 
 
 <!-- Data bootstrap for transaction history — consumed by script.js -->
@@ -414,6 +423,8 @@
             'counterparty_contact_id' => $cpContact['contact_id'] ?? null,
             'sender_address' => $tx['sender_address'] ?? '',
             'receiver_address' => $tx['receiver_address'] ?? '',
+            'sender_public_key_hash' => $tx['sender_public_key_hash'] ?? '',
+            'receiver_public_key_hash' => $tx['receiver_public_key_hash'] ?? '',
             'memo' => $tx['memo'] ?? '',
             'description' => $tx['description'] ?? '',
             'previous_txid' => $tx['previous_txid'] ?? '',

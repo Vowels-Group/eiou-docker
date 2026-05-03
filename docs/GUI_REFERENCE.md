@@ -80,6 +80,7 @@ files/src/gui/
 │   ├── ContactController.php       # Contact CRUD operations
 │   ├── TransactionController.php   # Transaction processing
 │   ├── SettingsController.php      # Settings and debug operations
+│   ├── PaybackMethodsController.php # Payback-methods CRUD + reveal gate
 │   └── DlqController.php           # Dead letter queue retry/abandon (AJAX)
 │
 ├── functions/
@@ -107,6 +108,8 @@ files/src/gui/
 │       ├── contactSection.html      # Contact list and modal
 │       ├── transactionHistory.html  # Transaction list and modal
 │       ├── dlqSection.html          # Dead letter queue management
+│       ├── paybackMethodsSection.html # Payback methods dashboard section (list + "How payback methods work" intro)
+│       ├── paybackMethodForm.html   # Two-step Add / Edit / View modal (type picker → per-type fields)
 │       ├── settingsSection.html     # Settings form and debug panel
 │       ├── floatingButtons.html     # Back-to-top and refresh buttons
 │       └── analyticsConsentModal.html # One-time analytics opt-in modal
@@ -150,6 +153,8 @@ Handles all contact-related operations.
 | `handleAcceptCurrency()` | `acceptCurrency` | Accept pending incoming currency | `pubkey_hash`, `currency`, `fee`, `credit` |
 | `handleAddCurrency()` | `addCurrency` | Add a new currency to an existing contact (AJAX) | `pubkey`, `currency`, `fee`, `credit` |
 | `handleAcceptAllCurrencies()` | `acceptAllCurrencies` | Accept all pending currencies for a contact (AJAX) | `pubkey_hash`, `currencies` (JSON array), `is_new_contact`, `contact_address`, `contact_name` |
+| `handleApplyContactDecisions()` | `applyContactDecisions` | Batched per-currency decisions for a pending contact request — accept some, decline others, leave the rest deferred. Used by the Contact Request modal in place of the per-row Accept/Decline + Accept-All buttons. Thin POST adapter — partition / declines-first / first-accept-via-add logic lives in the shared `ContactDecisionService::apply()` so the GUI, the `eiou contact apply / accept` CLI, and `POST /api/v1/contacts/:hash/decisions` all share one implementation | `pubkey_hash`, `decisions` (JSON array of `{currency, action: "accept"\|"decline", fee?, credit?}` — defer rows omitted by client), `is_new_contact`, `contact_address`, `contact_name` |
+| `handleDeclineContact()` | `declineContact` | Decline every pending currency on an incoming contact request in one shot. Mirrors `eiou contact decline <pubkey-hash>` and `POST /api/v1/contacts/:hash/decline` so all three surfaces share the same effect — useful for "reject this whole request" without enumerating its currencies | `pubkey_hash` |
 
 **AJAX Response Format (pingContact):**
 
@@ -164,6 +169,10 @@ Handles all contact-related operations.
 ```
 
 Internally, the ping/pong protocol exchanges per-currency data: `prevTxidsByCurrency` (chain heads per currency), `chainStatusByCurrency` (per-currency chain validity), and `availableCreditByCurrency` (per-currency available credit). The AJAX response aggregates chain validity into a single `chain_valid` boolean. Per-currency available credit is stored in the `contact_credit` table and displayed in the contact modal.
+
+When the remote node responds with `status: rejected`, `ContactStatusService::describePingRejection()` translates the reason code into a sentence the user can act on rather than echoing the raw token. `unknown_contact` (the remote responded but doesn't recognize this user — almost always because the local-side acceptance hasn't been delivered yet) reads *"Contact is online but doesn't recognize you yet — your acceptance hasn't been delivered to them. Check the Failed Messages panel under Activity; delivery will keep retrying in the background."* `blocked` and `disabled` get reason-specific phrasings; any unrecognized reason falls back to the existing brief form so the message stays accurate as new reasons are added upstream.
+
+The Apply button on the Contact Request modal goes through the page-wide loader pattern (`showLoader` + `startOperationTimeout`, mirroring payment-request approve) so a degraded transport — slow Tor circuit or self-signed TLS hop — can't lock up the UI while the user-initiated outbound notification is in flight. Local state flips immediately; the notification is sent fire-and-forget by `ContactSyncService` (one synchronous attempt, then DLQ retries on failure) and the GUI auto-reloads after 15s with a post-reload toast pointing at the Failed Messages panel.
 
 ---
 
@@ -306,6 +315,31 @@ All GUI-driven creations, toggles, updates, deletions, and bulk operations log t
 
 **Routing:**
 Dispatched from `Functions.php` via an allowlist of action names. A new action must be added to both the `in_array($action, [...])` check in `Functions.php` **and** the `switch ($action)` in `ApiKeysController::routeAction()` — missing it from the allowlist causes `Functions.php` to fall through and render `wallet.html` (107 kB of HTML) instead of routing to the controller, which manifests client-side as a silent `res.json()` rejection.
+
+---
+
+### PaybackMethodsController
+
+Handles every AJAX call the dashboard's Payback Methods section and the contact modal's Payback tab fire — CRUD for your own methods plus the synchronous E2E fetch used to pull a contact's shareable methods over the wire. JSON-only; CSRF is validated on every call.
+
+| Method | Action Value | Description | Parameters |
+|--------|-------------|-------------|------------|
+| `list()` | `paybackMethodsList` | List this node's methods (public shape, sensitive fields masked). Response also carries `sensitive_access` + `seconds_remaining` mirroring `apiKeysList`, so the section header can show "🔓 Unlocked for N min" without an extra round-trip. | `csrf_token` |
+| `create()` | `paybackMethodsCreate` | Create a new method. Validates via `PaybackMethodTypeValidator` (which delegates to `PaybackMethodTypeContract::validate()` for plugin-registered types). Returns `method_id`. | `type`, `label`, `currency`, `fields[...]`, optional `share_policy`, optional `priority`, `csrf_token` |
+| `update()` | `paybackMethodsUpdate` | Patch an existing row. Accepts any of `label`, `share_policy`, `priority`, `enabled`, `fields` — sending `fields` re-encrypts the entire blob atomically. | `method_id`, any of `label`, `share_policy`, `priority`, `enabled`, `fields[...]`, `csrf_token` |
+| `reveal()` | `paybackMethodsReveal` | Return the method with all fields decrypted to plaintext. Used by Edit (to pre-populate sensitive inputs) and the per-field Copy buttons on the detail modal. | `method_id`, `csrf_token` |
+| `remove()` | `paybackMethodsRemove` | Permanently delete a method. | `method_id`, `csrf_token` |
+| `setSharePolicy()` | `paybackMethodsSetSharePolicy` | Atomic share-policy update without touching other fields. | `method_id`, `share_policy`, `csrf_token` |
+| `fetchFromContact()` | `paybackMethodsFetchFromContact` | Fire a synchronous `payback-methods-request.v1` E2E round-trip at a contact and return their shareable methods inline. Nothing is cached — closing the tab drops the in-memory copy. Returns `{status, methods, ttl_seconds}`; `status` is one of `ok` / `denied` / `rate_limited`. Stale responses are dropped if the user switched contacts mid-flight. | `address`, optional `currency`, `csrf_token` |
+
+**Sensitive-access gate:**
+All mutations (`Create`, `Update`, `Remove`, `SetSharePolicy`) **and** `Reveal` require an active sensitive-access grant — the GUI shares the same `apiKeysVerify` / `apiKeysStatus` / `apiKeysClearAccess` mechanism so a single unlock covers both API-key and payback-method edits for the grant's lifetime. The client routes all seven calls through `withSensitiveAccess(requestFn, onResponse, label)` which opens `apiKeysVerifyModal` on a `401 sensitive_access_required` response and retries on successful unlock. Listing (`paybackMethodsList`) and contact-fetch (`paybackMethodsFetchFromContact`) are outside the gate — list rows already show masked values, and the contact-fetch response is composed by the *other* node so there's nothing sensitive for this node to re-gate.
+
+**E2E fetch mechanics (`fetchFromContact`):**
+The controller extracts the inner response body from the envelope that `MessageService` echoes back from `MessageDeliveryService::sendSyncMessage()`, normalizes the status strings, and returns them to the GUI. Underlying flow: request → receiver's `ReceivedPaybackMethodService::handleIncomingRequest()` → receiver's `PaybackMethodService::listShareable()` → response envelope back through the same E2E channel. Nothing is written to `payback_methods_received` on this flow — that table is reserved for a future cache layer.
+
+**Routing:**
+Same allowlist rule as every other AJAX controller — new actions must be added both to `Functions.php`'s action check and the controller's `switch` dispatch.
 
 ---
 
@@ -459,7 +493,7 @@ Rendered below the Send form in the Send tab. Shows incoming and outgoing paymen
 | Requester name/address | Who sent the request |
 | Amount + currency | Requested amount |
 | Description | Optional note from requester |
-| Approve & Pay button | Sends the eIOU automatically, marks request approved |
+| Pay button | Opens a confirmation modal pre-loaded with the requester's description (read-only) and an optional payer-note textarea. The on-chain description becomes `"payment: <requester desc> \| <your note>"` if the note is filled. A live counter under the textarea shows remaining chars and decrements as the user types — the cap is computed dynamically against this specific request's description (`max_note = 255 − len(desc) − 3`) so the joined string always fits the on-chain ceiling. If the requester's description already fills the budget, the textarea is disabled and the user can still hit Pay (with no note). Same modal is used whether the user clicks Pay on the inline pending-row form or the Pay button inside the row-click "Payment Request Details" drill-down modal — the submit handler is event-delegated so dynamically-rendered Pay forms get caught too. |
 | Decline button | Rejects the request, notifies requester |
 
 **Outgoing Requests (pending):**
@@ -476,7 +510,7 @@ Resolved requests (approved/declined) appear in a collapsed history section. App
 
 **History Paginator (resolved requests only):**
 - Same shared `Paginator` IIFE as the Recent Transactions and Contacts tables. Page buttons + size selector (25 / 50 / 100 / All), persisted as `eiou_paginator_size_payment-requests`.
-- **"Load older" button** — fetches next server-side page via `loadMorePaymentRequests` GUI AJAX action. Backed by `PaymentRequestRepository::getResolvedHistoryPage($limit, $offset)` — a single SQL query on the unified table with `WHERE status != 'pending' ORDER BY COALESCE(responded_at, created_at) DESC LIMIT ? OFFSET ?`, matching the initial template's `usort` key so pages append cleanly. Rows rendered via a shared `_paymentRequestRow.html` partial.
+- **"Load older" button** — fetches next server-side page via `loadMorePaymentRequests` GUI AJAX action. Backed by `PaymentRequestRepository::getResolvedHistoryPage($limit, $offset, ?$cursor)`. When the client posts a `cursor` (default for second-and-later pages), the query uses a keyset predicate on `(COALESCE(responded_at, created_at), id)` and runs in constant time regardless of depth; without a cursor it falls back to `LIMIT ? OFFSET ?` on the same ORDER BY. Sort key matches the initial template's `usort` so pages append cleanly. Rows rendered via a shared `_paymentRequestRow.html` partial.
 - **"Showing the last N requests"** counter is dynamic via `#pr-meta-loaded-count`; updates after each Load-older click.
 
 **Search database (server-side):**
@@ -525,8 +559,11 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 |-----|----------|
 | Info | Per-currency balance, credit limit, fee, your/their available credit (via horizontal currency slider pills), addresses (with Copy and QR code buttons; QR regenerates when switching address types), public key (single-line display with Copy button), contact ID |
 | Transactions | Recent transactions with this contact |
+| Payback | **Live E2E fetch** of the contact's shareable payback methods (bank wire, PayPal, BTC, etc.). Opens a synchronous `payback-methods-request.v1` round-trip through the node; response is rendered inline and never persisted to disk or `localStorage`. Currency dropdown defaults to the currency of the largest debt owed, filters the fetch when changed (auto-refetches). Rows are clickable → per-method detail modal with per-field Copy buttons. Renders dedicated copy for `denied` / `rate_limited` states. |
 | Status | Online status, chain status (proposal-aware, clickable — switches to this tab), Check Status button, tx drop resolution section (propose/accept/reject) |
 | Settings | Edit form, block/unblock/delete buttons |
+
+Every tab has a collapsible **About <tab>** info panel at the top explaining what the columns/fields mean.
 
 **Tx Drop Resolution Section (in Info tab):**
 - Shown when chain has a gap or active proposal
@@ -537,10 +574,17 @@ The Contacts tab. The contact list is shown first. The "Add Contact" form is acc
 **Pending Contact Requests Section:**
 - Lists incoming requests with direction-aware currency display
 - Outgoing currencies shown as read-only badges ("Awaiting their acceptance")
-- Incoming currencies shown as actionable accept forms ("They requested") with fee/credit fields
-- Per-currency accept forms when multiple currencies are requested
-- Legacy fallback form for contacts without `contact_currencies` data
-- Delete/block options
+- Incoming currencies shown in a **batched-decision modal** ("They requested"):
+  - Each currency renders as an accordion with a 3-state segmented control (**Accept** / **Decline** / **Defer**) and fee/credit inputs visible only when Accept
+  - Smart default: Accept for currencies in the user's allowed list, Defer for "new" currencies (not in `Allowed Currencies`)
+  - State badge in each accordion summary (✓ Accept / ✗ Decline / ⏳ Defer) — visible without expanding
+  - Accordion auto-collapses on Decline/Defer (nothing to configure), re-opens on Accept
+  - **Apply** button at the bottom commits everything in a single `applyContactDecisions` POST. Label updates live: "Accept request" / "Accept all N currencies" / "Decline N" / "Apply: X accept, Y decline"; disabled when every row is Defer
+  - Defaults guard: one confirmation modal if any Accept rows are at both default fee + default credit
+  - Inline help disclosure ("How to handle this request") collapsed by default at the top of the modal
+  - "About this contact" reference section below the action area (addresses, public key)
+- **Delete Request** silently drops the whole request (other side not notified). **Block Contact** prevents future requests
+- Legacy fallback form preserved for contacts without `contact_currencies` data
 
 ---
 
@@ -640,6 +684,38 @@ A warning toast appears when new items are added to the DLQ (tracked per session
 
 ---
 
+#### paybackMethodsSection.html
+
+Dashboard section rendering the user's own payback methods — the settlement rails (bank wire, PayPal, BTC, custom free-text, etc.) they offer contacts for squaring debts. Uses the same `form-container fade-in-up` chrome as Payment Requests.
+
+**Header:**
+- `+ Add` button — opens the two-step Add/Edit modal (`paybackMethodForm.html`)
+- `🔓 Unlocked for N min` — status text shown after a sensitive-access grant; inherited from the same session-grant mechanism as API Keys
+
+**Header callout — "How payback methods work":** per-row encryption at rest (AES-256-GCM, keyed to the wallet), how each rail's masking differs (typed rails show last-4; `custom` shows the first 80 chars as a preview since it's user-authored free text), share policy behaviour.
+
+**Filter bar:** client-side Type and Currency dropdowns reusing the shared `.contacts-filter-select` chrome from Recent Transactions. Only surfaces when >1 option exists on an axis — a single-method / single-currency wallet sees no dead widgets.
+
+**Table columns:** Type (plain uppercase, no badge), Currency, Label, Details (the `masked_display`), Share policy. Ordered by `priority ASC, created_at DESC` — same sort the repository uses. Row click opens the **view** modal.
+
+**Add / View / Edit modal (`paybackMethodForm.html`)** is a two-step flow:
+1. **Step 1 — Type picker.** Tiles injected from the catalog JSON at `#payback-methods-catalog` (the PHP side echoes the full `PaybackMethodTypeValidator::getCatalog()` result, including plugin-registered types). Tiles group by `bank` / `crypto` / `mobile` / `fintech` / `other` — plugin-declared groups are injected automatically.
+2. **Step 2 — Per-type fields.** Form body is built from the catalog entry's `fields` spec: label input, currency select (filtered to `type.currencies` when the type declares a whitelist), type-specific inputs (IBAN, routing number, email, address…), share-policy select, priority number input. SWIFT sub-rail gets a segmented `[IBAN] [Account number]` toggle so only the chosen identifier submits.
+
+View mode renders the same DOM with inputs set to `readonly` and a *"View only. Click Edit below to make changes"* banner; footer swaps to `Close · Edit`. Edit mode flips inputs to editable without refetch (title changes, banner hides, footer swaps to `Cancel · Delete · Save Method`).
+
+**Sensitive-access gate:** opening the modal for edit/view — and every mutation (`add`, `update`, `remove`, `share-policy`, `reveal`) — returns `401 sensitive_access_required` unless a short-lived grant is active. The client routes through the same `withSensitiveAccess(requestFn, onResponse, label)` helper that `apiKeysSection.html` uses, so a denied request opens `apiKeysVerifyModal` on top of the form and retries on successful unlock. Unlock persists for a few minutes; the chrome-level "Unlocked for N min" readout ticks down in the section header.
+
+**Per-rail "About <rail>" info panel** at the top of step 2, populated from the catalog entry's optional `info` HTML string. Starts collapsed so returning users who don't need the refresher see the compact form. Plugins opt-in by returning an `info` key from `getCatalogEntry()` — a BTC plugin can call out accepted address formats, a PayPal plugin can remind operators to link an active account, etc.
+
+Client-side module (`script.js`, IIFE exported as `window.paybackMethods`) talks to `PaybackMethodsController` via `paybackMethodsList` / `paybackMethodsCreate` / `paybackMethodsUpdate` / `paybackMethodsRemove` / `paybackMethodsReveal` / `paybackMethodsSetSharePolicy` AJAX actions. Session-expired responses (302 / 401 / HTML login page) are caught in the JSON-parse branch and surfaced as a readable "Session expired — please sign in again" message instead of a cryptic `bad_json` toast.
+
+**Related surfaces:**
+- Contact modal **Payback** tab (`contactSection.html`) — live E2E fetch of the *other* contact's shareable methods; nothing persists. See the Contact Modal table above.
+- `PaybackMethodsController` — see Controllers section below.
+
+---
+
 #### settingsSection.html
 
 **Header callout** — `.section-intro` explaining what Save does, what Reset reverts (unsaved changes only), and pointing at Advanced Settings → Reset to Defaults for a full wipe.
@@ -667,7 +743,7 @@ Any section can start with a `<details class="section-intro text-muted">` callou
     <div class="section-intro-body">Longer explanation…</div>
 </details>
 ```
-Currently applied to: **Wallet Settings**, **API Keys**, **Failed Messages**, **Debug Information**, **New eIOU**, **Your Contacts**, **Recent Transactions**.
+Currently applied to: **Wallet Settings**, **API Keys**, **Failed Messages**, **Debug Information**, **New eIOU**, **Your Contacts**, **Recent Transactions**, **Payback Methods**, **Plugins**, and every tab inside the contact modal (**Info**, **Transactions**, **Payback**, **Status**, **Settings**) — per-tab "About <tab>" intros help users who land on a tab cold.
 
 Always ships closed (no `open` attribute) — user clicks the summary to expand via native `<details>` behaviour. Same UX on desktop and mobile and for JS-disabled users (Tor "Safest" mode). The summary shows an info icon on the left and a chevron on the right that rotates when open. CSS lives at `.section-intro` / `details.section-intro > summary` / `.section-intro-body` in `page.css`.
 
@@ -756,7 +832,7 @@ The `Session` class provides secure session handling.
 | `httponly` | true | Prevent JavaScript access |
 | `samesite` | Strict | CSRF protection via cookie |
 | `secure` | auto | HTTPS-only when available |
-| `name` | EIOU_WALLET_SESSION | Custom session name |
+| `name` | `EIOU_WALLET_SESSION_<nodeHash>` | Custom session name. Suffixed with `substr(sha256(public_key_pem), 0, 16)` so two nodes sharing a hostname (only differ by port — typical localhost dev with `:443` and `:8443`) write distinct cookies. Cookies ignore port per RFC 6265, so without the suffix the second login overwrites the first's session and both tabs end up logged out. Falls back to `EIOU_WALLET_SESSION_default` while `userconfig.json` is missing (pre-init window). |
 
 ### Key Methods
 

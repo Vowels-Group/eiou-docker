@@ -295,6 +295,27 @@ body {
         color: white;
         border-color: #0d6efd;
     }
+    /* Dropdown variant — rendered when there are >4 currencies so a
+       wrapping pill row doesn't crowd out the wallet stats. */
+    .wallet-currency-tabs-dropdown {
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .wallet-currency-label {
+        font-size: 0.85rem;
+        color: #495057;
+        font-weight: 600;
+    }
+    .wallet-currency-select {
+        flex: 1 1 auto;
+        padding: 0.4rem 0.7rem;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        background: white;
+        color: #495057;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
     .wallet-stats-container {
         max-height: none;
         overflow-y: visible;
@@ -462,6 +483,52 @@ body {
     margin-bottom: 1rem;
     border-bottom: 2px solid #dee2e6;
     padding-bottom: 0.5rem;
+}
+
+/* Restart banner row in the Plugins section: text on the left, action on
+   the right. Matches the visual rhythm of .section-header above. */
+.plugins-restart-banner-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* Full-page overlay shown while the node is restarting (Plugins → Restart).
+   Blocks all interaction so the user can't trigger a second restart while
+   workers are recycling, and gives them a clear "we're working on it" state. */
+.restart-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: white;
+    text-align: center;
+}
+.restart-overlay-card {
+    background: #1f2733;
+    padding: 2rem 2.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    max-width: 420px;
+}
+.restart-overlay-card .fa-spinner {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: #ffc107;
+}
+.restart-overlay-card h3 {
+    margin: 0 0 0.5rem;
+    color: white;
+}
+.restart-overlay-card p {
+    margin: 0.25rem 0;
+    color: #c2cad6;
+    font-size: 0.95rem;
 }
 
 .pending {
@@ -834,16 +901,20 @@ tr.paginator-hidden {
 }
 .paginator-range {
     color: #6c757d;
+    min-width: 7rem;
+    text-align: center;
 }
 .paginator-nav {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
 }
+/* The page indicator was a separate "Page X / Y" span sandwiched
+   between the prev/next arrows. Combined into the range now, so
+   the indicator class is unused — kept as zero-impact null rule
+   for any leftover markup floating in caches. */
 .paginator-page-indicator {
-    min-width: 5.5rem;
-    text-align: center;
-    color: #6c757d;
+    display: none;
 }
 .paginator-btn {
     display: inline-flex;
@@ -865,8 +936,18 @@ tr.paginator-hidden {
     opacity: 0.5;
     cursor: not-allowed;
 }
+/* No longer rendered — the next-arrow swallowed Load-older's job.
+   Kept for backward-compat with anyone styling it externally. */
 .paginator-load-more {
     margin-left: auto;
+}
+/* Square-up the prev/next arrows so they read as icon buttons rather
+   than oblong text-buttons. */
+.paginator-btn.paginator-prev,
+.paginator-btn.paginator-next {
+    padding: 0.25rem 0.55rem;
+    min-width: 2.1rem;
+    justify-content: center;
 }
 
 .contacts-table-wrapper {
@@ -901,6 +982,129 @@ tr.paginator-hidden {
 .contacts-table .col-status { width: 10%; }
 .contacts-table .col-chain  { width: 8%; }
 .contacts-table .col-online { width: 6%; }
+
+/* ─── Plugins table — extends .contacts-table with .plugins-table ───
+   Wide Description column that truncates to a single line with ellipsis;
+   full text (and any error — and the status badge) surface in the detail
+   modal on row click. The leading dot carries enabled/disabled/failed at
+   a glance, so a dedicated Status column would be redundant. */
+/* Leading status-dot column: mirrors .col-tx-status-icon — a tight
+   percentage keeps it proportional on desktop; a fixed 28px on mobile
+   (where most other cols are hidden) prevents table-layout:fixed from
+   inflating the icon cell to absorb the freed-up width. */
+.plugins-table th.col-plugin-dot,
+.plugins-table td.col-plugin-dot {
+    width: 3%;
+    padding: 0.4rem 0 0.4rem 0.6rem;
+    text-align: center;
+}
+.plugins-table .col-name        { width: 15%; }
+.plugins-table .col-version     { width: 11%; }
+.plugins-table .col-description {
+    width: 62%;
+    max-width: 0; /* lets the fixed-layout cell collapse to col width */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.plugins-table .col-enabled     { width: 9%; }
+.plugins-table tbody td { vertical-align: middle; }
+.plugins-table tbody tr:hover { background: #f8f9fa; }
+
+/* Mobile: inherit the .contacts-table rule that hides col 3+, then
+   re-show col 3 (Version) so users see dot + name + version. Cols 4–5
+   (Description, Enabled toggle) stay hidden — the row opens the modal
+   which has the toggle. */
+@media (max-width: 600px) {
+    /* Compound .contacts-table.plugins-table beats the generic
+       .contacts-table rule below that hides every col from the third
+       onwards — same nth-child selector but higher specificity, so it
+       wins regardless of source order. */
+    .contacts-table.plugins-table thead th:nth-child(3),
+    .contacts-table.plugins-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    /* Fix the icon cell and let the two text cells (name + version) size
+       naturally so the icon can't inflate to absorb the hidden columns'
+       freed-up width. Mirrors the tx-table mobile treatment. */
+    .contacts-table.plugins-table .col-plugin-dot {
+        width: 28px;
+        padding-left: 0.25rem;
+        padding-right: 0;
+    }
+    .contacts-table.plugins-table .col-name    { width: auto; }
+    .contacts-table.plugins-table .col-version { width: auto; }
+}
+
+.plugin-status-dot {
+    font-size: 0.55rem;
+    vertical-align: middle;
+}
+/* Fallbacks are grey so the neutral status-colour scheme (which unsets
+   --status-*-bg to `initial`) collapses enabled/failed to the neutral
+   palette, matching the tx-status-icon / api-keys-status-dot pattern. */
+.plugin-status-dot--enabled  { color: var(--status-success-bg, #6c757d); }
+.plugin-status-dot--disabled { color: #adb5bd; }
+.plugin-status-dot--failed   { color: var(--status-failure-bg, #6c757d); }
+
+/* Plugin detail modal — used on mobile where the inline toggle is hidden */
+.plugin-modal-dl {
+    margin: 0 0 1rem 0;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.4rem 0.75rem;
+}
+.plugin-modal-dl dt { color: #6c757d; font-weight: 600; }
+.plugin-modal-dl dd { margin: 0; overflow-wrap: anywhere; }
+.plugin-modal-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+/* Nested changelog modal — renders plugin-bundled CHANGELOG.md inline so
+   users stay in the wallet. Server escapes content via htmlspecialchars
+   before running it through the shared markdown parser. */
+.plugin-changelog-body {
+    padding: 1.25rem;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+.plugin-changelog-body h1,
+.plugin-changelog-body h2,
+.plugin-changelog-body h3 { margin: 1rem 0 0.5rem; }
+.plugin-changelog-body h1 { font-size: 1.2rem; }
+.plugin-changelog-body h2 { font-size: 1.05rem; }
+.plugin-changelog-body h3 { font-size: 0.95rem; }
+.plugin-changelog-body ul,
+.plugin-changelog-body ol { margin: 0.4rem 0 0.8rem 1.25rem; }
+.plugin-changelog-body li { margin-bottom: 0.25rem; }
+.plugin-changelog-body code {
+    background: #f8f9fa;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+}
+.plugin-changelog-body pre {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    overflow-x: auto;
+    margin: 0.6rem 0;
+}
+.plugin-changelog-body pre code { background: none; padding: 0; }
+.plugin-changelog-body hr {
+    border: 0;
+    border-top: 1px solid #e9ecef;
+    margin: 1rem 0;
+}
 /* Narrow screens: hide credits / status / chain / online — keep Name + Balance only */
 @media (max-width: 600px) {
     .contacts-table thead th:nth-child(n+3),
@@ -2925,10 +3129,31 @@ tr.tx-item-in-progress > td:first-child {
 
 .modal-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.25rem;
     border-bottom: 2px solid #dee2e6;
     padding: 0 1rem;
     margin-bottom: 1rem;
+}
+.modal-tabs > .modal-tab { flex: 0 0 auto; white-space: nowrap; }
+
+/* Narrow screens: wrap tabs — 3 per row maximum, a 4th or 5th wraps to a
+   second row. flex-grow:0 keeps each tab at its 1/3 share, so the
+   second row (1 or 2 items) doesn't stretch and is centered with
+   justify-content — Status + Settings cluster together instead of
+   splitting the whole width. */
+@media (max-width: 600px) {
+    .modal-tabs {
+        justify-content: center;
+        row-gap: 0.25rem;
+    }
+    .modal-tabs > .modal-tab {
+        flex: 0 0 calc((100% - 0.5rem) / 3);
+        min-width: 0;
+        text-align: center;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
 }
 
 .modal-tab {
@@ -3012,6 +3237,29 @@ tr.tx-item-in-progress > td:first-child {
     justify-content: flex-end;
     background: #f8f9fa;
     border-radius: 0 0 8px 8px;
+}
+
+.modal-confirm {
+    max-width: 440px;
+}
+.modal-confirm-body {
+    padding: 1.25rem 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #343a40;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.modal-confirm-footer {
+    gap: 0.5rem;
+}
+@media (max-width: 480px) {
+    .modal-confirm-footer {
+        flex-direction: column-reverse;
+    }
+    .modal-confirm-footer .btn {
+        width: 100%;
+    }
 }
 
 /* --- Release notes (What's New modal) --- */
@@ -4193,6 +4441,22 @@ tr.tx-item-in-progress > td:first-child {
     letter-spacing: 0.02em;
 }
 
+.pending-about-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e9ecef;
+}
+.pending-about-title {
+    font-size: 0.95rem;
+    color: #6c757d;
+    margin: 0 0 0.75rem 0;
+    font-weight: 600;
+}
+.pending-about-title i {
+    margin-right: 0.4rem;
+    opacity: 0.8;
+}
+
 .pending-pubkey-disclosure {
     border: 1px solid #e9ecef;
     border-radius: 6px;
@@ -4207,10 +4471,16 @@ tr.tx-item-in-progress > td:first-child {
 }
 .pending-pubkey-disclosure > summary::-webkit-details-marker { display: none; }
 .pending-pubkey-disclosure > summary::before {
-    content: "▸ ";
-    color: #6c757d;
+    content: "▸";
+    color: #0d6efd;
+    font-size: 1.25rem;
+    line-height: 1;
+    display: inline-block;
+    width: 1.25rem;
+    margin-right: 0.25rem;
+    vertical-align: -0.1em;
 }
-.pending-pubkey-disclosure[open] > summary::before { content: "▾ "; }
+.pending-pubkey-disclosure[open] > summary::before { content: "▾"; }
 .pending-pubkey-disclosure .pubkey-display {
     margin-top: 0.75rem;
     font-size: 0.8rem;
@@ -4238,10 +4508,12 @@ tr.tx-item-in-progress > td:first-child {
 .pending-currency-summary::-webkit-details-marker { display: none; }
 .pending-currency-summary::before {
     content: "▸";
-    color: #6c757d;
-    font-size: 0.85rem;
+    color: #0d6efd;
+    font-size: 1.25rem;
+    line-height: 1;
     display: inline-block;
-    width: 0.85rem;
+    width: 1.25rem;
+    transition: transform 0.15s ease;
 }
 .pending-currency-accordion[open] .pending-currency-summary::before {
     content: "▾";
@@ -4261,22 +4533,113 @@ tr.tx-item-in-progress > td:first-child {
     min-width: 0;
 }
 .pending-currency-body {
-    padding: 0 0.85rem 0.85rem 0.85rem;
+    padding: 0.6rem 0.85rem;
     border-top: 1px solid #e9ecef;
-    padding-top: 0.75rem;
 }
-.pending-currency-body .currency-decline-form {
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px dashed #e9ecef;
-    text-align: right;
+.pending-currency-body .currency-form-row .form-group {
+    margin-bottom: 0;
 }
-.pending-currency-body .currency-decline-btn {
+.pending-currency-body .currency-form-row .form-group label {
+    margin-bottom: 0.25rem;
     font-size: 0.85rem;
+}
+.pending-currency-body .currency-form-row .form-group input {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.95rem;
+}
+
+/* Per-currency segmented decision control */
+.currency-decision-control {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.currency-decision-btn {
+    flex: 1 1 0;
+    padding: 0.5rem 0.5rem;
+    font-size: 0.85rem;
+    background: white;
+    color: #495057;
+    border: none;
+    border-right: 1px solid #ced4da;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+    white-space: nowrap;
+}
+.currency-decision-btn:last-child { border-right: none; }
+.currency-decision-btn i { margin-right: 0.3rem; opacity: 0.75; }
+.currency-decision-btn:hover { background: #f1f3f5; }
+.currency-decision-btn.is-active {
+    color: white;
+    font-weight: 600;
+}
+.currency-decision-btn.is-active i { opacity: 1; }
+.currency-decision-accept.is-active { background: #198754; }
+.currency-decision-decline.is-active { background: #6c757d; }
+.currency-decision-defer.is-active { background: #6610f2; }
+
+/* Hide fee/credit fields when decision != accept */
+.pending-currency-accordion[data-decision="decline"] .currency-accept-fields,
+.pending-currency-accordion[data-decision="defer"] .currency-accept-fields {
+    display: none;
+}
+
+/* Per-row state badge in the summary */
+.pending-currency-state-badge {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+.pending-currency-accordion[data-decision="accept"] .pending-currency-state-badge {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+.pending-currency-accordion[data-decision="accept"] .pending-currency-state-badge::before { content: "✓ Accept"; }
+.pending-currency-accordion[data-decision="decline"] .pending-currency-state-badge {
+    background: #e2e3e5;
+    color: #41464b;
+}
+.pending-currency-accordion[data-decision="decline"] .pending-currency-state-badge::before { content: "✗ Decline"; }
+.pending-currency-accordion[data-decision="defer"] .pending-currency-state-badge {
+    background: #ede1ff;
+    color: #4b1fa6;
+}
+.pending-currency-accordion[data-decision="defer"] .pending-currency-state-badge::before { content: "⏳ Defer"; }
+
+/* Visual styling on the accordion based on decision */
+.pending-currency-accordion[data-decision="decline"] {
+    background: #f8f9fa;
     opacity: 0.85;
 }
-.pending-currency-body .currency-decline-btn:hover {
-    opacity: 1;
+.pending-currency-accordion[data-decision="defer"] {
+    background: #fafafa;
+    opacity: 0.85;
+}
+
+/* Apply button row.
+   Override the generic `.modal-content form { padding: 1.5rem; }` rule —
+   that 24px of padding sat between the Apply button and Delete/Block,
+   making the two action clusters feel disconnected. Higher specificity
+   here so the override wins. */
+.modal-content form.apply-decisions-form,
+.apply-decisions-form {
+    margin: 0;
+    padding: 0;
+}
+.apply-decisions-row {
+    margin-top: 0.85rem;
+}
+.apply-decisions-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .pending-contact-header {
@@ -4287,16 +4650,30 @@ tr.tx-item-in-progress > td:first-child {
 }
 
 .pending-contact-accept-form {
-    margin-top: 1rem;
-    padding: 1rem;
-    background: white;
-    border-radius: 4px;
-    border: 1px solid #dee2e6;
+    margin-top: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
 }
 
 .pending-contact-accept-title {
+    font-size: 0.95rem;
+    color: #6c757d;
+    margin: 0 0 0.75rem 0;
+    font-weight: 600;
+}
+.pending-contact-accept-title i {
+    margin-right: 0.4rem;
+    opacity: 0.8;
     color: #0d6efd;
-    margin-bottom: 1rem;
+}
+.pending-contact-accept-title .text-muted {
+    font-size: 0.8rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #6c757d;
+    font-weight: 500;
+    margin-left: 0.35rem;
 }
 
 .pending-contact-message {
@@ -4360,28 +4737,29 @@ tr.tx-item-in-progress > td:first-child {
 }
 
 .currency-form-row {
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr;
 }
 
-.currency-accept-btn {
-    height: 38px;
+.currency-accept-row {
+    margin-top: 0.6rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.currency-accept-row .currency-decline-btn {
+    flex: 0 0 auto;
     white-space: nowrap;
 }
 
-.currency-accept-spacer {
-    visibility: hidden;
+.currency-accept-row .currency-accept-btn {
+    flex: 1 1 auto;
+    white-space: nowrap;
 }
 
 @media (max-width: 576px) {
     .currency-form-row {
         grid-template-columns: 1fr;
-    }
-    .currency-accept-spacer {
-        display: none;
-    }
-    .currency-accept-btn {
-        width: 100%;
-        height: auto;
     }
 }
 
@@ -4409,15 +4787,31 @@ hr.currency-separator-double {
 }
 
 .pending-contact-actions {
-    display: -webkit-box; display: -ms-flexbox; display: flex;
+    display: flex;
     gap: 0.5rem;
-    margin-top: 1rem;
-    -webkit-flex-wrap: wrap; -ms-flex-wrap: wrap; flex-wrap: wrap;
+    margin-top: 0.5rem;
 }
 
 .pending-contact-action-col {
-    -webkit-box-flex: 1; -ms-flex: 1; flex: 1;
-    min-width: 120px;
+    flex: 1 1 0;
+    min-width: 0;
+}
+/* Each Delete/Block button is wrapped in its own <form>; the generic
+   `.modal-content form { padding: 1.5rem }` rule was inflating each
+   form by 24px on every side. Higher specificity to override. */
+.modal-content form.pending-contact-action-col,
+.pending-contact-action-col {
+    padding: 0;
+    margin: 0;
+}
+
+/* On narrow screens, side-by-side Delete + Block tend to wrap their
+   labels onto two lines (mismatched heights, ugly). Stack each on its
+   own row so they read cleanly + match the full-width Apply above. */
+@media (max-width: 576px) {
+    .pending-contact-actions {
+        flex-direction: column;
+    }
 }
 
 /* Chain gap section */
@@ -4935,6 +5329,22 @@ details.section-intro > .section-intro-body {
     margin-bottom: 1rem;
 }
 .tx-modal-dlq-warning a { color: inherit; font-weight: 600; text-decoration: underline; }
+
+/* Mirrors `.tx-modal-dlq-warning` for the contact-request "awaiting your
+   decision" notice — info-toned because it's an actionable hint, not a
+   failure. Click target jumps to the corresponding Pending Contact
+   Request modal. */
+.tx-modal-pending-contact-notice {
+    background: var(--info-soft-bg, #cff4fc);
+    color: var(--info-soft-fg, #055160);
+    border: 1px solid var(--info-bg, #0dcaf0);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+.tx-modal-pending-contact-notice a { color: inherit; font-weight: 600; text-decoration: underline; }
+.tx-modal-pending-contact-notice a:hover { cursor: pointer; }
 
 .tx-modal-badges {
     display: -webkit-box; display: -ms-flexbox; display: flex;
@@ -5815,3 +6225,218 @@ label.api-keys-permission .api-keys-permission-text {
     font-size: 0.9rem;
     margin-top: 0.5rem;
 }
+
+/* ==========================================================================
+ * Payback Methods
+ * ========================================================================== */
+.payback-methods-section { margin-top: 1rem; }
+.payback-methods-list { margin-top: 0.5rem; }
+.payback-methods-empty { padding: 0.75rem; border: 1px dashed var(--border-color, #ccc); border-radius: 4px; }
+
+.payback-method-type-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--text-muted, #555);
+}
+
+.payback-method-currency-pill {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 999px;
+    background: var(--bg-soft, #eef);
+    text-align: center;
+}
+.payback-method-label { font-weight: 500; }
+.payback-method-mask { font-family: var(--font-mono, ui-monospace, monospace); color: var(--text-muted, #555); }
+
+.payback-type-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+details.payback-type-group { border: 1px solid var(--border-color, #e0e0e0); border-radius: 4px; }
+details.payback-type-group + details.payback-type-group { margin-top: 0.4rem; }
+details.payback-type-group > summary.payback-type-group-label {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, #6c757d);
+    user-select: none;
+}
+details.payback-type-group > summary.payback-type-group-label::-webkit-details-marker { display: none; }
+details.payback-type-group > summary.payback-type-group-label > .payback-type-group-chevron {
+    font-size: 0.7rem;
+    transition: transform 0.15s ease;
+    color: var(--text-muted, #6c757d);
+}
+details.payback-type-group[open] > summary.payback-type-group-label > .payback-type-group-chevron {
+    transform: rotate(90deg);
+}
+details.payback-type-group > summary.payback-type-group-label > span:first-of-type { flex: 1 1 auto; }
+.payback-type-group-count {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: var(--bg-soft, #eef);
+    color: var(--text-muted, #6c757d);
+    letter-spacing: 0;
+}
+details.payback-type-group > summary.payback-type-group-label:hover { background: var(--bg-alt, #fafafa); }
+.payback-type-group-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem 0.75rem;
+}
+.payback-type-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.75rem 0.5rem;
+    min-height: 78px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    background: var(--bg-alt, #fff);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .15s, background .15s;
+}
+.payback-type-tile > i { font-size: 1.1rem; color: var(--text-muted, #6c757d); }
+.payback-type-tile-label { font-size: 0.8rem; line-height: 1.15; }
+.payback-type-tile:hover:not(:disabled) { border-color: var(--primary, #36c); }
+.payback-type-tile.is-selected { border-color: var(--primary, #36c); background: var(--bg-accent, #e6eef8); }
+.payback-type-tile:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Payback Options (contact modal tab) ──────────────────────────── */
+.payback-options-controls {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin: 0.25rem 0 0.5rem;
+}
+.payback-options-controls > #payback-options-currency {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 12rem;
+    font-size: 0.9rem;
+    padding: 0.35rem 1.75rem 0.35rem 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='none' stroke='%236c757d' stroke-width='1.5' d='M1 1l4 4 4-4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    background-size: 0.6rem 0.4rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+.payback-options-controls > button { flex: 0 0 auto; }
+
+.contacts-table.payback-options-table .col-pbo-type,
+.contacts-table.payback-options-table .col-pbo-currency {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.contacts-table.payback-options-table .col-pbo-label {
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0;
+}
+.contacts-table.payback-options-table tbody tr.is-clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.contacts-table.payback-options-table tbody tr.is-clickable:hover {
+    background: var(--bg-alt, #f6f8fa);
+}
+
+/* Re-show col 3 (Label) on mobile — the generic .contacts-table rule
+   hides col 3+. Details is handled by the tap-to-open detail modal. */
+@media (max-width: 600px) {
+    .contacts-table.payback-options-table thead th:nth-child(3),
+    .contacts-table.payback-options-table tbody td:nth-child(3) {
+        display: table-cell;
+    }
+    .contacts-table.payback-options-table .col-pbo-type { width: 30%; }
+    .contacts-table.payback-options-table .col-pbo-currency { width: 30%; }
+    .contacts-table.payback-options-table .col-pbo-label { width: 40%; }
+}
+
+/* Detail modal — a row per field, key left / value right. */
+.payback-detail-row {
+    display: grid;
+    grid-template-columns: 8rem 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color, #eee);
+}
+.payback-detail-row:last-child { border-bottom: none; }
+.payback-detail-key { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.payback-detail-value { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.payback-detail-text { overflow-wrap: anywhere; word-break: break-word; }
+@media (max-width: 600px) {
+    .payback-detail-row { grid-template-columns: 1fr; gap: 0.1rem; }
+}
+
+.payback-type-fields .form-group + .form-group { margin-top: 0.5rem; }
+.payback-field-group { display: flex; flex-direction: column; gap: 0.25rem; }
+.payback-swift-id-btns { display: flex; gap: 0.5rem; }
+.payback-swift-id-btns > .btn { flex: 1 1 auto; }
+.payback-methods-table tbody tr.is-clickable { cursor: pointer; transition: background 0.15s; }
+.payback-methods-table tbody tr.is-clickable:hover { background: var(--bg-alt, #f6f8fa); }
+.contacts-table.payback-methods-table .col-pb-type     { width: 14%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-currency { width: 10%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-label    {
+    width: 22%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.contacts-table.payback-methods-table .col-pb-details  {
+    width: 30%; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.contacts-table.payback-methods-table .col-pb-share    { width: 14%; white-space: nowrap; }
+.contacts-table.payback-methods-table .col-pb-actions  { width: 10%; white-space: nowrap; }
+
+/* Mobile (≤600px): the generic .contacts-table rule hides cols 3+.
+   Re-show Label (3) + Actions (6) and let everything size naturally. */
+@media (max-width: 600px) {
+    .contacts-table.payback-methods-table thead th:nth-child(3),
+    .contacts-table.payback-methods-table tbody td:nth-child(3),
+    .contacts-table.payback-methods-table thead th:nth-child(6),
+    .contacts-table.payback-methods-table tbody td:nth-child(6) {
+        display: table-cell;
+    }
+    .contacts-table.payback-methods-table .col-pb-type     { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-currency { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-label    { width: auto; }
+    .contacts-table.payback-methods-table .col-pb-actions  { width: 1%; }
+}
+
+.form-errors {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--status-failure-border, #f5c2c7);
+    background: var(--status-failure-soft-bg, #f8d7da);
+    color: var(--status-failure-soft-fg, #842029);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.form-errors-list { margin: 0; padding-left: 1.1rem; }
+

@@ -21,6 +21,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Database\TransactionContactRepository;
 use Eiou\Database\HeldTransactionRepository;
+use Eiou\Contracts\EventDispatcherInterface;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Utilities\UtilityServiceContainer;
@@ -140,6 +141,26 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
     private TransactionContactRepository $transactionContactRepository;
 
     /**
+     * @var HeldTransactionRepository Held-transaction repository instance.
+     * Was previously instantiated `new HeldTransactionRepository()` inline
+     * inside `releaseHeldTransaction()`, bypassing the factory cache and
+     * making the dependency invisible to the constructor signature.
+     */
+    private HeldTransactionRepository $heldTransactionRepository;
+
+    /**
+     * @var EventDispatcherInterface Event dispatcher used for plugin hooks.
+     * Injected so unit tests can swap a fake (mock) implementation in
+     * place of the singleton without `resetInstance()` gymnastics, and so
+     * the dependency is visible at the constructor seam. The production
+     * binding (via `ServiceContainer::getEventDispatcher()`) still returns
+     * the existing singleton, so cross-service event subscriptions wired
+     * through `EventDispatcher::getInstance()` from other code paths
+     * continue to work without churn.
+     */
+    private EventDispatcherInterface $eventDispatcher;
+
+    /**
      * Set the held transaction service (setter injection for circular dependency)
      *
      * @param HeldTransactionService $service Held transaction service
@@ -192,8 +213,10 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         TransactionChainRepository $transactionChainRepository,
         TransactionContactRepository $transactionContactRepository,
         BalanceRepository $balanceRepository,
+        HeldTransactionRepository $heldTransactionRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?EventDispatcherInterface $eventDispatcher = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -203,9 +226,15 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         $this->transactionChainRepository = $transactionChainRepository;
         $this->transactionContactRepository = $transactionContactRepository;
         $this->balanceRepository = $balanceRepository;
+        $this->heldTransactionRepository = $heldTransactionRepository;
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
+        // Default to the singleton when no dispatcher is injected so existing
+        // call sites that don't yet thread one don't regress; production
+        // wiring (via ServiceContainer::getEventDispatcher()) returns the
+        // same singleton, so the two paths are observationally identical.
+        $this->eventDispatcher = $eventDispatcher ?? EventDispatcher::getInstance();
 
         $this->contactPayload = new ContactPayload($this->currentUser, $this->utilityContainer);
         $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
@@ -353,7 +382,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 output(outputContactSuccessfullySynced($contactAddress),$echo);
 
                 // Dispatch contact synced event
-                EventDispatcher::getInstance()->dispatch(SyncEvents::CONTACT_SYNCED, [
+                $this->eventDispatcher->dispatch(SyncEvents::CONTACT_SYNCED, [
                     'contact_pubkey' => $senderPublicKey,
                     'contact_address' => $contactAddress,
                     'status' => $status,
@@ -378,7 +407,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                         output(outputContactSuccessfullySynced($contactAddress),$echo);
 
                         // Dispatch contact synced event
-                        EventDispatcher::getInstance()->dispatch(SyncEvents::CONTACT_SYNCED, [
+                        $this->eventDispatcher->dispatch(SyncEvents::CONTACT_SYNCED, [
                             'contact_pubkey' => $inquiryPubkey,
                             'contact_address' => $contactAddress,
                             'status' => Constants::STATUS_ACCEPTED,
@@ -661,7 +690,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
                 if (!$syncResponse || !isset($syncResponse['status'])) {
                     $result['error'] = 'Invalid sync response';
-                    EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                    $this->eventDispatcher->dispatch(SyncEvents::SYNC_FAILED, [
                         'contact_pubkey' => $contactPublicKey,
                         'contact_address' => $contactAddress,
                         'error' => 'Invalid sync response',
@@ -672,7 +701,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
                 if ($syncResponse['status'] === Constants::STATUS_REJECTED) {
                     $result['error'] = $syncResponse['reason'] ?? 'Sync rejected';
-                    EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                    $this->eventDispatcher->dispatch(SyncEvents::SYNC_FAILED, [
                         'contact_pubkey' => $contactPublicKey,
                         'contact_address' => $contactAddress,
                         'error' => $result['error'],
@@ -683,7 +712,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
                 if ($syncResponse['status'] !== Constants::STATUS_ACCEPTED || !isset($syncResponse['transactions'])) {
                     $result['error'] = 'Unexpected sync response';
-                    EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                    $this->eventDispatcher->dispatch(SyncEvents::SYNC_FAILED, [
                         'contact_pubkey' => $contactPublicKey,
                         'contact_address' => $contactAddress,
                         'error' => 'Unexpected sync response',
@@ -734,7 +763,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                                 $conflictsResolved++;
 
                                 // Dispatch chain conflict resolved event
-                                EventDispatcher::getInstance()->dispatch(SyncEvents::CHAIN_CONFLICT_RESOLVED, [
+                                $this->eventDispatcher->dispatch(SyncEvents::CHAIN_CONFLICT_RESOLVED, [
                                     'contact_pubkey' => $contactPublicKey,
                                     'local_txid' => $localConflict['txid'],
                                     'remote_txid' => $tx['txid'],
@@ -934,7 +963,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 ]);
 
                 // Dispatch chain gap detected event
-                EventDispatcher::getInstance()->dispatch(SyncEvents::CHAIN_GAP_DETECTED, [
+                $this->eventDispatcher->dispatch(SyncEvents::CHAIN_GAP_DETECTED, [
                     'contact_pubkey' => $contactPublicKey,
                     'contact_address' => $contactAddress,
                     'gap_count' => $gapCount,
@@ -946,7 +975,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             }
 
             // Dispatch sync completed event
-            EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_COMPLETED, [
+            $this->eventDispatcher->dispatch(SyncEvents::SYNC_COMPLETED, [
                 'contact_pubkey' => $contactPublicKey,
                 'contact_address' => $contactAddress,
                 'synced_count' => $syncedCount,
@@ -963,7 +992,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             ]);
 
             // Dispatch sync failed event
-            EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+            $this->eventDispatcher->dispatch(SyncEvents::SYNC_FAILED, [
                 'contact_pubkey' => $contactPublicKey,
                 'contact_address' => $contactAddress,
                 'error' => $e->getMessage(),
@@ -1229,15 +1258,13 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      */
     private function releaseHeldTransaction(string $txid): bool {
         try {
-            $heldRepository = new HeldTransactionRepository();
-
             // Check if transaction is held
-            if (!$heldRepository->isTransactionHeld($txid)) {
+            if (!$this->heldTransactionRepository->isTransactionHeld($txid)) {
                 return true; // Not held, nothing to release
             }
 
             // Release it to prevent HeldTransactionService from overwriting
-            $released = $heldRepository->releaseTransaction($txid);
+            $released = $this->heldTransactionRepository->releaseTransaction($txid);
 
             if ($released) {
                 Logger::getInstance()->info("Released held transaction after chain conflict resolution", [
@@ -1811,6 +1838,14 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             'error' => null
         ];
 
+        // SYNC_STARTED hook — companion to SYNC_COMPLETED below. Plugin
+        // listeners can record the attempt or short-circuit by throwing.
+        $this->eventDispatcher->dispatch(SyncEvents::SYNC_STARTED, [
+            'contact_pubkey'  => $contactPubkey,
+            'contact_address' => null,
+            'sync_type'       => 'balance',
+        ]);
+
         try {
             // Get the user's addresses to determine transaction direction
             $userAddresses = $this->currentUser->getUserAddresses();
@@ -1876,7 +1911,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             output("Contact balance sync completed for " . count($balancesByCurrency) . " currency(ies)", 'SILENT');
 
             // Dispatch balance synced event
-            EventDispatcher::getInstance()->dispatch(SyncEvents::BALANCE_SYNCED, [
+            $this->eventDispatcher->dispatch(SyncEvents::BALANCE_SYNCED, [
                 'contact_pubkey' => $contactPubkey,
                 'currencies' => array_keys($balancesByCurrency),
                 'success' => true
@@ -1890,7 +1925,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             ]);
 
             // Dispatch balance sync failed event
-            EventDispatcher::getInstance()->dispatch(SyncEvents::BALANCE_SYNCED, [
+            $this->eventDispatcher->dispatch(SyncEvents::BALANCE_SYNCED, [
                 'contact_pubkey' => $contactPubkey,
                 'currencies' => [],
                 'success' => false,
