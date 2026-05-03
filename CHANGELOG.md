@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- **What's New modal intro paragraph no longer renders as a stack of broken short lines.** `markdownToHtml()` now folds soft line breaks into a single `<p>` until a blank line or block element ends it (CommonMark behaviour). Hard-wrapped intro paragraphs in GitHub release bodies — common at ~120-char wrap — were emitting one `<p>` per source line, producing a fragmented look at the top of the modal.
+
 ## v0.1.14-alpha (2026-05-03)
 
 ### Added
