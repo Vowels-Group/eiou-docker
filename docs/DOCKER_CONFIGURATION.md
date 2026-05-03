@@ -49,7 +49,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_TOR_FORCE_FAST` | `true` | No | Auto-enable fast mode for Tor routes. Set to `false` for best-fee testing over Tor |
 | `EIOU_HOP_BUDGET_RANDOMIZED` | `true` | No | Randomize hop budget via geometric distribution. Set to `false` for deterministic routing depth |
 | `EIOU_UPDATE_CHECK_ENABLED` | `true` | No | Check Docker Hub daily for newer image versions. Set to `false` to disable all external API calls |
-| `EIOU_ANALYTICS_ENABLED` | `false` | No | Share anonymous usage statistics weekly (opt-in). Sends only aggregate transaction counts and volume per currency — no personal data, amounts per transaction, contacts, or addresses |
+| `EIOU_ANALYTICS_ENABLED` | `false` | No | Share anonymous usage statistics, batched daily by a cron job (opt-in, not real-time). Sends only aggregate transaction counts and volume per currency — no personal data, amounts per transaction, contacts, or addresses |
 | `EIOU_VOLUME_KEY_FILE` | (none) | No | Path to file containing volume encryption passphrase (recommended) |
 | `EIOU_VOLUME_KEY` | (none) | No | Volume encryption passphrase as environment variable (less secure) |
 | `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with QUICKSTART nodes, use `P2P_CA_CERT` for a shared CA, or place nodes behind a reverse proxy with valid certificates |
@@ -521,28 +521,30 @@ All eIOU containers are configured with resource limits to prevent runaway resou
 deploy:
   resources:
     limits:
-      cpus: '1.0'
-      memory: 512M
+      cpus: '2.0'
+      memory: 1024M
+      pids: 200
     reservations:
-      memory: 256M
+      memory: 512M
 ```
 
 ### Resource Parameters
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `limits.cpus` | `1.0` | Maximum CPU cores the container can use |
-| `limits.memory` | `512M` | Maximum memory the container can use |
-| `reservations.memory` | `256M` | Guaranteed minimum memory allocation |
+| `limits.cpus` | `2.0` | Maximum CPU cores the container can use |
+| `limits.memory` | `1024M` | Maximum memory the container can use |
+| `limits.pids` | `200` | Maximum number of processes/threads inside the container |
+| `reservations.memory` | `512M` | Guaranteed minimum memory allocation |
 
 ### Memory Requirements by Topology
 
 | Topology | Nodes | Per-Node Limit | Total Reserved | Total Limit |
 |----------|-------|----------------|----------------|-------------|
-| Single | 1 | 512M | 256M | 512M |
-| 4-line | 4 | 512M each | 1GB | 2GB |
-| 10-line | 10 | 512M each | 2.5GB | 5GB |
-| Cluster | 13 | 512M each | 3.25GB | 6.5GB |
+| Single | 1 | 1024M | 512M | 1GB |
+| 4-line | 4 | 1024M each | 2GB | 4GB |
+| 10-line | 10 | 1024M each | 5GB | 10GB |
+| Cluster | 13 | 1024M each | 6.5GB | 13GB |
 
 ### Customizing Resource Limits
 

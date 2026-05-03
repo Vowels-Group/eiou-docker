@@ -21,12 +21,12 @@ eIOU includes an optional, opt-in anonymous analytics system that sends aggregat
 
 | Guarantee | Detail |
 |-----------|--------|
+| **Opt-in only** | Analytics are disabled by default. No data is ever sent unless you explicitly enable it |
 | **Tor-routed** | All submissions are sent through the local Tor SOCKS5 proxy — your IP address is never exposed to the analytics server |
 | **Anonymous ID** | The node identifier is an HMAC-SHA256 hash that **cannot be reversed** to your public key, network address, or any other identity |
 | **No personal data** | No individual transaction details, contacts, addresses, amounts, or counterparties are ever included |
 | **Once per day** | A single heartbeat is submitted every day at 3:00 AM UTC — there is no continuous tracking or real-time reporting |
 | **Random jitter** | Each submission is delayed by a random 0–60 minute window to prevent timing correlation across nodes |
-| **Opt-in only** | Analytics are disabled by default. No data is ever sent unless you explicitly enable it |
 | **Consent boundary** | On opt-in, the current timestamp is recorded as `analyticsOptInAt`. No data from before that timestamp is ever included in a submission, even after an outage recovery |
 | **Revocable** | You can disable analytics at any time via GUI, CLI, or API. Disabling takes effect immediately |
 

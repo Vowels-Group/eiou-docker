@@ -1194,11 +1194,11 @@ eiou payback <action> [args...]
 | Action | Syntax | Description |
 |--------|--------|-------------|
 | `list` | `payback list [--currency <c>] [--all]` | List all enabled methods. `--currency` filters to one code; `--all` also includes disabled rows. |
-| `add` | `payback add <type> <label> <currency> [--share auto\|prompt\|never] [--priority N]` | Create a new method. Type-specific fields are prompted interactively (sensitive inputs use `stty -echo` when stdin is a TTY). |
+| `add` | `payback add <type> <label> <currency> [--share auto\|never] [--priority N]` | Create a new method. Type-specific fields are prompted interactively (sensitive inputs use `stty -echo` when stdin is a TTY). |
 | `show` | `payback show <method_id>` | Display a single method with **all fields decrypted** to plaintext. |
 | `edit` | `payback edit <method_id>` | Re-enter the type-specific fields. Label, priority, and share policy have their own subcommands. |
 | `remove` | `payback remove <method_id>` | Permanently delete a method. |
-| `share-policy` | `payback share-policy <method_id> auto\|prompt\|never` | Update only the share policy on an existing method. |
+| `share-policy` | `payback share-policy <method_id> auto\|never` | Update only the share policy on an existing method. |
 | `help` | `payback help` | Show detailed help. |
 
 **Supported Types (core):**
@@ -1234,8 +1234,8 @@ eiou payback list --json
 # Add a SEPA bank-wire method (prompts for rail, name, IBAN)
 eiou payback add bank_wire "My Revolut" EUR
 
-# Add a custom free-text method, share only on prompt, top priority
-eiou payback add custom "Monzo – DM me" GBP --share prompt --priority 10
+# Add a custom free-text method, never auto-shared with contacts, top priority
+eiou payback add custom "Monzo – DM me" GBP --share never --priority 10
 
 # Reveal a method's plaintext fields (does not re-prompt for auth — CLI is trusted)
 eiou payback show pbm_abc123

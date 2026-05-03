@@ -340,7 +340,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `CliService` | CLI output formatting | ContactRepo, BalanceRepo, TransactionRepo + setter: ContactCreditRepo, P2pRepo |
 | `DebugService` | Debug logging and diagnostics | DebugRepo |
 | `DebugReportService` | Generates debug reports (limited/full) with system info, logs, and diagnostics | DebugService, Logger |
-| `AnalyticsService` | Opt-in anonymous usage statistics — collects aggregate metrics (transaction counts, volume, contact count, active days) and sends weekly to `analytics.eiou.org`. Anonymous ID is HMAC-SHA256 hash. Disabled by default | UserContext, TransactionRepo, ContactRepo |
+| `AnalyticsService` | Opt-in anonymous usage statistics — collects aggregate metrics (transaction counts, volume, contact count, active days) and sends a single daily heartbeat to `analytics.eiou.org` (cron at 03:00 UTC, not real-time). Anonymous ID is HMAC-SHA256 hash. Disabled by default | UserContext, TransactionRepo, ContactRepo |
 | `UpdateCheckService` | Checks Docker Hub (with GitHub Releases fallback) for newer image versions. Cached for 24 hours. Respects `updateCheckEnabled` setting. Tor-only nodes skip | UserContext |
 | `CliDlqService` | CLI dead letter queue operations (list, retry, abandon) | DeadLetterQueueRepo, TransportUtility |
 | `CliHelpService` | CLI help/documentation generation | None |
@@ -1234,7 +1234,7 @@ Each node maintains a MariaDB database with these primary tables:
 | `held_transactions` | Transactions pending sync completion |
 | `api_keys` | API authentication keys |
 | `api_request_log` | API request audit trail |
-| `payback_methods` | The node's own payback methods — per-row AES-256-GCM encrypted `encrypted_fields` JSON blob keyed to the wallet with `method_id` as AAD (so ciphertext can't be swapped between rows). Carries `type`, `label`, `currency`, `priority`, `share_policy` (ENUM `auto`/`prompt`/`never`), `settlement_min_unit` + `settlement_min_unit_exponent`. Rail-type dispatch is plugin-extensible via `PaybackMethodTypeRegistry`; see `docs/PLUGINS.md` |
+| `payback_methods` | The node's own payback methods — per-row AES-256-GCM encrypted `encrypted_fields` JSON blob keyed to the wallet with `method_id` as AAD (so ciphertext can't be swapped between rows). Carries `type`, `label`, `currency`, `priority`, `share_policy` (ENUM `auto`/`never`), `settlement_min_unit` + `settlement_min_unit_exponent`. Rail-type dispatch is plugin-extensible via `PaybackMethodTypeRegistry`; see `docs/PLUGINS.md` |
 | `payback_methods_received` | Cache of methods fetched from contacts over the E2E `payback-methods-request.v1` round-trip. Reserved for a future offline-cache layer — the current contact-modal Payback tab is a pure live fetch and does not write to this table |
 | `rate_limits` | Rate limiting state |
 | `chain_drop_proposals` | Mutual tx drop agreement tracking |

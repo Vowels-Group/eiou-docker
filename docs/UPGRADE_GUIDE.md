@@ -265,7 +265,7 @@ docker logs <container-name> 2>&1 | head -100
 - `MariaDB upgrade completed successfully` — `mariadb-upgrade` ran after version change
 - `MariaDB: Adding version tracking` — first boot with version tracking enabled (normal on first upgrade to v0.1.6+)
 - `Update check cron job installed (daily at 2 AM UTC)` — version check active
-- `Analytics cron job installed (weekly, Sundays at 3 AM UTC)` — analytics cron active
+- `Analytics cron job installed (daily at 3 AM UTC)` — analytics cron active
 - `eIOU Node started successfully!` — all processors running, ready to receive
 
 ---
