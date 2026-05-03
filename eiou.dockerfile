@@ -213,7 +213,7 @@ COPY files/plugins/ /app/plugins/
 # Only first-party / eIOU-official keys belong here; operators add their
 # own trusted keys to /etc/eiou/config/trusted-plugin-keys/ on the volume.
 # See docs/PLUGINS.md → Plugin Signatures.
-COPY files/etc/eiou/config/trusted-plugin-keys/ /app/eiou/config/trusted-plugin-keys/
+COPY files/trusted-plugin-keys/ /app/eiou/config/trusted-plugin-keys/
 
 # Copy composer.json (needed for autoloader path reference)
 COPY files/composer.json /app/eiou/composer.json
