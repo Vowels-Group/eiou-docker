@@ -253,7 +253,7 @@ For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md#err
 |------|------|-------|-------------|-----------------|
 | `CONTACT_NOT_FOUND` | 404 | Contact Not Found | Contact does not exist | Verify contact name or address |
 | `CONTACT_EXISTS` | 409 | Contact Already Exists | Contact already in address book | Use existing contact or different address |
-| `CONTACT_BLOCKED` | 403 | Contact Blocked | Contact has been blocked | Unblock contact first: `eiou unblock` |
+| `CONTACT_BLOCKED` | 403 | Contact Blocked | Contact has been blocked | Unblock contact first: `eiou contact unblock <contact>` |
 | `CONTACT_REJECTED` | 403 | Contact Request Rejected | Contact request was rejected | Cannot add this contact |
 | `CONTACT_CREATE_FAILED` | 500 | Contact Creation Failed | Failed to create contact | Check database and network connectivity |
 | `SELF_CONTACT` | 400 | Cannot Add Self as Contact | Attempted to add own address | Cannot send to yourself |
@@ -264,7 +264,7 @@ For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md#err
 | `DELETE_FAILED` | 500 | Delete Failed | Failed to delete contact | Check if contact has pending transactions |
 | `UPDATE_FAILED` | 500 | Update Failed | Failed to update contact | Verify contact exists and values are valid |
 | `ADDRESS_UPDATE_FAILED` | 500 | Address Update Failed | Failed to update contact address | Check address format |
-| `NO_CONTACTS` | 400 | No Contacts Available | No contacts found | Add contacts first: `eiou add` |
+| `NO_CONTACTS` | 400 | No Contacts Available | No contacts found | Add contacts first: `eiou contact add <address> <name> --fee <fee> --credit <credit> --currency <currency>` |
 | `CONTACT_UNREACHABLE` | 503 | Contact Unreachable | Contact node is not responding | Check contact is online; try again later |
 
 ---

@@ -380,9 +380,17 @@ To run multiple nodes, duplicate the service block in `docker-compose.yml` with 
 # Unit tests (PHPUnit)
 cd files && composer test
 
-# Integration tests
-cd tests && ./run-all-tests.sh http4
+# Integration tests — usage: ./run-all-tests.sh <build_name> [mode] [subset]
+cd tests && ./run-all-tests.sh http4              # 4-node line over HTTP, all tests
+cd tests && ./run-all-tests.sh http4 https        # same topology over HTTPS
+cd tests && ./run-all-tests.sh http4 tor          # same topology over Tor (.onion)
+cd tests && ./run-all-tests.sh http4 http quick   # quick subset only
+cd tests && ./run-all-tests.sh collisions http bestfee  # best-fee routing on collisions topology
 ```
+
+Builds: `http4`, `http10`, `http13`, `collisions`, `collisionscluster`.
+Modes: `http` (default), `https`, `tor`.
+Subsets: `all` (default), `quick`, `contacts`, `transactions`, `messaging`, `api`, `sync`, `connections`, `system`, `performance`, `mutual`, `bestfee`.
 
 See [Testing Guide](docs/TESTING.md) for details.
 
