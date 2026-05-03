@@ -515,11 +515,11 @@ docker exec alice eiou help sync
 **Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to the contact handler's own help — so `eiou help contact` and `eiou contact` print **the exact same** subcommand tree (single source of truth). Same for `eiou help contact currency` → per-currency help.
 
 ```bash
-# These four print identical output (same subcommand tree):
+# These three print identical output (same subcommand tree):
 docker exec alice eiou contact
 docker exec alice eiou contact help
 docker exec alice eiou help contact
-# And the per-currency tree:
+# And these two print the per-currency tree:
 docker exec alice eiou contact currency
 docker exec alice eiou help contact currency
 

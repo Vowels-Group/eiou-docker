@@ -1803,6 +1803,35 @@ Start background processors by removing the shutdown flag. The watchdog process 
 
 ---
 
+### POST /api/v1/system/restart
+
+Request a full in-place node restart — both the background processors **and** the PHP-FPM workers. Required after toggling plugins (or any other state bound at boot) so event subscriptions rebind without a container reboot.
+
+The API runs as `www-data` and cannot signal the root-owned PHP-FPM master directly, so this endpoint writes a request marker that the root-side poller in `startup.sh` picks up within ~2 seconds and turns into the equivalent of `eiou restart`. Rate-limited to one restart per 10 seconds at the poller; rapid duplicate calls return success but only the first is acted on.
+
+**Permission:** `admin`
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Restart requested. The node will respawn its workers within a few seconds.",
+        "expected_restart_within_seconds": 5
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `request_write_failed` | 500 | The request marker could not be written |
+| `restart_error` | 500 | Unhandled exception while requesting the restart |
+
+---
+
 ### GET /api/v1/system/debug-report
 
 Download a debug report as JSON. Includes system info, debug table entries, application logs, PHP errors, and nginx errors.
@@ -2737,6 +2766,156 @@ Permanently delete a payback method. The encrypted row is dropped; there is no s
 ```
 
 **404 Not Found** if the id does not exist.
+
+---
+
+## Plugin Endpoints
+
+Plugin management endpoints. All require `admin`. Toggling a plugin's enabled flag does **not** restart the node — follow up with `POST /api/v1/system/restart` (or `eiou restart` on the host) for the change to take effect, since event subscriptions bind during boot.
+
+The plugin name is validated against `^[a-z0-9][a-z0-9-_]{0,63}$` (kebab-case alphanumerics).
+
+---
+
+### GET /api/v1/plugins
+
+List every discovered plugin with full metadata (author, homepage, changelog, license, has_changelog).
+
+**Permission:** `admin`
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugins": [
+            {
+                "name": "hello-eiou",
+                "version": "0.1.0",
+                "enabled": true,
+                "status": "active",
+                "license": "MIT",
+                "author": "Example Author",
+                "homepage": "https://example.org/hello-eiou",
+                "has_changelog": true
+            }
+        ]
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `plugin_loader_unavailable` | 500 | Plugin system is not initialized on this node |
+
+---
+
+### POST /api/v1/plugins/:name/enable
+
+Persist `enabled = true` for the named plugin. Does not restart.
+
+**Permission:** `admin`
+
+**Path parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | string | Plugin name (kebab-case alphanumerics, ≤ 64 chars) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugin": "hello-eiou",
+        "enabled": true,
+        "restart_required": true,
+        "message": "Plugin state persisted. POST /api/v1/system/restart to apply."
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `invalid_name` | 400 | Plugin name failed the regex validation |
+| `unknown_plugin` | 404 | Plugin not found in the discovered set |
+| `persist_failed` | 500 | Could not write the plugin state to disk |
+| `plugin_loader_unavailable` | 500 | Plugin system is not initialized on this node |
+
+---
+
+### POST /api/v1/plugins/:name/disable
+
+Persist `enabled = false` for the named plugin. Does not restart.
+
+**Permission:** `admin`
+
+Same path parameters and response shape as `enable`, with `enabled: false`.
+
+---
+
+### DELETE /api/v1/plugins/:name
+
+Permanently uninstall a plugin. The plugin must be disabled first; an attempt to uninstall an enabled plugin returns 409 Conflict.
+
+Runs the full step sequence: `onUninstall` hook → revoke MySQL grants → drop tables → drop user → delete credentials → remove files → clean state. The response carries a per-step status so partial failures (e.g. plugin files removed but a DB-side cleanup step reported an error) are surfacable.
+
+**Permission:** `admin`
+
+**Path parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | string | Plugin name (kebab-case alphanumerics, ≤ 64 chars) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugin": "hello-eiou",
+        "uninstalled": true,
+        "steps": {
+            "on_uninstall_hook": "ok",
+            "revoke_grants": "ok",
+            "drop_tables": "ok",
+            "drop_user": "ok",
+            "delete_credentials": "ok",
+            "remove_files": "ok",
+            "clean_state": "ok"
+        }
+    }
+}
+```
+
+**Response (partial failure — `success: false` with `200`):** plugin files were removed on disk but at least one MySQL-side step reported an error. Inspect `steps` and resolve manually; the plugin is gone.
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `invalid_name` | 400 | Plugin name failed the regex validation |
+| `unknown_plugin` | 404 | Plugin not found |
+| `plugin_enabled` | 409 | Plugin is still enabled — disable first |
+
+---
+
+### Plugin-owned endpoints
+
+Plugins can register their own routes via `PluginApiRegistry`. Shape:
+
+```
+ANY /api/v1/plugins/:name/:action
+```
+
+Permission gating is set by the registering plugin (typically `admin`). Failures from a misbehaving plugin return a clean error response — they cannot tear down the controller.
 
 ---
 

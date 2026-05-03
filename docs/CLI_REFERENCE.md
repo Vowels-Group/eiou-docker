@@ -15,12 +15,14 @@ Complete command-line interface documentation for the eIOU Docker node.
 9. [API Key Management](#api-key-management)
 10. [Payback Methods](#payback-methods)
 11. [Payment Request Commands](#payment-request-commands)
-11. [Tx Drop Commands](#tx-drop-commands)
-11. [Backup Commands](#backup-commands)
-12. [Report Commands](#report-commands)
-13. [Test Mode Commands](#test-mode-commands)
-14. [Exit Codes](#exit-codes)
-15. [Rate Limiting](#rate-limiting)
+12. [Tx Drop Commands](#tx-drop-commands)
+13. [Backup Commands](#backup-commands)
+14. [Chain Integrity Audit](#chain-integrity-audit)
+15. [Plugin Management](#plugin-management)
+16. [Report Commands](#report-commands)
+17. [Test Mode Commands](#test-mode-commands)
+18. [Exit Codes](#exit-codes)
+19. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -1088,6 +1090,23 @@ eiou start
 
 ---
 
+### restart
+
+Full in-place node restart: respawn processors **and** PHP-FPM workers so freshly-enabled plugins (or any other startup-bound state) take effect without a container reboot.
+
+**Syntax:**
+```bash
+eiou restart
+```
+
+**Behavior:**
+- Sends SIGTERM to all running processors (the watchdog respawns them within ~30s)
+- Sends SIGUSR2 to the PHP-FPM master so all workers gracefully recycle (in-flight HTTP requests finish before the worker exits)
+- Required when toggling plugins, since event subscriptions bind during boot
+- Must run as root inside the container — the CLI process does, calling from a PHP-FPM worker (GUI) does not. The REST equivalent (`POST /api/v1/system/restart`) sidesteps this by writing a request marker that the root-side poller in `startup.sh` picks up.
+
+---
+
 ## API Key Management
 
 ### apikey
@@ -1560,6 +1579,53 @@ eiou verify-chain
 - `1` — at least one pair has a finding (chain gap or hash mismatch)
 
 This command is intentionally NOT on any cron — it's O(all history) per pair, which is the cost the per-pair checkpoint avoids on the hot path. Run it deliberately.
+
+---
+
+## Plugin Management
+
+### plugin
+
+List installed plugins and toggle their enabled flag. Persistence-only — does **not** restart the node; you must follow up with `eiou restart` (or `POST /api/v1/system/restart`, or the GUI restart button) for an `enable`/`disable` to take effect, since event subscriptions bind during boot.
+
+**Syntax:**
+```bash
+eiou plugin [list|enable|disable|uninstall] [name]
+```
+
+**Subcommands:**
+
+| Subcommand | Syntax | Description |
+|------------|--------|-------------|
+| *(none / `list`)* | `eiou plugin` | List every installed plugin with version, enabled flag, status, license. |
+| `enable` | `eiou plugin enable <name>` | Persist the enabled flag as `true`. |
+| `disable` | `eiou plugin disable <name>` | Persist the enabled flag as `false`. |
+| `uninstall` | `eiou plugin uninstall <name>` | Run the full uninstall sequence (onUninstall hook, drop tables, drop user, delete credentials, remove files). The plugin must be disabled first. |
+
+**Examples:**
+```bash
+# List all plugins (table)
+eiou plugin
+
+# List as JSON (full metadata)
+eiou plugin list --json
+
+# Enable / disable
+eiou plugin enable hello-eiou
+eiou plugin disable hello-eiou
+
+# Uninstall a disabled plugin
+eiou plugin uninstall hello-eiou
+
+# Apply the change
+eiou restart
+```
+
+**Notes:**
+- Persists to `/etc/eiou/config/plugins.json` immediately.
+- Plugin names are validated against `^[a-z0-9][a-z0-9-_]{0,63}$` (kebab-case alphanumerics).
+- Plugins disabled by default at install time — see [PLUGINS.md](PLUGINS.md) for the safety stance.
+- Plugin-owned CLI verbs are dispatched via `PluginCliRegistry`; if a plugin registers a top-level verb, it falls through after core's `else` branch in `Eiou.php`. See [PLUGINS.md](PLUGINS.md) for plugin authoring.
 
 ---
 

@@ -30,7 +30,7 @@ use Eiou\Services\ContactDecisionService;
  *   eiou contact list   [--status accepted|pending|blocked]
  *   eiou contact pending [--incoming|--outgoing]
  *   eiou contact view   <name|address|pubkey-hash>
- *   eiou contact update <name|address> [--name N --fee F --credit C]
+ *   eiou contact update <name|address> <name|fee|credit|all> <values…> [<currency>]
  *   eiou contact delete <name|address>
  *   eiou contact block  <name|address>
  *   eiou contact unblock <name|address>
@@ -647,7 +647,7 @@ Usage:
   eiou contact list   [--status accepted|pending|blocked]
   eiou contact pending [--incoming|--outgoing]
   eiou contact view   <name|address|pubkey-hash>
-  eiou contact update <name|address> [--name N --fee F --credit C]
+  eiou contact update <name|address> <name|fee|credit|all> <values…> [<currency>]
   eiou contact delete <name|address>
   eiou contact block  <name|address>
   eiou contact unblock <name|address>

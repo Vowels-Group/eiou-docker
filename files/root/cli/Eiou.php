@@ -9,25 +9,34 @@
  *
  * Usage: php eiou.php <command> [arguments] [--json]
  *
- * Commands:
- *   generate [restore <seed>]  - Generate new wallet or restore from seed
- *   info [detail] [--show-auth] - Display wallet information
- *   add <address> <"name"> ... - Add a new contact (quote multi-word names)
- *   send <address|"name"> <amount> - Send an eIOU transaction
- *   viewbalances [contact]     - View balance(s)
- *   history [contact]          - View transaction history
- *   pending                    - View pending contact requests
- *   p2p [subcommand] [args]    - Manage P2P transactions awaiting approval
- *   dlq [list|retry|abandon]   - Manage dead letter queue (failed messages)
- *   overview [limit]           - View wallet overview dashboard
- *   report <type>              - Generate reports (debug [--send], etc.)
- *   request [subcommand] [args] - Manage payment requests
- *   help [command]             - Display help information
- *   sync [type]                - Synchronize data
- *   ping <contact>             - Check contact online status
- *   updatecheck                - Check for newer image versions
- *   shutdown                   - Graceful shutdown
- *   restart                    - Restart processors and PHP-FPM workers (in-place)
+ * Commands (top-level — see CliHelpService for the canonical list):
+ *   generate [restore <seed>]                  - Generate or restore a wallet (startup-only)
+ *   info [detail] [--show-auth]                - Display wallet information
+ *   overview [limit]                           - Wallet dashboard summary
+ *   send <addr|name> <amount> <currency> [desc] [--best]  - Send an eIOU transaction
+ *   viewbalances [contact]                     - View balance(s)
+ *   history [contact] [limit]                  - View transaction history
+ *   contact <subcommand> [args]                - Contact management (add / accept / apply /
+ *                                                decline / list / pending / view / update /
+ *                                                delete / block / unblock / ping / search /
+ *                                                currency …) — see ContactCliHandler
+ *   p2p [subcommand] [args]                    - Manage P2P transactions awaiting approval
+ *   dlq [list|retry|abandon]                   - Manage dead letter queue (failed messages)
+ *   request [subcommand] [args]                - Manage payment requests
+ *   chaindrop [propose|accept|reject|list]     - Manage chain drop agreements
+ *   sync [type]                                - Synchronize data
+ *   verify-chain                               - Audit every bilateral chain end-to-end
+ *   backup <action> [args]                     - Manage encrypted database backups
+ *   apikey <action> [args]                     - Manage REST API keys
+ *   payback <action> [args]                    - Manage your payback methods
+ *   plugin [list|enable|disable|uninstall]     - Manage plugins (requires `restart` to apply)
+ *   viewsettings / changesettings [k v]        - View / change wallet settings
+ *   report <type> [--full] [--send]            - Generate troubleshooting reports
+ *   updatecheck                                - Check Docker Hub / GitHub for newer images
+ *   shutdown / start / restart                 - Stop / resume / fully restart processors
+ *   help [command]                             - Display top-level help
+ *                                                (`eiou help contact` and `… contact currency`
+ *                                                 delegate to the namespace's own showHelp)
  *
  * Output Flags:
  *   --json, -j     - Output in JSON format
