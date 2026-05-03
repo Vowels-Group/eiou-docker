@@ -51,6 +51,12 @@ class DatabaseSetupTest extends TestCase
             ->method('query')
             ->willReturn($this->mockStatement);
 
+        // GET_LOCK / RELEASE_LOCK go through prepare(); stub it so the
+        // advisory-lock guard doesn't trip on a null-returning mock.
+        $this->mockPdo->expects($this->any())
+            ->method('prepare')
+            ->willReturn($this->mockStatement);
+
         $this->mockStatement->expects($this->any())
             ->method('rowCount')
             ->willReturn(1); // Table exists
@@ -72,6 +78,10 @@ class DatabaseSetupTest extends TestCase
         // With empty migrations array, should still return result from column migrations
         $this->mockPdo->expects($this->any())
             ->method('query')
+            ->willReturn($this->mockStatement);
+
+        $this->mockPdo->expects($this->any())
+            ->method('prepare')
             ->willReturn($this->mockStatement);
 
         $this->mockStatement->expects($this->any())
@@ -421,6 +431,10 @@ class DatabaseSetupTest extends TestCase
     {
         $this->mockPdo->expects($this->any())
             ->method('query')
+            ->willReturn($this->mockStatement);
+
+        $this->mockPdo->expects($this->any())
+            ->method('prepare')
             ->willReturn($this->mockStatement);
 
         $this->mockStatement->expects($this->any())

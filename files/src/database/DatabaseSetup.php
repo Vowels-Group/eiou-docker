@@ -230,61 +230,114 @@ function runMigrations(PDO $pdo): array {
         return ['_status' => 'up_to_date'];
     }
 
-    $results = [];
+    // Serialize concurrent migrations across PIDs with a MySQL advisory
+    // lock. Without this, multiple workers booting simultaneously each see
+    // the old version, all run table/column/index migrations in parallel,
+    // and the losers crash on 1061 "Duplicate key name" / 1050 "Table
+    // already exists". This is pre-ServiceContainer territory so we issue
+    // GET_LOCK directly instead of going through DatabaseLockingService.
+    $lockName = 'eiou_schema_migration';
+    $lockTimeout = 60;
+    $lockAcquired = false;
+    try {
+        $stmt = $pdo->prepare("SELECT GET_LOCK(:name, :timeout) AS acquired");
+        $stmt->execute(['name' => $lockName, 'timeout' => $lockTimeout]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $acquired = $row['acquired'] ?? null;
+        $lockAcquired = ($acquired === 1 || $acquired === '1');
+    } catch (PDOException $e) {
+        if (class_exists('Eiou\\Utils\\Logger')) {
+            Logger::getInstance()->error('Schema migration lock acquisition failed', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
 
-    // List of migration tables to create (added after initial release)
-    // Use fully-qualified names since dynamic calls don't use namespace resolution
-    $migrations = [
-        'payment_requests'               => 'Eiou\Database\getPaymentRequestsTableSchema',
-        'payment_requests_archive'       => 'Eiou\Database\getPaymentRequestsArchiveTableSchema',
-        'remember_tokens'                => 'Eiou\Database\getRememberTokensTableSchema',
-        'transactions_archive'           => 'Eiou\Database\getTransactionsArchiveTableSchema',
-        'transaction_chain_checkpoints'  => 'Eiou\Database\getTransactionChainCheckpointsTableSchema',
-        'payback_methods'                => 'Eiou\Database\getPaybackMethodsTableSchema',
-        'payback_methods_received'       => 'Eiou\Database\getPaybackMethodsReceivedTableSchema',
-        'plugin_credentials'             => 'Eiou\Database\getPluginCredentialsTableSchema',
-    ];
+    if (!$lockAcquired) {
+        // Another PID may have completed migrations while we waited; if
+        // the version file is now current, treat that as success.
+        $currentVersion = file_exists($versionFile) ? (int) trim(file_get_contents($versionFile)) : 0;
+        if ($currentVersion >= $schemaVersion) {
+            return ['_status' => 'up_to_date'];
+        }
+        return ['_status' => 'error: could not acquire schema migration lock'];
+    }
 
-    foreach ($migrations as $tableName => $schemaFunction) {
-        try {
-            assertSafeMigrationIdentifier($tableName, 'migrations.tableName');
-            // Check if table exists
-            $stmt = $pdo->query("SHOW TABLES LIKE '$tableName'");
-            if ($stmt->rowCount() === 0) {
-                // Table doesn't exist, create it
-                $pdo->exec($schemaFunction());
-                $results[$tableName] = 'created';
-            } else {
-                $results[$tableName] = 'exists';
+    try {
+        // Re-read inside the lock — the holder before us may have just
+        // bumped the version, in which case we have nothing to do.
+        $currentVersion = file_exists($versionFile) ? (int) trim(file_get_contents($versionFile)) : 0;
+        if ($currentVersion >= $schemaVersion) {
+            return ['_status' => 'up_to_date'];
+        }
+
+        $results = [];
+
+        // List of migration tables to create (added after initial release)
+        // Use fully-qualified names since dynamic calls don't use namespace resolution
+        $migrations = [
+            'payment_requests'               => 'Eiou\Database\getPaymentRequestsTableSchema',
+            'payment_requests_archive'       => 'Eiou\Database\getPaymentRequestsArchiveTableSchema',
+            'remember_tokens'                => 'Eiou\Database\getRememberTokensTableSchema',
+            'transactions_archive'           => 'Eiou\Database\getTransactionsArchiveTableSchema',
+            'transaction_chain_checkpoints'  => 'Eiou\Database\getTransactionChainCheckpointsTableSchema',
+            'payback_methods'                => 'Eiou\Database\getPaybackMethodsTableSchema',
+            'payback_methods_received'       => 'Eiou\Database\getPaybackMethodsReceivedTableSchema',
+            'plugin_credentials'             => 'Eiou\Database\getPluginCredentialsTableSchema',
+        ];
+
+        foreach ($migrations as $tableName => $schemaFunction) {
+            try {
+                assertSafeMigrationIdentifier($tableName, 'migrations.tableName');
+                // Check if table exists
+                $stmt = $pdo->query("SHOW TABLES LIKE '$tableName'");
+                if ($stmt->rowCount() === 0) {
+                    // Table doesn't exist, create it
+                    $pdo->exec($schemaFunction());
+                    $results[$tableName] = 'created';
+                } else {
+                    $results[$tableName] = 'exists';
+                }
+            } catch (PDOException $e) {
+                $results[$tableName] = 'error: ' . $e->getMessage();
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("Migration failed for table $tableName", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
+        }
+
+        // Run column migrations
+        $columnResults = runColumnMigrations($pdo);
+        $results = array_merge($results, $columnResults);
+
+        // Check if any migration errored — only update version if all succeeded
+        $hasErrors = false;
+        foreach ($results as $status) {
+            if (is_string($status) && strpos($status, 'error:') === 0) {
+                $hasErrors = true;
+                break;
+            }
+        }
+
+        if (!$hasErrors) {
+            file_put_contents($versionFile, (string) $schemaVersion);
+        }
+
+        return $results;
+    } finally {
+        try {
+            $rs = $pdo->prepare("SELECT RELEASE_LOCK(:name)");
+            $rs->execute(['name' => $lockName]);
         } catch (PDOException $e) {
-            $results[$tableName] = 'error: ' . $e->getMessage();
             if (class_exists('Eiou\\Utils\\Logger')) {
-                Logger::getInstance()->error("Migration failed for table $tableName", [
-                    'error' => $e->getMessage()
+                Logger::getInstance()->warning('Schema migration lock release failed', [
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
     }
-
-    // Run column migrations
-    $columnResults = runColumnMigrations($pdo);
-    $results = array_merge($results, $columnResults);
-
-    // Check if any migration errored — only update version if all succeeded
-    $hasErrors = false;
-    foreach ($results as $status) {
-        if (is_string($status) && strpos($status, 'error:') === 0) {
-            $hasErrors = true;
-            break;
-        }
-    }
-
-    if (!$hasErrors) {
-        file_put_contents($versionFile, (string) $schemaVersion);
-    }
-
-    return $results;
 }
 
 /**

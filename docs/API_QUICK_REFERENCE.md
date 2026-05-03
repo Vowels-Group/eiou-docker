@@ -125,7 +125,7 @@ Settlement-rail metadata you offer contacts (bank wire, custom free-text, plugin
 | `GET` | `/api/v1/payback-methods/:id` | `payback:read` | Method metadata (sensitive fields redacted) |
 | `GET` | `/api/v1/payback-methods/:id/reveal` | `payback:write` | Decrypt and return all fields in plaintext |
 | `PUT` | `/api/v1/payback-methods/:id` | `payback:write` | Re-enter type-specific fields |
-| `PUT` | `/api/v1/payback-methods/:id/share-policy` | `payback:write` | Update share policy (`auto` / `prompt` / `never`) |
+| `PUT` | `/api/v1/payback-methods/:id/share-policy` | `payback:write` | Update share policy (`auto` / `never`) |
 | `DELETE` | `/api/v1/payback-methods/:id` | `payback:write` | Permanently delete a method |
 
 ### Plugin Endpoints (Admin)

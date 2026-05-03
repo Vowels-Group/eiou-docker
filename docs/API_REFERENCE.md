@@ -2604,7 +2604,7 @@ Create a new payback method.
 | `label` | string | Yes | — | Human label (≤ 128 chars) — not encrypted, shown in lists |
 | `currency` | string | Yes | — | ISO-4217 or declared asset code (uppercased server-side) |
 | `fields` | object | Yes | — | Type-specific fields. Shape depends on `type` / `rail` — see the relevant `PaybackMethodTypeContract` for the schema |
-| `share_policy` | string | No | `auto` | `auto`, `prompt`, or `never` |
+| `share_policy` | string | No | `auto` | `auto` or `never` |
 | `priority` | integer | No | `100` | 0–9999, lower = preferred when multiple methods match the same currency |
 
 **Response (201 Created):**
