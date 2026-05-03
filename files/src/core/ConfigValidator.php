@@ -32,7 +32,29 @@ use Eiou\Utils\Logger;
  */
 final class ConfigValidator
 {
-    private const REQUIRED_DBCONFIG_KEYS = ['dbHost', 'dbName', 'dbUser', 'dbPass'];
+    /**
+     * dbconfig.json shape after Application::migrateDbConfigEncryption()
+     * (which always runs *before* this validator at boot — see
+     * Application::init() line ordering):
+     *
+     *   - `dbHost` is plaintext, always required.
+     *   - Credentials live in `dbNameEncrypted` / `dbUserEncrypted` /
+     *     `dbPassEncrypted` (TDE-encrypted blobs). Plaintext `dbName` /
+     *     `dbUser` / `dbPass` should NOT be present at this point —
+     *     migration moves them to the encrypted variants on first boot.
+     *
+     * The validator therefore requires the encrypted form and surfaces
+     * any leftover plaintext as a separate error: that means migration
+     * didn't complete, the file was hand-edited, or a restore put back
+     * a pre-TDE config — operator should investigate either way.
+     */
+    private const REQUIRED_DBCONFIG_KEYS = ['dbHost'];
+    private const REQUIRED_DBCONFIG_ENCRYPTED_KEYS = [
+        'dbNameEncrypted',
+        'dbUserEncrypted',
+        'dbPassEncrypted',
+    ];
+    private const PROHIBITED_DBCONFIG_PLAINTEXT_KEYS = ['dbName', 'dbUser', 'dbPass'];
 
     public function __construct(
         private readonly AppConfig $appConfig,
@@ -152,21 +174,126 @@ final class ConfigValidator
             ]];
         }
 
+        $issues = [];
+
+        // Plaintext required keys (currently just `dbHost`).
         $missing = [];
         foreach (self::REQUIRED_DBCONFIG_KEYS as $key) {
             if (!array_key_exists($key, $decoded) || $decoded[$key] === '' || $decoded[$key] === null) {
                 $missing[] = $key;
             }
         }
+
+        // Encrypted credential blobs. Each must STRUCTURALLY look like a
+        // KeyEncryption::encrypt() output:
+        //   { ciphertext: base64-string,  iv: base64 of 12 bytes,
+        //     tag:        base64 of 16 bytes,  version: int }
+        // — otherwise someone could write `dbUserEncrypted: "Dave"` or
+        // `dbUserEncrypted: {"foo": "bar"}` and slip past a "non-empty
+        // array" check. The shape check below catches all of those.
+        $malformed = [];
+        foreach (self::REQUIRED_DBCONFIG_ENCRYPTED_KEYS as $key) {
+            if (!array_key_exists($key, $decoded)) {
+                $missing[] = $key;
+                continue;
+            }
+            $blob = $decoded[$key];
+            if (!is_array($blob) || empty($blob) || !$this->looksLikeKeyEncryptionBlob($blob)) {
+                $malformed[] = $key;
+            }
+        }
+
         if (!empty($missing)) {
-            return [[
+            $issues[] = [
                 'severity' => 'error',
                 'code' => 'dbconfig_missing_fields',
                 'message' => sprintf('dbconfig.json is missing required field(s): %s.', implode(', ', $missing)),
-            ]];
+            ];
         }
 
-        return [];
+        if (!empty($malformed)) {
+            $issues[] = [
+                'severity' => 'error',
+                'code' => 'dbconfig_malformed_encrypted_blob',
+                'message' => sprintf(
+                    'dbconfig.json field(s) %s do not match the KeyEncryption blob shape (expected ciphertext/iv/tag base64 strings + version). The DB connection will fail at decrypt time.',
+                    implode(', ', $malformed)
+                ),
+            ];
+        }
+
+        // Plaintext credentials should never be present at this point —
+        // Application::migrateDbConfigEncryption() runs before this
+        // validator and rewrites them. If we see them now, migration
+        // didn't complete or the file was edited by hand.
+        $leakedPlaintext = [];
+        foreach (self::PROHIBITED_DBCONFIG_PLAINTEXT_KEYS as $key) {
+            if (array_key_exists($key, $decoded)) {
+                $leakedPlaintext[] = $key;
+            }
+        }
+        if (!empty($leakedPlaintext)) {
+            $issues[] = [
+                'severity' => 'error',
+                'code' => 'dbconfig_plaintext_credentials',
+                'message' => sprintf(
+                    'dbconfig.json contains plaintext credential field(s) (%s) that should have been migrated to TDE-encrypted form. Restart the node so Application::migrateDbConfigEncryption() can re-encrypt them, or restore from a known-good backup.',
+                    implode(', ', $leakedPlaintext)
+                ),
+            ];
+        }
+
+        return $issues;
+    }
+
+    /**
+     * Best-effort structural check on a KeyEncryption blob. We don't
+     * have the master key here so we can't actually decrypt — but we
+     * CAN verify the shape and lengths match what KeyEncryption::encrypt()
+     * produces, which catches:
+     *   - non-array values (`"Dave"`)
+     *   - missing required keys (`{"foo": "bar"}`)
+     *   - non-base64 strings
+     *   - IV / tag of the wrong byte length (expected 12 / 16 for AES-256-GCM)
+     *   - non-string ciphertext
+     * AAD is checked as a string when present (it's optional in older
+     * blobs but always written by the current code).
+     *
+     * @param array<mixed> $blob
+     */
+    private function looksLikeKeyEncryptionBlob(array $blob): bool
+    {
+        foreach (['ciphertext', 'iv', 'tag'] as $field) {
+            if (!array_key_exists($field, $blob) || !is_string($blob[$field]) || $blob[$field] === '') {
+                return false;
+            }
+            $decoded = base64_decode($blob[$field], true);
+            if ($decoded === false) {
+                return false;
+            }
+            if ($field === 'iv' && strlen($decoded) !== 12) {
+                return false;
+            }
+            if ($field === 'tag' && strlen($decoded) !== 16) {
+                return false;
+            }
+            if ($field === 'ciphertext' && strlen($decoded) < 1) {
+                return false;
+            }
+        }
+        // version is mandatory on the current write path. Older v1 blobs
+        // (pre-AAD) wouldn't have it, but Application::init() rotates
+        // those forward, so seeing one without `version` here is a sign
+        // of tampering or a downgrade attack.
+        if (!array_key_exists('version', $blob) || !is_int($blob['version']) || $blob['version'] < 1) {
+            return false;
+        }
+        // aad is optional but if present must be a string (so a caller
+        // can't smuggle a typed value in).
+        if (array_key_exists('aad', $blob) && !is_string($blob['aad'])) {
+            return false;
+        }
+        return true;
     }
 
     /** @return array<int, array{severity: string, code: string, message: string}> */
