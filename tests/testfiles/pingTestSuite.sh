@@ -825,7 +825,7 @@ echo "========================================================================"
 ############################ TEST 4.1: MANUAL PING VIA CLI ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[4.1 Test manual ping command: eiou ping]"
+echo -e "\n[4.1 Test manual ping command: eiou contact ping]"
 
 # Test pinging B from A using the CLI command
 # Use EIOU_TEST_MODE=true to bypass rate limiting during tests

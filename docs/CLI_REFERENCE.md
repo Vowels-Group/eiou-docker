@@ -115,7 +115,7 @@ Wallet generation and restoration are handled automatically by `startup.sh` duri
 | `RESTORE_FILE` | Path to file containing seed phrase (recommended — more secure) |
 
 **Restoring contacts from a prior wallet:**
-After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou pending`) that you can re-accept with the `add` command.
+After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou contact pending`) that you can re-accept with `eiou contact accept <pubkey-hash> --currency CCY --fee F --credit C` (or `eiou contact apply` for multi-currency). If `autoAcceptRestoredContact` is enabled, the original per-currency settings are auto-restored and no manual accept is needed.
 
 ---
 
@@ -238,7 +238,7 @@ Rate limit: 20 contact ops per minute (`contact` rate-limit bucket).
 Initiate an outbound contact request. Outbound-only — for an existing accepted contact use `contact currency add` to propose a new currency, or `contact update` to change settings.
 
 ```bash
-eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]
+eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
 ```
 
 | Flag | Default | Description |
@@ -246,7 +246,10 @@ eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message
 | `--fee` | `0` | Fee percentage you'll charge to relay transactions in this currency. |
 | `--credit` | `0` | Credit limit you extend to this contact in this currency. `0` means contact-only (no transactions can route through you). |
 | `--currency` | `USD` | Currency code (3-9 uppercase alphanumeric, e.g. USD, EIOU). |
+| `--requested-credit` | — | Credit limit you'd like the **receiver** to extend to *you* in this currency. Sent on the wire as `requested_credit_limit` in the contact payload — the receiver sees it as a suggestion when they accept (mirrors what the GUI's "Requested Credit" field and the `POST /api/v1/contacts` endpoint expose). They choose what to actually grant. Omit to send no suggestion. |
 | `--message` | — | Optional short message (≤ 255 chars, E2E or transport-encrypted). |
+
+Flags can appear in any order, and in any position relative to the positional `<address> <name>`.
 
 ```bash
 # Contact request with all defaults
@@ -254,6 +257,9 @@ eiou contact add http://bob:8080 Bob
 
 # With explicit per-currency settings + a message
 eiou contact add http://bob:8080 Bob --fee 1.0 --credit 100 --currency USD --message "Hey, it's Dave!"
+
+# Suggest that Bob extend you a 500 USD credit limit when he accepts
+eiou contact add http://bob:8080 Bob --fee 1.0 --credit 100 --currency USD --requested-credit 500
 
 # Multi-word names need quoting in your shell — there's no special placeholder
 eiou contact add http://bob:8080 "Jane Doe" --fee 1.0 --credit 100 --currency USD
@@ -343,13 +349,25 @@ Output includes name, status, addresses, per-currency balances, fee/credit-limit
 
 ### contact update
 
-Update contact settings.
+Update contact settings using the positional `<field> <values…>` form. `<field>` is one of `name`, `fee`, `credit`, `all`. For `fee` / `credit`, append the currency code (so the right per-currency row is updated). For `all`, the trailing currency is optional and defaults to the contact's current currency.
 
 ```bash
-eiou contact update <name|address> [--name N --fee F --credit C]
+eiou contact update <name|address> name <new-name>
+eiou contact update <name|address> fee <pct> <CCY>
+eiou contact update <name|address> credit <amount> <CCY>
+eiou contact update <name|address> all <new-name> <fee> <credit> [<CCY>]
 ```
 
-Fee and credit updates apply to the contact's current default currency. For more targeted edits use the existing positional argv form (`all`, `name`, `fee`, `credit` followed by a currency code) — see `ContactManagementService::updateContact()` for the full positional syntax that's preserved for backwards compatibility.
+```bash
+eiou contact update Bob name Robert
+eiou contact update Bob fee 1.5 USD
+eiou contact update Bob credit 500 EUR
+eiou contact update Bob all Robert 2.0 1500 USD
+eiou contact update Bob all Robert 2.0 1500          # currency defaults to Bob's current currency
+eiou contact update http://bob fee 2.0 USD --json
+```
+
+Updates are local-only — the contact is not notified. See `ContactManagementService::updateContact()` for the full positional grammar.
 
 ### contact delete / block / unblock / ping / search
 
@@ -964,7 +982,7 @@ eiou sync balances
 
 ### help
 
-Display help information.
+Display help information for top-level commands.
 
 **Syntax:**
 ```bash
@@ -975,20 +993,37 @@ eiou help [command]
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `command` | optional | Specific command to get detailed help for |
+| `command` | optional | Specific top-level command to get detailed help for |
 
 **Examples:**
 ```bash
 # General help
 eiou help
 
-# Help for specific command
+# Help for specific top-level command
 eiou help send
 eiou help apikey
 
 # JSON format
 eiou help --json
 ```
+
+**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to `ContactCliHandler::showHelp()` — so `eiou help contact` and `eiou contact` print the **exact same** subcommand tree (single source of truth, no drift). `eiou help contact currency` likewise delegates to the per-currency help.
+
+```bash
+eiou contact            # full contact subcommand tree (same as `eiou contact help`)
+eiou help contact       # ← identical output, delegated to the contact handler
+eiou contact currency   # per-currency subcommand tree
+eiou help contact currency  # ← identical output
+
+# Other namespaces are still reached via the namespace itself:
+eiou backup help
+eiou apikey help
+eiou payback help
+eiou chaindrop help
+```
+
+There is no `eiou help contact add` form — drill down by running the namespace's own help (`eiou contact` for the full tree) and read the subcommand line you want.
 
 ---
 
@@ -1640,11 +1675,15 @@ eiou in
 
 CLI commands are rate-limited per wallet to prevent abuse:
 
-| Command | Limit | Window | Block Duration |
-|---------|-------|--------|----------------|
+| Command bucket | Limit | Window | Block Duration |
+|----------------|-------|--------|----------------|
 | `send` | 30 | 60 seconds | 5 minutes |
-| `add` | 20 | 60 seconds | 5 minutes |
+| `contact` (every `eiou contact …` subcommand) | 20 | 60 seconds | 5 minutes |
+| `generate` | 5 | 5 minutes | 15 minutes |
 | `backup` | 10 | 60 seconds | 5 minutes |
+| `chaindrop` | 10 | 60 seconds | 5 minutes |
+| `report` | 10 | 60 seconds | 5 minutes |
+| `p2p` | 30 | 60 seconds | 5 minutes |
 | `request` | 20 | 60 seconds | 5 minutes |
 | All others | 100 | 60 seconds | 5 minutes |
 

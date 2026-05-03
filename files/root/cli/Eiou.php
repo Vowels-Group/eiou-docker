@@ -193,10 +193,27 @@ elseif($request === "dlq"){
 }
 // Settings
 elseif($request === "help"){
-  // Help
+  // Help. Top-level commands render via CliHelpService; namespaced verbs
+  // delegate to the namespace handler's own help so there's a single
+  // source of truth for the subcommand tree (no drift between
+  // `eiou help contact` and `eiou contact`).
   $debugService->output("Executing help request", 'SILENT');
-  $cliService = $app->services->getCliService();
-  $cliService->displayHelp($cleanArgv, $output);
+  $helpTarget = isset($cleanArgv[2]) ? strtolower($cleanArgv[2]) : '';
+  if ($helpTarget === 'contact') {
+    $sub = isset($cleanArgv[3]) ? strtolower($cleanArgv[3]) : '';
+    if ($sub === 'currency') {
+      // eiou help contact currency → showCurrencyHelp()
+      $namespaceArgv = ['eiou', 'contact', 'currency', 'help'];
+    } else {
+      // eiou help contact [<anything-else>] → showHelp() (full tree)
+      $namespaceArgv = ['eiou', 'contact', 'help'];
+    }
+    $contactCli = $app->services->getContactCliHandler($output);
+    $contactCli->handleCommand($namespaceArgv);
+  } else {
+    $cliService = $app->services->getCliService();
+    $cliService->displayHelp($cleanArgv, $output);
+  }
 }
 elseif($request === "viewsettings"){
   // View Settings

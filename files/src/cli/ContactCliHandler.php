@@ -20,7 +20,7 @@ use Eiou\Services\ContactDecisionService;
  *
  * Subcommand tree (argv[2] / argv[3]):
  *
- *   eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]
+ *   eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
  *   eiou contact accept <pubkey-hash|address> --currency CCY --fee F --credit C
  *                                             [--currency CCY --fee F --credit C ...]
  *   eiou contact apply  <pubkey-hash|address> --from <file.json|->
@@ -95,7 +95,7 @@ class ContactCliHandler
         $name = $argv[4] ?? null;
         if ($address === null || $name === null) {
             $this->output->error(
-                'Usage: eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]',
+                'Usage: eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]',
                 ErrorCodes::MISSING_ARGUMENT,
                 400
             );
@@ -105,13 +105,21 @@ class ContactCliHandler
         $fee = $this->flag($argv, '--fee') ?? '0';
         $credit = $this->flag($argv, '--credit') ?? '0';
         $currency = $this->flag($argv, '--currency') ?? 'USD';
+        // Suggested credit limit you'd like the receiver to extend to *you*
+        // in this currency. Sent on the wire (ContactPayload picks it up via
+        // the addContact pipeline); the receiver chooses what to actually
+        // grant on accept. Omit to send no suggestion.
+        $requestedCredit = $this->flag($argv, '--requested-credit');
         $message = $this->flag($argv, '--message');
 
         // Build the addContact-style argv for the underlying service. The
         // service uses positional args for backward compatibility:
         //   [0]=eiou [1]=add [2]=address [3]=name [4]=fee [5]=credit
-        //   [6]=currency [7]=requested_credit (NULL placeholder) [8]=message
-        $serviceArgv = ['eiou', 'add', $address, $name, $fee, $credit, $currency, 'NULL'];
+        //   [6]=currency [7]=requested_credit (NULL = no suggestion) [8]=message
+        $serviceArgv = [
+            'eiou', 'add', $address, $name, $fee, $credit, $currency,
+            ($requestedCredit !== null && $requestedCredit !== '') ? $requestedCredit : 'NULL',
+        ];
         if ($message !== null && $message !== '') {
             $serviceArgv[] = $message;
         }
@@ -629,7 +637,7 @@ class ContactCliHandler
 Contact management — manage contacts and per-currency relationships.
 
 Usage:
-  eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]
+  eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
   eiou contact accept <pubkey-hash|address> --currency CCY --fee F --credit C
                                             [--currency CCY --fee F --credit C ...]
   eiou contact apply  <pubkey-hash|address> --from <file.json|->
