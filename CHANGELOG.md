@@ -12,6 +12,8 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+## v0.1.14-alpha (2026-05-03)
+
 ### Added
 - **Plugin system.** Discovery + lifecycle (`discover → register → boot`), GUI extension hooks (render slots, filter slots, asset registry, tab registry), per-plugin MySQL user with manifest-declared owned tables, uninstall flow with typed confirmation, Ed25519 signature verification with two-layer trusted-keys model, optional author / homepage / changelog / license metadata, in-app rendering of bundled CHANGELOG. Plugins disabled by default. Reference plugin `hello-eiou` demonstrates every surface.
 - **Plugin extension surfaces.** Plugins can now register CLI subcommands (`PluginCliRegistry`), REST endpoints (`PluginApiRegistry`), and payback-method rail types (`PaybackMethodTypeRegistry`). Four new event classes — `TransactionEvents`, `ContactEvents`, `P2pEvents`, `PluginEvents` — with all 15 emit points wired and pinned by dispatch-assertion tests. New hooks `TransactionEvents::PRE_VALIDATE` (abort-before-DB veto point) and `SyncEvents::SYNC_STARTED`.
