@@ -1557,7 +1557,7 @@ Get system settings.
 
 Update system settings.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Request Body:**
 
@@ -1711,7 +1711,7 @@ Trigger a manual update check against Docker Hub and GitHub Releases. Bypasses t
 
 Trigger a sync operation to synchronize data with contacts.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Request Body (optional):**
 
@@ -1744,7 +1744,7 @@ Trigger a sync operation to synchronize data with contacts.
 
 Shutdown background processors. The API remains responsive; only background workers (P2P, transaction processor, etc.) are terminated.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Response:**
 
@@ -1773,7 +1773,7 @@ Shutdown background processors. The API remains responsive; only background work
 
 Start background processors by removing the shutdown flag. The watchdog process will detect the flag removal and restart processors automatically.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Response (processors were stopped):**
 
@@ -1800,6 +1800,35 @@ Start background processors by removing the shutdown flag. The watchdog process 
     }
 }
 ```
+
+---
+
+### POST /api/v1/system/restart
+
+Request a full in-place node restart — both the background processors **and** the PHP-FPM workers. Required after toggling plugins (or any other state bound at boot) so event subscriptions rebind without a container reboot.
+
+The API runs as `www-data` and cannot signal the root-owned PHP-FPM master directly, so this endpoint writes a request marker that the root-side poller in `startup.sh` picks up within ~2 seconds and turns into the equivalent of `eiou restart`. Rate-limited to one restart per 10 seconds at the poller; rapid duplicate calls return success but only the first is acted on.
+
+**Permission:** `system:write` (or `admin`)
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Restart requested. The node will respawn its workers within a few seconds.",
+        "expected_restart_within_seconds": 5
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `request_write_failed` | 500 | The request marker could not be written |
+| `restart_error` | 500 | Unhandled exception while requesting the restart |
 
 ---
 
@@ -1966,9 +1995,11 @@ Propose a tx drop with a contact. This initiates the process of mutually droppin
 
 ### POST /api/v1/chaindrop/accept
 
-Accept a pending tx drop proposal.
+Accept a pending tx drop proposal. **Irreversible chain rewrite** — drops the missing transactions, re-signs surrounding transactions on both sides, recalculates balances. Asymmetric with `propose` (which is just a sent request, non-destructive on this node) and `reject` (declines, leaves gap).
 
-**Permission:** `wallet:send`
+The server-side auto-accept policy (env `EIOU_AUTO_CHAIN_DROP_ACCEPT`) handles the routine case automatically; this endpoint is for manual operator override.
+
+**Permission:** `admin` (not `wallet:send`, because of the chain-rewrite blast radius)
 
 **Request Body:**
 
@@ -2740,6 +2771,156 @@ Permanently delete a payback method. The encrypted row is dropped; there is no s
 
 ---
 
+## Plugin Endpoints
+
+Plugin management endpoints. All require `admin`. Toggling a plugin's enabled flag does **not** restart the node — follow up with `POST /api/v1/system/restart` (or `eiou restart` on the host) for the change to take effect, since event subscriptions bind during boot.
+
+The plugin name is validated against `^[a-z0-9][a-z0-9-_]{0,63}$` (kebab-case alphanumerics).
+
+---
+
+### GET /api/v1/plugins
+
+List every discovered plugin with full metadata (author, homepage, changelog, license, has_changelog).
+
+**Permission:** `admin`
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugins": [
+            {
+                "name": "hello-eiou",
+                "version": "0.1.0",
+                "enabled": true,
+                "status": "active",
+                "license": "MIT",
+                "author": "Example Author",
+                "homepage": "https://example.org/hello-eiou",
+                "has_changelog": true
+            }
+        ]
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `plugin_loader_unavailable` | 500 | Plugin system is not initialized on this node |
+
+---
+
+### POST /api/v1/plugins/:name/enable
+
+Persist `enabled = true` for the named plugin. Does not restart.
+
+**Permission:** `admin`
+
+**Path parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | string | Plugin name (kebab-case alphanumerics, ≤ 64 chars) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugin": "hello-eiou",
+        "enabled": true,
+        "restart_required": true,
+        "message": "Plugin state persisted. POST /api/v1/system/restart to apply."
+    }
+}
+```
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `invalid_name` | 400 | Plugin name failed the regex validation |
+| `unknown_plugin` | 404 | Plugin not found in the discovered set |
+| `persist_failed` | 500 | Could not write the plugin state to disk |
+| `plugin_loader_unavailable` | 500 | Plugin system is not initialized on this node |
+
+---
+
+### POST /api/v1/plugins/:name/disable
+
+Persist `enabled = false` for the named plugin. Does not restart.
+
+**Permission:** `admin`
+
+Same path parameters and response shape as `enable`, with `enabled: false`.
+
+---
+
+### DELETE /api/v1/plugins/:name
+
+Permanently uninstall a plugin. The plugin must be disabled first; an attempt to uninstall an enabled plugin returns 409 Conflict.
+
+Runs the full step sequence: `onUninstall` hook → revoke MySQL grants → drop tables → drop user → delete credentials → remove files → clean state. The response carries a per-step status so partial failures (e.g. plugin files removed but a DB-side cleanup step reported an error) are surfacable.
+
+**Permission:** `admin`
+
+**Path parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | string | Plugin name (kebab-case alphanumerics, ≤ 64 chars) |
+
+**Response (success):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "plugin": "hello-eiou",
+        "uninstalled": true,
+        "steps": {
+            "on_uninstall_hook": "ok",
+            "revoke_grants": "ok",
+            "drop_tables": "ok",
+            "drop_user": "ok",
+            "delete_credentials": "ok",
+            "remove_files": "ok",
+            "clean_state": "ok"
+        }
+    }
+}
+```
+
+**Response (partial failure — `success: false` with `200`):** plugin files were removed on disk but at least one MySQL-side step reported an error. Inspect `steps` and resolve manually; the plugin is gone.
+
+**Errors:**
+
+| Code | Status | When |
+|------|--------|------|
+| `invalid_name` | 400 | Plugin name failed the regex validation |
+| `unknown_plugin` | 404 | Plugin not found |
+| `plugin_enabled` | 409 | Plugin is still enabled — disable first |
+
+---
+
+### Plugin-owned endpoints
+
+Plugins can register their own routes via `PluginApiRegistry`. Shape:
+
+```
+ANY /api/v1/plugins/:name/:action
+```
+
+Permission gating is set by the registering plugin (typically `admin`). Failures from a misbehaving plugin return a clean error response — they cannot tear down the controller.
+
+---
+
 ## API Key Management
 
 These endpoints require `admin` permission.
@@ -2803,17 +2984,23 @@ Create a new API key.
 | Permission | Description |
 |------------|-------------|
 | `wallet:read` | Read wallet balances and transactions |
-| `wallet:send` | Send transactions |
-| `wallet:*` | All wallet permissions |
-| `contacts:read` | Read contacts |
-| `contacts:write` | Add, update, delete contacts |
-| `contacts:*` | All contact permissions |
-| `system:read` | Read system status and metrics |
-| `backup:read` | Read backup status and list, verify backups |
-| `backup:write` | Create, restore, delete backups, enable/disable auto-backup |
-| `backup:*` | All backup permissions |
-| `admin` | Full administrative access |
-| `all` | All permissions |
+| `wallet:send` | Send transactions, propose/accept/reject chain drops, approve/reject P2P |
+| `wallet:*` | Both `wallet:read` and `wallet:send` |
+| `contacts:read` | List, view, search, and ping contacts |
+| `contacts:write` | Add, update, delete, block/unblock contacts; per-currency operations |
+| `contacts:*` | Both `contacts:read` and `contacts:write` |
+| `system:read` | Read system status, metrics, and settings; download debug reports; trigger update-check |
+| `system:write` | Trigger sync, shutdown/start/restart, change settings (operational control of this node) |
+| `system:*` | Both `system:read` and `system:write` |
+| `backup:read` | Read backup status/list, verify backups |
+| `backup:write` | Create, restore, delete, enable/disable backups, cleanup |
+| `backup:*` | Both `backup:read` and `backup:write` |
+| `payback:read` | List/read your own payback methods (sensitive fields redacted) |
+| `payback:write` | Create/edit/delete methods, AND reveal plaintext via `GET /payback-methods/:id/reveal` (write-class because it returns secrets) |
+| `payback:*` | Both `payback:read` and `payback:write` |
+| `admin` | Full administrative access (settings, sync, shutdown/start/restart, key management, plugin management). Implies every other scope. |
+
+> **Wildcard semantics:** `<category>:*` grants any `<category>:<verb>` request — `wallet:*` covers anything that requires `wallet:read` or `wallet:send`. There is currently no `plugin:*` scope; key management (`/keys/*`) and plugin management (`/plugins/*`) require `admin`. Operational control (`/system/sync`, `shutdown`, `start`, `restart`, `PUT /system/settings`) was carved out from `admin` into `system:write` so a CI/automation key can poke the node without also unlocking key minting and plugin install.
 
 **Response (201 Created):**
 

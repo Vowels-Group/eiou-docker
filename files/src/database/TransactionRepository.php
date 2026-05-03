@@ -970,10 +970,20 @@ class TransactionRepository extends AbstractRepository {
 
 
     /**
-     * Get transaction by txid
+     * Get transaction(s) by txid.
+     *
+     * Returns a LIST of rows (fetchAll), not a single row, because the
+     * txid column isn't formally a UNIQUE index — duplicates can occur
+     * across the live + archive tables in pathological states. Callers
+     * that want "the" transaction should unwrap with `$rows[0] ?? null`
+     * (see DlqController.php:120-122 for the canonical pattern). The
+     * function falls through to `transactions_archive` when the live
+     * table has no match so sync can re-send archived txs to peers
+     * that don't have them.
      *
      * @param string $txid Transaction ID
-     * @return array|null Transaction data or null
+     * @return array<int, array>|null List of matching rows, or null if
+     *                                no row exists in either table.
      */
     public function getByTxid(string $txid): ?array {
         $query = "SELECT * FROM {$this->tableName} WHERE txid = :txid";

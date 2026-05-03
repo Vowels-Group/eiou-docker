@@ -601,32 +601,77 @@ class ContactCliHandlerTest extends TestCase
         $this->assertOutput('error', 'Usage');
     }
 
-    public function testUpdateDelegatesWithTypedFieldAndValues(): void
+    public function testUpdateNameForwardsToServiceAsNameField(): void
     {
-        // Flags like --json must be stripped from the values array before
-        // they reach the service — the field-specific positional args are
-        // what updateContactField cares about.
         $this->managementService->expects($this->once())
             ->method('updateContactField')
             ->with('Bob', 'name', ['Robert'], $this->output);
 
-        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', 'name', 'Robert', '--json']);
+        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', '--name', 'Robert', '--json']);
     }
 
-    public function testUpdateForwardsFeeWithCurrency(): void
+    public function testUpdateFeeForwardsWithCurrencyAppended(): void
     {
         $this->managementService->expects($this->once())
             ->method('updateContactField')
             ->with('Bob', 'fee', ['1.5', 'USD'], $this->output);
 
-        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', 'fee', '1.5', 'USD']);
+        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', '--fee', '1.5', '--currency', 'USD']);
     }
 
-    public function testUpdateMissingFieldEmitsUsage(): void
+    public function testUpdateMultipleFieldsCallsServicePerField(): void
+    {
+        // --name + --fee + --credit + --currency should yield exactly three
+        // service calls (one per touched field). Order is name → fee → credit.
+        $this->managementService->expects($this->exactly(3))
+            ->method('updateContactField')
+            ->willReturnCallback(function (string $id, string $field, array $values) {
+                static $calls = 0;
+                $calls++;
+                if ($calls === 1) {
+                    $this->assertSame(['Bob', 'name', ['Robert']], [$id, $field, $values]);
+                } elseif ($calls === 2) {
+                    $this->assertSame(['Bob', 'fee', ['1.5', 'USD']], [$id, $field, $values]);
+                } else {
+                    $this->assertSame(['Bob', 'credit', ['1500', 'USD']], [$id, $field, $values]);
+                }
+            });
+
+        $this->handler->handleCommand([
+            'eiou', 'contact', 'update', 'Bob',
+            '--name', 'Robert',
+            '--fee', '1.5',
+            '--credit', '1500',
+            '--currency', 'USD',
+        ]);
+    }
+
+    public function testUpdateNoFlagsEmitsUsage(): void
     {
         $this->managementService->expects($this->never())->method('updateContactField');
         $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob']);
+        $this->assertOutput('error', 'No fields to update');
+    }
+
+    public function testUpdateMissingIdentifierEmitsUsage(): void
+    {
+        $this->managementService->expects($this->never())->method('updateContactField');
+        $this->handler->handleCommand(['eiou', 'contact', 'update', '--name', 'Robert']);
         $this->assertOutput('error', 'Usage');
+    }
+
+    public function testUpdateFeeWithoutCurrencyEmitsError(): void
+    {
+        $this->managementService->expects($this->never())->method('updateContactField');
+        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', '--fee', '1.5']);
+        $this->assertOutput('error', 'Currency is required');
+    }
+
+    public function testUpdateCreditWithoutCurrencyEmitsError(): void
+    {
+        $this->managementService->expects($this->never())->method('updateContactField');
+        $this->handler->handleCommand(['eiou', 'contact', 'update', 'Bob', '--credit', '500']);
+        $this->assertOutput('error', 'Currency is required');
     }
 
     public function testDeleteDelegates(): void

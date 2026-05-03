@@ -20,7 +20,7 @@ use Eiou\Services\ContactDecisionService;
  *
  * Subcommand tree (argv[2] / argv[3]):
  *
- *   eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]
+ *   eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
  *   eiou contact accept <pubkey-hash|address> --currency CCY --fee F --credit C
  *                                             [--currency CCY --fee F --credit C ...]
  *   eiou contact apply  <pubkey-hash|address> --from <file.json|->
@@ -30,7 +30,7 @@ use Eiou\Services\ContactDecisionService;
  *   eiou contact list   [--status accepted|pending|blocked]
  *   eiou contact pending [--incoming|--outgoing]
  *   eiou contact view   <name|address|pubkey-hash>
- *   eiou contact update <name|address> [--name N --fee F --credit C]
+ *   eiou contact update <name|address> [--name N] [--fee F] [--credit C] [--currency CCY]
  *   eiou contact delete <name|address>
  *   eiou contact block  <name|address>
  *   eiou contact unblock <name|address>
@@ -95,7 +95,7 @@ class ContactCliHandler
         $name = $argv[4] ?? null;
         if ($address === null || $name === null) {
             $this->output->error(
-                'Usage: eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]',
+                'Usage: eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]',
                 ErrorCodes::MISSING_ARGUMENT,
                 400
             );
@@ -105,13 +105,21 @@ class ContactCliHandler
         $fee = $this->flag($argv, '--fee') ?? '0';
         $credit = $this->flag($argv, '--credit') ?? '0';
         $currency = $this->flag($argv, '--currency') ?? 'USD';
+        // Suggested credit limit you'd like the receiver to extend to *you*
+        // in this currency. Sent on the wire (ContactPayload picks it up via
+        // the addContact pipeline); the receiver chooses what to actually
+        // grant on accept. Omit to send no suggestion.
+        $requestedCredit = $this->flag($argv, '--requested-credit');
         $message = $this->flag($argv, '--message');
 
         // Build the addContact-style argv for the underlying service. The
         // service uses positional args for backward compatibility:
         //   [0]=eiou [1]=add [2]=address [3]=name [4]=fee [5]=credit
-        //   [6]=currency [7]=requested_credit (NULL placeholder) [8]=message
-        $serviceArgv = ['eiou', 'add', $address, $name, $fee, $credit, $currency, 'NULL'];
+        //   [6]=currency [7]=requested_credit (NULL = no suggestion) [8]=message
+        $serviceArgv = [
+            'eiou', 'add', $address, $name, $fee, $credit, $currency,
+            ($requestedCredit !== null && $requestedCredit !== '') ? $requestedCredit : 'NULL',
+        ];
         if ($message !== null && $message !== '') {
             $serviceArgv[] = $message;
         }
@@ -333,34 +341,84 @@ class ContactCliHandler
         $this->managementService->viewContactByIdentifier((string) $identifier, $this->output);
     }
 
+    /**
+     * Flag-based update — mirrors the PUT /api/v1/contacts/:address API
+     * surface so CLI and API behave identically. All field flags are
+     * optional; provide whichever subset you want to change.
+     *
+     *   eiou contact update <id> [--name N] [--fee F] [--credit C] [--currency CCY]
+     *
+     * Currency is required when --fee or --credit is set, since those
+     * are stored per-currency. --name is currency-independent.
+     */
     private function cmdUpdate(array $argv): void
     {
         $identifier = $argv[3] ?? null;
-        $field = $argv[4] ?? null;
-        if ($identifier === null || $field === null) {
+        if ($identifier === null || (is_string($identifier) && str_starts_with($identifier, '--'))) {
             $this->output->error(
-                'Usage: eiou contact update <name|address> <name|fee|credit|all> <values…>',
+                'Usage: eiou contact update <name|address> [--name N] [--fee F] [--credit C] [--currency CCY]',
                 ErrorCodes::MISSING_ARGUMENT,
                 400
             );
             return;
         }
 
-        // Strip flags (e.g. --json) from the trailing positional values so the
-        // service sees only field-specific args.
-        $values = [];
-        for ($i = 5; $i < count($argv); $i++) {
-            if (is_string($argv[$i]) && str_starts_with($argv[$i], '--')) {
-                continue;
-            }
-            $values[] = $argv[$i];
+        $newName = $this->flag($argv, '--name');
+        $newFee = $this->flag($argv, '--fee');
+        $newCredit = $this->flag($argv, '--credit');
+        $currency = $this->flag($argv, '--currency');
+
+        $hasName = $newName !== null && $newName !== '';
+        $hasFee = $newFee !== null && $newFee !== '';
+        $hasCredit = $newCredit !== null && $newCredit !== '';
+
+        if (!$hasName && !$hasFee && !$hasCredit) {
+            $this->output->error(
+                'No fields to update — provide at least one of --name, --fee, --credit',
+                ErrorCodes::MISSING_ARGUMENT,
+                400
+            );
+            return;
         }
-        $this->managementService->updateContactField(
-            (string) $identifier,
-            strtolower((string) $field),
-            $values,
-            $this->output
-        );
+
+        if (($hasFee || $hasCredit) && ($currency === null || $currency === '')) {
+            $this->output->error(
+                'Currency is required when updating --fee or --credit (use --currency CCY)',
+                ErrorCodes::MISSING_ARGUMENT,
+                400
+            );
+            return;
+        }
+
+        // Apply each touched field as its own service call. Non-atomic
+        // across the name/fee/credit boundary, but each individual update
+        // is validated server-side. The API equivalent (PUT /contacts/...)
+        // builds an UPDATE statement that's atomic per request — if you
+        // need that here, use the API.
+        if ($hasName) {
+            $this->managementService->updateContactField(
+                (string) $identifier,
+                'name',
+                [(string) $newName],
+                $this->output
+            );
+        }
+        if ($hasFee) {
+            $this->managementService->updateContactField(
+                (string) $identifier,
+                'fee',
+                [(string) $newFee, (string) $currency],
+                $this->output
+            );
+        }
+        if ($hasCredit) {
+            $this->managementService->updateContactField(
+                (string) $identifier,
+                'credit',
+                [(string) $newCredit, (string) $currency],
+                $this->output
+            );
+        }
     }
 
     private function cmdDelete(array $argv): void
@@ -629,7 +687,7 @@ class ContactCliHandler
 Contact management — manage contacts and per-currency relationships.
 
 Usage:
-  eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]
+  eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
   eiou contact accept <pubkey-hash|address> --currency CCY --fee F --credit C
                                             [--currency CCY --fee F --credit C ...]
   eiou contact apply  <pubkey-hash|address> --from <file.json|->
@@ -639,7 +697,7 @@ Usage:
   eiou contact list   [--status accepted|pending|blocked]
   eiou contact pending [--incoming|--outgoing]
   eiou contact view   <name|address|pubkey-hash>
-  eiou contact update <name|address> [--name N --fee F --credit C]
+  eiou contact update <name|address> [--name N] [--fee F] [--credit C] [--currency CCY]
   eiou contact delete <name|address>
   eiou contact block  <name|address>
   eiou contact unblock <name|address>

@@ -46,6 +46,13 @@ All requests require HMAC-SHA256 authentication:
 | `DELETE` | `/api/v1/contacts/:address` | `contacts:write` | Delete contact |
 | `POST` | `/api/v1/contacts/block/:address` | `contacts:write` | Block contact |
 | `POST` | `/api/v1/contacts/unblock/:address` | `contacts:write` | Unblock contact |
+| `POST` | `/api/v1/contacts/:hash/decisions` | `contacts:write` | Apply batched accept/decline/defer decisions (mirrors `eiou contact apply`) |
+| `POST` | `/api/v1/contacts/:hash/decline` | `contacts:write` | Decline every pending currency on a contact request |
+| `GET` | `/api/v1/contacts/:hash/currencies` | `contacts:read` | List every currency configured for a contact (status + direction) |
+| `POST` | `/api/v1/contacts/:hash/currencies` | `contacts:write` | Add a new currency to an already-accepted contact |
+| `POST` | `/api/v1/contacts/:hash/currency-accept` | `contacts:write` | Accept a single pending currency |
+| `POST` | `/api/v1/contacts/:hash/currency-decline` | `contacts:write` | Decline a single pending currency |
+| `POST` | `/api/v1/contacts/:hash/currency-remove` | `contacts:write` | Locally remove a currency from a contact (no peer notification) |
 
 ### Payment Request Endpoints
 
@@ -64,10 +71,12 @@ All requests require HMAC-SHA256 authentication:
 | `GET` | `/api/v1/system/status` | `system:read` | System health status |
 | `GET` | `/api/v1/system/metrics` | `system:read` | System metrics |
 | `GET` | `/api/v1/system/settings` | `system:read` | System settings |
-| `PUT` | `/api/v1/system/settings` | `admin` | Update system settings |
-| `POST` | `/api/v1/system/sync` | `admin` | Trigger sync operation |
-| `POST` | `/api/v1/system/shutdown` | `admin` | Shutdown background processors |
-| `POST` | `/api/v1/system/start` | `admin` | Start background processors |
+| `PUT` | `/api/v1/system/settings` | `system:write` | Update system settings |
+| `POST` | `/api/v1/system/sync` | `system:write` | Trigger sync operation |
+| `POST` | `/api/v1/system/shutdown` | `system:write` | Shutdown background processors |
+| `POST` | `/api/v1/system/start` | `system:write` | Start background processors |
+| `POST` | `/api/v1/system/restart` | `system:write` | Full in-place restart (processors + PHP-FPM workers); required after toggling plugins |
+| `POST` | `/api/v1/system/update-check` | `system:read` | Force a fresh Docker Hub / GitHub release check (bypasses 24h cache) |
 | `GET` | `/api/v1/system/debug-report` | `system:read` | Download debug report (JSON) |
 | `POST` | `/api/v1/system/debug-report` | `system:read` | Submit debug report to support |
 
@@ -88,7 +97,7 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
 |--------|----------|------------|-------------|
 | `GET` | `/api/v1/chaindrop` | `wallet:read` | List tx drop proposals |
 | `POST` | `/api/v1/chaindrop/propose` | `wallet:send` | Propose tx drop with contact |
-| `POST` | `/api/v1/chaindrop/accept` | `wallet:send` | Accept tx drop proposal |
+| `POST` | `/api/v1/chaindrop/accept` | `admin` | Accept tx drop proposal — **irreversible chain rewrite**, gated stricter than propose/reject |
 | `POST` | `/api/v1/chaindrop/reject` | `wallet:send` | Reject tx drop proposal |
 
 ### Backup Endpoints
@@ -104,6 +113,32 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
 | `POST` | `/api/v1/backup/enable` | `backup:write` | Enable automatic backups |
 | `POST` | `/api/v1/backup/disable` | `backup:write` | Disable automatic backups |
 | `POST` | `/api/v1/backup/cleanup` | `backup:write` | Remove old backups |
+
+### Payback Methods Endpoints
+
+Settlement-rail metadata you offer contacts (bank wire, custom free-text, plugin-provided types). Sensitive fields are encrypted at rest per row; the `reveal` endpoint is gated as a write-class operation since it returns plaintext.
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| `GET` | `/api/v1/payback-methods` | `payback:read` | List your enabled methods (`?currency=USD`, `?all=1`) |
+| `POST` | `/api/v1/payback-methods` | `payback:write` | Create a new method |
+| `GET` | `/api/v1/payback-methods/:id` | `payback:read` | Method metadata (sensitive fields redacted) |
+| `GET` | `/api/v1/payback-methods/:id/reveal` | `payback:write` | Decrypt and return all fields in plaintext |
+| `PUT` | `/api/v1/payback-methods/:id` | `payback:write` | Re-enter type-specific fields |
+| `PUT` | `/api/v1/payback-methods/:id/share-policy` | `payback:write` | Update share policy (`auto` / `prompt` / `never`) |
+| `DELETE` | `/api/v1/payback-methods/:id` | `payback:write` | Permanently delete a method |
+
+### Plugin Endpoints (Admin)
+
+Toggling a plugin's enabled flag does not restart the node — call `POST /api/v1/system/restart` after to apply.
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| `GET` | `/api/v1/plugins` | `admin` | List installed plugins with full metadata |
+| `POST` | `/api/v1/plugins/:name/enable` | `admin` | Persist enabled flag = true (no restart) |
+| `POST` | `/api/v1/plugins/:name/disable` | `admin` | Persist enabled flag = false (no restart) |
+| `DELETE` | `/api/v1/plugins/:name` | `admin` | Uninstall (must be disabled first) |
+| `*` | `/api/v1/plugins/:name/:action` | per-plugin | Plugin-owned routes (gating set by the registering plugin) |
 
 ### API Key Management (Admin)
 
@@ -122,17 +157,23 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
 | Permission | Scope |
 |------------|-------|
 | `wallet:read` | Read wallet balances and transactions |
-| `wallet:send` | Send transactions |
-| `wallet:*` | All wallet permissions |
-| `contacts:read` | Read contacts |
-| `contacts:write` | Add, update, delete contacts |
-| `contacts:*` | All contact permissions |
-| `system:read` | Read system status and metrics |
+| `wallet:send` | Send transactions, propose/accept/reject chain drops, approve/reject P2P |
+| `wallet:*` | Both `wallet:read` and `wallet:send` |
+| `contacts:read` | List, view, search, and ping contacts |
+| `contacts:write` | Add, update, delete, block/unblock contacts; per-currency operations |
+| `contacts:*` | Both `contacts:read` and `contacts:write` |
+| `system:read` | Read system status, metrics, and settings; download debug reports; trigger update-check |
+| `system:write` | Trigger sync, shutdown/start/restart, change settings (operational control of this node) |
+| `system:*` | Both `system:read` and `system:write` |
 | `backup:read` | Read backup status/list, verify backups |
-| `backup:write` | Create, restore, delete, enable/disable backups |
-| `backup:*` | All backup permissions |
-| `admin` | Full administrative access |
-| `all` | All permissions |
+| `backup:write` | Create, restore, delete, enable/disable backups, cleanup |
+| `backup:*` | Both `backup:read` and `backup:write` |
+| `payback:read` | List/read your own payback methods (sensitive fields redacted) |
+| `payback:write` | Create/edit/delete methods, **and reveal plaintext via `GET …/:id/reveal`** (write-class because it returns secrets) |
+| `payback:*` | Both `payback:read` and `payback:write` |
+| `admin` | Full administrative access (settings, sync, shutdown/start/restart, keys, plugins). Implies every other scope. |
+
+> **Wildcard semantics:** at lookup time, `<category>:*` grants any `<category>:<verb>` request — so a key with `wallet:*` covers a route that requires `wallet:read` or `wallet:send`. `admin` is the only god-scope and grants everything unconditionally. There is currently no `plugin:*` scope; key management and plugin management gate on `admin`. Operational control (sync, shutdown/start/restart, settings PUT) was carved out from `admin` into `system:write`. (The legacy `'all'` synonym was removed in favour of `admin`.)
 
 ---
 
@@ -142,8 +183,18 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `limit` | int | 50 | Number of items (max: 100) |
+| `limit` | int | 50 | Number of items (per-endpoint cap — see below) |
 | `offset` | int | 0 | Skip first N items |
+
+**Per-endpoint `limit` caps:**
+
+| Endpoint | Cap |
+|----------|-----|
+| `/api/v1/wallet/transactions` | 100 |
+| `/api/v1/contacts/search` | 100 |
+| `/api/v1/requests` | 200 |
+| `/api/v1/wallet/overview` (`transaction_limit`) | 20 |
+| All others (default) | 100 |
 
 ### Filtering
 

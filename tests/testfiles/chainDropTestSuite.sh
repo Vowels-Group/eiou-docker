@@ -339,11 +339,11 @@ testPattern="chaindrop-t1-%${timestamp}"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions from sender to receiver"
 
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t1-tx1-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t1-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t1-tx2-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t1-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t1-tx3-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t1-tx3-${timestamp}" 2>&1 > /dev/null
 
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
@@ -533,7 +533,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 5 transactions from sender to receiver"
 
 for i in 1 2 3 4 5; do
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t2-tx${i}-${timestamp}" 2>&1 > /dev/null
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t2-tx${i}-${timestamp}" 2>&1 > /dev/null
     sleep 1
 done
 
@@ -729,7 +729,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 5 transactions from sender to receiver"
 
 for i in 1 2 3 4 5; do
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t3-tx${i}-${timestamp}" 2>&1 > /dev/null
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t3-tx${i}-${timestamp}" 2>&1 > /dev/null
     sleep 1
 done
 
@@ -896,11 +896,11 @@ testPattern="chaindrop-t4-%${timestamp}"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions and creating gap"
 
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t4-tx1-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t4-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t4-tx2-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t4-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t4-tx3-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t4-tx3-${timestamp}" 2>&1 > /dev/null
 
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
@@ -1060,7 +1060,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Setting up: Sending 5 transactions from sender to receiver"
 
 for i in 1 2 3 4 5; do
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t5-tx${i}-${timestamp}" 2>&1 > /dev/null
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t5-tx${i}-${timestamp}" 2>&1 > /dev/null
     sleep 1
 done
 
@@ -1107,7 +1107,7 @@ echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Test 5.1: Ping should detect chain gap"
 
-pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 # Check for chain_valid: false in the JSON output
@@ -1142,7 +1142,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Test 5.3: Send should block on chain gap and auto-propose chain drop"
 
-sendOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t5-blocked-${timestamp}" --json 2>&1)
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t5-blocked-${timestamp}" --json 2>&1)
 echo -e "\t   Send output (first 150 chars): ${sendOutput:0:150}..."
 
 # Send should fail with CHAIN_INTEGRITY_FAILED and/or mention chain_drop_proposed
@@ -1177,7 +1177,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 5 transactions to build chain"
 
 for i in 1 2 3 4 5; do
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t6-tx${i}-${timestamp}" 2>&1 > /dev/null
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t6-tx${i}-${timestamp}" 2>&1 > /dev/null
     sleep 1
 done
 
@@ -1237,7 +1237,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Attempting send (should fail and auto-propose chain drop)"
 
-sendOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t6-blocked-${timestamp}" --json 2>&1)
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t6-blocked-${timestamp}" --json 2>&1)
 echo -e "\t   Send output (first 150 chars): ${sendOutput:0:150}..."
 
 if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED\|chain_drop_proposed\|chain.*gap.*detected\|chain drop proposal'; then
@@ -1396,7 +1396,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending new transaction after repair (should succeed)"
 
-sendOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t6-post-repair-${timestamp}" --json 2>&1)
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t6-post-repair-${timestamp}" --json 2>&1)
 echo -e "\t   Send output (first 120 chars): ${sendOutput:0:120}..."
 
 wait_for_queue_processed ${sender} 3
@@ -1421,7 +1421,7 @@ echo -e "\n\t-> Ping after repair (should report chain_valid: true)"
 wait_for_queue_processed ${sender} 3
 wait_for_queue_processed ${receiver} 3
 
-pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true'; then
@@ -1459,7 +1459,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 5 transactions to build chain"
 
 for i in 1 2 3 4 5; do
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t7-tx${i}-${timestamp}" 2>&1 > /dev/null
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t7-tx${i}-${timestamp}" 2>&1 > /dev/null
     sleep 1
 done
 
@@ -1519,7 +1519,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Ping to detect chain gap"
 
-pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 if echo "$pingOutput" | grep -q '"chain_valid":false\|"chain_valid": false' || echo "$pingOutput" | grep -qi 'chain.*sync\|chain.*gap'; then
@@ -1663,7 +1663,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending new transaction after chain repair"
 
-sendOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t7-post-repair-${timestamp}" --json 2>&1)
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t7-post-repair-${timestamp}" --json 2>&1)
 wait_for_queue_processed ${sender} 3
 wait_for_queue_processed ${receiver} 3
 
@@ -1684,7 +1684,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Final ping to confirm chain validity"
 
-pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true' || echo "$pingOutput" | grep -qi 'chain is valid'; then
@@ -1719,7 +1719,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 6 transactions to build chain"
 
 for i in 1 2 3 4 5 6; do
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t8-tx${i}-${timestamp}" 2>&1 > /dev/null
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t8-tx${i}-${timestamp}" 2>&1 > /dev/null
     sleep 1
 done
 
@@ -1931,7 +1931,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending new transaction + ping after 2-round repair"
 
-sendOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t8-post-repair-${timestamp}" --json 2>&1)
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t8-post-repair-${timestamp}" --json 2>&1)
 wait_for_queue_processed ${sender} 3
 wait_for_queue_processed ${receiver} 3
 
@@ -1940,7 +1940,7 @@ if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED'; then
     failure=$(( failure + 1 ))
 elif echo "$sendOutput" | grep -qi 'success\|queued\|sent'; then
     # Also verify ping
-    pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
+    pingOutput=$(docker exec ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
     if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true' || echo "$pingOutput" | grep -qi 'chain is valid'; then
         printf "\t   Post-repair send + ping both OK ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
@@ -1975,11 +1975,11 @@ testPattern="chaindrop-t9-%${timestamp}"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions and creating backup on sender"
 
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t9-tx1-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t9-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t9-tx2-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t9-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t9-tx3-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t9-tx3-${timestamp}" 2>&1 > /dev/null
 
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
@@ -2157,11 +2157,11 @@ testPattern="chaindrop-t10-%${timestamp}"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions and creating backup on receiver"
 
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t10-tx1-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t10-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t10-tx2-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t10-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t10-tx3-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t10-tx3-${timestamp}" 2>&1 > /dev/null
 
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
@@ -2299,11 +2299,11 @@ testPattern="chaindrop-t11-%${timestamp}"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions, creating backup on sender"
 
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t11-tx1-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t11-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t11-tx2-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t11-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t11-tx3-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t11-tx3-${timestamp}" 2>&1 > /dev/null
 
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
@@ -2434,11 +2434,11 @@ testPattern="chaindrop-t12-%${timestamp}"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions, creating backup on sender"
 
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t12-tx1-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t12-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t12-tx2-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t12-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t12-tx3-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t12-tx3-${timestamp}" 2>&1 > /dev/null
 
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
@@ -2500,7 +2500,7 @@ syncResult=$(docker exec ${sender} eiou sync transactions --json 2>&1)
 wait_for_queue_processed ${sender} 3
 
 # Now ping should show chain valid (backup recovery during sync should have restored tx2)
-pingResult=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
+pingResult=$(docker exec ${sender} eiou contact ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping result: ${pingResult:0:120}..."
 
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
@@ -2552,11 +2552,11 @@ cleanup_backups ${receiver}
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions (NO backup created)"
 
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t13-tx1-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t13-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t13-tx2-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t13-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t13-tx3-${timestamp}" 2>&1 > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t13-tx3-${timestamp}" 2>&1 > /dev/null
 
 wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}

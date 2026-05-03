@@ -182,6 +182,36 @@ run_test() {
     printf "Running: ${test_name}\n"
     printf "================================================================\n"
 
+    # Re-apply rate-limit disable before each test file by patching
+    # defaultconfig.json directly, NOT via `eiou changesettings`. The
+    # CLI changesettings command itself goes through the rate limiter
+    # (every CLI command does, post-hardening), so a test file that
+    # exhausts the `default` bucket (cliCommandsTest's ~40 changesettings
+    # calls, apiEndpointsTest's heavy API churn) can leave the CLI
+    # locked out for ~5 minutes — long enough that the next test file's
+    # changesettings call gets rate-limited too, and the user setting
+    # silently stays at true.
+    #
+    # Direct file write bypasses the CLI entirely. UserContext::get()
+    # reads defaultconfig.json on each request, so the next CLI/API
+    # call sees the new value immediately.
+    #
+    # Wallet restore (seedphraseTestSuite) and backup restore
+    # (backupTestSuite) reset this file back to factory defaults
+    # mid-run, which is why we have to re-apply per-file rather than
+    # only at suite start.
+    if [ "${EIOU_KEEP_RATE_LIMITS:-0}" != "1" ] && [ -n "$CONTAINER_LIST" ]; then
+        for c in $CONTAINER_LIST; do
+            docker exec "$c" php -r '
+                $path = "/etc/eiou/config/defaultconfig.json";
+                if (!file_exists($path)) { exit(0); }
+                $cfg = json_decode(file_get_contents($path), true) ?? [];
+                $cfg["rateLimitEnabled"] = false;
+                file_put_contents($path, json_encode($cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            ' >/dev/null 2>&1 || true
+        done
+    fi
+
     # Track test duration
     local start_time=$(date +%s)
 
@@ -400,6 +430,34 @@ done
 printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
 # Brief buffer time for message processors (using environment variable if set)
 sleep ${TEST_POLL_INTERVAL:-1}
+
+# Disable per-wallet rate limiting on every container so the integration
+# suite doesn't trip CLI/API rate limits on rapid-fire test calls.
+# `EIOU_TEST_MODE` env var is no longer honored at runtime (it's now only
+# the PHPUnit bootstrap constant — see RateLimiterService.php), and
+# setting the env var on a non-test build emits a SECURITY error per
+# request. The legitimate runtime knob is `rateLimitEnabled`, which
+# we flip via the standard changesettings path. Skipped when
+# EIOU_KEEP_RATE_LIMITS=1, for tests that actually want to exercise
+# rate limiting (none today, but the option is there).
+if [ "${EIOU_KEEP_RATE_LIMITS:-0}" != "1" ]; then
+    printf "\n${GREEN}Disabling per-wallet rate limiting on all containers...${NC}\n"
+    for container in $CONTAINER_LIST; do
+        # Patch defaultconfig.json directly — doesn't go through the
+        # CLI rate limiter, so it can never deadlock itself. See the
+        # per-file re-apply hook below for the full rationale.
+        docker exec "$container" php -r '
+            $path = "/etc/eiou/config/defaultconfig.json";
+            if (!file_exists($path)) { exit(1); }
+            $cfg = json_decode(file_get_contents($path), true) ?? [];
+            $cfg["rateLimitEnabled"] = false;
+            $ok = file_put_contents($path, json_encode($cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            exit($ok === false ? 1 : 0);
+        ' >/dev/null 2>&1 \
+            && printf "  ${CHECK} %s: rate limiting disabled\n" "$container" \
+            || printf "  ${YELLOW}⚠${NC} %s: defaultconfig.json patch failed (continuing)\n" "$container"
+    done
+fi
 
 # Step 2: Run prerequisite test (hostnameTest (HTTP/HTTPS) or torAddressTest (TOR))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"

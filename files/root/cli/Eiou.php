@@ -9,25 +9,34 @@
  *
  * Usage: php eiou.php <command> [arguments] [--json]
  *
- * Commands:
- *   generate [restore <seed>]  - Generate new wallet or restore from seed
- *   info [detail] [--show-auth] - Display wallet information
- *   add <address> <"name"> ... - Add a new contact (quote multi-word names)
- *   send <address|"name"> <amount> - Send an eIOU transaction
- *   viewbalances [contact]     - View balance(s)
- *   history [contact]          - View transaction history
- *   pending                    - View pending contact requests
- *   p2p [subcommand] [args]    - Manage P2P transactions awaiting approval
- *   dlq [list|retry|abandon]   - Manage dead letter queue (failed messages)
- *   overview [limit]           - View wallet overview dashboard
- *   report <type>              - Generate reports (debug [--send], etc.)
- *   request [subcommand] [args] - Manage payment requests
- *   help [command]             - Display help information
- *   sync [type]                - Synchronize data
- *   ping <contact>             - Check contact online status
- *   updatecheck                - Check for newer image versions
- *   shutdown                   - Graceful shutdown
- *   restart                    - Restart processors and PHP-FPM workers (in-place)
+ * Commands (top-level — see CliHelpService for the canonical list):
+ *   generate [restore <seed>]                  - Generate or restore a wallet (startup-only)
+ *   info [detail] [--show-auth]                - Display wallet information
+ *   overview [limit]                           - Wallet dashboard summary
+ *   send <addr|name> <amount> <currency> [desc] [--best]  - Send an eIOU transaction
+ *   viewbalances [contact]                     - View balance(s)
+ *   history [contact] [limit]                  - View transaction history
+ *   contact <subcommand> [args]                - Contact management (add / accept / apply /
+ *                                                decline / list / pending / view / update /
+ *                                                delete / block / unblock / ping / search /
+ *                                                currency …) — see ContactCliHandler
+ *   p2p [subcommand] [args]                    - Manage P2P transactions awaiting approval
+ *   dlq [list|retry|abandon]                   - Manage dead letter queue (failed messages)
+ *   request [subcommand] [args]                - Manage payment requests
+ *   chaindrop [propose|accept|reject|list]     - Manage chain drop agreements
+ *   sync [type]                                - Synchronize data
+ *   verify-chain                               - Audit every bilateral chain end-to-end
+ *   backup <action> [args]                     - Manage encrypted database backups
+ *   apikey <action> [args]                     - Manage REST API keys
+ *   payback <action> [args]                    - Manage your payback methods
+ *   plugin [list|enable|disable|uninstall]     - Manage plugins (requires `restart` to apply)
+ *   viewsettings / changesettings [k v]        - View / change wallet settings
+ *   report <type> [--full] [--send]            - Generate troubleshooting reports
+ *   updatecheck                                - Check Docker Hub / GitHub for newer images
+ *   shutdown / start / restart                 - Stop / resume / fully restart processors
+ *   help [command]                             - Display top-level help
+ *                                                (`eiou help contact` and `… contact currency`
+ *                                                 delegate to the namespace's own showHelp)
  *
  * Output Flags:
  *   --json, -j     - Output in JSON format
@@ -86,8 +95,28 @@ if (!$app->currentUserLoaded()) {
 // Get Debug Service Instance
 $debugService = $app->services->getDebugService();
 
-// Apply rate limiting for CLI commands (if database is available and not in test mode)
-if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
+// Apply rate limiting for CLI commands (if database is available).
+//
+// We always invoke the rate limiter and let it decide whether to bypass.
+// The legitimate runtime bypass paths are:
+//   1. UserContext::getRateLimitEnabled() === false — the operator-toggleable
+//      `rateLimitEnabled` user setting (CLI / API / GUI all expose it).
+//   2. defined('EIOU_TEST_MODE') === true — set ONLY by tests/bootstrap.php
+//      under PHPUnit; production builds never define this constant.
+//
+// Crucially, the legacy `getenv('EIOU_TEST_MODE') === 'true'` env-var
+// bypass that used to live here was removed alongside the matching
+// hardening in RateLimiterService::checkLimit. A hostile orchestrator
+// (or a typo in docker-compose.yml) used to be able to turn off CLI
+// rate limiting in production by exporting one variable. RateLimiter
+// now logs a SECURITY error if the env var is seen without the build-
+// time constant; this caller deferring to it means that signal fires
+// reliably from CLI invocations too. The `eiou in` / `eiou out`
+// queue-processor commands (Eiou.php:247/261) still honor the env var
+// because the integration test suite needs them runnable via
+// `docker exec`, not PHPUnit; that is a deliberately narrower escape
+// hatch and is logged accordingly.
+if ($app->currentPdoLoaded()) {
     $rateLimiter = $app->getRateLimiter();
 
     // Get CLI identifier (user + command for more granular limiting)
@@ -193,10 +222,27 @@ elseif($request === "dlq"){
 }
 // Settings
 elseif($request === "help"){
-  // Help
+  // Help. Top-level commands render via CliHelpService; namespaced verbs
+  // delegate to the namespace handler's own help so there's a single
+  // source of truth for the subcommand tree (no drift between
+  // `eiou help contact` and `eiou contact`).
   $debugService->output("Executing help request", 'SILENT');
-  $cliService = $app->services->getCliService();
-  $cliService->displayHelp($cleanArgv, $output);
+  $helpTarget = isset($cleanArgv[2]) ? strtolower($cleanArgv[2]) : '';
+  if ($helpTarget === 'contact') {
+    $sub = isset($cleanArgv[3]) ? strtolower($cleanArgv[3]) : '';
+    if ($sub === 'currency') {
+      // eiou help contact currency → showCurrencyHelp()
+      $namespaceArgv = ['eiou', 'contact', 'currency', 'help'];
+    } else {
+      // eiou help contact [<anything-else>] → showHelp() (full tree)
+      $namespaceArgv = ['eiou', 'contact', 'help'];
+    }
+    $contactCli = $app->services->getContactCliHandler($output);
+    $contactCli->handleCommand($namespaceArgv);
+  } else {
+    $cliService = $app->services->getCliService();
+    $cliService->displayHelp($cleanArgv, $output);
+  }
 }
 elseif($request === "viewsettings"){
   // View Settings

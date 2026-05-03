@@ -1642,7 +1642,7 @@ class ApiControllerTest extends TestCase
     }
 
     /**
-     * Test tx drop accept requires wallet:send permission
+     * Test tx drop accept requires admin permission (chain-rewriting op).
      */
     public function testChainDropAcceptRequiresPermission(): void
     {
@@ -1761,7 +1761,8 @@ class ApiControllerTest extends TestCase
         $this->mockAuthService->method('authenticate')
             ->willReturn([
                 'success' => true,
-                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:send']]
+                // accept requires admin (chain-rewrite op), unlike propose/reject which take wallet:send
+                'key' => ['key_id' => 'test_key', 'permissions' => ['admin']]
             ]);
 
         $this->mockAuthService->method('hasPermission')

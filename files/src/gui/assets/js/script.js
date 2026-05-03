@@ -9161,15 +9161,22 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function closeCreateModal() { hideModal('apiKeysCreateModal'); }
 
         function applyPreset(preset) {
-            var boxes = document.querySelectorAll('#apiKeysCreateForm input[name="permissions[]"]');
+            var form = document.getElementById('apiKeysCreateForm');
+            var boxes = form ? form.querySelectorAll('input[name="permissions[]"]') : [];
             if (preset === 'clear') {
                 boxes.forEach(function(b) { b.checked = false; });
                 return;
             }
-            var presets = {
-                'read_only': ['wallet:read', 'contacts:read', 'system:read', 'backup:read'],
-                'full_access': ['admin']
-            };
+            // Presets come from the form's data-permission-presets attribute,
+            // emitted by ApiKeysController::permissionPresets() — single
+            // source of truth lives in PHP so a new read-class scope auto-
+            // joins the read_only preset without a JS edit.
+            var presets = {};
+            try {
+                presets = JSON.parse((form && form.dataset && form.dataset.permissionPresets) || '{}');
+            } catch (e) {
+                presets = {};
+            }
             var target = presets[preset] || [];
             boxes.forEach(function(b) { b.checked = target.indexOf(b.value) !== -1; });
         }

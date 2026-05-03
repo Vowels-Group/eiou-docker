@@ -94,6 +94,7 @@ tests/
     ├── curlErrorHandlingTest.sh      # HTTP error handling
     ├── cliCommandsTest.sh            # CLI command tests
     ├── apiEndpointsTest.sh           # API endpoint tests
+    ├── paymentRequestTest.sh         # Full payment-request lifecycle via REST API (10 tests)
     ├── securityTestSuite.sh          # Security test suite
     ├── apiInputValidationTest.sh     # API input validation (15+ test cases)
     ├── syncTestSuite.sh              # Chain synchronization
@@ -172,7 +173,7 @@ The `collisions` and `collisionscluster` topologies assign random fee multiplier
 | `contacts`    | Contact management | addContactsTest, contactListTest, contactNameTest, pingTestSuite |
 | `transactions`| Transaction operations | addContactsTest, balanceTest, transactionTestSuite, transactionRecoveryTest, negativeFinancialTest |
 | `messaging`   | Message delivery and routing | addContactsTest, sendMessageTest, sendAllPeersTest, routingTest, messageDeliveryTest |
-| `api`         | API endpoints and CLI | addContactsTest, curlErrorHandlingTest, cliCommandsTest, apiEndpointsTest, securityTestSuite, apiInputValidationTest, serviceExceptionTest |
+| `api`         | API endpoints and CLI | addContactsTest, curlErrorHandlingTest, cliCommandsTest, apiEndpointsTest, paymentRequestTest, securityTestSuite, apiInputValidationTest, serviceExceptionTest |
 | `sync`        | Chain synchronization | addContactsTest, sendMessageTest, pingTestSuite, syncTestSuite, chunkedSyncTest, chainDropTestSuite |
 | `connections` | SSL and Tor connectivity | sslCertificateTest, torTestSuite |
 | `system`      | System-level operations | gracefulShutdownTest, sigTermTest, seedphraseTestSuite, processorLockfileTest, serviceInterfaceTest, serviceExceptionTest, nodeIdentityTest, backupTestSuite |
@@ -505,14 +506,16 @@ The runner displays a summary after completion:
 Build:          http4
 Mode:           http
 Subset:         all
-Total Tests:    42
-Passed:         42
+Total Tests:    865
+Passed:         865
 Failed:         0
 Success Rate:   100.0%
 ================================================================
 
 All tests passed successfully!
 ```
+
+The `Total Tests` figure depends on the subset and topology — full `all` runs on `http4` currently report ~865 individual test cases across the ~40 test files; `quick` reports ~10–20.
 
 Exit codes:
 - `0` - All tests passed

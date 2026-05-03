@@ -68,9 +68,9 @@ use Eiou\Services\ApiKeyService;
  * - POST /api/v1/plugins/:name/disable       - Disable a plugin (admin, no auto-restart)
  * - *    /api/v1/plugins/:name/:action       - Plugin-owned endpoints (admin, via PluginApiRegistry)
  *
- * - POST /api/v1/chaindrop/propose           - Propose tx drop
- * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal
- * - POST /api/v1/chaindrop/reject            - Reject tx drop proposal
+ * - POST /api/v1/chaindrop/propose           - Propose tx drop (wallet:send)
+ * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal (admin — irreversible chain rewrite)
+ * - POST /api/v1/chaindrop/reject            - Reject tx drop proposal (wallet:send)
  * - GET  /api/v1/chaindrop                   - List tx drop proposals
  *
  * - GET  /api/v1/p2p                         - List P2P transactions awaiting approval
@@ -1986,8 +1986,8 @@ class ApiController {
      * Update system settings (one at a time)
      */
     private function updateSettings(string $body): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         $data = json_decode($body, true);
@@ -2231,8 +2231,8 @@ class ApiController {
      * Trigger sync operation
      */
     private function triggerSync(string $body): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2275,8 +2275,8 @@ class ApiController {
      * Shutdown processors (flag + signal only, API stays responsive)
      */
     private function shutdownProcessors(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2323,8 +2323,8 @@ class ApiController {
      * first is acted on.
      */
     private function restartNode(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2456,8 +2456,8 @@ class ApiController {
      * Start processors by removing shutdown flag
      */
     private function startProcessors(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2904,9 +2904,9 @@ class ApiController {
      * Handle tx drop endpoints
      *
      * Routes:
-     * - POST /api/v1/chaindrop/propose  - Propose tx drop
-     * - POST /api/v1/chaindrop/accept   - Accept tx drop proposal
-     * - POST /api/v1/chaindrop/reject   - Reject tx drop proposal
+     * - POST /api/v1/chaindrop/propose  - Propose tx drop (wallet:send)
+     * - POST /api/v1/chaindrop/accept   - Accept tx drop proposal (admin — irreversible chain rewrite)
+     * - POST /api/v1/chaindrop/reject   - Reject tx drop proposal (wallet:send)
      * - GET  /api/v1/chaindrop          - List tx drop proposals
      */
     private function handleChainDrop(string $method, ?string $action, array $params, string $body): array {
@@ -3023,10 +3023,20 @@ class ApiController {
 
     /**
      * POST /api/v1/chaindrop/accept
+     *
+     * Gated on `admin` (not `wallet:send`) because accepting a chain
+     * drop irreversibly rewrites the bilateral chain on both sides:
+     * missing transactions are dropped, surrounding transactions are
+     * re-signed, balances recalculated. Asymmetric with `propose`
+     * (which is just a sent request — non-destructive on this node
+     * until the other side accepts) and `reject` (declines, leaves
+     * gap unresolved). The server-side auto-accept policy
+     * (`EIOU_AUTO_CHAIN_DROP_ACCEPT`) handles the routine case;
+     * this endpoint is for manual operator override.
      */
     private function acceptChainDrop(string $body): array {
-        if (!$this->hasPermission('wallet:send')) {
-            return $this->permissionDenied('wallet:send');
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
         }
 
         $data = json_decode($body, true);
@@ -3435,14 +3445,33 @@ class ApiController {
     /**
      * Handle /api/v1/requests endpoints
      *
-     * GET    /api/v1/requests              → list all requests
-     * POST   /api/v1/requests              → create a payment request
-     * POST   /api/v1/requests/approve      → approve an incoming request
-     * POST   /api/v1/requests/decline      → decline an incoming request
-     * DELETE /api/v1/requests/{id}         → cancel an outgoing request
+     * GET    /api/v1/requests              → list all requests          (wallet:read)
+     * POST   /api/v1/requests              → create a payment request   (wallet:read)
+     *                                        — non-destructive on this node; the recipient
+     *                                          must approve before any value moves.
+     * POST   /api/v1/requests/approve      → approve incoming request   (wallet:send)
+     *                                        — fires sendEiou internally; moves real value.
+     * POST   /api/v1/requests/decline      → decline an incoming request (wallet:read)
+     * DELETE /api/v1/requests/{id}         → cancel an outgoing request (wallet:read)
+     *
+     * NOTE: until v0.1.14 these endpoints had no permission gate at all
+     * — any valid API key (even one with no scopes) could approve a
+     * pending request and trigger an outbound transaction. The matrix
+     * above mirrors how the CLI cliRateLimits buckets the same
+     * operations and how the corresponding `eiou request …` paths are
+     * gated when callers go through the request path.
      */
     private function handleRequests(string $method, ?string $action, ?string $id, array $params, string $body): array
     {
+        // Determine the required scope for this (method, action) pair so
+        // the gate denial maps to the right scope name. Reads gate on
+        // wallet:read; the only value-moving endpoint (approve) gates on
+        // wallet:send.
+        $requiredScope = ($method === 'POST' && $action === 'approve') ? 'wallet:send' : 'wallet:read';
+        if (!$this->hasPermission($requiredScope)) {
+            return $this->permissionDenied($requiredScope);
+        }
+
         $prService = $this->services->getPaymentRequestService();
 
         return match (true) {
@@ -3614,7 +3643,7 @@ class ApiController {
             $keyId,
             $path,
             $method,
-            ApiAuthService::getClientIp($this->container->getAppConfig()),
+            ApiAuthService::getClientIp($this->services->getAppConfig()),
             $statusCode,
             $responseTimeMs
         );

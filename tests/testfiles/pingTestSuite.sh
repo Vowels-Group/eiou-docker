@@ -683,7 +683,7 @@ echo -e "\n[3.7 A pings B - triggers auto-restore sync]"
 # A pings B. B was wiped and doesn't know A, so handlePingRequest detects an
 # unknown contact, auto-creates pending contact, and triggers sync to restore
 # transaction history from A. This is the core feature added by this PR.
-pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
+pingResultA=$(docker exec ${containerA} php -r "
     try {
         require_once('/app/eiou/Functions.php');
         \$app = \Eiou\Core\Application::getInstance();
@@ -711,7 +711,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[3.8 C pings B - triggers auto-restore sync]"
 
 # C pings B. Same flow: B doesn't know C, auto-creates pending contact, syncs.
-pingResultC=$(docker exec -e EIOU_TEST_MODE=true ${containerC} php -r "
+pingResultC=$(docker exec ${containerC} php -r "
     try {
         require_once('/app/eiou/Functions.php');
         \$app = \Eiou\Core\Application::getInstance();
@@ -825,12 +825,11 @@ echo "========================================================================"
 ############################ TEST 4.1: MANUAL PING VIA CLI ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[4.1 Test manual ping command: eiou ping]"
+echo -e "\n[4.1 Test manual ping command: eiou contact ping]"
 
 # Test pinging B from A using the CLI command
-# Use EIOU_TEST_MODE=true to bypass rate limiting during tests
 # Note: Require Functions.php to get output() wrapper function
-pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
+pingResultA=$(docker exec ${containerA} php -r "
     // Test the eiou contact ping command logic directly
     try {
         require_once('/app/eiou/Functions.php');
@@ -895,9 +894,8 @@ contactNameB=$(docker exec ${containerA} php -r "
 " 2>/dev/null || echo "")
 
 if [[ -n "$contactNameB" ]]; then
-    # Use EIOU_TEST_MODE=true to bypass rate limiting during tests
     # Note: Require Functions.php to get output() wrapper function
-    pingByName=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
+    pingByName=$(docker exec ${containerA} php -r "
         try {
             require_once('/app/eiou/Functions.php');
             \$app = \Eiou\Core\Application::getInstance();

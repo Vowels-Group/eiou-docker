@@ -15,12 +15,14 @@ Complete command-line interface documentation for the eIOU Docker node.
 9. [API Key Management](#api-key-management)
 10. [Payback Methods](#payback-methods)
 11. [Payment Request Commands](#payment-request-commands)
-11. [Tx Drop Commands](#tx-drop-commands)
-11. [Backup Commands](#backup-commands)
-12. [Report Commands](#report-commands)
-13. [Test Mode Commands](#test-mode-commands)
-14. [Exit Codes](#exit-codes)
-15. [Rate Limiting](#rate-limiting)
+12. [Tx Drop Commands](#tx-drop-commands)
+13. [Backup Commands](#backup-commands)
+14. [Chain Integrity Audit](#chain-integrity-audit)
+15. [Plugin Management](#plugin-management)
+16. [Report Commands](#report-commands)
+17. [Test Mode Commands](#test-mode-commands)
+18. [Exit Codes](#exit-codes)
+19. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -115,7 +117,7 @@ Wallet generation and restoration are handled automatically by `startup.sh` duri
 | `RESTORE_FILE` | Path to file containing seed phrase (recommended — more secure) |
 
 **Restoring contacts from a prior wallet:**
-After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou pending`) that you can re-accept with the `add` command.
+After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou contact pending`) that you can re-accept with `eiou contact accept <pubkey-hash> --currency CCY --fee F --credit C` (or `eiou contact apply` for multi-currency). If `autoAcceptRestoredContact` is enabled, the original per-currency settings are auto-restored and no manual accept is needed.
 
 ---
 
@@ -238,7 +240,7 @@ Rate limit: 20 contact ops per minute (`contact` rate-limit bucket).
 Initiate an outbound contact request. Outbound-only — for an existing accepted contact use `contact currency add` to propose a new currency, or `contact update` to change settings.
 
 ```bash
-eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message M]
+eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]
 ```
 
 | Flag | Default | Description |
@@ -246,7 +248,10 @@ eiou contact add <address> <name> [--fee F --credit C --currency CCY] [--message
 | `--fee` | `0` | Fee percentage you'll charge to relay transactions in this currency. |
 | `--credit` | `0` | Credit limit you extend to this contact in this currency. `0` means contact-only (no transactions can route through you). |
 | `--currency` | `USD` | Currency code (3-9 uppercase alphanumeric, e.g. USD, EIOU). |
+| `--requested-credit` | — | Credit limit you'd like the **receiver** to extend to *you* in this currency. Sent on the wire as `requested_credit_limit` in the contact payload — the receiver sees it as a suggestion when they accept (mirrors what the GUI's "Requested Credit" field and the `POST /api/v1/contacts` endpoint expose). They choose what to actually grant. Omit to send no suggestion. |
 | `--message` | — | Optional short message (≤ 255 chars, E2E or transport-encrypted). |
+
+Flags can appear in any order, and in any position relative to the positional `<address> <name>`.
 
 ```bash
 # Contact request with all defaults
@@ -254,6 +259,9 @@ eiou contact add http://bob:8080 Bob
 
 # With explicit per-currency settings + a message
 eiou contact add http://bob:8080 Bob --fee 1.0 --credit 100 --currency USD --message "Hey, it's Dave!"
+
+# Suggest that Bob extend you a 500 USD credit limit when he accepts
+eiou contact add http://bob:8080 Bob --fee 1.0 --credit 100 --currency USD --requested-credit 500
 
 # Multi-word names need quoting in your shell — there's no special placeholder
 eiou contact add http://bob:8080 "Jane Doe" --fee 1.0 --credit 100 --currency USD
@@ -343,13 +351,39 @@ Output includes name, status, addresses, per-currency balances, fee/credit-limit
 
 ### contact update
 
-Update contact settings.
+Update contact settings via flags — same shape as `contact add`, mirrors the API's `PUT /api/v1/contacts/:address` payload. All field flags are optional; provide whichever subset you want to change.
 
 ```bash
-eiou contact update <name|address> [--name N --fee F --credit C]
+eiou contact update <name|address> [--name N] [--fee F] [--credit C] [--currency CCY]
 ```
 
-Fee and credit updates apply to the contact's current default currency. For more targeted edits use the existing positional argv form (`all`, `name`, `fee`, `credit` followed by a currency code) — see `ContactManagementService::updateContact()` for the full positional syntax that's preserved for backwards compatibility.
+| Flag | Required when | Description |
+|------|---------------|-------------|
+| `--name` | — | New display name (currency-independent). |
+| `--fee` | always paired with `--currency` | New fee percentage in the given currency. |
+| `--credit` | always paired with `--currency` | New credit limit in the given currency. |
+| `--currency` | when `--fee` or `--credit` is set | Currency code for the per-currency row being updated. |
+
+```bash
+# Rename
+eiou contact update Bob --name Robert
+
+# Change fee on an existing currency
+eiou contact update Bob --fee 1.5 --currency USD
+
+# Change credit limit
+eiou contact update Bob --credit 500 --currency EUR
+
+# Multi-field — name + fee + credit in one command
+eiou contact update Bob --name Robert --fee 2.0 --credit 1500 --currency USD
+
+# By address
+eiou contact update http://bob --fee 2.0 --currency USD --json
+```
+
+> **Atomicity:** the CLI fans out into one service call per touched field (`name`, `fee`, `credit`), so a multi-field update is **not atomic** across the name/per-currency boundary. The API equivalent (`PUT /api/v1/contacts/:address`) is atomic per request — use it if you need transactional semantics. Updates are **local-only** either way (the contact is not notified).
+
+> **Breaking change (v0.1.14):** the legacy positional form (`eiou contact update Bob name Robert` / `… fee 1.5 USD` / `… all Robert 1.5 1500 USD`) was removed in favour of this flag form. Scripts using the old grammar will fail with a "No fields to update" or "Usage" error.
 
 ### contact delete / block / unblock / ping / search
 
@@ -964,7 +998,7 @@ eiou sync balances
 
 ### help
 
-Display help information.
+Display help information for top-level commands.
 
 **Syntax:**
 ```bash
@@ -975,20 +1009,37 @@ eiou help [command]
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `command` | optional | Specific command to get detailed help for |
+| `command` | optional | Specific top-level command to get detailed help for |
 
 **Examples:**
 ```bash
 # General help
 eiou help
 
-# Help for specific command
+# Help for specific top-level command
 eiou help send
 eiou help apikey
 
 # JSON format
 eiou help --json
 ```
+
+**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to `ContactCliHandler::showHelp()` — so `eiou help contact` and `eiou contact` print the **exact same** subcommand tree (single source of truth, no drift). `eiou help contact currency` likewise delegates to the per-currency help.
+
+```bash
+eiou contact            # full contact subcommand tree (same as `eiou contact help`)
+eiou help contact       # ← identical output, delegated to the contact handler
+eiou contact currency   # per-currency subcommand tree
+eiou help contact currency  # ← identical output
+
+# Other namespaces are still reached via the namespace itself:
+eiou backup help
+eiou apikey help
+eiou payback help
+eiou chaindrop help
+```
+
+There is no `eiou help contact add` form — drill down by running the namespace's own help (`eiou contact` for the full tree) and read the subcommand line you want.
 
 ---
 
@@ -1050,6 +1101,23 @@ eiou start
 - The watchdog detects the flag removal and restarts all processors within 30 seconds
 - Restart counters are reset so processors are not blocked by pre-shutdown limits
 - If no shutdown flag exists (processors are already running), the command reports that and exits
+
+---
+
+### restart
+
+Full in-place node restart: respawn processors **and** PHP-FPM workers so freshly-enabled plugins (or any other startup-bound state) take effect without a container reboot.
+
+**Syntax:**
+```bash
+eiou restart
+```
+
+**Behavior:**
+- Sends SIGTERM to all running processors (the watchdog respawns them within ~30s)
+- Sends SIGUSR2 to the PHP-FPM master so all workers gracefully recycle (in-flight HTTP requests finish before the worker exits)
+- Required when toggling plugins, since event subscriptions bind during boot
+- Must run as root inside the container — the CLI process does, calling from a PHP-FPM worker (GUI) does not. The REST equivalent (`POST /api/v1/system/restart`) sidesteps this by writing a request marker that the root-side poller in `startup.sh` picks up.
 
 ---
 
@@ -1528,6 +1596,53 @@ This command is intentionally NOT on any cron — it's O(all history) per pair, 
 
 ---
 
+## Plugin Management
+
+### plugin
+
+List installed plugins and toggle their enabled flag. Persistence-only — does **not** restart the node; you must follow up with `eiou restart` (or `POST /api/v1/system/restart`, or the GUI restart button) for an `enable`/`disable` to take effect, since event subscriptions bind during boot.
+
+**Syntax:**
+```bash
+eiou plugin [list|enable|disable|uninstall] [name]
+```
+
+**Subcommands:**
+
+| Subcommand | Syntax | Description |
+|------------|--------|-------------|
+| *(none / `list`)* | `eiou plugin` | List every installed plugin with version, enabled flag, status, license. |
+| `enable` | `eiou plugin enable <name>` | Persist the enabled flag as `true`. |
+| `disable` | `eiou plugin disable <name>` | Persist the enabled flag as `false`. |
+| `uninstall` | `eiou plugin uninstall <name>` | Run the full uninstall sequence (onUninstall hook, drop tables, drop user, delete credentials, remove files). The plugin must be disabled first. |
+
+**Examples:**
+```bash
+# List all plugins (table)
+eiou plugin
+
+# List as JSON (full metadata)
+eiou plugin list --json
+
+# Enable / disable
+eiou plugin enable hello-eiou
+eiou plugin disable hello-eiou
+
+# Uninstall a disabled plugin
+eiou plugin uninstall hello-eiou
+
+# Apply the change
+eiou restart
+```
+
+**Notes:**
+- Persists to `/etc/eiou/config/plugins.json` immediately.
+- Plugin names are validated against `^[a-z0-9][a-z0-9-_]{0,63}$` (kebab-case alphanumerics).
+- Plugins disabled by default at install time — see [PLUGINS.md](PLUGINS.md) for the safety stance.
+- Plugin-owned CLI verbs are dispatched via `PluginCliRegistry`; if a plugin registers a top-level verb, it falls through after core's `else` branch in `Eiou.php`. See [PLUGINS.md](PLUGINS.md) for plugin authoring.
+
+---
+
 ## Report Commands
 
 ### report
@@ -1640,11 +1755,15 @@ eiou in
 
 CLI commands are rate-limited per wallet to prevent abuse:
 
-| Command | Limit | Window | Block Duration |
-|---------|-------|--------|----------------|
+| Command bucket | Limit | Window | Block Duration |
+|----------------|-------|--------|----------------|
 | `send` | 30 | 60 seconds | 5 minutes |
-| `add` | 20 | 60 seconds | 5 minutes |
+| `contact` (every `eiou contact …` subcommand) | 20 | 60 seconds | 5 minutes |
+| `generate` | 5 | 5 minutes | 15 minutes |
 | `backup` | 10 | 60 seconds | 5 minutes |
+| `chaindrop` | 10 | 60 seconds | 5 minutes |
+| `report` | 10 | 60 seconds | 5 minutes |
+| `p2p` | 30 | 60 seconds | 5 minutes |
 | `request` | 20 | 60 seconds | 5 minutes |
 | All others | 100 | 60 seconds | 5 minutes |
 

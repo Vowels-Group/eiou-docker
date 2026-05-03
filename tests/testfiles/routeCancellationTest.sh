@@ -373,15 +373,20 @@ originatorCancelCheck=$(docker exec ${testSender} php -r "
     \$service = \$app->services->getP2pService();
 
     // broadcastFullCancelForHash sends route_cancel with full_cancel=true
-    // to all accepted contacts, enabling downstream cancel propagation
+    // to all accepted contacts, enabling downstream cancel propagation.
     if (!method_exists(\$service, 'broadcastFullCancelForHash')) {
         echo 'MISSING_METHOD';
         exit;
     }
 
-    // Verify CliP2pApprovalService::rejectP2p calls broadcastFullCancelForHash
-    // (CliService delegates to CliP2pApprovalService)
-    \$ref = new ReflectionMethod(\Eiou\Services\CliP2pApprovalService::class, 'rejectP2p');
+    // The wiring lives on the SHARED P2pApprovalService::reject() —
+    // CliP2pApprovalService::rejectP2p is now a thin CLI wrapper that
+    // delegates to the shared service so CLI / REST / GUI all use the
+    // same originator-cancel path. Pre-refactor (v0.1.13 era) the call
+    // lived directly inside the CLI handler; the test originally
+    // introspected that file. See P2pApprovalService.php:99-101 for the
+    // refactor note.
+    \$ref = new ReflectionMethod(\Eiou\Services\P2pApprovalService::class, 'reject');
     \$filename = \$ref->getFileName();
     \$startLine = \$ref->getStartLine();
     \$endLine = \$ref->getEndLine();

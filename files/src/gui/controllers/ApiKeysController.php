@@ -28,38 +28,32 @@ class ApiKeysController
     private ApiKeyRepository $repository;
 
     /**
-     * Permission groups shown in the create modal. Presented here so the
-     * backend is the single source of truth for what the UI offers — the
-     * frontend just renders these labels.
+     * Permission groups shown in the create modal — derived from the
+     * canonical whitelist in `ApiKeyService::PERMISSIONS` so the GUI and
+     * the validator can never drift. Adding a new scope to ApiKeyService
+     * is enough; the modal picks it up automatically.
      */
-    public const PERMISSION_GROUPS = [
-        'Wallet' => [
-            'wallet:read' => 'Read balance and transactions',
-            'wallet:send' => 'Send transactions and manage chain drops',
-        ],
-        'Contacts' => [
-            'contacts:read'  => 'List, view, search, ping contacts',
-            'contacts:write' => 'Add, update, delete, block contacts',
-        ],
-        'System' => [
-            'system:read' => 'View status, metrics, and settings',
-        ],
-        'Backup' => [
-            'backup:read'  => 'Read backup status and verify',
-            'backup:write' => 'Create, restore, delete backups',
-        ],
-        'Admin' => [
-            'admin' => 'Full administrative access (settings, sync, keys)',
-        ],
-    ];
+    public static function permissionGroups(): array
+    {
+        return \Eiou\Services\ApiKeyService::permissionGroupsForDisplay();
+    }
 
     /**
-     * Preset permission bundles.
+     * Preset permission bundles. Read-only mirrors every `<cat>:read`
+     * scope in PERMISSIONS so a new read-class scope auto-extends the
+     * preset; full-access stays a single `admin` row.
      */
-    public const PERMISSION_PRESETS = [
-        'read_only'   => ['wallet:read', 'contacts:read', 'system:read', 'backup:read'],
-        'full_access' => ['admin'],
-    ];
+    public static function permissionPresets(): array
+    {
+        $readOnly = array_values(array_filter(
+            \Eiou\Services\ApiKeyService::PERMISSIONS,
+            static fn (string $p) => str_ends_with($p, ':read')
+        ));
+        return [
+            'read_only'   => $readOnly,
+            'full_access' => ['admin'],
+        ];
+    }
 
     public function __construct(Session $session, ApiKeyRepository $repository)
     {
