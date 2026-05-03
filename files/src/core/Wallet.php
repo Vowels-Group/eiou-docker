@@ -577,14 +577,20 @@ class Wallet{
     }
 
     /**
-     * Encrypt plaintext dbPass in dbconfig.json now that the master key exists.
+     * Encrypt plaintext database credentials in dbconfig.json now that the
+     * master key exists.
      *
-     * freshInstall() writes the DB password in plaintext because the master key
-     * isn't available yet (it depends on the wallet seed). This method runs
-     * immediately after initMasterKeyFromSeed() to close that window — the
-     * plaintext password never survives past wallet generation.
+     * freshInstall() writes dbPass / dbUser / dbName in plaintext because the
+     * master key isn't available yet (it depends on the wallet seed). This
+     * method runs immediately after initMasterKeyFromSeed() to close that
+     * window — plaintext credentials never survive past wallet generation.
      *
-     * Idempotent: skips if dbconfig.json is missing, unreadable, or already encrypted.
+     * Covers all three fields in one shot so the next process's
+     * Application::migrateDbConfigEncryption() has nothing to do and stays
+     * silent on a healthy boot.
+     *
+     * Idempotent: skips if dbconfig.json is missing, unreadable, or already
+     * fully encrypted.
      */
     private static function migrateDbConfigEncryption(): void {
         $configPath = '/etc/eiou/config/dbconfig.json';
@@ -597,14 +603,31 @@ class Wallet{
             return;
         }
         $config = json_decode($raw, true);
-        if (!is_array($config) || !isset($config['dbPass'])) {
-            return; // Already encrypted or invalid — nothing to do
+        if (!is_array($config)) {
+            return;
+        }
+
+        $hasPlaintextPass = isset($config['dbPass']);
+        $hasPlaintextUser = isset($config['dbUser']) && !isset($config['dbUserEncrypted']);
+        $hasPlaintextName = isset($config['dbName']) && !isset($config['dbNameEncrypted']);
+
+        if (!$hasPlaintextPass && !$hasPlaintextUser && !$hasPlaintextName) {
+            return; // Already encrypted — nothing to do
         }
 
         try {
-            $encrypted = KeyEncryption::encrypt($config['dbPass']);
-            $config['dbPassEncrypted'] = $encrypted;
-            unset($config['dbPass']);
+            if ($hasPlaintextPass) {
+                $config['dbPassEncrypted'] = KeyEncryption::encrypt($config['dbPass']);
+                unset($config['dbPass']);
+            }
+            if ($hasPlaintextUser) {
+                $config['dbUserEncrypted'] = KeyEncryption::encrypt($config['dbUser'], 'db_user');
+                unset($config['dbUser']);
+            }
+            if ($hasPlaintextName) {
+                $config['dbNameEncrypted'] = KeyEncryption::encrypt($config['dbName'], 'db_name');
+                unset($config['dbName']);
+            }
 
             $oldUmask = umask(0027);
             file_put_contents($configPath, json_encode($config), LOCK_EX);
@@ -618,7 +641,7 @@ class Wallet{
             DatabaseContext::getInstance()->setdatabaseData($config);
 
             Logger::getInstance()->info(
-                "dbconfig.json: plaintext password encrypted successfully"
+                "dbconfig.json: database credentials encrypted"
             );
         } catch (\Exception $e) {
             Logger::getInstance()->warning(

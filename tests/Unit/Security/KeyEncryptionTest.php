@@ -204,6 +204,38 @@ class KeyEncryptionTest extends TestCase
     }
 
     /**
+     * isMasterKeyAvailable() returns a bool — never throws, never returns null.
+     */
+    public function testIsMasterKeyAvailableReturnsBool(): void
+    {
+        $this->assertIsBool(KeyEncryption::isMasterKeyAvailable());
+    }
+
+    /**
+     * isMasterKeyAvailable() reflects the actual on-disk state — true when
+     * either the runtime (/dev/shm) or persistent (/etc/eiou/config) master
+     * key file exists, false otherwise. Used by the dbconfig.json encryption
+     * migration to distinguish "expected first-boot deferral" from a real
+     * encryption failure.
+     */
+    public function testIsMasterKeyAvailableReflectsFilesystemState(): void
+    {
+        $expected = file_exists('/dev/shm/.master.key')
+                 || file_exists('/etc/eiou/config/.master.key');
+        $this->assertSame($expected, KeyEncryption::isMasterKeyAvailable());
+    }
+
+    /**
+     * isMasterKeyAvailable() must agree with getInfo()'s master_key_exists key
+     * (they share the same underlying check).
+     */
+    public function testIsMasterKeyAvailableMatchesGetInfo(): void
+    {
+        $info = KeyEncryption::getInfo();
+        $this->assertSame($info['master_key_exists'], KeyEncryption::isMasterKeyAvailable());
+    }
+
+    /**
      * Test getMasterKey throws when master key file does not exist
      */
     public function testGetMasterKeyThrowsWhenNoFile(): void

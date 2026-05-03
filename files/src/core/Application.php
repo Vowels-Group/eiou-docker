@@ -264,6 +264,20 @@ class Application {
             return; // Already encrypted — nothing to do
         }
 
+        // First-boot guard: on a fresh install, freshInstall() writes plaintext
+        // credentials before the wallet seed exists, so the master key file
+        // doesn't exist yet either. KeyEncryption::encrypt() would throw a
+        // scary-looking "Master key not found" error in this case, which reads
+        // like a real failure but is actually the expected pre-wallet-setup
+        // state. Wallet::generateWallet() / Wallet::restoreWallet() run the
+        // migration themselves immediately after initMasterKeyFromSeed().
+        if (!KeyEncryption::isMasterKeyAvailable()) {
+            if ($this->loggerLoaded()) {
+                $this->getLogger()->debug("dbconfig.json encryption deferred until wallet generation/restore");
+            }
+            return;
+        }
+
         try {
             // Encrypt dbPass (if still plaintext)
             if ($hasPlaintextPass) {
@@ -303,13 +317,10 @@ class Application {
                 $this->getLogger()->info("Migrated dbconfig.json: database credentials encrypted");
             }
         } catch (Exception $e) {
-            // Non-fatal on first boot: the master key doesn't exist yet because
-            // the wallet hasn't been generated. Wallet::generateWallet() and
-            // Wallet::restoreWallet() handle this migration immediately after
-            // initMasterKeyFromSeed(), so the plaintext credentials are encrypted
-            // before the container becomes operational.
+            // Master key exists but encryption still failed — genuinely abnormal,
+            // worth a warning so an operator notices.
             if ($this->loggerLoaded()) {
-                $this->getLogger()->warning("dbconfig.json encryption migration deferred — will complete during wallet setup", [
+                $this->getLogger()->warning("dbconfig.json encryption migration failed", [
                     'error' => $e->getMessage()
                 ]);
             }

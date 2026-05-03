@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- **First-boot dbconfig.json encryption no longer logs as a WARNING.** On a fresh install, `Application` runs the dbconfig encryption migration before the wallet seed exists, so the master key isn't available yet — `KeyEncryption::encrypt()` would throw "Master key not found", which the migration caught and re-emitted as a WARNING with the scary error in the context field. To a reader scanning the EIOU log, this read like a real encryption failure right next to the success message that follows. Now gated on a new `KeyEncryption::isMasterKeyAvailable()` check: if the master key isn't on disk yet, log at DEBUG with calmer wording ("encryption deferred until wallet generation/restore") and return; the WARNING is reserved for the genuine failure case where the master key exists but encryption still throws. `Wallet::migrateDbConfigEncryption()` extended to encrypt `dbUser` and `dbName` alongside `dbPass` so the next process's idempotent re-check finds nothing to do and stays silent — collapsing the three-message dance on a healthy fresh install down to one.
+
 ### Fixed
 - **What's New modal intro paragraph no longer renders as a stack of broken short lines.** `markdownToHtml()` now folds soft line breaks into a single `<p>` until a blank line or block element ends it (CommonMark behaviour). Hard-wrapped intro paragraphs in GitHub release bodies — common at ~120-char wrap — were emitting one `<p>` per source line, producing a fragmented look at the top of the modal.
 
