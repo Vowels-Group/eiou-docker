@@ -182,6 +182,17 @@ run_test() {
     printf "Running: ${test_name}\n"
     printf "================================================================\n"
 
+    # Re-apply rate-limit disable before each test file. Wallet restore
+    # (seedphraseTestSuite) and backup restore (backupTestSuite) reset
+    # defaultconfig.json back to factory defaults (rate_limit_enabled =
+    # true), so the post-init hook above doesn't hold across the whole
+    # run. Re-disabling per-file is cheap and idempotent.
+    if [ "${EIOU_KEEP_RATE_LIMITS:-0}" != "1" ] && [ -n "$CONTAINER_LIST" ]; then
+        for c in $CONTAINER_LIST; do
+            docker exec "$c" eiou changesettings rateLimitEnabled false --json >/dev/null 2>&1 || true
+        done
+    fi
+
     # Track test duration
     local start_time=$(date +%s)
 
