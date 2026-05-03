@@ -401,6 +401,24 @@ printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
 # Brief buffer time for message processors (using environment variable if set)
 sleep ${TEST_POLL_INTERVAL:-1}
 
+# Disable per-wallet rate limiting on every container so the integration
+# suite doesn't trip CLI/API rate limits on rapid-fire test calls.
+# `EIOU_TEST_MODE` env var is no longer honored at runtime (it's now only
+# the PHPUnit bootstrap constant — see RateLimiterService.php), and
+# setting the env var on a non-test build emits a SECURITY error per
+# request. The legitimate runtime knob is `rateLimitEnabled`, which
+# we flip via the standard changesettings path. Skipped when
+# EIOU_KEEP_RATE_LIMITS=1, for tests that actually want to exercise
+# rate limiting (none today, but the option is there).
+if [ "${EIOU_KEEP_RATE_LIMITS:-0}" != "1" ]; then
+    printf "\n${GREEN}Disabling per-wallet rate limiting on all containers...${NC}\n"
+    for container in $CONTAINER_LIST; do
+        docker exec "$container" eiou changesettings rateLimitEnabled false --json >/dev/null 2>&1 \
+            && printf "  ${CHECK} %s: rate limiting disabled\n" "$container" \
+            || printf "  ${YELLOW}⚠${NC} %s: changesettings call failed (continuing)\n" "$container"
+    done
+fi
+
 # Step 2: Run prerequisite test (hostnameTest (HTTP/HTTPS) or torAddressTest (TOR))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"
 if [ "$MODE" == 'http' ] || [ "$MODE" == 'https' ]; then

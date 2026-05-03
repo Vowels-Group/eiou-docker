@@ -138,7 +138,7 @@ if [[ -n "$dupTestSender" ]]; then
 
     # Now try to send to "Test User" in JSON mode - should get multiple_matches error
     echo -e "\t-> Sending to duplicate name 'Test User' in JSON mode"
-    sendOutput=$(docker exec -e EIOU_TEST_MODE=true ${dupTestSender} eiou send "Test User" 1 USD --json 2>&1)
+    sendOutput=$(docker exec ${dupTestSender} eiou send "Test User" 1 USD --json 2>&1)
 
     if echo "$sendOutput" | grep -q 'MULTIPLE_MATCHES' || echo "$sendOutput" | grep -q 'multiple_matches'; then
         printf "\t   Duplicate name detection ${GREEN}PASSED${NC}\n"

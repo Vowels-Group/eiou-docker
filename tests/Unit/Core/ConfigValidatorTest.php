@@ -146,9 +146,20 @@ class ConfigValidatorTest extends TestCase
         ];
     }
 
+    /**
+     * Helper: signal post-wallet state by writing a fake master key.
+     * The validator only checks file_exists, not the content, so a
+     * 32-byte placeholder is enough.
+     */
+    private function markPostWallet(): void
+    {
+        file_put_contents($this->tempConfigDir . '/.master.key', str_repeat('A', 32));
+    }
+
     public function testDbConfigMissingEncryptedCredentialIsError(): void
     {
         // Post-migration shape with one encrypted blob missing.
+        $this->markPostWallet();
         file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
             'dbHost' => 'localhost',
             'dbNameEncrypted' => $this->tdeBlob(),
@@ -165,6 +176,7 @@ class ConfigValidatorTest extends TestCase
 
     public function testDbConfigEmptyDbHostIsMissing(): void
     {
+        $this->markPostWallet();
         file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
             'dbHost' => '',
             'dbNameEncrypted' => $this->tdeBlob(),
@@ -181,7 +193,9 @@ class ConfigValidatorTest extends TestCase
     public function testDbConfigPostMigrationShapeIsClean(): void
     {
         // The shape Application::migrateDbConfigEncryption() leaves on disk:
-        // plaintext dbHost + three encrypted blobs. Should pass cleanly.
+        // plaintext dbHost + three encrypted blobs. Should pass cleanly
+        // (with the master key file present, signalling post-wallet state).
+        file_put_contents($this->tempConfigDir . '/.master.key', str_repeat('A', 32));
         file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
             'dbHost' => 'localhost',
             'dbNameEncrypted' => $this->tdeBlob(),
@@ -194,9 +208,65 @@ class ConfigValidatorTest extends TestCase
         $this->assertNull($this->findIssue($validator->validate(), 'dbconfig_plaintext_credentials'));
     }
 
+    public function testDbConfigPreWalletBootstrapShapeIsClean(): void
+    {
+        // First-boot, before generateWallet/restoreWallet creates the master key.
+        // Plaintext credentials are legitimate here — Application::migrate-
+        // DbConfigEncryption() will re-encrypt them as soon as the master key
+        // exists. The validator must NOT fire the post-wallet errors during
+        // this transient state. (No /.master.key in tempConfigDir.)
+        file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
+            'dbHost' => 'localhost',
+            'dbName' => 'eiou',
+            'dbUser' => 'eiou',
+            'dbPass' => 'bootstrap-secret',
+        ]));
+
+        $validator = new ConfigValidator($this->makeConfig(), $this->tempConfigDir);
+        $issues = $validator->validate();
+        $this->assertNull($this->findIssue($issues, 'dbconfig_missing_fields'));
+        $this->assertNull($this->findIssue($issues, 'dbconfig_plaintext_credentials'));
+        $this->assertNull($this->findIssue($issues, 'dbconfig_malformed_encrypted_blob'));
+        $this->assertNull($this->findIssue($issues, 'dbconfig_no_credentials'));
+    }
+
+    public function testDbConfigPreWalletWithNoCredentialsIsError(): void
+    {
+        // dbconfig.json with only dbHost — no plaintext, no encrypted —
+        // pre-wallet bootstrap can't proceed because nothing to migrate.
+        file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
+            'dbHost' => 'localhost',
+        ]));
+
+        $validator = new ConfigValidator($this->makeConfig(), $this->tempConfigDir);
+        $issue = $this->findIssue($validator->validate(), 'dbconfig_no_credentials');
+        $this->assertNotNull($issue);
+        $this->assertSame('error', $issue['severity']);
+    }
+
+    public function testDbConfigEncryptedWithoutMasterKeyIsError(): void
+    {
+        // Encrypted blobs on disk but master key missing — broken state.
+        // Either someone deleted the master key, restored from a partial
+        // backup, or tampered with the file. Either way it's unrecoverable
+        // without restoring the key (or regenerating from seed).
+        file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
+            'dbHost' => 'localhost',
+            'dbNameEncrypted' => $this->tdeBlob(),
+            'dbUserEncrypted' => $this->tdeBlob(),
+            'dbPassEncrypted' => $this->tdeBlob(),
+        ]));
+
+        $validator = new ConfigValidator($this->makeConfig(), $this->tempConfigDir);
+        $issue = $this->findIssue($validator->validate(), 'dbconfig_encrypted_without_master_key');
+        $this->assertNotNull($issue);
+        $this->assertSame('error', $issue['severity']);
+    }
+
     public function testDbConfigMalformedEncryptedBlobAsStringIsFlagged(): void
     {
         // Someone tries to slip a plaintext value into an "encrypted" slot.
+        $this->markPostWallet();
         file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
             'dbHost' => 'localhost',
             'dbNameEncrypted' => $this->tdeBlob(),
@@ -214,6 +284,7 @@ class ConfigValidatorTest extends TestCase
     public function testDbConfigMalformedEncryptedBlobMissingKeysIsFlagged(): void
     {
         // Object with the right name but the wrong keys.
+        $this->markPostWallet();
         file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
             'dbHost' => 'localhost',
             'dbNameEncrypted' => $this->tdeBlob(),
@@ -230,6 +301,7 @@ class ConfigValidatorTest extends TestCase
     public function testDbConfigMalformedEncryptedBlobWrongIvLengthIsFlagged(): void
     {
         // IV decodes to 4 bytes (should be 12 for AES-256-GCM).
+        $this->markPostWallet();
         $bad = [
             'ciphertext' => 'AAAA',
             'iv' => base64_encode('1234'),  // 4 bytes — wrong
@@ -253,6 +325,7 @@ class ConfigValidatorTest extends TestCase
     public function testDbConfigMalformedEncryptedBlobMissingVersionIsFlagged(): void
     {
         // No version field — could be a downgraded v1 blob attack.
+        $this->markPostWallet();
         $bad = [
             'ciphertext' => 'AAAA',
             'iv' => base64_encode(str_repeat('A', 12)),
@@ -278,6 +351,7 @@ class ConfigValidatorTest extends TestCase
         // Migration didn't complete or hand-edited file: plaintext is
         // present alongside (or instead of) encrypted blobs. Validator
         // must flag this as a separate error so the operator notices.
+        $this->markPostWallet();
         file_put_contents($this->tempConfigDir . '/dbconfig.json', json_encode([
             'dbHost' => 'localhost',
             'dbName' => 'eiou',

@@ -95,8 +95,28 @@ if (!$app->currentUserLoaded()) {
 // Get Debug Service Instance
 $debugService = $app->services->getDebugService();
 
-// Apply rate limiting for CLI commands (if database is available and not in test mode)
-if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
+// Apply rate limiting for CLI commands (if database is available).
+//
+// We always invoke the rate limiter and let it decide whether to bypass.
+// The legitimate runtime bypass paths are:
+//   1. UserContext::getRateLimitEnabled() === false — the operator-toggleable
+//      `rateLimitEnabled` user setting (CLI / API / GUI all expose it).
+//   2. defined('EIOU_TEST_MODE') === true — set ONLY by tests/bootstrap.php
+//      under PHPUnit; production builds never define this constant.
+//
+// Crucially, the legacy `getenv('EIOU_TEST_MODE') === 'true'` env-var
+// bypass that used to live here was removed alongside the matching
+// hardening in RateLimiterService::checkLimit. A hostile orchestrator
+// (or a typo in docker-compose.yml) used to be able to turn off CLI
+// rate limiting in production by exporting one variable. RateLimiter
+// now logs a SECURITY error if the env var is seen without the build-
+// time constant; this caller deferring to it means that signal fires
+// reliably from CLI invocations too. The `eiou in` / `eiou out`
+// queue-processor commands (Eiou.php:247/261) still honor the env var
+// because the integration test suite needs them runnable via
+// `docker exec`, not PHPUnit; that is a deliberately narrower escape
+// hatch and is logged accordingly.
+if ($app->currentPdoLoaded()) {
     $rateLimiter = $app->getRateLimiter();
 
     // Get CLI identifier (user + command for more granular limiting)

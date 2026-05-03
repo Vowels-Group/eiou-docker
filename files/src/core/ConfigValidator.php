@@ -176,7 +176,23 @@ final class ConfigValidator
 
         $issues = [];
 
-        // Plaintext required keys (currently just `dbHost`).
+        // Are we pre-wallet (master key not yet generated) or post-wallet?
+        // The two states have different valid dbconfig shapes:
+        //
+        //   Pre-wallet  : plaintext dbName/dbUser/dbPass (deferred encryption,
+        //                 will be migrated as soon as wallet generation runs);
+        //                 encrypted blobs MUST be absent.
+        //   Post-wallet : encrypted dbNameEncrypted/dbUserEncrypted/dbPassEncrypted;
+        //                 plaintext counterparts MUST be absent.
+        //
+        // Using the master key file as the state signal closes the false-
+        // positive on first boot (logged by the user as
+        // dbconfig_missing_fields + dbconfig_plaintext_credentials before
+        // migrateDbConfigEncryption ran for the first time) without
+        // weakening post-wallet checks.
+        $preWallet = $this->isPreWalletBootstrap();
+
+        // dbHost is required in both states.
         $missing = [];
         foreach (self::REQUIRED_DBCONFIG_KEYS as $key) {
             if (!array_key_exists($key, $decoded) || $decoded[$key] === '' || $decoded[$key] === null) {
@@ -184,13 +200,56 @@ final class ConfigValidator
             }
         }
 
-        // Encrypted credential blobs. Each must STRUCTURALLY look like a
-        // KeyEncryption::encrypt() output:
-        //   { ciphertext: base64-string,  iv: base64 of 12 bytes,
-        //     tag:        base64 of 16 bytes,  version: int }
-        // — otherwise someone could write `dbUserEncrypted: "Dave"` or
-        // `dbUserEncrypted: {"foo": "bar"}` and slip past a "non-empty
-        // array" check. The shape check below catches all of those.
+        $hasPlaintext = false;
+        $hasEncrypted = false;
+        foreach (self::PROHIBITED_DBCONFIG_PLAINTEXT_KEYS as $key) {
+            if (array_key_exists($key, $decoded)) {
+                $hasPlaintext = true;
+                break;
+            }
+        }
+        foreach (self::REQUIRED_DBCONFIG_ENCRYPTED_KEYS as $key) {
+            if (array_key_exists($key, $decoded)) {
+                $hasEncrypted = true;
+                break;
+            }
+        }
+
+        if ($preWallet) {
+            // Pre-wallet bootstrap: plaintext is the legitimate shape.
+            // Encrypted blobs without a master key indicate a broken
+            // state — either the master key was deleted, the plaintext
+            // key file is at /dev/shm only and we lost the persistent
+            // copy, or the file was tampered with.
+            if ($hasEncrypted) {
+                $issues[] = [
+                    'severity' => 'error',
+                    'code' => 'dbconfig_encrypted_without_master_key',
+                    'message' => 'dbconfig.json contains encrypted credential field(s) but no master key is present on disk. The wallet cannot decrypt these. Restore /etc/eiou/config/.master.key from backup, or regenerate the wallet from the seed phrase.',
+                ];
+            }
+            // Pre-wallet without ANY credential fields means the file is
+            // empty of useful data — bootstrap can't proceed.
+            if (!$hasPlaintext && !$hasEncrypted) {
+                $issues[] = [
+                    'severity' => 'error',
+                    'code' => 'dbconfig_no_credentials',
+                    'message' => 'dbconfig.json contains no credential fields (neither plaintext nor encrypted). The DB connection cannot be opened.',
+                ];
+            }
+            // Skip the post-wallet "missing encrypted" / "leftover plaintext"
+            // checks — both are expected during pre-wallet bootstrap.
+            if (!empty($missing)) {
+                $issues[] = [
+                    'severity' => 'error',
+                    'code' => 'dbconfig_missing_fields',
+                    'message' => sprintf('dbconfig.json is missing required field(s): %s.', implode(', ', $missing)),
+                ];
+            }
+            return $issues;
+        }
+
+        // Post-wallet path: full strict checks.
         $malformed = [];
         foreach (self::REQUIRED_DBCONFIG_ENCRYPTED_KEYS as $key) {
             if (!array_key_exists($key, $decoded)) {
@@ -198,6 +257,9 @@ final class ConfigValidator
                 continue;
             }
             $blob = $decoded[$key];
+            // Structural blob check rejects `"Dave"`, `{"foo":"bar"}`,
+            // wrong IV/tag length, missing version, etc. — see
+            // looksLikeKeyEncryptionBlob() below.
             if (!is_array($blob) || empty($blob) || !$this->looksLikeKeyEncryptionBlob($blob)) {
                 $malformed[] = $key;
             }
@@ -222,10 +284,10 @@ final class ConfigValidator
             ];
         }
 
-        // Plaintext credentials should never be present at this point —
-        // Application::migrateDbConfigEncryption() runs before this
-        // validator and rewrites them. If we see them now, migration
-        // didn't complete or the file was edited by hand.
+        // Plaintext should never be present post-wallet. If it is,
+        // either migrateDbConfigEncryption() didn't complete, the file
+        // was hand-edited, or a pre-TDE backup was restored without a
+        // re-migration boot.
         $leakedPlaintext = [];
         foreach (self::PROHIBITED_DBCONFIG_PLAINTEXT_KEYS as $key) {
             if (array_key_exists($key, $decoded)) {
@@ -244,6 +306,23 @@ final class ConfigValidator
         }
 
         return $issues;
+    }
+
+    /**
+     * Pre-wallet bootstrap state: the master key file isn't on disk yet,
+     * so dbconfig.json plaintext credentials are legitimate (transient,
+     * encryption migration runs as soon as generateWallet/restoreWallet
+     * creates the key). Once the wallet is initialized, the master key
+     * persists at /etc/eiou/config/.master.key (and a runtime copy at
+     * /dev/shm/.master.key may also exist post-VolumeEncryption load).
+     */
+    private function isPreWalletBootstrap(): bool
+    {
+        // Use the validator's $configDir for testability (so the test
+        // suite can simulate either state with a temp dir). The runtime
+        // key at /dev/shm is derived from the persistent one, so absence
+        // of the persistent key is the canonical "no wallet yet" signal.
+        return !file_exists($this->configDir . '/.master.key');
     }
 
     /**
