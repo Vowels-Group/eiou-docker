@@ -157,20 +157,22 @@ Toggling a plugin's enabled flag does not restart the node — call `POST /api/v
 | Permission | Scope |
 |------------|-------|
 | `wallet:read` | Read wallet balances and transactions |
-| `wallet:send` | Send transactions |
-| `wallet:*` | All wallet permissions |
-| `contacts:read` | Read contacts |
-| `contacts:write` | Add, update, delete contacts |
-| `contacts:*` | All contact permissions |
-| `system:read` | Read system status and metrics |
+| `wallet:send` | Send transactions, propose/accept/reject chain drops, approve/reject P2P |
+| `wallet:*` | Both `wallet:read` and `wallet:send` |
+| `contacts:read` | List, view, search, and ping contacts |
+| `contacts:write` | Add, update, delete, block/unblock contacts; per-currency operations |
+| `contacts:*` | Both `contacts:read` and `contacts:write` |
+| `system:read` | Read system status, metrics, and settings; download debug reports; trigger update-check |
 | `backup:read` | Read backup status/list, verify backups |
-| `backup:write` | Create, restore, delete, enable/disable backups |
-| `backup:*` | All backup permissions |
+| `backup:write` | Create, restore, delete, enable/disable backups, cleanup |
+| `backup:*` | Both `backup:read` and `backup:write` |
 | `payback:read` | List/read your own payback methods (sensitive fields redacted) |
 | `payback:write` | Create/edit/delete methods, **and reveal plaintext via `GET …/:id/reveal`** (write-class because it returns secrets) |
-| `payback:*` | All payback permissions |
-| `admin` | Full administrative access (settings, sync, shutdown/start/restart, keys, plugins) |
-| `all` | All permissions |
+| `payback:*` | Both `payback:read` and `payback:write` |
+| `admin` | Full administrative access (settings, sync, shutdown/start/restart, keys, plugins). Implies every other scope. |
+| `all` | Same as `admin` |
+
+> **Wildcard semantics:** at lookup time, `<category>:*` grants any `<category>:<verb>` request — so a key with `wallet:*` covers a route that requires `wallet:read` or `wallet:send`. `admin` and `all` (and the legacy `*`) grant everything unconditionally. There is currently no `system:write` or `plugin:*` scope; sync, shutdown/start/restart, key management, and plugin management all gate on `admin`.
 
 ---
 

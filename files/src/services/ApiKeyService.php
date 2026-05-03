@@ -30,11 +30,20 @@ class ApiKeyService implements ApiKeyServiceInterface {
     public const PERMISSIONS = [
         'wallet:read',
         'wallet:send',
+        'wallet:*',           // alias for wallet:read + wallet:send
         'contacts:read',
         'contacts:write',
+        'contacts:*',         // alias for contacts:read + contacts:write
         'system:read',
         'backup:read',
         'backup:write',
+        'backup:*',           // alias for backup:read + backup:write
+        // Payback methods. `payback:write` is also the gate for the
+        // /payback-methods/:id/reveal endpoint because it returns
+        // plaintext — a read of secrets is treated as write-class.
+        'payback:read',
+        'payback:write',
+        'payback:*',          // alias for payback:read + payback:write
         'admin',
         'all'
     ];

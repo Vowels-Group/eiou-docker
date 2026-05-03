@@ -413,12 +413,18 @@ class CliHelpService
                 'permissions' => [
                     'wallet:read' => 'Read wallet balance, info, and transactions',
                     'wallet:send' => 'Send transactions, manage chain drops',
+                    'wallet:*' => 'Both wallet:read and wallet:send',
                     'contacts:read' => 'List, view, search, and ping contacts',
                     'contacts:write' => 'Add, update, delete, block/unblock contacts',
+                    'contacts:*' => 'Both contacts:read and contacts:write',
                     'system:read' => 'View system status, metrics, and settings',
                     'backup:read' => 'Read backup status/list, verify backups',
                     'backup:write' => 'Create, restore, delete, enable/disable backups',
-                    'admin' => 'Full administrative access (settings, sync, shutdown, keys)',
+                    'backup:*' => 'Both backup:read and backup:write',
+                    'payback:read' => 'List/read your own payback methods (sensitive fields redacted)',
+                    'payback:write' => 'Create/edit/delete payback methods, AND reveal plaintext via /payback-methods/:id/reveal (write-class because it returns secrets)',
+                    'payback:*' => 'Both payback:read and payback:write',
+                    'admin' => 'Full administrative access (settings, sync, shutdown/start/restart, keys, plugins)',
                     'all' => 'All permissions (same as admin)'
                 ],
                 'api_usage' => [
@@ -921,10 +927,18 @@ Create a new API key:
   Available permissions:
     - wallet:read     Read wallet balance and transactions
     - wallet:send     Send transactions
+    - wallet:*        Both wallet:read and wallet:send
     - contacts:read   List and view contacts
     - contacts:write  Add, update, delete contacts
-    - system:read     View system status and metrics
-    - admin           Full administrative access
+    - contacts:*      Both contacts:read and contacts:write
+    - system:read     View system status, metrics, and settings
+    - backup:read     Read backup status/list, verify backups
+    - backup:write    Create, restore, delete, enable/disable backups
+    - backup:*        Both backup:read and backup:write
+    - payback:read    List/read your own payback methods (redacted)
+    - payback:write   Create/edit/delete + reveal plaintext (write-class)
+    - payback:*       Both payback:read and payback:write
+    - admin           Full administrative access (settings, sync, shutdown/start/restart, keys, plugins)
     - all             All permissions (same as admin)
 
 List all API keys:
