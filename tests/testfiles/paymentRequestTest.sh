@@ -552,13 +552,19 @@ else
             printf "\t   Approve-with-note API call succeeded (txid=${noteTxid})\n"
 
             if [[ -n "$noteTxid" ]]; then
-                # Read the transaction description back from B's database
+                # Read the transaction description back from B's database.
+                # NOTE: getByTxid returns a LIST of rows (fetchAll), not a
+                # single row — see DlqController.php:120-122 for the
+                # canonical unwrap pattern. Reading $tx['description']
+                # directly silently returns '' because the list array
+                # has only integer keys.
                 noteTxDesc=$(docker exec ${containerB} php -r "
                     require_once '${BOOTSTRAP_PATH}';
                     \$app = Eiou\Core\Application::getInstance();
-                    \$tx = \$app->services->getRepositoryFactory()
+                    \$rows = \$app->services->getRepositoryFactory()
                         ->get(Eiou\Database\TransactionRepository::class)
                         ->getByTxid('${noteTxid}');
+                    \$tx = (is_array(\$rows) && isset(\$rows[0])) ? \$rows[0] : null;
                     echo \$tx['description'] ?? '';
                 " 2>/dev/null || echo "")
                 printf "\t   On-chain description on B: ${noteTxDesc}\n"
