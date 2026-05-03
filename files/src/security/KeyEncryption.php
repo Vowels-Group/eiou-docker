@@ -288,6 +288,18 @@ class KeyEncryption {
     }
 
     /**
+     * Check whether the master key is on disk (or in /dev/shm under volume
+     * encryption). Lets callers distinguish "encryption is genuinely broken"
+     * from the expected first-boot state where the wallet hasn't been
+     * generated yet and the master key simply doesn't exist.
+     *
+     * @return bool True if encrypt()/decrypt() can find a master key
+     */
+    public static function isMasterKeyAvailable(): bool {
+        return file_exists(self::RUNTIME_KEY_FILE) || file_exists(self::MASTER_KEY_FILE);
+    }
+
+    /**
      * Get encryption info for diagnostics
      *
      * @return array Encryption configuration details
@@ -300,7 +312,7 @@ class KeyEncryption {
             'tag_length' => self::TAG_LENGTH,
             'openssl_available' => extension_loaded('openssl'),
             'sodium_available' => extension_loaded('sodium'),
-            'master_key_exists' => file_exists(self::RUNTIME_KEY_FILE) || file_exists(self::MASTER_KEY_FILE),
+            'master_key_exists' => self::isMasterKeyAvailable(),
             'volume_encryption' => VolumeEncryption::getStatus()
         ];
     }
