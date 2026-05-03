@@ -1995,9 +1995,11 @@ Propose a tx drop with a contact. This initiates the process of mutually droppin
 
 ### POST /api/v1/chaindrop/accept
 
-Accept a pending tx drop proposal.
+Accept a pending tx drop proposal. **Irreversible chain rewrite** — drops the missing transactions, re-signs surrounding transactions on both sides, recalculates balances. Asymmetric with `propose` (which is just a sent request, non-destructive on this node) and `reject` (declines, leaves gap).
 
-**Permission:** `wallet:send`
+The server-side auto-accept policy (env `EIOU_AUTO_CHAIN_DROP_ACCEPT`) handles the routine case automatically; this endpoint is for manual operator override.
+
+**Permission:** `admin` (not `wallet:send`, because of the chain-rewrite blast radius)
 
 **Request Body:**
 

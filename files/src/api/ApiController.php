@@ -68,9 +68,9 @@ use Eiou\Services\ApiKeyService;
  * - POST /api/v1/plugins/:name/disable       - Disable a plugin (admin, no auto-restart)
  * - *    /api/v1/plugins/:name/:action       - Plugin-owned endpoints (admin, via PluginApiRegistry)
  *
- * - POST /api/v1/chaindrop/propose           - Propose tx drop
- * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal
- * - POST /api/v1/chaindrop/reject            - Reject tx drop proposal
+ * - POST /api/v1/chaindrop/propose           - Propose tx drop (wallet:send)
+ * - POST /api/v1/chaindrop/accept            - Accept tx drop proposal (admin — irreversible chain rewrite)
+ * - POST /api/v1/chaindrop/reject            - Reject tx drop proposal (wallet:send)
  * - GET  /api/v1/chaindrop                   - List tx drop proposals
  *
  * - GET  /api/v1/p2p                         - List P2P transactions awaiting approval
@@ -2904,9 +2904,9 @@ class ApiController {
      * Handle tx drop endpoints
      *
      * Routes:
-     * - POST /api/v1/chaindrop/propose  - Propose tx drop
-     * - POST /api/v1/chaindrop/accept   - Accept tx drop proposal
-     * - POST /api/v1/chaindrop/reject   - Reject tx drop proposal
+     * - POST /api/v1/chaindrop/propose  - Propose tx drop (wallet:send)
+     * - POST /api/v1/chaindrop/accept   - Accept tx drop proposal (admin — irreversible chain rewrite)
+     * - POST /api/v1/chaindrop/reject   - Reject tx drop proposal (wallet:send)
      * - GET  /api/v1/chaindrop          - List tx drop proposals
      */
     private function handleChainDrop(string $method, ?string $action, array $params, string $body): array {
@@ -3023,10 +3023,20 @@ class ApiController {
 
     /**
      * POST /api/v1/chaindrop/accept
+     *
+     * Gated on `admin` (not `wallet:send`) because accepting a chain
+     * drop irreversibly rewrites the bilateral chain on both sides:
+     * missing transactions are dropped, surrounding transactions are
+     * re-signed, balances recalculated. Asymmetric with `propose`
+     * (which is just a sent request — non-destructive on this node
+     * until the other side accepts) and `reject` (declines, leaves
+     * gap unresolved). The server-side auto-accept policy
+     * (`EIOU_AUTO_CHAIN_DROP_ACCEPT`) handles the routine case;
+     * this endpoint is for manual operator override.
      */
     private function acceptChainDrop(string $body): array {
-        if (!$this->hasPermission('wallet:send')) {
-            return $this->permissionDenied('wallet:send');
+        if (!$this->hasPermission('admin')) {
+            return $this->permissionDenied('admin');
         }
 
         $data = json_decode($body, true);

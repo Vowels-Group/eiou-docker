@@ -97,7 +97,7 @@ Active when `autoAcceptTransaction` is OFF. Fast mode shows 1 route; best-fee mo
 |--------|----------|------------|-------------|
 | `GET` | `/api/v1/chaindrop` | `wallet:read` | List tx drop proposals |
 | `POST` | `/api/v1/chaindrop/propose` | `wallet:send` | Propose tx drop with contact |
-| `POST` | `/api/v1/chaindrop/accept` | `wallet:send` | Accept tx drop proposal |
+| `POST` | `/api/v1/chaindrop/accept` | `admin` | Accept tx drop proposal — **irreversible chain rewrite**, gated stricter than propose/reject |
 | `POST` | `/api/v1/chaindrop/reject` | `wallet:send` | Reject tx drop proposal |
 
 ### Backup Endpoints
