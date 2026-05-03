@@ -30,8 +30,8 @@ declare(strict_types=1);
  *
  *   php plugin-sign.php verify --plugin=<dir> [--keys=<dir>]
  *       Verifies the plugin's signature against one or more trusted key
- *       directories (default: /app/eiou/config/trusted-plugin-keys and
- *       /etc/eiou/config/trusted-plugin-keys). Exit code 0 on success, 1
+ *       directories (default: /app/eiou/plugins/trusted-keys and
+ *       /etc/eiou/plugins/trusted-keys). Exit code 0 on success, 1
  *       on any failure — scriptable for pre-release CI.
  *
  * This script does not require the eIOU runtime classloader — it reuses
@@ -46,7 +46,7 @@ declare(strict_types=1);
  *       "key_fingerprint": "sha256:<hex>",
  *       "signature": "<base64 raw 64 bytes>" }
  *
- *   trusted-plugin-keys/*.pub (text):
+ *   trusted-keys/*.pub (text):
  *     # optional human-readable comments, prefixed with #
  *     <base64 raw 32-byte Ed25519 public key>
  *
@@ -154,8 +154,8 @@ function cmdVerify(array $flags): void
     $keyDirs = isset($flags['keys'])
         ? explode(',', $flags['keys'])
         : [
-            '/app/eiou/config/trusted-plugin-keys',
-            '/etc/eiou/config/trusted-plugin-keys',
+            '/app/eiou/plugins/trusted-keys',
+            '/etc/eiou/plugins/trusted-keys',
         ];
 
     $pluginDir = rtrim($pluginDir, '/');
@@ -306,8 +306,8 @@ Commands:
   verify --plugin=<dir> [--keys=<dir>]  Verify a plugin's signature. Exit 0 on valid.
 
 Trust directories searched by default:
-  /app/eiou/config/trusted-plugin-keys   (baked into the image)
-  /etc/eiou/config/trusted-plugin-keys   (operator-added, config volume)
+  /app/eiou/plugins/trusted-keys   (baked into the image)
+  /etc/eiou/plugins/trusted-keys   (operator-added, plugins volume)
 
 See docs/PLUGINS.md (Plugin Signatures) for the full operator guide.
 

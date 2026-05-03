@@ -804,15 +804,24 @@ if [ -d /app/plugins ]; then
     chown -R www-data:www-data /etc/eiou/plugins
 fi
 
-# Operator-added trusted plugin-signing keys live on the config volume so
-# removing / rotating a key doesn't need a rebuild. Directory is created
-# empty on first boot; operators drop *.pub files here (or via the GUI
-# once that lands) to trust third-party publishers. The baked-in keys at
-# /app/eiou/config/trusted-plugin-keys/ are scanned alongside this one
-# on every plugin-load pass.
-mkdir -p /etc/eiou/config/trusted-plugin-keys
-chown -R www-data:www-data /etc/eiou/config/trusted-plugin-keys
-chmod 750 /etc/eiou/config/trusted-plugin-keys
+# Operator-added trusted plugin-signing keys live on the plugins volume
+# (alongside operator-installed plugins themselves) so removing or
+# rotating a key doesn't need a rebuild. Directory is created empty on
+# first boot; operators drop *.pub files here via `docker cp` (or
+# `docker exec --user root`) to trust third-party publishers. The
+# baked-in keys at /app/eiou/plugins/trusted-keys/ are scanned alongside
+# this one on every plugin-load pass.
+#
+# Ownership: root:root, mode 755. www-data (the PHP/PHP-FPM user that
+# loads plugins) needs read-only access to verify signatures, but must
+# NOT be able to write — otherwise a buggy or hostile plugin running
+# in-process could drop its own .pub file here and authorize itself
+# on the next boot. Operators add keys with root-level operations
+# (`docker cp`, `docker exec --user root`); the running PHP code
+# never writes to this directory.
+mkdir -p /etc/eiou/plugins/trusted-keys
+chown root:root /etc/eiou/plugins/trusted-keys
+chmod 755 /etc/eiou/plugins/trusted-keys
 
 # =============================================================================
 # PRE-SERVICE ENCRYPTION SETUP
