@@ -34,8 +34,7 @@ class PaybackMethodApiTest extends TestCase
             public function hasPermission(array $key, string $permission): bool
             {
                 return in_array($permission, $key['permissions'] ?? [], true)
-                    || in_array('admin', $key['permissions'] ?? [], true)
-                    || in_array('all', $key['permissions'] ?? [], true);
+                    || in_array('admin', $key['permissions'] ?? [], true);
             }
         };
 

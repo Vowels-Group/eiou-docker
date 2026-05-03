@@ -1557,7 +1557,7 @@ Get system settings.
 
 Update system settings.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Request Body:**
 
@@ -1711,7 +1711,7 @@ Trigger a manual update check against Docker Hub and GitHub Releases. Bypasses t
 
 Trigger a sync operation to synchronize data with contacts.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Request Body (optional):**
 
@@ -1744,7 +1744,7 @@ Trigger a sync operation to synchronize data with contacts.
 
 Shutdown background processors. The API remains responsive; only background workers (P2P, transaction processor, etc.) are terminated.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Response:**
 
@@ -1773,7 +1773,7 @@ Shutdown background processors. The API remains responsive; only background work
 
 Start background processors by removing the shutdown flag. The watchdog process will detect the flag removal and restart processors automatically.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Response (processors were stopped):**
 
@@ -1809,7 +1809,7 @@ Request a full in-place node restart — both the background processors **and** 
 
 The API runs as `www-data` and cannot signal the root-owned PHP-FPM master directly, so this endpoint writes a request marker that the root-side poller in `startup.sh` picks up within ~2 seconds and turns into the equivalent of `eiou restart`. Rate-limited to one restart per 10 seconds at the poller; rapid duplicate calls return success but only the first is acted on.
 
-**Permission:** `admin`
+**Permission:** `system:write` (or `admin`)
 
 **Response (success):**
 
@@ -2988,6 +2988,8 @@ Create a new API key.
 | `contacts:write` | Add, update, delete, block/unblock contacts; per-currency operations |
 | `contacts:*` | Both `contacts:read` and `contacts:write` |
 | `system:read` | Read system status, metrics, and settings; download debug reports; trigger update-check |
+| `system:write` | Trigger sync, shutdown/start/restart, change settings (operational control of this node) |
+| `system:*` | Both `system:read` and `system:write` |
 | `backup:read` | Read backup status/list, verify backups |
 | `backup:write` | Create, restore, delete, enable/disable backups, cleanup |
 | `backup:*` | Both `backup:read` and `backup:write` |
@@ -2995,9 +2997,8 @@ Create a new API key.
 | `payback:write` | Create/edit/delete methods, AND reveal plaintext via `GET /payback-methods/:id/reveal` (write-class because it returns secrets) |
 | `payback:*` | Both `payback:read` and `payback:write` |
 | `admin` | Full administrative access (settings, sync, shutdown/start/restart, key management, plugin management). Implies every other scope. |
-| `all` | Same as `admin` |
 
-> **Wildcard semantics:** `<category>:*` grants any `<category>:<verb>` request — `wallet:*` covers anything that requires `wallet:read` or `wallet:send`. There is currently no `system:write` or `plugin:*` scope; `system/sync`, `system/shutdown`, `system/start`, `system/restart`, `keys/*`, and `plugins/*` all require `admin`.
+> **Wildcard semantics:** `<category>:*` grants any `<category>:<verb>` request — `wallet:*` covers anything that requires `wallet:read` or `wallet:send`. There is currently no `plugin:*` scope; key management (`/keys/*`) and plugin management (`/plugins/*`) require `admin`. Operational control (`/system/sync`, `shutdown`, `start`, `restart`, `PUT /system/settings`) was carved out from `admin` into `system:write` so a CI/automation key can poke the node without also unlocking key minting and plugin install.
 
 **Response (201 Created):**
 

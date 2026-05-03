@@ -873,23 +873,23 @@ Shows contact details including balance, fee, credit limit, and bidirectional av
 
 ### 5.6 contact update - Modifying Contacts
 
-The update form is positional: `<identifier> <field> <values…>` where `<field>` is `name`, `fee`, `credit`, or `all`. Fee/credit edits require a trailing currency; `all` defaults the trailing currency to the contact's current one when omitted.
+The update form is flag-based — same shape as `contact add`, all fields optional. `--currency` is required only when `--fee` or `--credit` is set (those are stored per-currency).
 
 ```bash
 # Update contact name
-docker exec alice eiou contact update Bob name Robert
+docker exec alice eiou contact update Bob --name Robert
 
 # Update fee for USD
-docker exec alice eiou contact update Bob fee 0.5 USD
+docker exec alice eiou contact update Bob --fee 0.5 --currency USD
 
 # Update credit limit for EUR
-docker exec alice eiou contact update Bob credit 2000 EUR
+docker exec alice eiou contact update Bob --credit 2000 --currency EUR
 
-# Update all at once for USD
-docker exec alice eiou contact update Bob all Robert 0.2 1500 USD
+# Update multiple fields in one command
+docker exec alice eiou contact update Bob --name Robert --fee 0.2 --credit 1500 --currency USD
 ```
 
-Updates are **local-only** — the contact is not notified.
+Updates are **local-only** — the contact is not notified. Multi-field updates fan out to one service call per touched field (not atomic). For atomic updates, use `PUT /api/v1/contacts/:address`.
 
 ---
 
@@ -1328,7 +1328,7 @@ docker volume rm demo-mysql-data demo-config demo-eiou demo-backups
 | | `eiou contact view <name\|address\|hash>` | View contact details |
 | | `eiou contact search [query]` | Substring search by name |
 | | `eiou contact ping <name\|address>` | Check online status + chain heads |
-| | `eiou contact update <name\|address> <name\|fee\|credit\|all> <values…>` | Update contact (local-only) |
+| | `eiou contact update <name\|address> [--name N] [--fee F] [--credit C] [--currency CCY]` | Update contact (local-only; multi-field, non-atomic) |
 | | `eiou contact block <name\|address>` / `eiou contact unblock <name\|address>` | Block / unblock contact |
 | | `eiou contact delete <name\|address>` | Delete contact (permanent) |
 | **Per-currency** | `eiou contact currency add <contact> <CCY> --fee F --credit C` | Propose a new currency on an accepted contact |

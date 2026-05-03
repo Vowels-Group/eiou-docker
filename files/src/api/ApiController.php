@@ -1986,8 +1986,8 @@ class ApiController {
      * Update system settings (one at a time)
      */
     private function updateSettings(string $body): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         $data = json_decode($body, true);
@@ -2231,8 +2231,8 @@ class ApiController {
      * Trigger sync operation
      */
     private function triggerSync(string $body): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2275,8 +2275,8 @@ class ApiController {
      * Shutdown processors (flag + signal only, API stays responsive)
      */
     private function shutdownProcessors(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2323,8 +2323,8 @@ class ApiController {
      * first is acted on.
      */
     private function restartNode(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {
@@ -2456,8 +2456,8 @@ class ApiController {
      * Start processors by removing shutdown flag
      */
     private function startProcessors(): array {
-        if (!$this->hasPermission('admin')) {
-            return $this->permissionDenied('admin');
+        if (!$this->hasPermission('system:write')) {
+            return $this->permissionDenied('system:write');
         }
 
         try {

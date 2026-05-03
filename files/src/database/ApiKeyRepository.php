@@ -374,8 +374,10 @@ class ApiKeyRepository extends AbstractRepository {
      * @return bool True if permission is granted
      */
     public static function hasPermission(array $keyPermissions, string $requiredPermission): bool {
-        // Check for 'all' permission (or legacy '*' for backwards compatibility)
-        if (in_array('all', $keyPermissions) || in_array('*', $keyPermissions) || in_array('admin', $keyPermissions)) {
+        // `admin` is the sole god-scope. (The legacy `'all'` synonym and the
+        // `'*'` shorthand were removed — operators with old keys storing
+        // either need to recreate them with `admin`.)
+        if (in_array('admin', $keyPermissions, true)) {
             return true;
         }
 

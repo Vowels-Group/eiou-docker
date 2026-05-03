@@ -351,25 +351,39 @@ Output includes name, status, addresses, per-currency balances, fee/credit-limit
 
 ### contact update
 
-Update contact settings using the positional `<field> <values…>` form. `<field>` is one of `name`, `fee`, `credit`, `all`. For `fee` / `credit`, append the currency code (so the right per-currency row is updated). For `all`, the trailing currency is optional and defaults to the contact's current currency.
+Update contact settings via flags — same shape as `contact add`, mirrors the API's `PUT /api/v1/contacts/:address` payload. All field flags are optional; provide whichever subset you want to change.
 
 ```bash
-eiou contact update <name|address> name <new-name>
-eiou contact update <name|address> fee <pct> <CCY>
-eiou contact update <name|address> credit <amount> <CCY>
-eiou contact update <name|address> all <new-name> <fee> <credit> [<CCY>]
+eiou contact update <name|address> [--name N] [--fee F] [--credit C] [--currency CCY]
 ```
+
+| Flag | Required when | Description |
+|------|---------------|-------------|
+| `--name` | — | New display name (currency-independent). |
+| `--fee` | always paired with `--currency` | New fee percentage in the given currency. |
+| `--credit` | always paired with `--currency` | New credit limit in the given currency. |
+| `--currency` | when `--fee` or `--credit` is set | Currency code for the per-currency row being updated. |
 
 ```bash
-eiou contact update Bob name Robert
-eiou contact update Bob fee 1.5 USD
-eiou contact update Bob credit 500 EUR
-eiou contact update Bob all Robert 2.0 1500 USD
-eiou contact update Bob all Robert 2.0 1500          # currency defaults to Bob's current currency
-eiou contact update http://bob fee 2.0 USD --json
+# Rename
+eiou contact update Bob --name Robert
+
+# Change fee on an existing currency
+eiou contact update Bob --fee 1.5 --currency USD
+
+# Change credit limit
+eiou contact update Bob --credit 500 --currency EUR
+
+# Multi-field — name + fee + credit in one command
+eiou contact update Bob --name Robert --fee 2.0 --credit 1500 --currency USD
+
+# By address
+eiou contact update http://bob --fee 2.0 --currency USD --json
 ```
 
-Updates are local-only — the contact is not notified. See `ContactManagementService::updateContact()` for the full positional grammar.
+> **Atomicity:** the CLI fans out into one service call per touched field (`name`, `fee`, `credit`), so a multi-field update is **not atomic** across the name/per-currency boundary. The API equivalent (`PUT /api/v1/contacts/:address`) is atomic per request — use it if you need transactional semantics. Updates are **local-only** either way (the contact is not notified).
+
+> **Breaking change (v0.1.14):** the legacy positional form (`eiou contact update Bob name Robert` / `… fee 1.5 USD` / `… all Robert 1.5 1500 USD`) was removed in favour of this flag form. Scripts using the old grammar will fail with a "No fields to update" or "Usage" error.
 
 ### contact delete / block / unblock / ping / search
 

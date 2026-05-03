@@ -71,11 +71,11 @@ All requests require HMAC-SHA256 authentication:
 | `GET` | `/api/v1/system/status` | `system:read` | System health status |
 | `GET` | `/api/v1/system/metrics` | `system:read` | System metrics |
 | `GET` | `/api/v1/system/settings` | `system:read` | System settings |
-| `PUT` | `/api/v1/system/settings` | `admin` | Update system settings |
-| `POST` | `/api/v1/system/sync` | `admin` | Trigger sync operation |
-| `POST` | `/api/v1/system/shutdown` | `admin` | Shutdown background processors |
-| `POST` | `/api/v1/system/start` | `admin` | Start background processors |
-| `POST` | `/api/v1/system/restart` | `admin` | Full in-place restart (processors + PHP-FPM workers); required after toggling plugins |
+| `PUT` | `/api/v1/system/settings` | `system:write` | Update system settings |
+| `POST` | `/api/v1/system/sync` | `system:write` | Trigger sync operation |
+| `POST` | `/api/v1/system/shutdown` | `system:write` | Shutdown background processors |
+| `POST` | `/api/v1/system/start` | `system:write` | Start background processors |
+| `POST` | `/api/v1/system/restart` | `system:write` | Full in-place restart (processors + PHP-FPM workers); required after toggling plugins |
 | `POST` | `/api/v1/system/update-check` | `system:read` | Force a fresh Docker Hub / GitHub release check (bypasses 24h cache) |
 | `GET` | `/api/v1/system/debug-report` | `system:read` | Download debug report (JSON) |
 | `POST` | `/api/v1/system/debug-report` | `system:read` | Submit debug report to support |
@@ -163,6 +163,8 @@ Toggling a plugin's enabled flag does not restart the node — call `POST /api/v
 | `contacts:write` | Add, update, delete, block/unblock contacts; per-currency operations |
 | `contacts:*` | Both `contacts:read` and `contacts:write` |
 | `system:read` | Read system status, metrics, and settings; download debug reports; trigger update-check |
+| `system:write` | Trigger sync, shutdown/start/restart, change settings (operational control of this node) |
+| `system:*` | Both `system:read` and `system:write` |
 | `backup:read` | Read backup status/list, verify backups |
 | `backup:write` | Create, restore, delete, enable/disable backups, cleanup |
 | `backup:*` | Both `backup:read` and `backup:write` |
@@ -170,9 +172,8 @@ Toggling a plugin's enabled flag does not restart the node — call `POST /api/v
 | `payback:write` | Create/edit/delete methods, **and reveal plaintext via `GET …/:id/reveal`** (write-class because it returns secrets) |
 | `payback:*` | Both `payback:read` and `payback:write` |
 | `admin` | Full administrative access (settings, sync, shutdown/start/restart, keys, plugins). Implies every other scope. |
-| `all` | Same as `admin` |
 
-> **Wildcard semantics:** at lookup time, `<category>:*` grants any `<category>:<verb>` request — so a key with `wallet:*` covers a route that requires `wallet:read` or `wallet:send`. `admin` and `all` (and the legacy `*`) grant everything unconditionally. There is currently no `system:write` or `plugin:*` scope; sync, shutdown/start/restart, key management, and plugin management all gate on `admin`.
+> **Wildcard semantics:** at lookup time, `<category>:*` grants any `<category>:<verb>` request — so a key with `wallet:*` covers a route that requires `wallet:read` or `wallet:send`. `admin` is the only god-scope and grants everything unconditionally. There is currently no `plugin:*` scope; key management and plugin management gate on `admin`. Operational control (sync, shutdown/start/restart, settings PUT) was carved out from `admin` into `system:write`. (The legacy `'all'` synonym was removed in favour of `admin`.)
 
 ---
 

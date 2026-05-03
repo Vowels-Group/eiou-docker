@@ -424,8 +424,7 @@ class CliHelpService
                     'payback:read' => 'List/read your own payback methods (sensitive fields redacted)',
                     'payback:write' => 'Create/edit/delete payback methods, AND reveal plaintext via /payback-methods/:id/reveal (write-class because it returns secrets)',
                     'payback:*' => 'Both payback:read and payback:write',
-                    'admin' => 'Full administrative access (settings, sync, shutdown/start/restart, keys, plugins)',
-                    'all' => 'All permissions (same as admin)'
+                    'admin' => 'Full administrative access (settings, sync, shutdown/start/restart, keys, plugins). Implies every other scope.',
                 ],
                 'api_usage' => [
                     'base_url' => 'http://your-node/api/v1/...',
@@ -938,8 +937,7 @@ Create a new API key:
     - payback:read    List/read your own payback methods (redacted)
     - payback:write   Create/edit/delete + reveal plaintext (write-class)
     - payback:*       Both payback:read and payback:write
-    - admin           Full administrative access (settings, sync, shutdown/start/restart, keys, plugins)
-    - all             All permissions (same as admin)
+    - admin           Full administrative access (settings, sync, shutdown/start/restart, keys, plugins) — implies every other scope
 
 List all API keys:
   eiou apikey list
