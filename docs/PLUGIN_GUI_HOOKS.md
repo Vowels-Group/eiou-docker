@@ -4,6 +4,21 @@ A WordPress-style hook system for the eIOU GUI so plugins can inject HTML, regis
 
 This document is the spec the implementation phases follow. It captures intent + API + risks. Code-level rationale lives in the source comments.
 
+## Table of Contents
+
+1. [Goals](#goals)
+2. [Foundation already in place](#foundation-already-in-place)
+3. [Two primitives](#two-primitives)
+4. [Asset enqueueing](#asset-enqueueing)
+5. [Tab registry](#tab-registry)
+6. [Action registry](#action-registry)
+7. [Concrete render slots — Phase 1](#concrete-render-slots--phase-1)
+8. [Implementation phases](#implementation-phases)
+9. [Risks & open decisions](#risks--open-decisions)
+10. [Out of scope (this design)](#out-of-scope-this-design)
+11. [Migration checklist (per phase)](#migration-checklist-per-phase)
+12. [Reference: example "hello-eiou" plugin (final-state target)](#reference-example-hello-eiou-plugin-final-state-target)
+
 ---
 
 ## Goals

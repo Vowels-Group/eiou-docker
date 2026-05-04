@@ -2,6 +2,20 @@
 
 Quick lookup card for the eIOU Wallet web interface.
 
+## Table of Contents
+
+1. [Entry Points](#entry-points)
+2. [File Locations](#file-locations)
+3. [Controllers](#controllers)
+4. [POST Actions](#post-actions)
+5. [Layout Components](#layout-components)
+6. [Security Requirements](#security-requirements)
+7. [JavaScript Key Functions](#javascript-key-functions)
+8. [Session Settings](#session-settings)
+9. [Helpers](#helpers)
+10. [Request Flow](#request-flow)
+11. [See Also](#see-also)
+
 ---
 
 ## Entry Points

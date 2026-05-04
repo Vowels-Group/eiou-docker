@@ -11,6 +11,16 @@ The eIOU node reads configuration from four layers, in priority order. Settings 
 
 The `Eiou\Core\AppConfig` value object is the typed seam over layers 1–2 for runtime code paths. Build it once at boot via `AppConfig::fromEnvironment()` (or read from `ServiceContainer::getAppConfig()`), then pass it explicitly — don't call `getenv()` in service code.
 
+## Table of Contents
+
+1. [Layer 1 — `Constants`](#layer-1--constants)
+2. [Layer 2 — environment variables](#layer-2--environment-variables)
+3. [Layer 3 — JSON config files](#layer-3--json-config-files)
+4. [Layer 4 — `UserContext` getters](#layer-4--usercontext-getters)
+5. [Plugins (read-only seam, not a layer)](#plugins-read-only-seam-not-a-layer)
+6. [Decision tree: where should this setting live?](#decision-tree-where-should-this-setting-live)
+7. [Startup validation](#startup-validation)
+
 ---
 
 ## Layer 1 — `Constants`
