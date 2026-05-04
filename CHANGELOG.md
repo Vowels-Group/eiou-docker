@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Removed
+- **Internal "deferred plugin GUI hooks" planning doc removed from `docs/`.** The file was an internal scope-tracking note that should never have been committed under `docs/` — that directory is reserved for user-facing reference documentation and the file was being mirrored to the public website alongside the real plugin docs. Deleted; no other references in the repo.
+
 ### Changed
 - **First-boot dbconfig.json encryption no longer logs as a WARNING.** On a fresh install, `Application` runs the dbconfig encryption migration before the wallet seed exists, so the master key isn't available yet — `KeyEncryption::encrypt()` would throw "Master key not found", which the migration caught and re-emitted as a WARNING with the scary error in the context field. To a reader scanning the EIOU log, this read like a real encryption failure right next to the success message that follows. Now gated on a new `KeyEncryption::isMasterKeyAvailable()` check: if the master key isn't on disk yet, log at DEBUG with calmer wording ("encryption deferred until wallet generation/restore") and return; the WARNING is reserved for the genuine failure case where the master key exists but encryption still throws. `Wallet::migrateDbConfigEncryption()` extended to encrypt `dbUser` and `dbName` alongside `dbPass` so the next process's idempotent re-check finds nothing to do and stays silent — collapsing the three-message dance on a healthy fresh install down to one.
 
