@@ -2994,8 +2994,8 @@ let plugins extend rendering without forking templates:
 
 `renderSection()` and `renderTable()` helpers in
 `WalletTemplateHelpers.php` give plugin-authored sections the same chrome
-as core sections. See `docs/PLUGIN_GUI_HOOKS.md` for the design and
-`docs/PLUGINS.md` "Extending the GUI" for the plugin-author reference.
+as core sections. See `docs/PLUGINS.md` "Extending the GUI" for the
+plugin-author reference.
 
 Optional `PLUGIN_HOOKS_TRACE=1` env flag logs every hook fire (kind,
 hook, listener count, errors) — useful for plugin authors discovering
@@ -3595,8 +3595,7 @@ public function testSearchContactsWithInvalidName(): void
 |----------|-------------|
 | [GUI_REFERENCE.md](GUI_REFERENCE.md) | Web interface documentation |
 | [GUI_QUICK_REFERENCE.md](GUI_QUICK_REFERENCE.md) | GUI quick reference card |
-| [PLUGIN_GUI_HOOKS.md](PLUGIN_GUI_HOOKS.md) | Plugin GUI hooks design (render slots, filter slots, asset registry, tab/action registries) |
-| [PLUGINS.md](PLUGINS.md) | Plugin authoring guide — see "Extending the GUI" for the day-to-day reference |
+| [PLUGINS.md](PLUGINS.md) | Plugin authoring guide — see "Extending the GUI" for plugin GUI hook usage (render slots, filter slots, asset registry, tab/action registries) |
 
 ### Configuration and Errors
 

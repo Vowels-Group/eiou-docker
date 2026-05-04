@@ -1149,8 +1149,7 @@ Both registrations live in `HelloEiouPlugin::boot()`.
 Plugins extend the wallet GUI through five complementary surfaces — render
 hooks, filter hooks, the asset registry, the tab registry, and the action
 registry. Each is exposed via `ServiceContainer` and meant to be used from
-`boot()`. Full design rationale lives in `docs/PLUGIN_GUI_HOOKS.md`; this
-section is the API reference plugin authors need day-to-day.
+`boot()`. This section is the API reference plugin authors need day-to-day.
 
 ```php
 public function boot(ServiceContainer $container): void

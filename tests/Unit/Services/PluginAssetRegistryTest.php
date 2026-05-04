@@ -6,7 +6,7 @@
  * the page's CSP nonce. Tests cover the registration validators
  * (kebab-case plugin id, no path traversal), inline rendering
  * shape, priority ordering, head-vs-body script split, missing-file
- * graceful skip. See docs/PLUGIN_GUI_HOOKS.md.
+ * graceful skip. See docs/PLUGINS.md "Extending the GUI".
  */
 
 namespace Eiou\Tests\Services;

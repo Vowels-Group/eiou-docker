@@ -6,7 +6,7 @@
  * core tabs are registered by the host on every request; plugins
  * register their own. wallet.html iterates `all()` to build the
  * desktop nav, the mobile nav, and the panel sections from a single
- * source of truth. See docs/PLUGIN_GUI_HOOKS.md.
+ * source of truth. See docs/PLUGINS.md "Extending the GUI".
  */
 
 namespace Eiou\Tests\Services;

@@ -910,7 +910,7 @@ foreach ($acceptedContacts as $c) {
 // plugins can inject HTML at named fire sites. doRender('foo', $ctx)
 // returns '' when no plugin has subscribed, so all hook fires are
 // safe to scatter through the templates without per-call guards.
-// See docs/PLUGIN_GUI_HOOKS.md.
+// See docs/PLUGINS.md "Extending the GUI" for the API reference.
 $hooks = $serviceContainer->getHooks();
 
 // Drain the plugin asset registry into the three asset hook slots.
@@ -950,7 +950,7 @@ $contactDataBuilder = new ContactDataBuilder($addressTypes);
 // registry to build the desktop nav + mobile nav + tab panels, instead
 // of hardcoding the 5 tabs in three places. Plugins register their own
 // tabs in their boot(); they appear automatically alongside the core
-// tabs sorted by `order`. See docs/PLUGIN_GUI_HOOKS.md.
+// tabs sorted by `order`. See docs/PLUGINS.md "Extending the GUI".
 //
 // `include` paths are resolved by wallet.html with require_once at
 // render time, so each partial sees Functions.php's scope ($user,

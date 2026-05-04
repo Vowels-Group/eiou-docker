@@ -7,7 +7,7 @@
  * server is a pure request → response struct, so all tests work
  * without a real HTTP layer.
  *
- * See docs/PLUGIN_GUI_HOOKS.md.
+ * See docs/PLUGINS.md "Extending the GUI".
  */
 
 namespace Eiou\Tests\Services;

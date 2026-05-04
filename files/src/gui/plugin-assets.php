@@ -10,7 +10,7 @@
  * + path-resolution + cache-header logic lives in the server class so
  * it is unit-testable without spinning up nginx.
  *
- * See docs/PLUGIN_GUI_HOOKS.md (Phase 6).
+ * See docs/PLUGINS.md "Extending the GUI" for the asset registry API.
  */
 
 require_once '/app/eiou/vendor/autoload.php';

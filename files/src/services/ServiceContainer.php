@@ -234,7 +234,7 @@ class ServiceContainer implements ContainerInterface {
      * Get the GUI hook registry. Plugins use this in their boot() to
      * register render + filter listeners; templates and controllers
      * call doRender() / applyFilter() at hook fire sites. See
-     * docs/PLUGIN_GUI_HOOKS.md for the full API + slot list.
+     * docs/PLUGINS.md "Extending the GUI" for the full API + slot list.
      */
     public function getHooks(): Hooks
     {
@@ -272,7 +272,7 @@ class ServiceContainer implements ContainerInterface {
      * Get the GUI tab registry. Core tabs are registered by
      * Functions.php on each request; plugins register their tabs in
      * boot(). wallet.html iterates the registry to build the tab nav
-     * + panels. See docs/PLUGIN_GUI_HOOKS.md.
+     * + panels. See docs/PLUGINS.md "Extending the GUI".
      */
     public function getTabRegistry(): TabRegistry
     {
@@ -287,7 +287,7 @@ class ServiceContainer implements ContainerInterface {
      * enqueueScript in boot(); the registry's renderStyles /
      * renderScripts are drained by the host render listeners attached
      * to gui.head.styles / gui.head.scripts / gui.footer.scripts. See
-     * docs/PLUGIN_GUI_HOOKS.md.
+     * docs/PLUGINS.md "Extending the GUI".
      */
     public function getAssetRegistry(): PluginAssetRegistry
     {
@@ -301,7 +301,7 @@ class ServiceContainer implements ContainerInterface {
      * Get the GUI action registry. Plugins call register() in boot()
      * to add new POST handlers; Functions.php dispatches via has() +
      * the per-tier gates the registry exposes. See
-     * docs/PLUGIN_GUI_HOOKS.md.
+     * docs/PLUGINS.md "Extending the GUI".
      */
     public function getActionRegistry(): GuiActionRegistry
     {

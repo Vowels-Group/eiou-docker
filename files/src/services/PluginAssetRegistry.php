@@ -33,7 +33,7 @@ use Eiou\Utils\Logger;
  * registry into the hook fires. That keeps the registry pure data and
  * lets tests exercise it without a Hooks instance.
  *
- * See docs/PLUGIN_GUI_HOOKS.md for design rationale.
+ * See docs/PLUGINS.md "Extending the GUI" for design rationale.
  */
 class PluginAssetRegistry
 {
