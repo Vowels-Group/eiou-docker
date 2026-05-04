@@ -41,7 +41,7 @@ use Eiou\Utils\Logger;
  * like the static-file route it functionally replaces, just with the
  * path-validation step PHP can do but nginx alias can't.
  *
- * See docs/PLUGIN_GUI_HOOKS.md.
+ * See docs/PLUGINS.md "Extending the GUI".
  */
 class PluginAssetServer
 {

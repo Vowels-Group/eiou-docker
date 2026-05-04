@@ -39,7 +39,7 @@ use Eiou\Utils\Logger;
  * doesn't apply that filter itself — wallet.html does, so the
  * registry stays a pure data store.
  *
- * See docs/PLUGIN_GUI_HOOKS.md.
+ * See docs/PLUGINS.md "Extending the GUI".
  */
 class TabRegistry
 {

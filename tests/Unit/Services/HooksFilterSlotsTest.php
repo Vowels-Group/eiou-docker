@@ -10,7 +10,7 @@
  * tests exercise the registry behavior at each slot's call signature
  * so a contract regression breaks here, not in the browser.
  *
- * See docs/PLUGIN_GUI_HOOKS.md.
+ * See docs/PLUGINS.md "Extending the GUI".
  */
 
 namespace Eiou\Tests\Services;

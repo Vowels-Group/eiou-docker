@@ -5,7 +5,7 @@
  * Covers the registry that replaces Functions.php's hardcoded action
  * whitelist. Plugins register POST handlers here; Functions.php
  * dispatches via has() + the per-tier gates the registry exposes.
- * See docs/PLUGIN_GUI_HOOKS.md.
+ * See docs/PLUGINS.md "Extending the GUI".
  */
 
 namespace Eiou\Tests\Services;

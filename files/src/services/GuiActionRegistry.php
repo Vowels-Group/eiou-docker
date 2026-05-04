@@ -43,7 +43,7 @@ use Eiou\Utils\Logger;
  * with a flash message), and binding the registry to one shape would
  * just push the special cases somewhere uglier.
  *
- * See docs/PLUGIN_GUI_HOOKS.md.
+ * See docs/PLUGINS.md "Extending the GUI" for the action registry API.
  */
 class GuiActionRegistry
 {
