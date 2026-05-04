@@ -2,6 +2,22 @@
 
 This document describes how to run tests for the eIOU Docker node.
 
+## Table of Contents
+
+1. [Quick Start](#quick-start)
+2. [Test Types](#test-types)
+3. [Unit Test Inventory](#unit-test-inventory)
+4. [Integration Test Inventory](#integration-test-inventory)
+5. [Running Unit Tests](#running-unit-tests)
+6. [Running Integration Tests](#running-integration-tests)
+7. [Test Structure](#test-structure)
+8. [Writing New Tests](#writing-new-tests)
+9. [Prerequisites](#prerequisites)
+10. [Troubleshooting](#troubleshooting)
+11. [Continuous Integration](#continuous-integration)
+
+---
+
 ## Quick Start
 
 ```bash
@@ -34,19 +50,14 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 Integration tests validate the complete system behavior using Docker containers.
 
-- **Location**: `tests/`
+- **Location**: `tests/testfiles/` (per-test scripts) and `tests/` (runners and benchmarks)
 - **Runner**: `./run-all-tests.sh`
-- **Coverage**: API endpoints, multi-node communication, transaction flows, P2P routing (fast and best-fee modes)
+- **Coverage**: contact lifecycle, transactions, P2P routing (fast and best-fee modes), sync & chain-integrity, REST API, CLI, backups, identity / wallet setup, process lifecycle, networking, security
+- **Inventory**: see [Integration Test Inventory](#integration-test-inventory) below for the per-file table
 
 **Topologies:**
 - `http4` / `https4` / `tor4` — 4-node linear chain (standard transaction and routing tests)
 - `collisions` — 12-node mesh topology with randomized fees and dead-end nodes (best-fee routing, path selection, deadlock prevention, cascade cancel)
-
-**Best-fee routing tests** (`bestFeeRoutingTest.sh`): 11 tests covering single-node, 4-node line, and 12-node collision topologies. Includes fast vs best-fee timing comparison, path analysis with randomized fee structures, and dead-end cascade cancel validation.
-
-**Route cancellation tests** (`routeCancellationTest.sh`): 13 tests covering route cancellation service wiring, capacity reservation table existence, hop budget distribution (deterministic-mode aware: accepts constant `maxHops` when `EIOU_HOP_BUDGET_RANDOMIZED=false`, requires variance when randomized), capacity reservation creation during relay, release after best-fee selection, originator downstream cancel via `broadcastFullCancelForHash`, multi-route safety with `full_cancel` flag propagation, cancel timing vs passive expiry, and relay status propagation. Best with collisions or collisionscluster topologies.
-
-**Payment request tests** (`paymentRequestTest.sh`): 10 tests covering the full payment request lifecycle via the REST API — baseline list, create, outgoing pending confirmation, incoming delivery (async-safe), decline, cancel, invalid-create error handling, a full **approve flow** (creates a request, polls until it arrives at the recipient, approves which triggers `sendEiou` internally, verifies the transaction landed and balance changes on both nodes), an **approve-with-payer-note flow** that confirms the on-chain description ends up as `"payment: <requester desc> | <payer note>"`, and an over-long payer-note rejection check. Permission-gated since v0.1.14: `wallet:read` for list/create/decline/cancel, `wallet:send` for approve. Included in the `all` and `api` test subsets.
 
 ## Unit Test Inventory
 
@@ -279,6 +290,129 @@ Integration tests validate the complete system behavior using Docker containers.
 | **Rp2pPayloadTest.php** | 54 | Return P2P payloads, relay routing |
 | **TransactionPayloadTest.php** | 77 | Transaction payloads, all transaction types |
 | **UtilPayloadTest.php** | 77 | Utility/error payloads, acknowledgments |
+
+## Integration Test Inventory
+
+> The tables below are a curated overview of the shell-based integration
+> test suite under `tests/testfiles/`. The repo's actual count is the
+> authoritative number — `ls tests/testfiles/*.sh | wc -l` for files and
+> the `run-all-tests.sh` summary line for individual test counts. The
+> inventory may lag behind when new test files are added; the headings
+> always reflect the current categorization.
+
+### Contact Lifecycle (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **addContactsTest.sh** | Contact addition workflow between containers — request, accept, status transitions |
+| **mutualContactTest.sh** | Mutual-contact request auto-accept feature (both sides issue `add` simultaneously) |
+| **contactListTest.sh** | Contact list storage, ordering, and per-contact metadata verification |
+| **contactNameTest.sh** | Multi-part contact names and duplicate-name disambiguation across the API/CLI |
+
+### Transactions & Balances (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **transactionTestSuite.sh** | Consolidated transaction tests: history, inquiry response, contact-tx type, chain reorder under cancellations, held-tx for invalid `previous_txid`, self-send prevention |
+| **transactionRecoveryTest.sh** | Atomic transaction claiming and crash-recovery mechanisms |
+| **balanceTest.sh** | Balance queries and verification across all containers in the topology |
+| **sendMessageTest.sh** | Message sending between connected contacts |
+| **sendAllPeersTest.sh** | Transaction sending to all connected peers in the network |
+| **negativeFinancialTest.sh** | Negative / error paths for financial operations (over-credit, double-spend, malformed amounts) |
+
+### P2P Routing (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **routingTest.sh** | Multi-hop message routing and relay-fee calculation |
+| **bestFeeRoutingTest.sh** | Best-fee P2P route selection: single-node, 4-line, 12-collision topologies; fast-vs-best timing, path analysis with randomized fees, dead-end cascade cancel |
+| **routeCancellationTest.sh** | Route-cancellation service wiring, capacity-reservation table, hop-budget distribution (constant under `EIOU_HOP_BUDGET_RANDOMIZED=false`, variance when randomized), reservation create/release, originator downstream cancel via `broadcastFullCancelForHash`, multi-route safety with `full_cancel` |
+| **cascadeCancelTest.sh** | Cascade cancel / expire for dead-end P2P routes |
+| **maxLevelCancelTest.sh** | Nodes at the P2P max-level boundary immediately cancel and notify the originator |
+
+### Sync & Chain Integrity (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **syncTestSuite.sh** | Consolidated sync: basic sync command, transaction-chain recovery, signature-validation stop, multi-cycle resilience, cancelled-tx handling, `NULL previous_txid` edge cases |
+| **chainDropTestSuite.sh** | Tx-drop agreement protocol for resolving mutual chain gaps (propose / accept / reject; auto-propose; balance-guard) |
+| **chunkedSyncTest.sh** | Chunked transaction-sync protocol behavior at large chain lengths |
+
+### REST API & Payment Requests (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **apiEndpointsTest.sh** | REST API endpoints — happy-path coverage across the v1 surface |
+| **apiInputValidationTest.sh** | Missing-required-field 400s, invalid types, boundary values, special-character / encoding safety |
+| **paymentRequestTest.sh** | Full payment-request lifecycle via REST: list, create, outgoing-pending, incoming-delivery (async-safe), decline, cancel, invalid-create, full **approve flow** (request → poll → approve → sendEiou → balance verify), **approve-with-payer-note** (description shape `"payment: <req desc> \| <payer note>"`), over-long payer-note rejection. Permission-gated: `wallet:read` for list/create/decline/cancel, `wallet:send` for approve |
+
+### CLI (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **cliCommandsTest.sh** | CLI commands produce correct output in both regular and JSON modes |
+
+### Backup (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **backupTestSuite.sh** | Encrypted backup create / list / verify / restore / status; auto-backup toggle; retention per prefix |
+
+### Identity & Wallet Setup (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **nodeIdentityTest.sh** | `EIOU_NAME`, `EIOU_HOST`, `EIOU_PORT` environment-variable handling and userconfig effects |
+| **hostnameTest.sh** | Hostname configuration in `userconfig.json` matches expected values |
+| **seedphraseTestSuite.sh** | Seedphrase generate / restore, secure display, authcode restoration, restore + `QUICKSTART` hostname application |
+| **sslCertificateTest.sh** | SSL certificate generation and HTTPS functionality |
+
+### Process & Lifecycle (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **gracefulShutdownTest.sh** | Graceful shutdown handling for eIOU Docker containers (processors stop cleanly, lockfiles cleared) |
+| **sigTermTest.sh** | SIGTERM graceful shutdown via `docker stop` |
+| **processorLockfileTest.sh** | Processor lockfile fix preventing random restart loops |
+| **performanceBaseline.sh** | Performance baseline: transaction processing time, batch throughput, API response times, DB query performance |
+
+### Networking & Messaging (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **messageDeliveryTest.sh** | `MessageDeliveryService` and Dead Letter Queue functionality |
+| **parallelBroadcastTest.sh** | `curl_multi` parallel-broadcast functionality in P2P and transport layers |
+| **pingTestSuite.sh** | Contact-status ping feature, online detection, response time, chain-head exchange |
+| **curlErrorHandlingTest.sh** | HTTP-client error handling and timeout behavior |
+
+### Tor (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **torTestSuite.sh** | Consolidated TOR: address verification, restart verification, key-file permissions, rapid-restart resilience |
+
+### Code Quality & Static Checks (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **circularDependencyCheck.sh** | Static analysis: parses PHP service files for constructor & setter-injection deps, builds a dependency graph, DFS-detects cycles |
+| **serviceExceptionTest.sh** | `ServiceException` hierarchy and error handling |
+| **serviceInterfaceTest.sh** | Verifies all services properly implement their declared interfaces |
+
+### Security (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **securityTestSuite.sh** | SQL-injection protection on API endpoints, XSS payload handling and sanitization, authentication-header manipulation, rate-limit enforcement |
+
+### Benchmarks (`tests/`)
+
+Standalone benchmark scripts in `tests/` (not run by `./run-all-tests.sh`):
+
+| Test File | Coverage |
+|-----------|----------|
+| **benchmark-routing.sh** | Routing throughput and latency measurements |
+| **benchmark-bestfee.sh** | Best-fee mode latency vs fast mode and route-fan-out cost |
 
 ## Running Unit Tests
 

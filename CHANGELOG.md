@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Docs
+- **Tables of contents added to `TESTING.md`, `PLUGIN_GUI_HOOKS.md`, `CONFIGURATION.md`, `GUI_QUICK_REFERENCE.md`, `API_QUICK_REFERENCE.md`** so each long-form doc has the same `## Table of Contents` block at the top that ARCHITECTURE.md / CLI_REFERENCE.md / etc. already have. Anchor slugs follow the GitHub-default lowercase-and-hyphenate rule.
+- **`TESTING.md` integration-test section reworked into a per-file inventory matching the Unit Test Inventory style.** The previous `### Integration Tests (Shell)` subsection randomly singled out three of the ~40 shell scripts under `tests/testfiles/` (`bestFeeRoutingTest.sh`, `routeCancellationTest.sh`, `paymentRequestTest.sh`) with paragraph-length descriptions while every other test got no mention. Now the subsection holds only metadata (location, runner, topology list) and a pointer to the new top-level `## Integration Test Inventory` section, which lists every script in a `Test File | Coverage` table grouped by area: Contact Lifecycle, Transactions & Balances, P2P Routing, Sync & Chain Integrity, REST API & Payment Requests, CLI, Backup, Identity & Wallet Setup, Process & Lifecycle, Networking & Messaging, Tor, Code Quality & Static Checks, Security, Benchmarks. Same prose-style introductory note as the unit inventory, including the disclaimer that the table may lag behind the actual file list.
 ### Removed
 - **Internal "deferred plugin GUI hooks" planning doc removed from `docs/`.** The file was an internal scope-tracking note that should never have been committed under `docs/` — that directory is reserved for user-facing reference documentation and the file was being mirrored to the public website alongside the real plugin docs. Deleted; no other references in the repo.
 
