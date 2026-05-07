@@ -75,8 +75,8 @@ FROM debian:12-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553
 LABEL org.opencontainers.image.title="eiou-node" \
       org.opencontainers.image.description="eIOU peer-to-peer transaction node with GUI, API, Tor, and MariaDB" \
       org.opencontainers.image.url="https://eiou.org" \
-      org.opencontainers.image.source="https://github.com/eiou-org/eiou-docker" \
-      org.opencontainers.image.documentation="https://github.com/eiou-org/eiou-docker#readme" \
+      org.opencontainers.image.source="https://github.com/Vowels-Group/eiou-docker" \
+      org.opencontainers.image.documentation="https://github.com/Vowels-Group/eiou-docker#readme" \
       org.opencontainers.image.vendor="Vowels Group, LLC" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="debian:12-slim"

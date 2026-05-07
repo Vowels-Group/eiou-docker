@@ -122,7 +122,11 @@ class CleanupServiceTest extends TestCase
                     P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
                     CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
                     RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
-                    default => null,
+                    // RepositoryFactory::get() now declares non-nullable
+                    // AbstractRepository — null trips a TypeError. Hand
+                    // back a generic mock for any class the test
+                    // doesn't pre-stub.
+                    default => $this->createMock($class),
                 };
             });
 
@@ -284,7 +288,11 @@ class CleanupServiceTest extends TestCase
                     P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
                     CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
                     RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
-                    default => null,
+                    // RepositoryFactory::get() now declares non-nullable
+                    // AbstractRepository — null trips a TypeError. Hand
+                    // back a generic mock for any class the test
+                    // doesn't pre-stub.
+                    default => $this->createMock($class),
                 };
             });
 
@@ -340,7 +348,11 @@ class CleanupServiceTest extends TestCase
                     P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
                     CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
                     RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
-                    default => null,
+                    // RepositoryFactory::get() now declares non-nullable
+                    // AbstractRepository — null trips a TypeError. Hand
+                    // back a generic mock for any class the test
+                    // doesn't pre-stub.
+                    default => $this->createMock($class),
                 };
             });
 
@@ -386,7 +398,11 @@ class CleanupServiceTest extends TestCase
                     P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
                     CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
                     RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
-                    default => null,
+                    // RepositoryFactory::get() now declares non-nullable
+                    // AbstractRepository — null trips a TypeError. Hand
+                    // back a generic mock for any class the test
+                    // doesn't pre-stub.
+                    default => $this->createMock($class),
                 };
             });
 

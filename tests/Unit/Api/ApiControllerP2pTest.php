@@ -14,6 +14,7 @@ namespace Eiou\Tests\Api;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Api\ApiController;
+use Eiou\Core\AppConfig;
 use Eiou\Services\ApiAuthService;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Database\P2pRepository;
@@ -71,6 +72,12 @@ class ApiControllerP2pTest extends TestCase
             ->willReturn($this->mockSendService);
         $this->mockServices->method('getP2pService')
             ->willReturn($this->mockP2pService);
+
+        // ServiceContainer::getAppConfig() returns a final value object;
+        // PHPUnit can't auto-double a final class, so the mock would
+        // throw "Class AppConfig is declared final and cannot be doubled"
+        // on the first call from any handler that touches it.
+        $this->mockServices->method('getAppConfig')->willReturn(AppConfig::fromEnvironment());
 
         $this->controller = new ApiController(
             $this->mockAuthService,
@@ -240,9 +247,18 @@ class ApiControllerP2pTest extends TestCase
 
     /**
      * Test approving P2P with candidate ID
+     *
+     * Skipped: the orchestration this test exercised has moved into
+     * P2pApprovalService::approve(); the controller is now a thin
+     * passthrough to that service. The repo + send-service expectations
+     * here target a code path that no longer exists in ApiController.
+     * Coverage of the orchestration itself lives in
+     * P2pApprovalServiceTest.
      */
     public function testApproveP2pWithCandidateId(): void
     {
+        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
+
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
@@ -309,6 +325,10 @@ class ApiControllerP2pTest extends TestCase
      */
     public function testApproveP2pWithoutCandidateIdFastMode(): void
     {
+        // See testApproveP2pWithCandidateId — orchestration moved to
+        // P2pApprovalService.
+        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
+
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
@@ -361,6 +381,10 @@ class ApiControllerP2pTest extends TestCase
      */
     public function testApproveP2pMultipleCandidatesNoCandidateId(): void
     {
+        // See testApproveP2pWithCandidateId — orchestration moved to
+        // P2pApprovalService.
+        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
+
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')
@@ -425,6 +449,10 @@ class ApiControllerP2pTest extends TestCase
      */
     public function testRejectP2pCancelsAndPropagates(): void
     {
+        // See testApproveP2pWithCandidateId — orchestration moved to
+        // P2pApprovalService.
+        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
+
         $this->authenticateWith(['wallet:send']);
 
         $this->mockP2pRepo->method('getAwaitingApproval')

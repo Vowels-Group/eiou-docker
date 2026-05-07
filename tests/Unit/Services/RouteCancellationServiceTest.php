@@ -51,7 +51,8 @@ class RouteCancellationServiceTest extends TestCase
                 if ($class === CapacityReservationRepository::class) return $this->capacityReservationRepository;
                 if ($class === RouteCancellationRepository::class) return $this->routeCancellationRepository;
                 if ($class === P2pRepository::class) return $this->p2pRepository;
-                return null;
+                // RepositoryFactory::get() declares non-nullable return.
+                return $this->createMock($class);
             });
 
         $this->service = new RouteCancellationService($repoFactory);
@@ -293,7 +294,7 @@ class RouteCancellationServiceTest extends TestCase
                     if ($class === CapacityReservationRepository::class) return $capacityRepo;
                     if ($class === RouteCancellationRepository::class) return $cancelRepo;
                     if ($class === P2pRepository::class) return $p2pRepo;
-                    return null;
+                    return $this->createMock($class);
                 });
             $service = new RouteCancellationService($repoFactory);
             $service->setP2pService($p2pMock);

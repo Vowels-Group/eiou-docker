@@ -703,7 +703,12 @@ class AvailableCreditOnAcceptanceTest extends TestCase
             ->willReturnCallback(function (string $class) use ($contactCreditRepo, $contactCurrencyRepo) {
                 if ($class === ContactCreditRepository::class) return $contactCreditRepo;
                 if ($class === ContactCurrencyRepository::class) return $contactCurrencyRepo;
-                return null;
+                // RepositoryFactory::get() now declares non-nullable
+                // AbstractRepository return; an explicit null trips a
+                // TypeError. Hand back a generic mock for any class we
+                // didn't pre-stub — tests that care assert on the
+                // pre-stubbed instances.
+                return $this->createMock($class);
             });
 
         $service = new ContactManagementService(
@@ -761,7 +766,12 @@ class AvailableCreditOnAcceptanceTest extends TestCase
             ->willReturnCallback(function (string $class) use ($contactCreditRepo, $contactCurrencyRepo) {
                 if ($class === ContactCreditRepository::class) return $contactCreditRepo;
                 if ($class === ContactCurrencyRepository::class) return $contactCurrencyRepo;
-                return null;
+                // RepositoryFactory::get() now declares non-nullable
+                // AbstractRepository return; an explicit null trips a
+                // TypeError. Hand back a generic mock for any class we
+                // didn't pre-stub — tests that care assert on the
+                // pre-stubbed instances.
+                return $this->createMock($class);
             });
 
         $service = new MessageService(

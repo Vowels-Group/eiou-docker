@@ -69,10 +69,16 @@ class ChainDropServiceTest extends TestCase
         $this->repositoryFactory = $this->createMock(RepositoryFactory::class);
         $this->syncTrigger = $this->createMock(SyncTriggerInterface::class);
 
-        // Configure RepositoryFactory to return balance repository mock
-        $this->repositoryFactory->method('get')
-            ->with(\Eiou\Database\BalanceRepository::class)
-            ->willReturn($this->balanceRepository);
+        // Configure RepositoryFactory: return the balance repo for the
+        // class the test cares about, generic mocks for everything
+        // else. RepositoryFactory::get() now declares non-nullable
+        // AbstractRepository so we can't fall through to null.
+        $this->repositoryFactory->method('get')->willReturnCallback(function (string $class) {
+            if ($class === \Eiou\Database\BalanceRepository::class) {
+                return $this->balanceRepository;
+            }
+            return $this->createMock($class);
+        });
 
         // Configure UtilityServiceContainer to return transport mock
         $this->utilityContainer->method('getTransportUtility')

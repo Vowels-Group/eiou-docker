@@ -70,7 +70,8 @@ class ContactManagementServiceTest extends TestCase
             ->willReturnCallback(function (string $class) {
                 if ($class === ContactCreditRepository::class) return $this->contactCreditRepo;
                 if ($class === ContactCurrencyRepository::class) return $this->contactCurrencyRepo;
-                return null;
+                // RepositoryFactory::get() declares non-nullable return.
+                return $this->createMock($class);
             });
 
         $this->service = new ContactManagementService(

@@ -61,20 +61,14 @@ class DeadLetterQueueRepositoryTest extends TestCase
      */
     public function testAddToQueueInsertsFailedMessage(): void
     {
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->atLeastOnce())
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(true);
-
-        $this->pdo->expects($this->once())
-            ->method('lastInsertId')
-            ->willReturn('1');
+        // addToQueue now does a duplicate-guard SELECT first, then the
+        // INSERT — two prepare() calls per call to addToQueue. The
+        // SELECT's fetch() returns no row so the INSERT path runs.
+        $this->pdo->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('bindValue');
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('fetch')->willReturn(false);
+        $this->pdo->method('lastInsertId')->willReturn('1');
 
         $result = $this->repository->addToQueue(
             'transaction',
@@ -93,16 +87,13 @@ class DeadLetterQueueRepositoryTest extends TestCase
      */
     public function testAddToQueueReturnsFalseOnFailure(): void
     {
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->atLeastOnce())
-            ->method('bindValue');
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(false);
+        // Same dual-prepare flow as testAddToQueueInsertsFailedMessage,
+        // but the INSERT execute() returns false to simulate the
+        // failure mode.
+        $this->pdo->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('bindValue');
+        $this->stmt->method('fetch')->willReturn(false);  // duplicate-guard SELECT finds nothing
+        $this->stmt->method('execute')->willReturn(false); // INSERT itself fails
 
         $result = $this->repository->addToQueue(
             'transaction',
@@ -128,20 +119,13 @@ class DeadLetterQueueRepositoryTest extends TestCase
             $stmt = $this->createMock(PDOStatement::class);
             $repository = new DeadLetterQueueRepository($pdo);
 
-            $pdo->expects($this->once())
-                ->method('prepare')
-                ->willReturn($stmt);
-
-            $stmt->expects($this->atLeastOnce())
-                ->method('bindValue');
-
-            $stmt->expects($this->once())
-                ->method('execute')
-                ->willReturn(true);
-
-            $pdo->expects($this->once())
-                ->method('lastInsertId')
-                ->willReturn('1');
+            // Dual prepare (duplicate-guard SELECT + INSERT); fetch
+            // returns false so the SELECT path doesn't short-circuit.
+            $pdo->method('prepare')->willReturn($stmt);
+            $stmt->method('bindValue');
+            $stmt->method('fetch')->willReturn(false);
+            $stmt->method('execute')->willReturn(true);
+            $pdo->method('lastInsertId')->willReturn('1');
 
             $result = $repository->addToQueue(
                 $type,
