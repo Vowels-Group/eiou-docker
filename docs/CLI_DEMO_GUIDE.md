@@ -512,22 +512,20 @@ docker exec alice eiou help changesettings
 docker exec alice eiou help sync
 ```
 
-**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to the contact handler's own help — so `eiou help contact` and `eiou contact` print **the exact same** subcommand tree (single source of truth). Same for `eiou help contact currency` → per-currency help.
+**Namespaced subcommand help.** Every namespace that owns a CLI subtree — `apikey`, `contact`, `chaindrop`, `payback` — delegates `eiou help <namespace>` straight into that namespace's own help. `eiou help <ns>` and `eiou <ns>` (or `eiou <ns> help`) print **the exact same** subcommand tree, so help lives in one place per namespace and never drifts.
 
 ```bash
-# These three print identical output (same subcommand tree):
-docker exec alice eiou contact
-docker exec alice eiou contact help
-docker exec alice eiou help contact
-# And these two print the per-currency tree:
-docker exec alice eiou contact currency
-docker exec alice eiou help contact currency
+# Each pair below prints identical output:
+docker exec alice eiou contact            ;  docker exec alice eiou help contact
+docker exec alice eiou apikey help        ;  docker exec alice eiou help apikey
+docker exec alice eiou chaindrop help     ;  docker exec alice eiou help chaindrop
+docker exec alice eiou payback help       ;  docker exec alice eiou help payback
 
-# Other namespaces are reached via the namespace itself:
+# Sub-namespace `contact currency` also delegates:
+docker exec alice eiou contact currency   ;  docker exec alice eiou help contact currency
+
+# Other discoverable namespaces:
 docker exec alice eiou backup help
-docker exec alice eiou apikey help
-docker exec alice eiou payback help
-docker exec alice eiou chaindrop help
 docker exec alice eiou request            # subcommand list for payment requests
 docker exec alice eiou p2p                # P2P approval list (also doubles as the syntax discoverer)
 docker exec alice eiou plugin             # plugin list (and via `--help` per registered plugin)

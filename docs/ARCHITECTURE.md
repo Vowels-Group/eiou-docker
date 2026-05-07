@@ -2952,9 +2952,13 @@ calls the handler. Tiers control what the registry enforces before dispatch:
 - `TIER_SENSITIVE` — `TIER_CSRF` + the session must hold a recent
   sensitive-access grant (auth-code re-prompt, several minutes).
 
-Core entries register at `TIER_AUTH` because each handler keeps its own
+Most core entries register at `TIER_AUTH` because each handler keeps its own
 inline rotating-vs-non-rotating CSRF semantics and its own legacy envelope
-shape (no behavior change vs the pre-migration if-ladder).
+shape (no behavior change vs the pre-migration if-ladder). The `updateSettings`
+core entry is the exception: it registers at `TIER_SENSITIVE` so the
+registry's pre-dispatch emits the canonical JSON `403 sensitive_access_required`
+envelope on a lapse, which the AJAX handler in `script.js` maps to the
+`apiKeysVerifyModal` and re-submits on successful unlock.
 
 Last-write-wins on collision. A plugin that registers an action with a
 core action's name overrides core. The dispatcher invokes whatever's
