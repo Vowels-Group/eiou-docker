@@ -794,6 +794,7 @@ Rendered at the bottom of the **Settings** tab (below the settings form).
 | eIOU Log | `/var/log/eiou/app.log` |
 | PHP Logs | PHP error log |
 | nginx Logs | nginx error log |
+| Processes | PID-to-processor lookup table — friendly name + current PID + status (Running / Stale lockfile / Stopped) for the four long-running processors (Transaction, P2P, Cleanup, Contact Status). Each row is a `<details>` so the role description collapses on mobile; a top-level "About running processes" `<details>` collapses the cross-reference help. Status comes from `posix_kill($pid, 0)` against the PID in each processor's `/tmp/*.pid` lockfile. Short-lived `P2pWorker` forks are intentionally not listed (they exit in seconds). |
 | System Info | PHP version, extensions, config files, constants |
 
 **Debug Report:**
