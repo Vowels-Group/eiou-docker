@@ -47,14 +47,14 @@ if (!empty($dlqPendingCount) && $dlqPendingCount > 0) {
             </button>
             <?php endif; ?>
             <button type="button" class="btn btn-primary btn-sm" data-action="reloadWithHash" data-hash="dlq">
-                <i class="fas fa-sync-alt"></i> Refresh
+                <i class="fas fa-sync-alt"></i> <span class="btn-text-collapse">Refresh</span>
             </button>
         </div>
         <!-- Mobile: dropdown -->
         <div class="dlq-section-header-actions dlq-mobile-actions">
             <div class="dlq-dropdown">
                 <button type="button" class="btn btn-primary btn-sm dlq-dropdown-toggle" data-action="toggleDlqDropdown" data-target="dlq-bulk-dropdown">
-                    <i class="fas fa-ellipsis-v"></i> Actions
+                    <i class="fas fa-ellipsis-v"></i> <span class="btn-text-collapse">Actions</span>
                 </button>
                 <div class="dlq-dropdown-menu" id="dlq-bulk-dropdown">
                     <?php if (!empty($dlqItems) && $hasRetryable): ?>

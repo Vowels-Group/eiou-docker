@@ -4,7 +4,14 @@
 <?php
 ob_start();
 ?>
-    <form method="POST">
+    <!-- AJAX-submitted form. The submit handler in script.js (look for
+         "settingsForm" / handleSettingsFormSubmit) intercepts the native
+         submit, posts via XHR, pops the auth-code modal on a 403
+         sensitive_access_required response, and reloads the page on
+         success. The method="POST" is left as a defensive default in case
+         JS fails to bind — but the server-side handler now emits JSON,
+         so a non-JS submission won't render meaningfully. -->
+    <form method="POST" id="settingsForm">
         <input type="hidden" name="action" value="updateSettings">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
@@ -1165,11 +1172,27 @@ ob_start();
 <?php
 $body = ob_get_clean();
 
+// Initial server-rendered state for the unlocked-for-X-min row.
+// Lives on its own line (full width, hidden when locked) instead of
+// the section header — narrow viewports broke when the badge shared a
+// row with the title and the inline action button.
+// updateSensitiveAccessBadges() in script.js keeps it in sync after.
+// $secureSession is in scope from gui/index.html.
+$settingsAccessSeconds = $secureSession->sensitiveAccessSecondsRemaining();
+$settingsAccessBadge   = $settingsAccessSeconds > 0
+    ? '<i class="fas fa-unlock-alt"></i> Unlocked for ' . (int) ceil($settingsAccessSeconds / 60) . ' min'
+    : '';
+$settingsAccessRow = '<div id="settings-access-state" class="section-access-state-row text-muted'
+    . ($settingsAccessSeconds > 0 ? '' : ' d-none')
+    . '" style="font-size: 0.85rem; padding: 0 0 0.5rem; text-align: right;">'
+    . $settingsAccessBadge
+    . '</div>';
+
 echo renderSection([
-    'id'         => 'settings',
-    'icon'       => 'fas fa-cog',
-    'title'      => 'Wallet Settings',
-    'introTitle' => 'How to change settings',
+    'id'           => 'settings',
+    'icon'         => 'fas fa-cog',
+    'title'        => 'Wallet Settings',
+    'introTitle'   => 'How to change settings',
     // Note: pre-migration this <details> lived inside the <form>. It
     // carries no form inputs, so moving it above the form (where
     // renderSection emits the section-intro) has zero functional
@@ -1187,7 +1210,7 @@ echo renderSection([
         . 'does <em>not</em> wipe your saved settings. To throw every saved '
         . 'setting back to the defaults this node ships with, pick '
         . '<strong>Reset to Defaults</strong> from the Section dropdown.',
-    'body' => $body,
+    'body' => $settingsAccessRow . $body,
 ]);
 ?>
 

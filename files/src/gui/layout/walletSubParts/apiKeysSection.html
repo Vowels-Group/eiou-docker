@@ -26,7 +26,6 @@ ob_start();
     </div>
 
     <div class="api-keys-bulk-toolbar">
-        <span id="api-keys-access-state" class="api-keys-access-state text-muted"></span>
         <div class="api-keys-bulk-actions">
             <button type="button" id="apiKeysDisableAllBtn" class="btn btn-secondary btn-compact d-none" data-action="disableAllApiKeysPrompt">
                 <i class="fas fa-ban"></i> Disable all
@@ -76,13 +75,28 @@ ob_start();
 <?php
 $body = ob_get_clean();
 
+// Initial server-rendered state for the unlocked-for-X-min row.
+// Lives on its own line (full width, hidden when locked) instead of
+// the section header — narrow viewports broke when the badge shared a
+// row with the title and the Create API Key button.
+// updateSensitiveAccessBadges() in script.js keeps it in sync after.
+$apiKeysAccessSeconds = $secureSession->sensitiveAccessSecondsRemaining();
+$apiKeysAccessBadge   = $apiKeysAccessSeconds > 0
+    ? '<i class="fas fa-unlock-alt"></i> Unlocked for ' . (int) ceil($apiKeysAccessSeconds / 60) . ' min'
+    : '';
+$apiKeysAccessRow = '<div id="api-keys-access-state" class="section-access-state-row text-muted'
+    . ($apiKeysAccessSeconds > 0 ? '' : ' d-none')
+    . '" style="font-size: 0.85rem; padding: 0 0 0.5rem; text-align: right;">'
+    . $apiKeysAccessBadge
+    . '</div>';
+
 echo renderSection([
     'id'    => 'api-keys-section',
     'icon'  => 'fas fa-key',
     'title' => 'API Keys',
     'headerExtras' =>
           '<button type="button" class="btn btn-success btn-nowrap" data-action="openApiKeyCreateModal">'
-        . '<i class="fas fa-plus"></i> Create API Key'
+        . '<i class="fas fa-plus"></i> <span class="btn-text-collapse">Create API Key</span>'
         . '</button>',
     'introTitle' => 'About API Keys',
     'intro' =>
@@ -107,7 +121,7 @@ echo renderSection([
         . '(a few minutes) so you can make several edits in a row without '
         . 'typing the code again, but it expires on its own and is '
         . 'independent of <em>Remember me</em> on login.',
-    'body' => $body,
+    'body' => $apiKeysAccessRow . $body,
 ]);
 ?>
 

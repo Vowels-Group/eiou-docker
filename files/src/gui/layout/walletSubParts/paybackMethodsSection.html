@@ -24,18 +24,30 @@
           . '</div>'
           . '</div>';
 
+    // Initial server-rendered state for the unlocked-for-X-min row.
+    // Lives on its own line (full width, hidden when locked) instead of
+    // the section header — narrow viewports broke when the badge shared a
+    // row with the title and the Add button.
+    // updateSensitiveAccessBadges() in script.js keeps it in sync after.
+    $paybackAccessSeconds = $secureSession->sensitiveAccessSecondsRemaining();
+    $paybackAccessBadge   = $paybackAccessSeconds > 0
+        ? '<i class="fas fa-unlock-alt"></i> Unlocked for ' . (int) ceil($paybackAccessSeconds / 60) . ' min'
+        : '';
+    $paybackAccessRow = '<div id="payback-methods-access-state" class="section-access-state-row text-muted'
+        . ($paybackAccessSeconds > 0 ? '' : ' d-none')
+        . '" style="font-size: 0.85rem; padding: 0 0 0.5rem; text-align: right;">'
+        . $paybackAccessBadge
+        . '</div>';
+
     echo renderSection([
         'id'    => 'payback-methods-section',
         'class' => 'form-container fade-in-up payback-methods-section',
         'icon'  => 'fas fa-hand-holding-usd',
         'title' => 'Payback Methods',
         'headerExtras' =>
-              '<div class="dlq-section-header-actions">'
-            . '<span id="payback-methods-access-state" class="text-muted" style="font-size: 0.85rem; margin-right: 0.75rem;"></span>'
-            . '<button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">'
-            . '<i class="fas fa-plus"></i> Add'
-            . '</button>'
-            . '</div>',
+              '<button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">'
+            . '<i class="fas fa-plus"></i> <span class="btn-text-collapse">Add</span>'
+            . '</button>',
         'introTitle' => 'How payback methods work',
         'intro' =>
               'Payback methods are how you prefer to be paid back — a bank wire, '
@@ -61,7 +73,7 @@
             . 'Each method also carries a share policy so you control whether a '
             . 'contact asking how to settle up receives it automatically or never '
             . 'sees it at all.',
-        'body' => $body,
+        'body' => $paybackAccessRow . $body,
     ]);
 ?>
 
