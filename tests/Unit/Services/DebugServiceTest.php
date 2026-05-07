@@ -29,9 +29,21 @@ class DebugServiceTest extends TestCase
     private MockObject|UserContext $userContext;
     private DebugService $service;
 
+    /** @var string|false Original APP_DEBUG env value, restored in tearDown. */
+    private string|false $appDebugBackup = false;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Most tests in this class require APP_DEBUG=true so the
+        // debug-gate in DebugService::output() lets the insertDebug
+        // call through. phpunit.xml.dist sets APP_DEBUG=false for the
+        // suite globally, so we flip it on per-test and restore in
+        // tearDown. The "doesn't insert when debug disabled" test
+        // overrides this in its own scope (RunInSeparateProcess).
+        $this->appDebugBackup = getenv('APP_DEBUG');
+        putenv('APP_DEBUG=true');
 
         $this->debugRepository = $this->createMock(DebugRepository::class);
         $this->userContext = $this->createMock(UserContext::class);
@@ -40,6 +52,12 @@ class DebugServiceTest extends TestCase
             $this->debugRepository,
             $this->userContext
         );
+    }
+
+    protected function tearDown(): void
+    {
+        putenv($this->appDebugBackup === false ? 'APP_DEBUG' : "APP_DEBUG={$this->appDebugBackup}");
+        parent::tearDown();
     }
 
     // =========================================================================
@@ -218,11 +236,8 @@ class DebugServiceTest extends TestCase
      */
     public function testOutputInsertsDebugWhenDebugEnabled(): void
     {
-        // APP_DEBUG is true in test env, so insertDebug MUST be called
-        if (!Constants::get('APP_DEBUG')) {
-            $this->markTestSkipped('APP_DEBUG is false in this environment');
-        }
-
+        // setUp already flipped APP_DEBUG=true in env so isDebug()
+        // returns true; the source's debug-gate lets insertDebug fire.
         $this->userContext->method('isInitialized')->willReturn(false);
         $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')->willReturn($mockPdo);
@@ -283,9 +298,10 @@ class DebugServiceTest extends TestCase
      */
     public function testOutputTrimsMessage(): void
     {
-        if (!Constants::get('APP_DEBUG')) {
-            $this->markTestSkipped('APP_DEBUG is false in this environment');
-        }
+        // phpunit.xml.dist sets APP_DEBUG=false for the suite as a
+        // whole; flip the env var on for the duration of this test
+        // so Constants::isDebug() (env-first) reads true. The
+        // try/finally below restores the original value.
 
         $this->userContext->method('isInitialized')->willReturn(false);
         $mockPdo = $this->createMock(PDO::class);
@@ -305,9 +321,10 @@ class DebugServiceTest extends TestCase
      */
     public function testOutputUsesDefaultLevelEcho(): void
     {
-        if (!Constants::get('APP_DEBUG')) {
-            $this->markTestSkipped('APP_DEBUG is false in this environment');
-        }
+        // phpunit.xml.dist sets APP_DEBUG=false for the suite as a
+        // whole; flip the env var on for the duration of this test
+        // so Constants::isDebug() (env-first) reads true. The
+        // try/finally below restores the original value.
 
         $this->userContext->method('isInitialized')->willReturn(false);
         $mockPdo = $this->createMock(PDO::class);
@@ -360,9 +377,10 @@ class DebugServiceTest extends TestCase
      */
     public function testLoggerForwardsToDebugServiceRepository(): void
     {
-        if (!Constants::get('APP_DEBUG')) {
-            $this->markTestSkipped('APP_DEBUG is false in this environment');
-        }
+        // phpunit.xml.dist sets APP_DEBUG=false for the suite as a
+        // whole; flip the env var on for the duration of this test
+        // so Constants::isDebug() (env-first) reads true. The
+        // try/finally below restores the original value.
 
         $this->userContext->method('isInitialized')->willReturn(false);
         $mockPdo = $this->createMock(PDO::class);
@@ -576,9 +594,10 @@ class DebugServiceTest extends TestCase
      */
     public function testOutputHandlesMultilineMessage(): void
     {
-        if (!Constants::get('APP_DEBUG')) {
-            $this->markTestSkipped('APP_DEBUG is false in this environment');
-        }
+        // phpunit.xml.dist sets APP_DEBUG=false for the suite as a
+        // whole; flip the env var on for the duration of this test
+        // so Constants::isDebug() (env-first) reads true. The
+        // try/finally below restores the original value.
 
         $this->userContext->method('isInitialized')->willReturn(false);
         $mockPdo = $this->createMock(PDO::class);

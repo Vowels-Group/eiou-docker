@@ -14,7 +14,9 @@ use Eiou\Services\TransactionRecoveryService;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionRecoveryRepository;
 use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
 use Exception;
+use ReflectionClass;
 
 #[CoversClass(TransactionRecoveryService::class)]
 class TransactionRecoveryServiceTest extends TestCase
@@ -23,8 +25,22 @@ class TransactionRecoveryServiceTest extends TestCase
     private TransactionRecoveryRepository $transactionRecoveryRepository;
     private TransactionRecoveryService $service;
 
+    private const TEST_USER_PUBKEY = 'test-user-pubkey-123';
+    private const TEST_USER_ADDRESS = 'http://me.example';
+
     protected function setUp(): void
     {
+        // resolveTransaction() now verifies the transaction belongs to
+        // the current user via UserContext::getInstance(), so tests
+        // need a populated singleton. setUserData() pulls double-duty
+        // here: marks the singleton initialized and lets us match the
+        // sender_address / sender_public_key on the test transactions
+        // below to a known user identity.
+        UserContext::getInstance()->setUserData([
+            'public' => self::TEST_USER_PUBKEY,
+            'hostname' => self::TEST_USER_ADDRESS,
+        ]);
+
         // Create mock objects for all dependencies
         $this->transactionRepository = $this->createMock(TransactionRepository::class);
         $this->transactionRecoveryRepository = $this->createMock(TransactionRecoveryRepository::class);
@@ -33,6 +49,18 @@ class TransactionRecoveryServiceTest extends TestCase
             $this->transactionRepository,
             $this->transactionRecoveryRepository
         );
+    }
+
+    protected function tearDown(): void
+    {
+        // Reset the UserContext singleton so other test classes that
+        // depend on a fresh / uninitialized UserContext aren't tainted
+        // by the test fixture above.
+        $reflection = new ReflectionClass(UserContext::class);
+        $instanceProp = $reflection->getProperty('instance');
+        $instanceProp->setAccessible(true);
+        $instanceProp->setValue(null, null);
+        parent::tearDown();
     }
 
     // =========================================================================
@@ -355,7 +383,14 @@ class TransactionRecoveryServiceTest extends TestCase
     public function testResolveTransactionWithRetryAction(): void
     {
         $txid = 'txid-to-retry';
-        $transaction = ['txid' => $txid, 'status' => 'failed'];
+        $transaction = [
+            'txid' => $txid,
+            'status' => 'failed',
+            // sender_address matches the user identity set up in
+            // setUp(); the source's user-ownership check requires the
+            // transaction to belong to the current user.
+            'sender_address' => self::TEST_USER_ADDRESS,
+        ];
 
         $this->transactionRepository->expects($this->once())
             ->method('getByTxid')
@@ -379,7 +414,14 @@ class TransactionRecoveryServiceTest extends TestCase
     public function testResolveTransactionWithCancelAction(): void
     {
         $txid = 'txid-to-cancel';
-        $transaction = ['txid' => $txid, 'status' => 'failed'];
+        $transaction = [
+            'txid' => $txid,
+            'status' => 'failed',
+            // sender_address matches the user identity set up in
+            // setUp(); the source's user-ownership check requires the
+            // transaction to belong to the current user.
+            'sender_address' => self::TEST_USER_ADDRESS,
+        ];
 
         $this->transactionRepository->expects($this->once())
             ->method('getByTxid')
@@ -403,7 +445,14 @@ class TransactionRecoveryServiceTest extends TestCase
     public function testResolveTransactionWithCompleteAction(): void
     {
         $txid = 'txid-to-complete';
-        $transaction = ['txid' => $txid, 'status' => 'failed'];
+        $transaction = [
+            'txid' => $txid,
+            'status' => 'failed',
+            // sender_address matches the user identity set up in
+            // setUp(); the source's user-ownership check requires the
+            // transaction to belong to the current user.
+            'sender_address' => self::TEST_USER_ADDRESS,
+        ];
 
         $this->transactionRepository->expects($this->once())
             ->method('getByTxid')
@@ -480,7 +529,14 @@ class TransactionRecoveryServiceTest extends TestCase
     public function testResolveTransactionHandlesException(): void
     {
         $txid = 'txid-exception';
-        $transaction = ['txid' => $txid, 'status' => 'failed'];
+        $transaction = [
+            'txid' => $txid,
+            'status' => 'failed',
+            // sender_address matches the user identity set up in
+            // setUp(); the source's user-ownership check requires the
+            // transaction to belong to the current user.
+            'sender_address' => self::TEST_USER_ADDRESS,
+        ];
 
         $this->transactionRepository->expects($this->once())
             ->method('getByTxid')
@@ -503,7 +559,14 @@ class TransactionRecoveryServiceTest extends TestCase
     public function testResolveTransactionWithoutReason(): void
     {
         $txid = 'txid-no-reason';
-        $transaction = ['txid' => $txid, 'status' => 'failed'];
+        $transaction = [
+            'txid' => $txid,
+            'status' => 'failed',
+            // sender_address matches the user identity set up in
+            // setUp(); the source's user-ownership check requires the
+            // transaction to belong to the current user.
+            'sender_address' => self::TEST_USER_ADDRESS,
+        ];
 
         $this->transactionRepository->expects($this->once())
             ->method('getByTxid')
