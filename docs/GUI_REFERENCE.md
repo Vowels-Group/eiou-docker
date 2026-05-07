@@ -690,7 +690,7 @@ Dashboard section rendering the user's own payback methods — the settlement ra
 
 **Header:**
 - `+ Add` button — opens the two-step Add/Edit modal (`paybackMethodForm.html`)
-- `🔓 Unlocked for N min` — status text shown after a sensitive-access grant; inherited from the same session-grant mechanism as API Keys
+- `🔓 Unlocked for N min` — full-width muted status row rendered above the section body when a sensitive-access grant is active (hidden when locked). Server-side initial state is rendered straight from `Session::sensitiveAccessSecondsRemaining()`, and a top-level `updateSensitiveAccessBadges()` helper in `script.js` keeps every visible row across the page in sync from a single source — unlocking from any verify modal refreshes all badges, not just the section that triggered the prompt
 
 **Header callout — "How payback methods work":** per-row encryption at rest (AES-256-GCM, keyed to the wallet), how each rail's masking differs (typed rails show last-4; `custom` shows the first 80 chars as a preview since it's user-authored free text), share policy behaviour.
 
@@ -704,7 +704,7 @@ Dashboard section rendering the user's own payback methods — the settlement ra
 
 View mode renders the same DOM with inputs set to `readonly` and a *"View only. Click Edit below to make changes"* banner; footer swaps to `Close · Edit`. Edit mode flips inputs to editable without refetch (title changes, banner hides, footer swaps to `Cancel · Delete · Save Method`).
 
-**Sensitive-access gate:** opening the modal for edit/view — and every mutation (`add`, `update`, `remove`, `share-policy`, `reveal`) — returns `401 sensitive_access_required` unless a short-lived grant is active. The client routes through the same `withSensitiveAccess(requestFn, onResponse, label)` helper that `apiKeysSection.html` uses, so a denied request opens `apiKeysVerifyModal` on top of the form and retries on successful unlock. Unlock persists for a few minutes; the chrome-level "Unlocked for N min" readout ticks down in the section header.
+**Sensitive-access gate:** opening the modal for edit/view — and every mutation (`add`, `update`, `remove`, `share-policy`, `reveal`) — returns `401 sensitive_access_required` unless a short-lived grant is active. The client routes through the same `withSensitiveAccess(requestFn, onResponse, label)` helper that `apiKeysSection.html` uses, so a denied request opens `apiKeysVerifyModal` on top of the form and retries on successful unlock. Unlock persists for a few minutes; the section's "Unlocked for N min" badge appears as a full-width muted row above the body content while the grant is active.
 
 **Per-rail "About <rail>" info panel** at the top of step 2, populated from the catalog entry's optional `info` HTML string. Starts collapsed so returning users who don't need the refresher see the compact form. Plugins opt-in by returning an `info` key from `getCatalogEntry()` — a BTC plugin can call out accepted address formats, a PayPal plugin can remind operators to link an active account, etc.
 
@@ -728,7 +728,10 @@ Client-side module (`script.js`, IIFE exported as `window.paybackMethods`) talks
 - **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list. The sessions list heading uses `settings-group-heading` for cross-category consistency, and the empty state uses the shared `.empty-panel` (dashed border + centered text) that also backs the API Keys empty state
 - **Data Retention** category has two subsections with distinct semantics: a **Cleanup** block (`cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`) where rows past retention are **deleted**, and a separate **Archive** block (`paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`) where resolved payment requests past retention **move to the `payment_requests_archive` table** — they stay queryable in the history/search paths. The archive block carries its own inline warning ("nothing is deleted") so users don't confuse it with the cleanup retentions above it
 - **Reset to Defaults** category is a dedicated destructive-action surface — danger button opens `settingsResetToDefaultsModal` which requires typing `reset` into a confirmation input before the submit button enables. Submits to `SettingsController::handleResetToDefaults()` via a separate form (outside the main settings `<form>`, since a nested form isn't legal HTML)
-- Save / Reset buttons at the bottom — Save posts `updateSettings`; Reset is a plain `<button type="reset">` that rolls back unsaved form state
+- Save / Reset buttons at the bottom — Save posts `updateSettings` via XHR (the form's native submit is intercepted by `submitSettingsForm()` in `script.js`); Reset is a plain `<button type="reset">` that rolls back unsaved form state
+- **`🔓 Unlocked for N min`** — full-width muted status row above the form, in sync with the same row in API Keys and Payback Methods (every section that gates on a sensitive-access grant). Hidden when no grant is active
+
+**`updateSettings` is AJAX, not a full-page POST.** The action registers at `TIER_SENSITIVE` so the registry's pre-dispatch handles both the CSRF check and the sensitive-access gate as a JSON `403 sensitive_access_required` response. `submitSettingsForm()` catches that envelope, opens `apiKeysVerifyModal` for re-auth, and re-submits the same form once the user verifies — the user never loses their unsaved field edits to a session-grant lapse. Validation errors return `400` with `{success: false, errors: […]}` and surface as a toast; save success returns `{success: true}` and the page reloads to re-render any computed labels and rotate the page-load CSRF token. Pre-AJAX, the form was a full-page POST that on a sensitive-access lapse just redirected with a "Please re-enter your auth code" toast and no way for the user to actually re-enter it without abandoning the page.
 
 The Settings tab additionally hosts **apiKeysSection.html** (API-key lifecycle, see below) and **debugSection.html** (debug logs, system info, debug report).
 
@@ -758,7 +761,7 @@ Rendered on the **Settings** tab, between the settings form and the debug sectio
 - **Refresh** — re-fetches the list without a full page reload
 - **Disable all** — visible only when ≥1 key is enabled
 - **Delete all** — visible only when ≥1 key exists (enabled or disabled)
-- **"Edits unlocked for N min"** — status text shown while a sensitive-access grant is active
+- **`🔓 Unlocked for N min`** — full-width muted status row above the body content while a sensitive-access grant is active (hidden when locked). Same row treatment as Payback Methods and Wallet Settings; kept in sync across all three sections by the page-wide `updateSensitiveAccessBadges()` helper
 
 **List rows (one per key):**
 - Label (bold) + Active/Disabled badge

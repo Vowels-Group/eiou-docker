@@ -336,8 +336,9 @@ class CliServiceTest extends TestCase
             ->method('help')
             ->with(
                 $this->callback(function ($commands) {
+                    // Spot-check a few stable top-level commands.
                     return isset($commands['info'])
-                        && isset($commands['add'])
+                        && isset($commands['contact'])
                         && isset($commands['send'])
                         && isset($commands['help']);
                 }),

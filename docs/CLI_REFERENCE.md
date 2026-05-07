@@ -1024,22 +1024,25 @@ eiou help apikey
 eiou help --json
 ```
 
-**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to `ContactCliHandler::showHelp()` — so `eiou help contact` and `eiou contact` print the **exact same** subcommand tree (single source of truth, no drift). `eiou help contact currency` likewise delegates to the per-currency help.
+**Namespaced subcommand help.** Every namespace that owns a CLI subtree — `apikey`, `contact`, `chaindrop`, `payback` — delegates `eiou help <namespace>` straight into that namespace's own help. `eiou help <ns>` and `eiou <ns>` (or `eiou <ns> help`) print the **exact same** subcommand tree, so help lives in exactly one place per namespace and never drifts.
 
 ```bash
-eiou contact            # full contact subcommand tree (same as `eiou contact help`)
-eiou help contact       # ← identical output, delegated to the contact handler
-eiou contact currency   # per-currency subcommand tree
-eiou help contact currency  # ← identical output
+eiou contact                # full contact subcommand tree
+eiou help contact           # ← identical output, delegated to the contact handler
+eiou contact currency       # per-currency subcommand tree
+eiou help contact currency  # ← identical output, delegated to the same handler
 
-# Other namespaces are still reached via the namespace itself:
-eiou backup help
-eiou apikey help
-eiou payback help
-eiou chaindrop help
+eiou apikey                 # full API key help
+eiou help apikey            # ← identical output
+
+eiou chaindrop              # full chain drop help
+eiou help chaindrop         # ← identical output
+
+eiou payback                # full payback methods help
+eiou help payback           # ← identical output
 ```
 
-There is no `eiou help contact add` form — drill down by running the namespace's own help (`eiou contact` for the full tree) and read the subcommand line you want.
+There is no `eiou help <namespace> <subcommand>` drill-down form — read the subcommand line you want from the namespace's full tree and use it directly. Top-level (non-namespaced) commands like `info`, `send`, `viewsettings` still render their detailed help via `eiou help <command>` as documented above.
 
 ---
 

@@ -222,24 +222,37 @@ elseif($request === "dlq"){
 }
 // Settings
 elseif($request === "help"){
-  // Help. Top-level commands render via CliHelpService; namespaced verbs
-  // delegate to the namespace handler's own help so there's a single
-  // source of truth for the subcommand tree (no drift between
-  // `eiou help contact` and `eiou contact`).
+  // Help. The bare `eiou help` (no namespace) and any non-namespaced
+  // verb like `eiou help info` go through CliHelpService for the
+  // top-level overview / generic showDetailedHelp.
+  //
+  // Each namespace that owns a CLI subtree (apikey, contact,
+  // chaindrop, payback) instead delegates `eiou help <ns>` straight
+  // into the handler's own showHelp() — same code path as
+  // `eiou <ns>` / `eiou <ns> help`. One source of truth per
+  // namespace; no duplicate help strings sitting in CliHelpService
+  // that drift away from the handler's own copy.
   $debugService->output("Executing help request", 'SILENT');
   $helpTarget = isset($cleanArgv[2]) ? strtolower($cleanArgv[2]) : '';
+
   if ($helpTarget === 'contact') {
     $sub = isset($cleanArgv[3]) ? strtolower($cleanArgv[3]) : '';
-    if ($sub === 'currency') {
-      // eiou help contact currency → showCurrencyHelp()
-      $namespaceArgv = ['eiou', 'contact', 'currency', 'help'];
-    } else {
-      // eiou help contact [<anything-else>] → showHelp() (full tree)
-      $namespaceArgv = ['eiou', 'contact', 'help'];
-    }
-    $contactCli = $app->services->getContactCliHandler($output);
-    $contactCli->handleCommand($namespaceArgv);
+    // contact has a sub-namespace `currency` with its own help —
+    // route to it directly so `eiou help contact currency` works.
+    $namespaceArgv = ($sub === 'currency')
+      ? ['eiou', 'contact', 'currency', 'help']
+      : ['eiou', 'contact', 'help'];
+    $app->services->getContactCliHandler($output)->handleCommand($namespaceArgv);
+  } elseif ($helpTarget === 'apikey') {
+    $app->services->getApiKeyService($output)->handleCommand(['eiou', 'apikey', 'help']);
+  } elseif ($helpTarget === 'chaindrop') {
+    $app->services->getChainDropService()->handleCommand(['eiou', 'chaindrop', 'help'], $output);
+  } elseif ($helpTarget === 'payback') {
+    $app->services->getPaybackMethodCliHandler($output)->handleCommand(['eiou', 'payback', 'help']);
   } else {
+    // Top-level overview, or detailed help for non-namespaced verbs
+    // (info, send, request, sync, …). showDetailedHelp() in
+    // CliHelpService renders these from the static $commands array.
     $cliService = $app->services->getCliService();
     $cliService->displayHelp($cleanArgv, $output);
   }
