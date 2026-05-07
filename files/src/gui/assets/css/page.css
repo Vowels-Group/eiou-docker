@@ -4057,6 +4057,17 @@ tr.tx-item-in-progress > td:first-child {
     .dlq-section { padding: 1.25rem; }
     .dlq-mobile-actions { display: flex; }
     .dlq-desktop-actions { display: none !important; }
+
+    /* The 768px rule above sets `.dlq-section-header-actions { width: 100% }`
+       so the desktop button row (Retry All / Abandon All / Refresh) gets a
+       full row of its own to wrap on. At ≤640px only the icon-only mobile
+       dropdown shows, and forcing it to 100% width pushes it onto a second
+       row even though title + button trivially fit on one line. Reset to
+       auto width so it sits inline next to the title. */
+    .dlq-section .section-header { flex-wrap: nowrap; }
+    .dlq-section .dlq-section-header-actions.dlq-mobile-actions {
+        width: auto;
+    }
 }
 
 /* ============================================================
@@ -6439,4 +6450,22 @@ details.payback-type-group > summary.payback-type-group-label:hover { background
     font-size: 0.85rem;
 }
 .form-errors-list { margin: 0; padding-left: 1.1rem; }
+
+/*
+ * Mobile button-label collapse.
+ *
+ * Wrap any portion of a button's visible text in
+ *   <span class="btn-text-collapse"> ... </span>
+ * to drop that text on narrow viewports while keeping the icon (and any
+ * always-visible text outside the span) intact. Used on icon+label
+ * buttons in section headers (Add, Refresh, Create, …) and Copy buttons
+ * where the icon already conveys the action, so the label only crowds
+ * the layout on phones. The 600px breakpoint matches the rest of this
+ * file's mobile rules.
+ */
+@media (max-width: 600px) {
+    .btn-text-collapse {
+        display: none !important;
+    }
+}
 

@@ -49,8 +49,8 @@ echo renderSection([
     'id'    => 'plugins-section',
     'icon'  => 'fas fa-puzzle-piece',
     'title' => 'Plugins',
-    'headerExtras' => '<button type="button" class="btn btn-secondary btn-compact" data-action="reloadPlugins" title="Refresh the list from disk">'
-                   . '<i class="fas fa-sync"></i> Refresh'
+    'headerExtras' => '<button type="button" class="btn btn-primary btn-sm" data-action="reloadPlugins" title="Refresh the list from disk">'
+                   . '<i class="fas fa-sync"></i> <span class="btn-text-collapse">Refresh</span>'
                    . '</button>',
     'introTitle' => 'About Plugins',
     'intro' => 'Plugins live under <code>/etc/eiou/plugins/</code>. They subscribe to '

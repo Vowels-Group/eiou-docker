@@ -2614,6 +2614,7 @@ function confirmPrApproveModal() {
         if (errEl) {
             errEl.textContent = 'Note too long — max ' + max + ' chars for this request';
             errEl.classList.remove('d-none');
+            scrollErrorIntoView(errEl);
         }
         return;
     }
@@ -5630,6 +5631,169 @@ function switchAdvancedSection(sectionId) {
         target.style.display = 'block';
     }
 }
+
+/**
+ * Update every "Unlocked for X min" badge on the page from a single
+ * source of truth. Each section template renders an empty span with a
+ * known id (settings-access-state, api-keys-access-state,
+ * payback-methods-access-state — extend the list below as new sections
+ * grow their own badge); this function fills any of them that exist on
+ * the current page with the same uniformly-formatted text.
+ *
+ * Why a top-level helper instead of leaving each section's own
+ * renderAccessState in place: the unlock modal is one global UX, but
+ * before this helper each section's badge only updated when *that*
+ * section's own AJAX action came back with seconds_remaining. Unlocking
+ * via the Payback Methods + Add preflight wouldn't refresh the API
+ * Keys badge or vice versa. Now any caller that learns the new
+ * seconds_remaining (the verify-modal success handler, any list/load
+ * callback, or PHP via SSR on the next reload) just calls this once
+ * and every visible badge agrees.
+ *
+ * @param {number} secondsRemaining - 0 means locked, >0 means
+ *     "X minutes" rounded up shown on every badge.
+ * @returns {void}
+ */
+/**
+ * Scroll a freshly-revealed error banner into view so the user actually
+ * sees the message even if they pressed Submit at the bottom of a long
+ * modal form. Safe to call with a missing element (no-op).
+ *
+ * Used by every modal-form error display in this file (api-keys create,
+ * api-keys verify, payback methods form, payment request approve, …) so
+ * the behavior stays consistent — point this at any future error
+ * banner you reveal and the same scroll behavior follows.
+ *
+ * @param {HTMLElement|null} el - The error banner element (already
+ *     populated with the message text) to scroll into view.
+ * @returns {void}
+ */
+function scrollErrorIntoView(el) {
+    if (!el || typeof el.scrollIntoView !== 'function') { return; }
+    // 'start' (vs the more conservative 'nearest') guarantees the
+    // banner ends up at the top of the visible area, which is what we
+    // want when the user just submitted from the bottom of the form.
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function updateSensitiveAccessBadges(secondsRemaining) {
+    var ids = [
+        'settings-access-state',
+        'api-keys-access-state',
+        'payback-methods-access-state',
+    ];
+    var html = secondsRemaining > 0
+        ? '<i class="fas fa-unlock-alt"></i> Unlocked for ' + Math.ceil(secondsRemaining / 60) + ' min'
+        : '';
+    ids.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) { return; }
+        el.innerHTML = html;
+        // The element is its own full-width row above each section's
+        // body content. Hiding it (rather than just blanking the text)
+        // keeps it from claiming layout space on narrow viewports when
+        // the wallet is locked.
+        el.classList.toggle('d-none', !html);
+    });
+}
+
+/**
+ * AJAX submit for the Wallet Settings form (#settingsForm).
+ *
+ * Pre-AJAX, the form posted natively and the server returned a 302 +
+ * flash toast. That meant a sensitive-access lapse showed up only as
+ * the toast "Please re-enter your auth code to continue (sensitive
+ * action)." with no chance for the JS to pop the unlock modal, so the
+ * user was stuck. Now we intercept the submit, post via XHR, and on
+ * the canonical 403 + sensitive_access_required envelope we open the
+ * verify modal and retry the save once the user has entered the code.
+ *
+ * Success → toast + page reload (matches the prior redirect-with-flash
+ * UX, and refreshes any rendered values that depend on the saved
+ * config like Total Fee Earnings labels).
+ * Validation error (400) → toast with the joined error list.
+ * Any other failure → toast with a generic message.
+ *
+ * @param {HTMLFormElement} form
+ * @returns {void}
+ */
+function submitSettingsForm(form) {
+    if (!form) { return; }
+
+    var fd = new FormData(form);
+    // Encode FormData as application/x-www-form-urlencoded so the
+    // server-side $_POST parser reads it the same way it reads the
+    // native form post. multipart/form-data would also work but
+    // there are no file inputs on this form, so url-encoded is the
+    // smaller wire format and keeps server-side handling identical.
+    var pairs = [];
+    fd.forEach(function (val, key) {
+        pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(val));
+    });
+    var body = pairs.join('&');
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) { return; }
+
+        var data;
+        try {
+            data = JSON.parse(xhr.responseText);
+        } catch (e) {
+            // 302 / 401 / an HTML login page all fail JSON.parse here —
+            // nearly always a session expiring mid-action. Show a
+            // generic toast and stop; reloading might land them on the
+            // login page anyway, which is the right outcome.
+            showToast('Error', 'Unexpected response — your session may have expired. Please sign in again.', 'error');
+            return;
+        }
+
+        // Sensitive-access lapsed → pop the verify modal, retry on success.
+        if (xhr.status === 403 && data && data.code === 'sensitive_access_required') {
+            if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                window.apiKeys.openVerifyModal(function () {
+                    submitSettingsForm(form);
+                }, 'Unlock to save settings');
+            } else {
+                showToast('Error', data.error || data.message || 'Please unlock sensitive actions first.', 'error');
+            }
+            return;
+        }
+
+        // CSRF mismatch → tell the user to refresh; the page-load token
+        // is what the form is signed with.
+        if (xhr.status === 403 && data && data.code === 'csrf_invalid') {
+            showToast('Error', 'Session token mismatch. Please refresh the page and try again.', 'error');
+            return;
+        }
+
+        if (data && data.success) {
+            showToast('Success', data.message || 'Settings updated successfully', 'success');
+            // Reload so the page re-renders any computed labels and the
+            // form's hidden CSRF token rotates naturally on the next page.
+            // Brief delay so the user can see the toast before the reload.
+            setTimeout(function () { window.location.reload(); }, 600);
+            return;
+        }
+
+        // Validation or save error.
+        var msg = (data && (data.message || data.error)) || 'Failed to save settings';
+        showToast('Error', msg, 'error');
+    };
+    xhr.send(body);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('settingsForm');
+    if (!form) { return; }
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitSettingsForm(form);
+    });
+});
 
 /**
  * Keeps the Held TX Sync Timeout max in sync with the P2P Expiration field.
@@ -8753,12 +8917,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function renderAccessState(secondsRemaining) {
-            var el = document.getElementById('api-keys-access-state');
-            if (!el) return;
-            if (secondsRemaining > 0) {
-                el.textContent = 'Edits unlocked for ' + Math.ceil(secondsRemaining / 60) + ' min';
-            } else {
-                el.textContent = '';
+            // Delegate to the page-wide helper so unlocking from any
+            // section (api-keys verify, payback methods preflight, …)
+            // refreshes every visible badge uniformly.
+            if (typeof updateSensitiveAccessBadges === 'function') {
+                updateSensitiveAccessBadges(secondsRemaining);
             }
         }
 
@@ -9220,7 +9383,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         function showCreateError(msg) {
             var err = document.getElementById('apiKeysCreateError');
-            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+            if (err) {
+                err.textContent = msg;
+                err.classList.remove('d-none');
+                scrollErrorIntoView(err);
+            }
         }
 
         // --- Reveal (one-time) -------------------------------------------
@@ -9242,7 +9409,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var ack = document.getElementById('apiKeysRevealAck');
             var err = document.getElementById('apiKeysRevealAckError');
             if (ack && !ack.checked) {
-                if (err) err.classList.remove('d-none');
+                if (err) {
+                    err.classList.remove('d-none');
+                    scrollErrorIntoView(err);
+                }
                 return;
             }
             // Clear the secret from memory and from the DOM the moment the
@@ -9399,7 +9569,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         function showEditError(msg) {
             var err = document.getElementById('apiKeysEditError');
-            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+            if (err) {
+                err.textContent = msg;
+                err.classList.remove('d-none');
+                scrollErrorIntoView(err);
+            }
         }
 
         // --- Bulk Disable / Delete ---------------------------------------
@@ -9535,12 +9709,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             ? 'Invalid auth code. Please try again.'
                             : 'Could not verify. Please try again.';
                         err.classList.remove('d-none');
+                        scrollErrorIntoView(err);
                     }
                 }
             }).catch(function() {
                 if (err) {
                     err.textContent = 'Network error. Please try again.';
                     err.classList.remove('d-none');
+                    scrollErrorIntoView(err);
                 }
             });
         }
@@ -10376,6 +10552,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         // -------------------------------------------------------------------
 
         function openForm(mode, methodId) {
+            // No preflight on Add: the unlock prompt fires only at submit
+            // time (see the post() callback in submit() below). Edit/View
+            // modes still trigger the modal upfront via paybackMethodsReveal
+            // because they need to decrypt the existing record to pre-fill
+            // the form — there's nothing for them to do without unlocking
+            // first. Add starts from blank inputs, so the user can compose
+            // the form without touching anything sensitive until they save.
             state.formMode = mode || 'add';
             state.editingId = methodId || null;
             state.selectedType = null;
@@ -10996,8 +11179,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             html += '</ul>';
             box.innerHTML = html;
             box.style.display = 'block';
+            // 'start' (was 'nearest') guarantees the banner ends up at the
+            // top of the visible area so it's actually noticed when the
+            // user submitted from deep in the form. Same behavior as the
+            // shared scrollErrorIntoView helper used elsewhere.
             if (typeof box.scrollIntoView === 'function') {
-                box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                box.scrollIntoView({ block: 'start', behavior: 'smooth' });
             }
         }
 
@@ -11057,13 +11244,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function escapeAttr(s) { return escapeHtml(s); }
 
         function renderAccessState(secondsRemaining) {
-            var el = document.getElementById('payback-methods-access-state');
-            if (!el) { return; }
-            if (secondsRemaining > 0) {
-                el.innerHTML = '<i class="fas fa-unlock-alt"></i> Unlocked for ' +
-                    Math.ceil(secondsRemaining / 60) + ' min';
-            } else {
-                el.textContent = '';
+            // Delegate to the page-wide helper so unlocking from any
+            // section (api-keys verify, payback methods preflight, …)
+            // refreshes every visible badge uniformly.
+            if (typeof updateSensitiveAccessBadges === 'function') {
+                updateSensitiveAccessBadges(secondsRemaining);
             }
         }
 

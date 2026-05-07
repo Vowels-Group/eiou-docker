@@ -104,7 +104,7 @@
                         <?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?>
                     </span>
                     <button class="btn btn-sm btn-outline" data-action="copyToClipboard" data-copy-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-copy-message="Address copied to clipboard!" title="Copy address">
-                        <i class="fas fa-copy"></i> Copy
+                        <i class="fas fa-copy"></i> <span class="btn-text-collapse">Copy</span>
                     </button>
                     <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-text="<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>" data-qr-name="<?php echo htmlspecialchars($walletDisplayName, ENT_QUOTES); ?>" data-qr-target="address-qr-display" title="Show QR code">
                         <i class="fas fa-qrcode"></i>
@@ -125,7 +125,7 @@
                 <div id="user-address-display" class="address-display-row">
                     <span id="user-address-value" class="address-value-mono"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></span>
                     <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="user-address-value" data-copy-message="Address copied to clipboard!" title="Copy address">
-                        <i class="fas fa-copy"></i> Copy
+                        <i class="fas fa-copy"></i> <span class="btn-text-collapse">Copy</span>
                     </button>
                     <button class="btn btn-sm btn-outline" data-action="toggleAddressQr" data-qr-source="user-address-value" data-qr-name="<?php echo htmlspecialchars($walletDisplayName, ENT_QUOTES); ?>" data-qr-target="address-qr-display" title="Show QR code">
                         <i class="fas fa-qrcode"></i>
@@ -140,7 +140,7 @@
                 <span id="public-key-value" class="address-value-mono"><?php echo $user->has('public') ? htmlspecialchars($user->getPublicKey()) : 'Not available'; ?></span>
                 <?php if ($user->has('public')): ?>
                     <button class="btn btn-sm btn-outline" data-action="copyFromElement" data-copy-source="public-key-value" data-copy-message="Public key copied to clipboard!" title="Copy public key">
-                        <i class="fas fa-copy"></i> Copy
+                        <i class="fas fa-copy"></i> <span class="btn-text-collapse">Copy</span>
                     </button>
                 <?php endif; ?>
             </div>

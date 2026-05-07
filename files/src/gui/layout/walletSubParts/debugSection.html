@@ -38,7 +38,7 @@ ob_start();
                 <input type="hidden" name="action" value="clearDebugLogs">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                 <button type="submit" class="btn btn-sm btn-warning" data-confirm="Clear all debug entries?">
-                    <i class="fas fa-trash"></i> Clear Logs
+                    <i class="fas fa-trash"></i> <span class="btn-text-collapse">Clear Logs</span>
                 </button>
             </form>
         </div>
@@ -316,13 +316,13 @@ ob_start();
         <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
         <div class="debug-actions">
             <button type="button" class="btn btn-primary" data-action="submitDebugReportToSupport" data-report-mode="full" title="Send full report to eIOU support via Tor">
-                <i class="fas fa-paper-plane"></i> Send to Support
+                <i class="fas fa-paper-plane"></i> Send<span class="btn-text-collapse"> to Support</span>
             </button>
             <button type="button" class="btn btn-secondary" data-action="downloadLimitedDebugReport" title="Quick download - same data shown in GUI above">
-                <i class="fas fa-download"></i> Limited Report
+                <i class="fas fa-download"></i> Limited<span class="btn-text-collapse"> Report</span>
             </button>
             <button type="button" class="btn btn-secondary" data-action="downloadFullDebugReport" title="Complete logs - may take longer over Tor">
-                <i class="fas fa-download"></i> Full Report
+                <i class="fas fa-download"></i> Full<span class="btn-text-collapse"> Report</span>
             </button>
         </div>
         <p class="text-muted font-sm mt-md">
