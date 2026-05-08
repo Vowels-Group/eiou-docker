@@ -214,19 +214,18 @@ class ContactStatusServiceTest extends TestCase
     /**
      * Test handlePingRequest responds with pong for accepted contact
      */
+    /**
+     * Per-currency ping with matching chain heads gets a pong whose
+     * chainValid=true and chainStatusByCurrency confirms each currency
+     * the two sides share. Only last_ping_at is touched on the contact;
+     * online_status is reserved for the next pong cycle.
+     */
     public function testHandlePingRequestRespondsPongForAcceptedContact(): void
     {
-        // Skipped: the ping request now sends `prevTxidsByCurrency`
-        // (per-currency map) instead of a flat `prevTxid`, and the
-        // response shape changed too — chainValid is computed from
-        // chainStatusByCurrency, not from a single prevTxid match.
-        // Rewriting these against the new per-currency state machine
-        // is its own focused task.
-        $this->markTestSkipped('Per-currency ping shape; needs rewrite.');
         $request = [
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
             'senderAddress' => self::TEST_CONTACT_ADDRESS,
-            'prevTxid' => self::TEST_PREV_TXID
+            'prevTxidsByCurrency' => ['USD' => self::TEST_PREV_TXID],
         ];
 
         $this->mockContactRepo->expects($this->once())
@@ -239,8 +238,9 @@ class ContactStatusServiceTest extends TestCase
             ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
             ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
-        // On incoming ping, only last_ping_at is updated (not online_status —
-        // that requires a pong with processorsRunning from the next ping/pong cycle)
+        $this->mockChainRepo->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true, 'has_transactions' => true, 'gaps' => [], 'broken_txids' => []]);
+
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
             ->with(self::TEST_CONTACT_PUBKEY, $this->callback(function ($fields) {
@@ -254,25 +254,25 @@ class ContactStatusServiceTest extends TestCase
 
         $response = json_decode($output, true);
         $this->assertEquals('pong', $response['status']);
-        $this->assertEquals(self::TEST_PREV_TXID, $response['prevTxid']);
         $this->assertTrue($response['chainValid']);
+        $this->assertSame(['USD' => true], $response['chainStatusByCurrency']);
     }
 
     /**
-     * Test handlePingRequest marks chain as invalid when prev_txid mismatch
+     * Per-currency mismatch flips chainValid to false and the offending
+     * currency's entry in chainStatusByCurrency to false; the rest of
+     * the per-currency map (and an absence of requestSync) keeps the
+     * sync trigger untouched.
      */
     public function testHandlePingRequestMarksChainInvalidOnMismatch(): void
     {
-        // See testHandlePingRequestRespondsPongForAcceptedContact —
-        // per-currency ping shape rewrite.
-        $this->markTestSkipped('Per-currency ping shape; needs rewrite.');
         $localPrevTxid = 'local-prev-txid-111';
         $remotePrevTxid = 'remote-prev-txid-222';
 
         $request = [
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
             'senderAddress' => self::TEST_CONTACT_ADDRESS,
-            'prevTxid' => $remotePrevTxid
+            'prevTxidsByCurrency' => ['USD' => $remotePrevTxid],
         ];
 
         $this->mockContactRepo->expects($this->once())
@@ -284,6 +284,9 @@ class ContactStatusServiceTest extends TestCase
             ->method('getPreviousTxidsByCurrency')
             ->willReturn(['USD' => $localPrevTxid]);
 
+        $this->mockSyncTrigger->expects($this->never())
+            ->method('syncTransactionChain');
+
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
             ->willReturn(true);
@@ -294,28 +297,27 @@ class ContactStatusServiceTest extends TestCase
 
         $response = json_decode($output, true);
         $this->assertEquals('pong', $response['status']);
-        $this->assertEquals($localPrevTxid, $response['prevTxid']);
         $this->assertFalse($response['chainValid']);
+        $this->assertSame(['USD' => false], $response['chainStatusByCurrency']);
     }
 
     /**
-     * Test handlePingRequest triggers sync when requestSync is true and chains mismatch
+     * When requestSync=true and the per-currency comparison fails,
+     * syncTransactionChain fires once and the post-sync re-evaluation
+     * checks transaction existence (transactionExistsTxid) — if the
+     * remote txid still isn't local, the response stays chainValid=false.
      */
     public function testHandlePingRequestTriggersSyncOnMismatchWithRequestSync(): void
     {
-        // See testHandlePingRequestRespondsPongForAcceptedContact.
-        $this->markTestSkipped('Per-currency ping shape; needs rewrite.');
         $localPrevTxid = 'local-prev-txid-111';
         $remotePrevTxid = 'remote-prev-txid-222';
 
         $request = [
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
             'senderAddress' => self::TEST_CONTACT_ADDRESS,
-            'prevTxid' => $remotePrevTxid,
-            'requestSync' => true
+            'prevTxidsByCurrency' => ['USD' => $remotePrevTxid],
+            'requestSync' => true,
         ];
-
-
 
         $this->mockContactRepo->expects($this->once())
             ->method('isAcceptedContactPubkey')
@@ -330,6 +332,12 @@ class ContactStatusServiceTest extends TestCase
             ->with(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY)
             ->willReturn(['success' => true, 'synced_count' => 1]);
 
+        // Post-sync re-evaluation: still missing remote txid locally.
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('transactionExistsTxid')
+            ->with($remotePrevTxid)
+            ->willReturn(false);
+
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
             ->willReturn(true);
@@ -341,6 +349,7 @@ class ContactStatusServiceTest extends TestCase
         $response = json_decode($output, true);
         $this->assertEquals('pong', $response['status']);
         $this->assertFalse($response['chainValid']);
+        $this->assertSame(['USD' => false], $response['chainStatusByCurrency']);
     }
 
     /**
@@ -517,13 +526,12 @@ class ContactStatusServiceTest extends TestCase
     }
 
     /**
-     * Test pingContact returns online with valid chain on successful pong
+     * Outbound pingContact treats a per-currency pong (chainValid=true,
+     * chainStatusByCurrency all-true) as online + chain valid; remote
+     * processor health is omitted so onlineStatus defaults to 'online'.
      */
     public function testPingContactReturnsOnlineWithValidChain(): void
     {
-        // See testHandlePingRequestRespondsPongForAcceptedContact —
-        // per-currency ping shape rewrite.
-        $this->markTestSkipped('Per-currency ping shape; needs rewrite.');
         $this->service->setRateLimiterService($this->mockRateLimiter);
 
         $this->mockRateLimiter->expects($this->once())
@@ -534,7 +542,7 @@ class ContactStatusServiceTest extends TestCase
             'name' => 'test-contact',
             'pubkey' => self::TEST_CONTACT_PUBKEY,
             'status' => 'accepted',
-            'http' => self::TEST_CONTACT_ADDRESS
+            'http' => self::TEST_CONTACT_ADDRESS,
         ];
 
         $this->mockContactRepo->expects($this->once())
@@ -545,18 +553,21 @@ class ContactStatusServiceTest extends TestCase
             ->method('getPreviousTxidsByCurrency')
             ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
+        $this->mockChainRepo->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true, 'has_transactions' => true, 'gaps' => [], 'broken_txids' => []]);
+
         $pongResponse = json_encode([
             'status' => 'pong',
             'chainValid' => true,
-            'prevTxid' => self::TEST_PREV_TXID
+            'chainStatusByCurrency' => ['USD' => true],
+            'availableCreditByCurrency' => ['USD' => 0.0],
         ]);
 
         $this->mockTransportUtility->expects($this->once())
             ->method('send')
             ->willReturn($pongResponse);
 
-        // Expect contact status to be updated to online
-        $this->mockContactRepo->expects($this->exactly(2))
+        $this->mockContactRepo->expects($this->atLeastOnce())
             ->method('updateContactFields')
             ->willReturn(true);
 
@@ -1624,19 +1635,17 @@ class ContactStatusServiceTest extends TestCase
     // =========================================================================
 
     /**
-     * Test handlePingRequest calculates credit from contact_currencies table
-     *
-     * When contactCurrencyRepository->getCreditLimit() returns a non-zero value,
-     * the pong response should use that value instead of the contact's credit_limit field.
+     * availableCreditByCurrency in the pong is built from
+     * (sent − received) + getCreditLimit() per accepted currency.
+     * Asserts the per-currency entry equals balance + credit limit;
+     * the legacy `availableCredit`/`currency` flat fields are gone.
      */
     public function testHandlePingRequestCalculatesCreditFromContactCurrencies(): void
     {
-        // See testHandlePingRequestRespondsPongForAcceptedContact.
-        $this->markTestSkipped('Per-currency ping shape; needs rewrite.');
         $request = [
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
             'senderAddress' => self::TEST_CONTACT_ADDRESS,
-            'prevTxid' => self::TEST_PREV_TXID
+            'prevTxidsByCurrency' => ['USD' => self::TEST_PREV_TXID],
         ];
 
         $this->mockContactRepo->expects($this->once())
@@ -1646,24 +1655,26 @@ class ContactStatusServiceTest extends TestCase
 
         $this->mockTransactionRepo->expects($this->once())
             ->method('getPreviousTxidsByCurrency')
-            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
             ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
-        // Inject balance repo to enable credit calculation path
+        $this->mockChainRepo->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true, 'has_transactions' => true, 'gaps' => [], 'broken_txids' => []]);
 
-
-
-        // Contact data with a credit_limit that should NOT be used
         $this->mockContactRepo->expects($this->once())
             ->method('getContactByPubkey')
             ->with(self::TEST_CONTACT_PUBKEY)
             ->willReturn([
                 'pubkey' => self::TEST_CONTACT_PUBKEY,
                 'currency' => 'USD',
-                'credit_limit' => 1000
             ]);
 
-        // Balance: sent 300, received 100 => balance = 200
+        // The contact has USD configured + accepted in contact_currencies
+        $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+        $this->mockContactCurrencyRepo->method('getContactCurrencies')
+            ->with($expectedPubkeyHash)
+            ->willReturn([['currency' => 'USD', 'status' => 'accepted']]);
+
+        // Balance: sent 300 − received 100 → 200 major units
         $this->mockBalanceRepo->expects($this->once())
             ->method('getContactSentBalance')
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
@@ -1673,8 +1684,7 @@ class ContactStatusServiceTest extends TestCase
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
             ->willReturn(\Eiou\Core\SplitAmount::from(100));
 
-        // ContactCurrencyRepository returns 5000 (overrides contact's credit_limit of 1000)
-        $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+        // Per-currency credit limit = 5000 → availableCredit = 200 + 5000 = 5200
         $this->mockContactCurrencyRepo->expects($this->once())
             ->method('getCreditLimit')
             ->with($expectedPubkeyHash, 'USD')
@@ -1691,25 +1701,24 @@ class ContactStatusServiceTest extends TestCase
         $response = json_decode($output, true);
         $this->assertNotNull($response, 'Response should be valid JSON');
         $this->assertEquals('pong', $response['status']);
-        // availableCredit = balance (200) + creditLimit (5000) = 5200
-        $this->assertEquals(5200, $response['availableCredit']);
-        $this->assertEquals('USD', $response['currency']);
+        $this->assertArrayHasKey('availableCreditByCurrency', $response);
+        $this->assertEqualsWithDelta(5200.0, $response['availableCreditByCurrency']['USD'], 0.0001);
+        $this->assertArrayNotHasKey('availableCredit', $response, 'Flat availableCredit field is gone');
     }
 
     /**
-     * Test handlePingRequest falls back to contact credit_limit when contactCurrencyRepository returns 0
-     *
-     * When contactCurrencyRepository->getCreditLimit() returns 0 (no per-currency config),
-     * the service should fall back to using the contact's credit_limit field.
+     * The legacy "fall back to contact.credit_limit when per-currency
+     * credit isn't set" path is gone — the per-currency table is the
+     * only source of truth now. When getCreditLimit() returns null the
+     * pong must report availableCredit = balance + 0, not silently
+     * resurrect the old contact-level credit_limit field.
      */
     public function testHandlePingRequestFallsBackToContactCreditLimit(): void
     {
-        // See testHandlePingRequestRespondsPongForAcceptedContact.
-        $this->markTestSkipped('Per-currency ping shape; needs rewrite.');
         $request = [
             'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
             'senderAddress' => self::TEST_CONTACT_ADDRESS,
-            'prevTxid' => self::TEST_PREV_TXID
+            'prevTxidsByCurrency' => ['USD' => self::TEST_PREV_TXID],
         ];
 
         $this->mockContactRepo->expects($this->once())
@@ -1719,24 +1728,27 @@ class ContactStatusServiceTest extends TestCase
 
         $this->mockTransactionRepo->expects($this->once())
             ->method('getPreviousTxidsByCurrency')
-            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
             ->willReturn(['USD' => self::TEST_PREV_TXID]);
 
-        // Inject balance repo to enable credit calculation path
+        $this->mockChainRepo->method('verifyChainIntegrity')
+            ->willReturn(['valid' => true, 'has_transactions' => true, 'gaps' => [], 'broken_txids' => []]);
 
-
-
-        // Contact data with credit_limit that SHOULD be used as fallback
+        // contact_currencies has the row but no credit set — getCreditLimit returns null
         $this->mockContactRepo->expects($this->once())
             ->method('getContactByPubkey')
             ->with(self::TEST_CONTACT_PUBKEY)
             ->willReturn([
                 'pubkey' => self::TEST_CONTACT_PUBKEY,
                 'currency' => 'USD',
-                'credit_limit' => 2000
+                'credit_limit' => 2000, // legacy field — must NOT be used
             ]);
 
-        // Balance: sent 500, received 200 => balance = 300
+        $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
+        $this->mockContactCurrencyRepo->method('getContactCurrencies')
+            ->with($expectedPubkeyHash)
+            ->willReturn([['currency' => 'USD', 'status' => 'accepted']]);
+
+        // Balance: 500 − 200 = 300 major units
         $this->mockBalanceRepo->expects($this->once())
             ->method('getContactSentBalance')
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
@@ -1746,12 +1758,10 @@ class ContactStatusServiceTest extends TestCase
             ->with(self::TEST_CONTACT_PUBKEY, 'USD')
             ->willReturn(\Eiou\Core\SplitAmount::from(200));
 
-        // ContactCurrencyRepository returns 0 (no per-currency config)
-        $expectedPubkeyHash = hash(Constants::HASH_ALGORITHM, self::TEST_CONTACT_PUBKEY);
         $this->mockContactCurrencyRepo->expects($this->once())
             ->method('getCreditLimit')
             ->with($expectedPubkeyHash, 'USD')
-            ->willReturn(\Eiou\Core\SplitAmount::from(0));
+            ->willReturn(null);
 
         $this->mockContactRepo->expects($this->once())
             ->method('updateContactFields')
@@ -1764,8 +1774,7 @@ class ContactStatusServiceTest extends TestCase
         $response = json_decode($output, true);
         $this->assertNotNull($response, 'Response should be valid JSON');
         $this->assertEquals('pong', $response['status']);
-        // availableCredit = balance (300) + creditLimit (2000 from contact fallback) = 2300
-        $this->assertEquals(2300, $response['availableCredit']);
-        $this->assertEquals('USD', $response['currency']);
+        // 300 + 0 = 300; legacy credit_limit=2000 is ignored
+        $this->assertEqualsWithDelta(300.0, $response['availableCreditByCurrency']['USD'], 0.0001);
     }
 }

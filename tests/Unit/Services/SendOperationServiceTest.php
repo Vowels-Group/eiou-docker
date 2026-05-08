@@ -876,56 +876,49 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test handleDirectRoute auto-proposes tx drop when sync fails to repair
+     * After sync fails to repair the chain, handleDirectRoute auto-proposes
+     * a chain drop iff (a) sync ran (synced=true), (b) chainDropService is
+     * wired, and (c) the user has auto-propose enabled. Verifies the
+     * "proposal sent" branch — output.error gets the structured payload
+     * with proposal_id + missing_txid + broken_txid.
      */
     public function testHandleDirectRouteAutoProposesChainDropWhenSyncFails(): void
     {
-        // Skipped: the chain-drop auto-propose path now lives in a
-        // different layer of the SendOperationService flow than this
-        // test was poking. The first error the user sees is the
-        // chain-repair failure ('Failed to repair chain: …'); the
-        // chain-drop proposal is dispatched on a separate retry /
-        // decision step, not inline.
-        $this->markTestSkipped('Chain-drop auto-propose flow moved; needs targeted rewrite.');
         $output = $this->createMock(CliOutputManager::class);
 
         $contactInfo = [
             'receiverPublicKey' => 'test-receiver-public-key',
             'receiverName' => 'TestContact',
             'status' => Constants::CONTACT_STATUS_ACCEPTED,
-            'receiverAddress' => 'http://test.example.com'
+            'receiverAddress' => 'http://test.example.com',
         ];
 
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
 
-        // Lock succeeds
         $this->mockLockingService->expects($this->once())
             ->method('acquireLock')
             ->willReturn(true);
         $this->mockLockingService->expects($this->once())
             ->method('releaseLock');
 
-        // Transport returns a valid index
         $this->mockTransportUtility->expects($this->once())
             ->method('fallbackTransportType')
             ->willReturn('receiverAddress');
 
-        // Chain verification fails after sync
-        // transactionChainRepository and syncTrigger are now injected via constructor
+        $this->mockUserContext->method('getPublicKey')->willReturn('user-public-key');
+        $this->mockUserContext->method('getAutoChainDropPropose')->willReturn(true);
 
-        $this->mockUserContext->expects($this->any())
-            ->method('getPublicKey')
-            ->willReturn('user-public-key');
-
-        $this->mockChainRepo->expects($this->any())
+        // verifySenderChainAndSync calls verifyChainIntegrity twice:
+        // once before sync, once after re-check. Both return invalid.
+        $this->mockChainRepo->expects($this->exactly(2))
             ->method('verifyChainIntegrity')
+            ->with('user-public-key', $contactInfo['receiverPublicKey'], 'USD')
             ->willReturn(['valid' => false, 'gaps' => ['gap1'], 'transaction_count' => 5]);
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
             ->willReturn(['success' => false, 'error' => 'Neither side has tx']);
 
-        // ChainDropService proposes successfully
         $this->service->setChainDropService($this->mockChainDropService);
         $this->mockChainDropService->expects($this->once())
             ->method('proposeChainDrop')
@@ -934,7 +927,7 @@ class SendOperationServiceTest extends TestCase
                 'success' => true,
                 'proposal_id' => 'proposal-123',
                 'missing_txid' => 'missing-tx-456',
-                'broken_txid' => 'broken-tx-789'
+                'broken_txid' => 'broken-tx-789',
             ]);
 
         $output->expects($this->once())
@@ -956,19 +949,20 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test handleDirectRoute shows pending proposal when one already exists
+     * If proposeChainDrop returns success=false but with a proposal_id,
+     * an active proposal already exists for this gap — the user gets
+     * "chain drop proposal is already pending" and the payload carries
+     * `chain_drop_pending => true` so the caller doesn't re-propose.
      */
     public function testHandleDirectRouteShowsPendingProposalWhenAlreadyExists(): void
     {
-        // See testHandleDirectRouteAutoProposesChainDropWhenSyncFails.
-        $this->markTestSkipped('Chain-drop pending-proposal flow moved; needs targeted rewrite.');
         $output = $this->createMock(CliOutputManager::class);
 
         $contactInfo = [
             'receiverPublicKey' => 'test-receiver-public-key',
             'receiverName' => 'TestContact',
             'status' => Constants::CONTACT_STATUS_ACCEPTED,
-            'receiverAddress' => 'http://test.example.com'
+            'receiverAddress' => 'http://test.example.com',
         ];
 
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
@@ -983,21 +977,18 @@ class SendOperationServiceTest extends TestCase
             ->method('fallbackTransportType')
             ->willReturn('receiverAddress');
 
-        // transactionChainRepository and syncTrigger are now injected via constructor
+        $this->mockUserContext->method('getPublicKey')->willReturn('user-public-key');
+        $this->mockUserContext->method('getAutoChainDropPropose')->willReturn(true);
 
-        $this->mockUserContext->expects($this->any())
-            ->method('getPublicKey')
-            ->willReturn('user-public-key');
-
-        $this->mockChainRepo->expects($this->any())
+        $this->mockChainRepo->expects($this->exactly(2))
             ->method('verifyChainIntegrity')
+            ->with('user-public-key', $contactInfo['receiverPublicKey'], 'USD')
             ->willReturn(['valid' => false, 'gaps' => ['gap1'], 'transaction_count' => 5]);
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
             ->willReturn(['success' => false, 'error' => 'Neither side has tx']);
 
-        // ChainDropService returns existing proposal (success=false but proposal_id set)
         $this->service->setChainDropService($this->mockChainDropService);
         $this->mockChainDropService->expects($this->once())
             ->method('proposeChainDrop')
@@ -1005,7 +996,7 @@ class SendOperationServiceTest extends TestCase
             ->willReturn([
                 'success' => false,
                 'proposal_id' => 'existing-proposal-456',
-                'error' => 'Active proposal already exists'
+                'error' => 'Active proposal already exists',
             ]);
 
         $output->expects($this->once())
@@ -1081,56 +1072,51 @@ class SendOperationServiceTest extends TestCase
     }
 
     /**
-     * Test handleDirectRoute detects chain gap even when sync reports success
-     *
-     * This covers the critical mutual gap scenario: both sides are missing the same
-     * transactions, so sync exchanges nothing and reports success=true with synced_count=0.
-     * The chain must still be re-verified and the gap detected.
+     * Mutual-gap case: sync reports success=true with synced_count=0
+     * because both sides are missing the same transactions. The post-sync
+     * verifyChainIntegrity recheck must still flag the gap and trigger
+     * the chain-drop proposal — silence + success=true from sync alone
+     * is not enough to clear the chain.
      */
     public function testHandleDirectRouteDetectsGapWhenSyncSucceedsButChainStillInvalid(): void
     {
-        // See testHandleDirectRouteAutoProposesChainDropWhenSyncFails.
-        $this->markTestSkipped('Chain-drop gap-detection flow moved; needs targeted rewrite.');
         $output = $this->createMock(CliOutputManager::class);
 
         $contactInfo = [
             'receiverPublicKey' => 'test-receiver-public-key',
             'receiverName' => 'TestContact',
             'status' => Constants::CONTACT_STATUS_ACCEPTED,
-            'receiverAddress' => 'http://test.example.com'
+            'receiverAddress' => 'http://test.example.com',
         ];
 
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
 
-        // Lock succeeds
         $this->mockLockingService->expects($this->once())
             ->method('acquireLock')
             ->willReturn(true);
         $this->mockLockingService->expects($this->once())
             ->method('releaseLock');
 
-        // Transport returns a valid index
         $this->mockTransportUtility->expects($this->once())
             ->method('fallbackTransportType')
             ->willReturn('receiverAddress');
 
-        // transactionChainRepository and syncTrigger are now injected via constructor
+        $this->mockUserContext->method('getPublicKey')->willReturn('user-public-key');
+        $this->mockUserContext->method('getAutoChainDropPropose')->willReturn(true);
 
-        $this->mockUserContext->expects($this->any())
-            ->method('getPublicKey')
-            ->willReturn('user-public-key');
-
-        // Chain verification ALWAYS returns invalid (gap persists after sync)
-        $this->mockChainRepo->expects($this->any())
+        // Both pre-sync and post-sync verifyChainIntegrity return invalid:
+        // the gap persists because both sides are missing the same txns.
+        $this->mockChainRepo->expects($this->exactly(2))
             ->method('verifyChainIntegrity')
+            ->with('user-public-key', $contactInfo['receiverPublicKey'], 'USD')
             ->willReturn(['valid' => false, 'gaps' => ['missing-tx-3', 'missing-tx-4'], 'transaction_count' => 4]);
 
-        // Sync reports SUCCESS with 0 transactions - this is the mutual gap case
+        // Sync "succeeds" but exchanges nothing — the mutual-gap
+        // signature.
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
             ->willReturn(['success' => true, 'synced_count' => 0, 'error' => null]);
 
-        // ChainDropService should be called to propose tx drop
         $this->service->setChainDropService($this->mockChainDropService);
         $this->mockChainDropService->expects($this->once())
             ->method('proposeChainDrop')
@@ -1139,7 +1125,7 @@ class SendOperationServiceTest extends TestCase
                 'success' => true,
                 'proposal_id' => 'proposal-mutual-gap',
                 'missing_txid' => 'missing-tx-3',
-                'broken_txid' => 'broken-tx-5'
+                'broken_txid' => 'broken-tx-5',
             ]);
 
         $output->expects($this->once())

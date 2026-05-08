@@ -1433,33 +1433,28 @@ class SyncServiceTest extends TestCase
     }
 
     /**
-     * Test message reconstruction includes all required fields
-     *
-     * Verifies that the signed message format includes all fields in the correct order.
-     * This is critical for signature verification to work consistently.
+     * Reconstructed signed message must include every field
+     * reconstructSignedMessage() emits — type, time, receiverAddress,
+     * receiverPublicKey, amount, currency, txid, previousTxid, memo,
+     * description (when memo=standard and non-empty), nonce — in that
+     * exact order. Sign with this hand-built shape and confirm
+     * verifyTransactionSignaturePublic() validates against an identical
+     * reconstruction from the database row.
      */
     public function testReconstructSignedMessageIncludesAllRequiredFields(): void
     {
-        // Skipped: the canonical signed-message format changed when
-        // the ledger moved from a single `amount` int to the Money
-        // split (amount_whole/amount_frac) — the test's hand-built
-        // expectedMessageContent and the transaction fixture both
-        // need to follow the source's new field set + ordering, and
-        // verifying that ordering belongs in a focused signature-
-        // format test rather than this generic reconstruction one.
-        // The end-to-end signed-message verification is exercised by
-        // the verifyTransactionSignature* tests below.
-        $this->markTestSkipped('Signed-message format changed with the Money split; rewrite separately.');
-
         $senderKeys = $this->generateTestKeyPair();
         $receiverKeys = $this->generateTestKeyPair();
 
-        // Create transaction with specific values to verify reconstruction
         $specificTime = 1700000000;
         $specificTxid = 'specific-txid-12345';
         $specificPreviousTxid = 'previous-txid-67890';
+        $specificDescription = 'Test description — must be part of the signed payload';
 
-        // Build the expected message content manually
+        // Hand-build the canonical signed message in the exact order the
+        // source emits it. Description is included because memo=standard
+        // and we're providing one — that branch was added by the
+        // payload refactor that prompted the original skip.
         $expectedMessageContent = [
             'type' => 'send',
             'time' => $specificTime,
@@ -1470,15 +1465,14 @@ class SyncServiceTest extends TestCase
             'txid' => $specificTxid,
             'previousTxid' => $specificPreviousTxid,
             'memo' => 'standard',
-            'nonce' => $specificTime  // Using same value for simplicity
+            'description' => $specificDescription,
+            'nonce' => $specificTime,
         ];
 
-        // Sign with this exact message
         $message = json_encode($expectedMessageContent);
         $signature = '';
         openssl_sign($message, $signature, $senderKeys['keyResource']);
 
-        // Create transaction data that should reconstruct to the same message
         $transaction = [
             'txid' => $specificTxid,
             'previous_txid' => $specificPreviousTxid,
@@ -1494,12 +1488,30 @@ class SyncServiceTest extends TestCase
             'status' => Constants::STATUS_COMPLETED,
             'sender_signature' => base64_encode($signature),
             'signature_nonce' => $specificTime,
-            'description' => 'Test description - should not affect signature'
+            'description' => $specificDescription,
         ];
 
-        $result = $this->service->verifyTransactionSignaturePublic($transaction);
+        $this->assertTrue(
+            $this->service->verifyTransactionSignaturePublic($transaction),
+            'Hand-built signed message must round-trip through reconstructSignedMessage()'
+        );
 
-        $this->assertTrue($result, 'Message reconstruction should produce verifiable signature');
+        // Inverse: an empty/null description must NOT appear in the
+        // signed payload, even with memo=standard. Re-sign without it
+        // and verify the same path validates.
+        $bareMessage = $expectedMessageContent;
+        unset($bareMessage['description']);
+        $bareSignature = '';
+        openssl_sign(json_encode($bareMessage), $bareSignature, $senderKeys['keyResource']);
+
+        $bareTransaction = $transaction;
+        $bareTransaction['description'] = null;
+        $bareTransaction['sender_signature'] = base64_encode($bareSignature);
+
+        $this->assertTrue(
+            $this->service->verifyTransactionSignaturePublic($bareTransaction),
+            'Null description must be omitted from the signed payload'
+        );
     }
 
     /**

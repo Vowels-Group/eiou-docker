@@ -20,6 +20,7 @@ use Eiou\Database\ApiKeyRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Services\P2pApprovalService;
 use Eiou\Services\ServiceContainer;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
@@ -39,6 +40,7 @@ class ApiControllerP2pTest extends TestCase
     private Rp2pCandidateRepository $mockRp2pCandidateRepo;
     private SendOperationServiceInterface $mockSendService;
     private P2pServiceInterface $mockP2pService;
+    private P2pApprovalService $mockP2pApprovalService;
     private ApiController $controller;
 
     protected function setUp(): void
@@ -52,6 +54,7 @@ class ApiControllerP2pTest extends TestCase
         $this->mockRp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
         $this->mockSendService = $this->createMock(SendOperationServiceInterface::class);
         $this->mockP2pService = $this->createMock(P2pServiceInterface::class);
+        $this->mockP2pApprovalService = $this->createMock(P2pApprovalService::class);
 
         $this->mockApiKeyRepository->method('logRequest');
 
@@ -72,6 +75,8 @@ class ApiControllerP2pTest extends TestCase
             ->willReturn($this->mockSendService);
         $this->mockServices->method('getP2pService')
             ->willReturn($this->mockP2pService);
+        $this->mockServices->method('getP2pApprovalService')
+            ->willReturn($this->mockP2pApprovalService);
 
         // ServiceContainer::getAppConfig() returns a final value object;
         // PHPUnit can't auto-double a final class, so the mock would
@@ -246,172 +251,98 @@ class ApiControllerP2pTest extends TestCase
     // =========================================================================
 
     /**
-     * Test approving P2P with candidate ID
-     *
-     * Skipped: the orchestration this test exercised has moved into
-     * P2pApprovalService::approve(); the controller is now a thin
-     * passthrough to that service. The repo + send-service expectations
-     * here target a code path that no longer exists in ApiController.
-     * Coverage of the orchestration itself lives in
-     * P2pApprovalServiceTest.
+     * Approve with explicit candidate_id delegates to P2pApprovalService::approve()
+     * with the candidate id (and a null candidate index — that's CLI vocabulary).
      */
     public function testApproveP2pWithCandidateId(): void
     {
-        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
-
         $this->authenticateWith(['wallet:send']);
 
-        $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+        $hash = str_repeat('a', 64);
+        $this->mockP2pApprovalService->expects($this->once())
+            ->method('approve')
+            ->with($hash, null, 5)
             ->willReturn([
-                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-                'amount' => 1000,
-                'currency' => 'USD',
-                'destination_address' => 'http://bob:8080',
-                'my_fee_amount' => 10,
-                'fast' => 0,
-            ]);
-
-        $this->mockRp2pCandidateRepo->method('getCandidateById')
-            ->with(5)
-            ->willReturn([
-                'id' => 5,
-                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'success' => true,
+                'hash' => $hash,
+                'mode' => 'candidate',
+                'candidate_index' => null,
                 'sender_address' => 'http://relay1:8080',
-                'amount' => 1020,
-                'currency' => 'USD',
-                'fee_amount' => 20,
-                'time' => 123456,
-                'sender_public_key' => 'pk1',
-                'sender_signature' => 'sig1',
             ]);
-
-        $this->mockRp2pRepo->expects($this->once())
-            ->method('insertRp2pRequest')
-            ->with($this->callback(function ($request) {
-                return $request['hash'] === 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-                    && $request['amount'] === 1020;
-            }));
-
-        $this->mockP2pRepo->expects($this->once())
-            ->method('updateStatus')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'found');
-
-        $this->mockSendService->expects($this->once())
-            ->method('sendP2pEiou')
-            ->with($this->callback(function ($request) {
-                return $request['hash'] === 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-                    && $request['amount'] === 1020;  // candidate amount (fee already included)
-            }));
-
-        $this->mockRp2pCandidateRepo->expects($this->once())
-            ->method('deleteCandidatesByHash')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 
         $response = $this->controller->handleRequest(
             'POST',
             '/api/v1/p2p/approve',
             [],
-            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'candidate_id' => 5]),
+            json_encode(['hash' => $hash, 'candidate_id' => 5]),
             []
         );
 
         $this->assertTrue($response['success']);
-        $this->assertEquals('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $response['data']['hash']);
+        $this->assertEquals($hash, $response['data']['hash']);
+        $this->assertEquals(5, $response['data']['candidate_id']);
+        $this->assertSame('P2P transaction approved and sent', $response['data']['message']);
     }
 
     /**
-     * Test approving P2P without candidate_id in fast mode
+     * Approve without candidate_id delegates with both selectors null;
+     * when the service reports `mode=fast` the response message gets the
+     * "(fast mode)" suffix and no candidate_id field is added.
      */
     public function testApproveP2pWithoutCandidateIdFastMode(): void
     {
-        // See testApproveP2pWithCandidateId — orchestration moved to
-        // P2pApprovalService.
-        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
-
         $this->authenticateWith(['wallet:send']);
 
-        $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+        $hash = str_repeat('a', 64);
+        $this->mockP2pApprovalService->expects($this->once())
+            ->method('approve')
+            ->with($hash, null, null)
             ->willReturn([
-                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-                'amount' => 1000,
-                'currency' => 'USD',
-                'destination_address' => 'http://bob:8080',
-                'my_fee_amount' => 10,
-                'fast' => 1,
-            ]);
-
-        $this->mockRp2pCandidateRepo->method('getCandidatesByHash')
-            ->willReturn([]);
-
-        $this->mockRp2pRepo->method('getByHash')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-            ->willReturn([
-                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'success' => true,
+                'hash' => $hash,
+                'mode' => 'fast',
+                'candidate_index' => null,
                 'sender_address' => 'http://relay1:8080',
-                'amount' => 1010,
-                'currency' => 'USD',
-                'time' => 123456,
-                'sender_public_key' => 'pk1',
-                'sender_signature' => 'sig1',
             ]);
-
-        $this->mockP2pRepo->expects($this->once())
-            ->method('updateStatus')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'found');
-
-        $this->mockSendService->expects($this->once())
-            ->method('sendP2pEiou');
 
         $response = $this->controller->handleRequest(
             'POST',
             '/api/v1/p2p/approve',
             [],
-            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
+            json_encode(['hash' => $hash]),
             []
         );
 
         $this->assertTrue($response['success']);
         $this->assertStringContainsString('fast mode', $response['data']['message']);
+        $this->assertArrayNotHasKey('candidate_id', $response['data']);
     }
 
     /**
-     * Test approving P2P with multiple candidates but no candidate_id returns error
+     * When the service reports candidate_selection_required the controller
+     * surfaces the structured error (status + code + message) without
+     * inventing its own response shape.
      */
     public function testApproveP2pMultipleCandidatesNoCandidateId(): void
     {
-        // See testApproveP2pWithCandidateId — orchestration moved to
-        // P2pApprovalService.
-        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
-
         $this->authenticateWith(['wallet:send']);
 
-        $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+        $hash = str_repeat('a', 64);
+        $this->mockP2pApprovalService->expects($this->once())
+            ->method('approve')
+            ->with($hash, null, null)
             ->willReturn([
-                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-                'amount' => 1000,
-                'currency' => 'USD',
-                'destination_address' => 'http://bob:8080',
-                'my_fee_amount' => 10,
-                'fast' => 0,
+                'success' => false,
+                'code' => 'candidate_selection_required',
+                'message' => 'Multiple candidates available; please pick one with candidate_id.',
+                'status' => 400,
             ]);
-
-        $this->mockRp2pCandidateRepo->method('getCandidatesByHash')
-            ->willReturn([
-                ['id' => 1, 'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
-                ['id' => 2, 'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
-            ]);
-
-        $this->mockSendService->expects($this->never())
-            ->method('sendP2pEiou');
 
         $response = $this->controller->handleRequest(
             'POST',
             '/api/v1/p2p/approve',
             [],
-            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
+            json_encode(['hash' => $hash]),
             []
         );
 
@@ -445,47 +376,33 @@ class ApiControllerP2pTest extends TestCase
     // =========================================================================
 
     /**
-     * Test rejecting P2P cancels and propagates
+     * Reject delegates to P2pApprovalService::reject() and surfaces the
+     * canonical "rejected and cancelled" message + hash on success.
      */
     public function testRejectP2pCancelsAndPropagates(): void
     {
-        // See testApproveP2pWithCandidateId — orchestration moved to
-        // P2pApprovalService.
-        $this->markTestSkipped('Orchestration moved to P2pApprovalService — see P2pApprovalServiceTest.');
-
         $this->authenticateWith(['wallet:send']);
 
-        $this->mockP2pRepo->method('getAwaitingApproval')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+        $hash = str_repeat('a', 64);
+        $this->mockP2pApprovalService->expects($this->once())
+            ->method('reject')
+            ->with($hash)
             ->willReturn([
-                'hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-                'amount' => 1000,
-                'currency' => 'USD',
-                'destination_address' => 'http://bob:8080',
+                'success' => true,
+                'hash' => $hash,
             ]);
-
-        $this->mockP2pRepo->expects($this->once())
-            ->method('updateStatus')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', Constants::STATUS_CANCELLED);
-
-        $this->mockP2pService->expects($this->once())
-            ->method('sendCancelNotificationForHash')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-
-        $this->mockRp2pCandidateRepo->expects($this->once())
-            ->method('deleteCandidatesByHash')
-            ->with('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 
         $response = $this->controller->handleRequest(
             'POST',
             '/api/v1/p2p/reject',
             [],
-            json_encode(['hash' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']),
+            json_encode(['hash' => $hash]),
             []
         );
 
         $this->assertTrue($response['success']);
-        $this->assertEquals('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $response['data']['hash']);
+        $this->assertEquals($hash, $response['data']['hash']);
+        $this->assertSame('P2P transaction rejected and cancelled', $response['data']['message']);
     }
 
     /**
