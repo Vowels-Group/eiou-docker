@@ -1344,17 +1344,58 @@ class P2pServiceTest extends TestCase
     }
 
     /**
-     * Test sendP2pRequest resolves contact name to address
-     *
-     * Note: This test is skipped due to an API mismatch between:
-     * - ContactServiceInterface::lookupAddressesByName returns ?string
-     * - TransportUtilityService::fallbackTransportAddress expects array
-     * The P2pService code passes the result of one to the other, which is incompatible.
-     * This should be addressed in a separate refactoring PR.
+     * Resolving a recipient that's a contact name (not a raw address):
+     * isAddress() returns false → lookupAddressesByName() returns the
+     * contact's address map → fallbackTransportAddress() picks one →
+     * data[2] is rewritten to that address before the P2P request is
+     * inserted. The original ?string/array API mismatch this test was
+     * skipped for has been fixed (lookupAddressesByName now returns
+     * ?array per the interface).
      */
     public function testSendP2pRequestResolvesContactName(): void
     {
-        $this->markTestSkipped('API mismatch: lookupAddressesByName returns string but fallbackTransportAddress expects array');
+        if (!function_exists('bccomp')) {
+            $this->markTestSkipped('bcmath required for InputValidator::validateAmount');
+        }
+
+        $contactName = 'Alice';
+        $resolvedAddress = 'http://alice.example.com:8080';
+        $contactAddresses = ['http' => $resolvedAddress, 'https' => null, 'tor' => null];
+
+        $this->transportUtility->expects($this->once())
+            ->method('isAddress')
+            ->with($contactName)
+            ->willReturn(false);
+
+        $this->contactService->expects($this->once())
+            ->method('lookupAddressesByName')
+            ->with($contactName)
+            ->willReturn($contactAddresses);
+
+        $this->transportUtility->expects($this->once())
+            ->method('fallbackTransportAddress')
+            ->with($contactAddresses)
+            ->willReturn($resolvedAddress);
+
+        $this->timeUtility->method('getCurrentMicrotime')->willReturn(1700000000123456);
+        $this->userContext->method('getHopBudgetRandomized')->willReturn(false);
+
+        // The lookup-then-rewrite path must hand the resolved address to
+        // p2pRepository::insertP2pRequest, not the original contact name.
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($payload) use ($resolvedAddress) {
+                    return ($payload['receiverAddress'] ?? null) === $resolvedAddress;
+                }),
+                $resolvedAddress,
+                $this->anything()
+            );
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($this->anything(), Constants::STATUS_QUEUED);
+
+        $this->service->sendP2pRequest(['eiou', 'send', $contactName, '100.00']);
     }
 
     // =========================================================================
