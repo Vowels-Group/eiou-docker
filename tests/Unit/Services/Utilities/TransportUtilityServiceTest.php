@@ -891,7 +891,12 @@ class TransportUtilityServiceTest extends TestCase
         $this->addressRepository->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
-        // torFallbackRequireEncrypted defaults to true in Constants
+        // Source reads the flag from the injected currentUser (named
+        // userContext in this test), not the singleton — set it here
+        // rather than relying on userconfig.json.
+        $this->userContext->method('isTorFallbackRequireEncrypted')
+            ->willReturn(true);
+
         $result = $reflection->invoke($this->service, 'contact.onion', '{"test":"data"}');
         $this->assertNull($result);
     }

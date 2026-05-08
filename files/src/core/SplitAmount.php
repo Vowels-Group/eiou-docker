@@ -112,9 +112,12 @@ class SplitAmount implements \JsonSerializable
             return self::zero();
         }
 
-        // Handle scientific notation by normalising to a plain decimal string
+        // Handle scientific notation by normalising to a plain decimal
+        // string. PHP 8.2+ bcmath rejects '1e5' as not-well-formed, so
+        // route through number_format on the float — bc only ever sees
+        // a fixed-point decimal here.
         if (stripos($value, 'e') !== false) {
-            $value = \bcadd($value, '0', self::FRAC_MODULUS_DIGITS);
+            $value = number_format((float) $value, self::FRAC_MODULUS_DIGITS, '.', '');
         }
 
         // Detect and strip sign

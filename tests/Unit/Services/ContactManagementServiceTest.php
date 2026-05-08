@@ -974,8 +974,12 @@ class ContactManagementServiceTest extends TestCase
         }
         $mockSync = $this->createServiceWithMockSync();
 
+        // Currency must be in Constants::ALLOWED_CURRENCIES (default ['USD'])
+        // because InputValidator::validateCurrency reaches for the real
+        // UserContext singleton, not the mocked $this->currentUser. Use USD
+        // and frame this as "Bob is accepted but doesn't yet have a USD line."
         $this->currentUser->method('getUserAddresses')->willReturn([]);
-        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD', 'EUR']);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
         $this->transportUtility->method('determineTransportType')->willReturn('http');
         $this->contactRepo->method('getContactByAddress')->willReturn([
             'pubkey' => 'pubkey-bob',
@@ -997,7 +1001,7 @@ class ContactManagementServiceTest extends TestCase
 
         $output = $this->createMock(CliOutputManager::class);
         $this->service->addContact(
-            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'EUR'],
+            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD'],
             $output,
         );
     }
@@ -1021,8 +1025,11 @@ class ContactManagementServiceTest extends TestCase
         }
         $mockSync = $this->createServiceWithMockSync();
 
+        // Use USD to keep InputValidator::validateCurrency happy (it
+        // bypasses the mocked currentUser and reads the real
+        // UserContext / Constants::ALLOWED_CURRENCIES).
         $this->currentUser->method('getUserAddresses')->willReturn([]);
-        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD', 'EUR']);
+        $this->currentUser->method('getAllowedCurrencies')->willReturn(['USD']);
         $this->transportUtility->method('determineTransportType')->willReturn('http');
         $this->contactRepo->method('getContactByAddress')->willReturn([
             'pubkey' => 'pubkey-bob',
@@ -1032,7 +1039,7 @@ class ContactManagementServiceTest extends TestCase
 
         // Stale outgoing-pending row from a prior attempt.
         $this->contactCurrencyRepo->method('getCurrencyConfig')->willReturn([
-            'currency' => 'EUR',
+            'currency' => 'USD',
             'fee_percent' => 100,
             'credit_limit' => null,
             'status' => Constants::STATUS_PENDING,
@@ -1041,7 +1048,7 @@ class ContactManagementServiceTest extends TestCase
         // Must drop the stale row before re-sending.
         $this->contactCurrencyRepo->expects($this->once())
             ->method('deletePendingOutgoingCurrency')
-            ->with($this->anything(), 'EUR')
+            ->with($this->anything(), 'USD')
             ->willReturn(true);
         $this->contactCurrencyRepo->method('hasCurrency')->willReturn(false);
         $this->contactCurrencyRepo->method('upsertCurrencyConfig')->willReturn(true);
@@ -1053,7 +1060,7 @@ class ContactManagementServiceTest extends TestCase
 
         $output = $this->createMock(CliOutputManager::class);
         $this->service->addContact(
-            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'EUR'],
+            ['eiou', 'add', 'http://bob:8080', 'Bob', '1', '100', 'USD'],
             $output,
         );
     }

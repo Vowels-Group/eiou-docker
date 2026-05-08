@@ -1051,7 +1051,11 @@ class P2pServiceTest extends TestCase
 
         $this->assertEquals('p2p', $result['txType']);
         $this->assertEquals(self::TEST_ADDRESS, $result['receiverAddress']);
-        $this->assertEquals(10000, $result['amount']); // 100.00 * 100
+        // After the Money split, amount is a SplitAmount instead of a
+        // raw int. 100.00 → whole=100, frac=0.
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result['amount']);
+        $this->assertSame(100, $result['amount']->whole);
+        $this->assertSame(0, $result['amount']->frac);
     }
 
     // =========================================================================
@@ -1381,13 +1385,13 @@ class P2pServiceTest extends TestCase
         $this->userContext->method('getHopBudgetRandomized')->willReturn(false);
 
         // The lookup-then-rewrite path must hand the resolved address to
-        // p2pRepository::insertP2pRequest, not the original contact name.
+        // p2pRepository::insertP2pRequest as the second argument.
+        // (receiverAddress is *not* in the wire payload — it's stripped
+        // for privacy; the destination address travels alongside.)
         $this->p2pRepository->expects($this->once())
             ->method('insertP2pRequest')
             ->with(
-                $this->callback(function ($payload) use ($resolvedAddress) {
-                    return ($payload['receiverAddress'] ?? null) === $resolvedAddress;
-                }),
+                $this->isType('array'),
                 $resolvedAddress,
                 $this->anything()
             );
