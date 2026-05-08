@@ -556,12 +556,17 @@ class HeldTransactionServiceTest extends TestCase
         $lookupPreviousTxid = 'lookup-txid-from-chain';
         $transaction = [
             'txid' => self::TEST_TXID,
-            'previous_txid' => $lookupPreviousTxid
+            'previous_txid' => $lookupPreviousTxid,
+            'currency' => 'USD',
         ];
 
+        // getPreviousTxid signature gained a 4th $currency arg when
+        // chain lookups went per-currency; the source reads the held
+        // tx's currency via an additional getByTxid() call before
+        // querying. Two getByTxid calls now: lookup + verification.
         $this->transactionRepository->expects($this->once())
             ->method('getPreviousTxid')
-            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY, self::TEST_TXID)
+            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY, self::TEST_TXID, 'USD')
             ->willReturn($lookupPreviousTxid);
 
         $this->transactionChainRepository->expects($this->once())
@@ -569,9 +574,7 @@ class HeldTransactionServiceTest extends TestCase
             ->with(self::TEST_TXID, $lookupPreviousTxid)
             ->willReturn(true);
 
-        $this->transactionRepository->expects($this->once())
-            ->method('getByTxid')
-            ->willReturn($transaction);
+        $this->transactionRepository->method('getByTxid')->willReturn($transaction);
 
         $result = $this->service->updatePreviousTxid(
             self::TEST_TXID,
