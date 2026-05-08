@@ -2545,22 +2545,6 @@ class P2pServiceTest extends TestCase
     }
 
     /**
-     * Test that expired P2P requests are rejected during checkP2pPossible
-     *
-     * Verifies that when a P2P request has an expiration time in the past,
-     * the checkP2pPossible method rejects it appropriately.
-     */
-    public function testCheckP2pPossibleRejectsExpiredP2p(): void
-    {
-        // checkP2pPossible does not currently check expiration directly -
-        // expiration is handled at message processing level, not in the P2P eligibility check.
-        // This test verifies the exception handling path when handleP2pRequest fails.
-        $this->markTestSkipped(
-            'checkP2pPossible does not check expiration - expiration is handled at message processing level'
-        );
-    }
-
-    /**
      * Test P2P expiration handling and cleanup
      *
      * Verifies that the repository correctly identifies expired P2P messages

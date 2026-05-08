@@ -12,8 +12,6 @@ namespace Eiou\Tests\Services;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\MockObject\MockObject;
 use Eiou\Services\DebugService;
 use Eiou\Database\DebugRepository;
@@ -263,10 +261,8 @@ class DebugServiceTest extends TestCase
      */
     public function testOutputEchosMessageWhenNotSilentInCli(): void
     {
-        if (php_sapi_name() !== 'cli') {
-            $this->markTestSkipped('Test requires CLI mode');
-        }
-
+        // PHPUnit always runs under the cli SAPI; the previous skip on
+        // php_sapi_name() !== 'cli' was dead code.
         $this->userContext->method('isInitialized')->willReturn(false);
         $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')->willReturn($mockPdo);
@@ -342,31 +338,85 @@ class DebugServiceTest extends TestCase
     }
 
     /**
-     * Test output does NOT insert debug record when APP_DEBUG is false (production)
-     *
-     * Runs in a separate process so we can load a Constants class with
-     * APP_DEBUG = false, simulating a production deployment.
+     * Production-mode behaviour: DebugService::output() must NOT insert
+     * a debug row when APP_DEBUG is false. Spawns a `php` child, loads
+     * a stub Eiou\Core\Constants (APP_DEBUG=false) before composer's
+     * autoloader can resolve the real one, and asserts insertDebug
+     * never fires — recorded via a sentinel file the stub repo
+     * touches.
      */
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function testOutputDoesNotInsertDebugWhenDebugDisabled(): void
     {
-        // This test requires Constants to not be autoloaded yet so we can override APP_DEBUG
-        if (class_exists('Eiou\\Core\\Constants', false)) {
-            $this->markTestSkipped('Constants class already loaded - cannot override in this environment');
+        $autoload = EIOU_FILES_ROOT . '/vendor/autoload.php';
+        $sentinel = tempnam(sys_get_temp_dir(), 'eiou-debug-stub-') . '.flag';
+        @unlink($sentinel);
+
+        // Production-shape Constants stub. Loaded BEFORE the composer
+        // autoloader so the autoloader's classmap entry for the real
+        // Eiou\Core\Constants is never resolved.
+        $stubPath = tempnam(sys_get_temp_dir(), 'eiou-constants-stub-') . '.php';
+        file_put_contents($stubPath, <<<'PHP'
+<?php
+namespace Eiou\Core;
+class Constants {
+    const APP_DEBUG = false;
+    public static function get($k, $d = null) {
+        $c = self::class . '::' . $k;
+        return defined($c) ? constant($c) : $d;
+    }
+    public static function isDebug(): bool { return false; }
+    public static function getAppEnv(): string { return 'production'; }
+}
+PHP);
+
+        $driver = <<<'PHP'
+<?php
+$stubPath = $argv[1];
+$autoload = $argv[2];
+$sentinel = $argv[3];
+require_once $stubPath;
+require_once $autoload;
+if ((new ReflectionClass(\Eiou\Core\Constants::class))->getConstant('APP_DEBUG') !== false) {
+    fwrite(STDERR, "FAIL: real Constants loaded before stub\n");
+    exit(2);
+}
+$repo = new class($sentinel) extends \Eiou\Database\DebugRepository {
+    private $sentinel;
+    public function __construct($sentinel) { $this->sentinel = $sentinel; }
+    public function insertDebug($data): void {
+        file_put_contents($this->sentinel, 'FIRED');
+    }
+};
+$userContext = new class extends \Eiou\Core\UserContext {
+    public function __construct() {}
+    public function isInitialized(): bool { return false; }
+};
+$service = new \Eiou\Services\DebugService($repo, $userContext);
+$service->output('production-mode message', 'SILENT');
+echo file_exists($sentinel) ? 'FIRED' : 'NOT_FIRED';
+PHP;
+
+        $driverPath = tempnam(sys_get_temp_dir(), 'eiou-debug-driver-') . '.php';
+        file_put_contents($driverPath, $driver);
+        try {
+            $cmd = sprintf(
+                'php %s %s %s %s 2>&1',
+                escapeshellarg($driverPath),
+                escapeshellarg($stubPath),
+                escapeshellarg($autoload),
+                escapeshellarg($sentinel)
+            );
+            $stdout = trim((string) shell_exec($cmd));
+            $this->assertSame(
+                'NOT_FIRED',
+                $stdout,
+                'DebugRepository::insertDebug must not fire when APP_DEBUG is false'
+            );
+        } finally {
+            @unlink($driverPath);
+            @unlink($stubPath);
+            @unlink($sentinel);
         }
-
-        // Define a Constants class with APP_DEBUG = false before autoloader loads the real one
-        eval('namespace Eiou\Core; class Constants { const APP_DEBUG = false; public static function get($key, $default = null) { $c = self::class . "::" . $key; return defined($c) ? constant($c) : $default; } public static function isDebug(): bool { return false; } public static function getAppEnv(): string { return "production"; } }');
-
-        $debugRepository = $this->createMock(\Eiou\Database\DebugRepository::class);
-        $userContext = $this->createMock(\Eiou\Core\UserContext::class);
-
-        // insertDebug must NEVER be called when APP_DEBUG is false
-        $debugRepository->expects($this->never())->method('insertDebug');
-
-        $service = new \Eiou\Services\DebugService($debugRepository, $userContext);
-        $service->output('This should not reach the database', 'SILENT');
     }
 
     /**

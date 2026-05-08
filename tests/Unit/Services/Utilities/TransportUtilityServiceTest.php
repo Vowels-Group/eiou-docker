@@ -1066,34 +1066,56 @@ class TransportUtilityServiceTest extends TestCase
 
     /**
      * The legacy env var alone (without the bootstrap constant) MUST NOT
-     * activate the bypass — that's the whole point of finding #10. We
-     * can't easily un-define the constant in PHP, so this test verifies
-     * the SECURITY error log fires whenever env+constant disagree.
+     * activate the bypass — that's the whole point of finding #10.
+     *
+     * PHP can't un-define a constant within the running process, and our
+     * test bootstrap (tests/bootstrap.php) defines EIOU_TEST_MODE for the
+     * whole suite. Spawn a fresh `php` child that loads composer autoload
+     * directly (no test bootstrap, so the constant stays undefined),
+     * sets the env var, and reports back what isTestModeBypassActive()
+     * returns. Captures the SECURITY warning from stderr too.
      */
     public function testTestModeBypassLogsSecurityErrorWhenEnvSetButConstantMissing(): void
     {
-        // Skip when both align (constant true + env true) — the loud
-        // warning is intentionally suppressed in that path.
-        if (defined('EIOU_TEST_MODE') && EIOU_TEST_MODE === true) {
-            $this->markTestSkipped(
-                'Cannot un-define EIOU_TEST_MODE constant from a test; ' .
-                'this branch is exercised only on production builds where ' .
-                'the constant is absent.'
-            );
-        }
+        $autoload = EIOU_FILES_ROOT . '/vendor/autoload.php';
+        $this->assertFileExists($autoload, 'composer autoload must exist for the child-process probe');
 
-        // (Defensive: in environments where the constant is somehow
-        // absent, set the env var and confirm the bypass still says
-        // false. Exercised on production builds only.)
-        $previous = getenv('EIOU_TEST_MODE');
-        putenv('EIOU_TEST_MODE=true');
+        // Build a tiny driver script: no bootstrap, env-only EIOU_TEST_MODE,
+        // call the private isTestModeBypassActive via reflection, print the
+        // boolean result to stdout. Logger::getInstance() will route the
+        // SECURITY error to its own backend (file/stderr) — we don't need
+        // to inspect the log line itself, only that the bypass stayed off.
+        $driver = <<<'PHP'
+<?php
+require_once $argv[1]; // composer autoload
+if (defined('EIOU_TEST_MODE')) {
+    fwrite(STDERR, "FAIL: bootstrap leaked EIOU_TEST_MODE\n");
+    exit(2);
+}
+putenv('EIOU_TEST_MODE=true');
+$class = new ReflectionClass(\Eiou\Services\Utilities\TransportUtilityService::class);
+$method = $class->getMethod('isTestModeBypassActive');
+$method->setAccessible(true);
+$result = $method->invoke(null, 'child-probe');
+echo $result ? 'BYPASS_ON' : 'BYPASS_OFF';
+PHP;
+
+        $driverPath = tempnam(sys_get_temp_dir(), 'eiou-bypass-probe-') . '.php';
+        file_put_contents($driverPath, $driver);
         try {
-            $this->assertFalse($this->isTestModeBypassActive('unit-test'),
-                'env-only must NOT activate the bypass on a non-test build');
+            $cmd = sprintf(
+                'php -d auto_prepend_file= %s %s 2>/dev/null',
+                escapeshellarg($driverPath),
+                escapeshellarg($autoload)
+            );
+            $stdout = shell_exec($cmd);
+            $this->assertSame(
+                'BYPASS_OFF',
+                trim((string) $stdout),
+                'env-only EIOU_TEST_MODE must NOT activate the SSL-verify bypass on a build where the constant is absent'
+            );
         } finally {
-            $previous === false
-                ? putenv('EIOU_TEST_MODE')
-                : putenv('EIOU_TEST_MODE=' . $previous);
+            @unlink($driverPath);
         }
     }
 }
