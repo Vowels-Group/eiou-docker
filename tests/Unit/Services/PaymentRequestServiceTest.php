@@ -138,8 +138,8 @@ class PaymentRequestServiceTest extends TestCase
     public function testCreateReturnsErrorWhenContactNotFound(): void
     {
         $this->requireBcmath();
-        $this->contactRepository->method('lookupByName')
-            ->willReturn(null);
+        $this->contactRepository->method('lookupAllByName')
+            ->willReturn([]);
 
         $result = $this->service->create('UnknownContact', self::TEST_AMOUNT, self::TEST_CURRENCY, null);
 
@@ -150,8 +150,8 @@ class PaymentRequestServiceTest extends TestCase
     public function testCreateReturnsErrorForPendingContact(): void
     {
         $this->requireBcmath();
-        $this->contactRepository->method('lookupByName')
-            ->willReturn(['name' => 'Bob', 'status' => 'pending', 'pubkey_hash' => 'x']);
+        $this->contactRepository->method('lookupAllByName')
+            ->willReturn([['name' => 'Bob', 'status' => 'pending', 'pubkey_hash' => 'x']]);
 
         $result = $this->service->create(self::TEST_CONTACT_NAME, self::TEST_AMOUNT, self::TEST_CURRENCY, null);
 
@@ -162,8 +162,8 @@ class PaymentRequestServiceTest extends TestCase
     public function testCreateReturnsErrorWhenNoAddressForContact(): void
     {
         $this->requireBcmath();
-        $this->contactRepository->method('lookupByName')
-            ->willReturn($this->acceptedContact());
+        $this->contactRepository->method('lookupAllByName')
+            ->willReturn([$this->acceptedContact()]);
         $this->addressRepository->method('lookupByPubkeyHash')
             ->willReturn([]);  // No addresses
 
@@ -176,8 +176,8 @@ class PaymentRequestServiceTest extends TestCase
     public function testCreateSuccessfullyStoresAndSendsRequest(): void
     {
         $this->requireBcmath();
-        $this->contactRepository->method('lookupByName')
-            ->willReturn($this->acceptedContact());
+        $this->contactRepository->method('lookupAllByName')
+            ->willReturn([$this->acceptedContact()]);
         $this->addressRepository->method('lookupByPubkeyHash')
             ->willReturn($this->addressMap());
         $this->paymentRequestRepository->expects($this->once())
@@ -198,8 +198,8 @@ class PaymentRequestServiceTest extends TestCase
     public function testCreateSucceedsEvenWhenDeliveryFails(): void
     {
         $this->requireBcmath();
-        $this->contactRepository->method('lookupByName')
-            ->willReturn($this->acceptedContact());
+        $this->contactRepository->method('lookupAllByName')
+            ->willReturn([$this->acceptedContact()]);
         $this->addressRepository->method('lookupByPubkeyHash')
             ->willReturn($this->addressMap());
         $this->paymentRequestRepository->method('createRequest')
@@ -216,8 +216,8 @@ class PaymentRequestServiceTest extends TestCase
     public function testCreatePrefersTorAddressWhenAvailable(): void
     {
         $this->requireBcmath();
-        $this->contactRepository->method('lookupByName')
-            ->willReturn($this->acceptedContact());
+        $this->contactRepository->method('lookupAllByName')
+            ->willReturn([$this->acceptedContact()]);
         $this->addressRepository->method('lookupByPubkeyHash')
             ->willReturn([
                 'http' => 'http://bob.example:8080',

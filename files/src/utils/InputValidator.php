@@ -825,7 +825,7 @@ class InputValidator {
         if ($remoteVersion === null) {
             return [
                 'reason' => 'Incompatible node version (unknown) — minimum required: ' . Constants::MIN_COMPATIBLE_VERSION .
-                            '. Please upgrade at https://github.com/eiou-org/eiou-docker',
+                            '. Please upgrade at https://github.com/Vowels-Group/eiou-docker',
                 'action' => 'upgrade_remote',
             ];
         }
@@ -834,7 +834,7 @@ class InputValidator {
         if (version_compare($remoteVersion, Constants::MIN_COMPATIBLE_VERSION, '<')) {
             return [
                 'reason' => "Incompatible node version ($remoteVersion) — minimum required: " . Constants::MIN_COMPATIBLE_VERSION .
-                            '. Please upgrade at https://github.com/eiou-org/eiou-docker',
+                            '. Please upgrade at https://github.com/Vowels-Group/eiou-docker',
                 'action' => 'upgrade_remote',
             ];
         }
@@ -845,7 +845,7 @@ class InputValidator {
             return [
                 'reason' => 'This node is running ' . Constants::APP_VERSION .
                             ' which is incompatible with the remote node (' . $remoteVersion .
-                            '). Please upgrade this node at https://github.com/eiou-org/eiou-docker',
+                            '). Please upgrade this node at https://github.com/Vowels-Group/eiou-docker',
                 'action' => 'upgrade_local',
             ];
         }

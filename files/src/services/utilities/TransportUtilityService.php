@@ -452,8 +452,11 @@ class TransportUtilityService implements TransportServiceInterface
         // Remove TOR from candidates so we only try HTTP/HTTPS
         unset($contactAddresses['tor']);
 
-        // If torFallbackRequireEncrypted is enabled, also remove HTTP to preserve privacy
-        if (UserContext::getInstance()->isTorFallbackRequireEncrypted()) {
+        // If torFallbackRequireEncrypted is enabled, also remove HTTP to preserve privacy.
+        // Use the injected currentUser (not the singleton) so tests can flip the flag
+        // without writing to /etc/eiou/config — fixes a long-standing test gap where
+        // this branch was unreachable under any mock setup.
+        if ($this->currentUser->isTorFallbackRequireEncrypted()) {
             unset($contactAddresses['http']);
         }
 

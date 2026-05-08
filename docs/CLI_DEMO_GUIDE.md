@@ -145,7 +145,7 @@ If you need to customize the image or are contributing to development, build fro
 **Clone and build:**
 ```bash
 # Clone the repository
-git clone https://github.com/eiou-org/eiou-docker.git
+git clone https://github.com/Vowels-Group/eiou-docker.git
 cd eiou-docker
 
 # Build the image

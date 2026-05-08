@@ -8,8 +8,6 @@ namespace Eiou\Gui\Includes;
  *
  * Centralizes all $_SESSION key names to prevent typos and enable
  * IDE autocompletion/refactoring.
- *
- * @see https://github.com/eiou-org/eiou-docker/issues/699
  */
 class SessionKeys
 {

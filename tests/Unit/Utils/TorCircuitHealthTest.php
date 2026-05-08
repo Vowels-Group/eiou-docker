@@ -4,8 +4,6 @@
  *
  * Tests per-.onion address failure tracking, cooldown activation,
  * success recovery, and bulk operations.
- *
- * @see https://github.com/eiou-org/eiou-docker/issues/699
  */
 
 namespace Eiou\Tests\Utils;

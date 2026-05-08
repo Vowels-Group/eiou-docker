@@ -831,26 +831,19 @@ class MessageDeliveryRepositoryTest extends TestCase
      */
     public function testMarkCompletedByHashUpdatesMatchingDeliveries(): void
     {
-        $this->pdo->expects($this->once())
-            ->method('prepare')
+        // markCompletedByHash binds 5 named placeholders
+        // (:completed_stage, :type, :pattern, :exclude_completed,
+        // :exclude_failed); the previous expectation of exactly 2
+        // was carrying over from before the NOT IN exclusion filter
+        // landed.
+        $this->pdo->method('prepare')
             ->with($this->stringContains('message_id LIKE :pattern'))
             ->willReturn($this->stmt);
+        $this->stmt->method('bindValue')->willReturn(true);
+        $this->stmt->method('execute')->willReturn(true);
+        $this->stmt->method('rowCount')->willReturn(3);
 
-        $this->stmt->expects($this->exactly(2))
-            ->method('bindValue')
-            ->willReturn(true);
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
-            ->willReturn(true);
-
-        $this->stmt->expects($this->once())
-            ->method('rowCount')
-            ->willReturn(3);
-
-        $result = $this->repository->markCompletedByHash('p2p', 'abc123hash');
-
-        $this->assertEquals(3, $result);
+        $this->assertEquals(3, $this->repository->markCompletedByHash('p2p', 'abc123hash'));
     }
 
     /**
@@ -858,21 +851,12 @@ class MessageDeliveryRepositoryTest extends TestCase
      */
     public function testMarkCompletedByHashReturnsZeroOnException(): void
     {
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->exactly(2))
-            ->method('bindValue')
-            ->willReturn(true);
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
+        $this->pdo->method('prepare')->willReturn($this->stmt);
+        $this->stmt->method('bindValue')->willReturn(true);
+        $this->stmt->method('execute')
             ->willThrowException(new PDOException('Update failed'));
 
-        $result = $this->repository->markCompletedByHash('p2p', 'abc123hash');
-
-        $this->assertEquals(0, $result);
+        $this->assertEquals(0, $this->repository->markCompletedByHash('p2p', 'abc123hash'));
     }
 
     // =========================================================================

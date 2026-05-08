@@ -523,6 +523,13 @@ class MessageDeliveryServiceTest extends TestCase
             ->method('getMessagesForRetry')
             ->willReturn($messages);
 
+        // processRetryQueue now atomically claims each message via
+        // claimForRetry() before processing, to avoid duplicate work
+        // when multiple workers race the queue. Unstubbed bool-returning
+        // mocks default to null (falsy), which would make every
+        // message look "claimed by another worker" and skip the body.
+        $this->deliveryRepository->method('claimForRetry')->willReturn(true);
+
         $this->dlqRepository->expects($this->once())
             ->method('addToQueue')
             ->with(
@@ -561,6 +568,10 @@ class MessageDeliveryServiceTest extends TestCase
         $this->deliveryRepository->expects($this->once())
             ->method('getMessagesForRetry')
             ->willReturn($messages);
+
+        // See testProcessRetryQueueMovesNoPayloadToDlq — atomic
+        // claim guard.
+        $this->deliveryRepository->method('claimForRetry')->willReturn(true);
 
         $this->transportUtility->expects($this->once())
             ->method('send')

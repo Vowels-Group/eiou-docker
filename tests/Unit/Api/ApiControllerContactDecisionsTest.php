@@ -7,12 +7,14 @@ namespace Eiou\Tests\Api;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Api\ApiController;
+use Eiou\Core\AppConfig;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Database\ContactCurrencyRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\RepositoryFactory;
 use Eiou\Services\ApiAuthService;
 use Eiou\Services\ContactDecisionService;
+use Eiou\Services\ContactSyncService;
 use Eiou\Services\ServiceContainer;
 use Eiou\Utils\Logger;
 
@@ -34,6 +36,8 @@ class ApiControllerContactDecisionsTest extends TestCase
     private $services;
     /** @var ContactDecisionService&\PHPUnit\Framework\MockObject\MockObject */
     private $decisionService;
+    /** @var ContactSyncService&\PHPUnit\Framework\MockObject\MockObject */
+    private $contactSyncService;
     /** @var ContactRepository&\PHPUnit\Framework\MockObject\MockObject */
     private $contactRepo;
     /** @var ContactCurrencyRepository&\PHPUnit\Framework\MockObject\MockObject */
@@ -47,6 +51,7 @@ class ApiControllerContactDecisionsTest extends TestCase
         $this->apiKeyRepo = $this->createMock(ApiKeyRepository::class);
         $this->services = $this->createMock(ServiceContainer::class);
         $this->decisionService = $this->createMock(ContactDecisionService::class);
+        $this->contactSyncService = $this->createMock(ContactSyncService::class);
         $this->contactRepo = $this->createMock(ContactRepository::class);
         $this->contactCurrencyRepo = $this->createMock(ContactCurrencyRepository::class);
 
@@ -59,6 +64,10 @@ class ApiControllerContactDecisionsTest extends TestCase
 
         $this->services->method('getContactDecisionService')
             ->willReturn($this->decisionService);
+        // Bulk + per-currency decline routes through ContactSyncService now;
+        // tests below set explicit expectations on the methods they exercise.
+        $this->services->method('getContactSyncService')
+            ->willReturn($this->contactSyncService);
 
         $repoFactory = $this->createMock(RepositoryFactory::class);
         $repoFactory->method('get')->willReturnCallback(function (string $class) {
@@ -67,6 +76,13 @@ class ApiControllerContactDecisionsTest extends TestCase
             return $this->createMock($class);
         });
         $this->services->method('getRepositoryFactory')->willReturn($repoFactory);
+
+        // ServiceContainer::getAppConfig() returns a final value object;
+        // PHPUnit can't auto-double a final class, so the mock would
+        // throw "Class AppConfig is declared final and cannot be doubled"
+        // on the first call from any handler that touches it. Hand it
+        // a real AppConfig instance instead.
+        $this->services->method('getAppConfig')->willReturn(AppConfig::fromEnvironment());
 
         $this->controller = new ApiController(
             $this->auth,
@@ -228,12 +244,15 @@ class ApiControllerContactDecisionsTest extends TestCase
     // POST /api/v1/contacts/:hash/currency-decline
     // =========================================================================
 
-    public function testCurrencyDeclineForwardsToRepository(): void
+    public function testCurrencyDeclineForwardsToContactSyncService(): void
     {
-        $this->contactCurrencyRepo->expects($this->once())
-            ->method('declineIncomingCurrency')
-            ->with('abc123', 'EUR')
-            ->willReturn(true);
+        // The endpoint forwards to ContactSyncService::declineReceivedContactCurrency
+        // (which handles the repo write + the decline notification to the
+        // peer); the controller no longer touches ContactCurrencyRepository
+        // directly for this route.
+        $this->contactSyncService->expects($this->once())
+            ->method('declineReceivedContactCurrency')
+            ->with('abc123', 'EUR');
 
         $response = $this->controller->handleRequest(
             'POST',
@@ -298,13 +317,21 @@ class ApiControllerContactDecisionsTest extends TestCase
                 ['currency' => 'EUR'],
             ]);
 
+        // Each pending currency goes through
+        // ContactSyncService::declineReceivedContactCurrency, plus a
+        // single sendContactDeclineNotification at the end covering the
+        // whole-contact decline.
         $declined = [];
-        $this->contactCurrencyRepo->expects($this->exactly(2))
-            ->method('declineIncomingCurrency')
+        $this->contactSyncService->expects($this->exactly(2))
+            ->method('declineReceivedContactCurrency')
             ->willReturnCallback(function ($_h, $ccy) use (&$declined) {
                 $declined[] = $ccy;
                 return true;
             });
+        $this->contactSyncService->expects($this->once())
+            ->method('sendContactDeclineNotification')
+            ->with('abc123')
+            ->willReturn(true);
 
         $response = $this->controller->handleRequest(
             'POST',
@@ -328,12 +355,11 @@ class ApiControllerContactDecisionsTest extends TestCase
             ['currency' => 'USD'],
             ['currency' => 'EUR'],
         ]);
-        $this->contactCurrencyRepo->method('declineIncomingCurrency')
+        $this->contactSyncService->method('declineReceivedContactCurrency')
             ->willReturnCallback(function ($_h, $ccy) {
                 if ($ccy === 'EUR') {
                     throw new \RuntimeException('locked');
                 }
-                return true;
             });
 
         $response = $this->controller->handleRequest(

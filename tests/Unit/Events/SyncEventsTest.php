@@ -175,10 +175,13 @@ class SyncEventsTest extends TestCase
         $reflection = new ReflectionClass(SyncEvents::class);
         $constants = $reflection->getConstants();
 
+        // Bump this when intentionally adding/removing a sync-event
+        // constant — the count guard is here to catch drift, not to
+        // freeze the surface.
         $this->assertCount(
-            11,
+            12,
             $constants,
-            'SyncEvents should define exactly 11 constants'
+            'SyncEvents should define exactly 12 constants'
         );
     }
 

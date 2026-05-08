@@ -467,6 +467,68 @@ docker run --rm -v "$(pwd)":/app -w /app php:8.3-cli ./files/vendor/bin/phpunit 
 docker run --rm -v "$(pwd)":/app -w /app php:8.3-cli ./files/vendor/bin/phpunit --configuration tests/phpunit.xml --testdox
 ```
 
+### Running the suite inside an eiou node (closes most env-gated skips)
+
+A handful of unit tests guard on environment state that only exists inside
+an eiou container — `php-bcmath` loaded, `/app/eiou/` populated, `/etc/eiou/config/`
+present and writable, the encryption-key file layout. Outside that
+environment they `markTestSkipped()` and **this is normal, expected
+behaviour** for host-side runs. To exercise that coverage:
+
+```bash
+# 1) Start a node (adds bcmath, /app/eiou, /etc/eiou/config, network)
+docker compose up -d --build
+
+# 2) Run the wrapper. Three modes; "all" runs them in sequence.
+tests/run-unit-tests-docker.sh all          # node + fresh + fresh-key
+tests/run-unit-tests-docker.sh node         # against running eiou-node only
+tests/run-unit-tests-docker.sh fresh        # empty /etc/eiou/config (first-boot path)
+tests/run-unit-tests-docker.sh fresh-key    # stub .master.key.enc for the volume-encryption presence path
+
+# Forwarded args go to phpunit:
+tests/run-unit-tests-docker.sh node --filter=ApplicationTest
+```
+
+Each mode covers a different class of skip:
+
+| Mode        | What it adds                                      | Tests it unlocks                                         |
+| ----------- | ------------------------------------------------- | -------------------------------------------------------- |
+| `node`      | bcmath + DB + populated `/etc/eiou/config`        | `ApplicationTest` (27), bcmath gates (~14), `UserContextTest` config tests (3), `UpdateCheckServiceTest` config tests (~16), the InputValidator-routed currency checks |
+| `fresh`     | empty `/etc/eiou/config` + clean `/dev/shm` tmpfs | `VolumeEncryptionTest` / `MariaDbEncryptionTest` / `KeyEncryptionTest` first-boot bootstrap paths (~9) |
+| `fresh-key` | stub `.master.key.enc` present in tmpfs config    | `VolumeEncryptionTest::testInitThrowsWhenEncryptedKeyExistsWithoutPassphrase` (the encrypted-key-present branch of the same suite) |
+
+#### Skips you'll still see — and why they're fine
+
+These never run on a plain host and shouldn't be treated as failures:
+
+- **bcmath gates** (`InputValidatorTest`, `ContactValidatorTest`,
+  `CurrencyUtilityServiceTest`, `SettlementPrecisionServiceTest`,
+  `PaymentRequestServiceTest`, `ContactDecisionServiceTest`,
+  `ContactManagementServiceTest`, `TransactionFormatterTest`) — skip
+  unless `bcmath` is loaded. Production and CI both have it.
+- **Docker-environment gates** (`ApplicationTest` × 27, `UserContextTest`
+  × 3, `UpdateCheckServiceTest` × ~16) — skip when `/app/eiou/` or
+  `/etc/eiou/config/` aren't present/writable.
+- **Encryption presence/absence** (`VolumeEncryptionTest`,
+  `MariaDbEncryptionTest`, `KeyEncryptionTest`) — split by intent:
+  some assert the *first-install* path (file absent), others the
+  *active-session* path (file present). Any single environment will
+  skip one of the two halves.
+- **PHP build features** (`PayloadEncryptionTest` × 2,
+  `E2eAllMessagesTest`, `E2eContactDescriptionTest`) — skip if the
+  linked OpenSSL lacks `secp256k1` or PHP lacks `openssl_pkey_derive` /
+  `hash_hkdf`. Production builds have both.
+- **Maintenance lockfile** (`MaintenanceCheckTest`) — only skips when
+  `/tmp/eiou_maintenance.lock` is present (loading the script during a
+  maintenance window would call `exit()`).
+- **Network** (`UpdateCheckServiceTest::testGetReleaseNotesReturnsExpectedKeysWhenAvailable`)
+  — needs to reach github.com.
+
+The wrapper above + a real network connection covers everything except the
+maintenance-lockfile guard. If you want a single number to track,
+`tests/run-unit-tests-docker.sh all` should bottom out at **≤ 5 skips**
+total — anything more means a new environment guard slipped in.
+
 ### Running Specific Tests
 
 ```bash

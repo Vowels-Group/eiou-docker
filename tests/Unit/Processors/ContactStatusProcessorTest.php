@@ -77,6 +77,16 @@ class ContactStatusProcessorTest extends TestCase
         // Configure user context
         $this->userContext->method('getPublicKey')
             ->willReturn(self::TEST_PUBLIC_KEY);
+
+        // Default the feature flag to ON so the early-return guard in
+        // processMessages() doesn't short-circuit every test that
+        // exercises the ping path. setContactStatusEnabled() below is
+        // a no-op kept for test readability — the actual feature gate
+        // is `$this->currentUser->getContactStatusEnabled()`. Tests
+        // that need it OFF override this with their own
+        // willReturn(false).
+        $this->userContext->method('getContactStatusEnabled')->willReturn(true);
+        $this->userContext->method('getContactStatusSyncOnPing')->willReturn(false);
     }
 
     protected function tearDown(): void

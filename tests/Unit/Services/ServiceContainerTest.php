@@ -622,28 +622,22 @@ class ServiceContainerTest extends TestCase
     }
 
     /**
-     * Test wireAllServices initializes and wires all services
+     * wireAllServices() walks every getter, instantiating the lazy
+     * service-graph and then setter-injecting the circular dependencies
+     * (TransactionService↔SyncService etc.). Construction is the only
+     * thing on the hot path here — none of these getters issue queries
+     * by themselves, so a mocked PDO threaded through RepositoryFactory
+     * is enough to exercise the wiring without a real database.
      *
-     * Note: This is effectively an integration test since wireAllServices()
-     * triggers service initialization that creates repositories requiring
-     * actual database connections. Should be moved to integration tests.
+     * The previous skip blamed an internal `new TransactionChainRepository`
+     * inside TransactionValidationService, but that constructor now
+     * takes the repo as a DI parameter via RepositoryFactory — the
+     * stale comment was the only thing stopping this test from running.
      */
     public function testWireAllServicesInitializesAndWiresAllServices(): void
     {
-        // Skip in unit test environment - this test requires a real database
-        // because wireAllServices() initializes services that internally create
-        // repositories with database connections (e.g., TransactionChainRepository
-        // is created directly in TransactionValidationService constructor).
-        $this->markTestSkipped(
-            'This test requires a real database connection. ' .
-            'TransactionValidationService creates TransactionChainRepository internally, ' .
-            'bypassing the mock PDO. Move to integration tests or refactor services to ' .
-            'use dependency injection for all repository dependencies.'
-        );
-
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
-        // This will initialize all services and wire dependencies
         $container->wireAllServices();
 
         // Verify key services are now available

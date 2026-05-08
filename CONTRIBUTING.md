@@ -12,9 +12,8 @@ This guide covers everything you need to get started: setting up your developmen
 4. [Coding Standards](#coding-standards)
 5. [Testing Requirements](#testing-requirements)
 6. [Pull Request Process](#pull-request-process)
-7. [Reporting Issues](#reporting-issues)
-8. [Documentation](#documentation)
-9. [License](#license)
+7. [Documentation](#documentation)
+8. [License](#license)
 
 ---
 
@@ -71,7 +70,7 @@ brew install php composer
 
 ```bash
 # Clone the repository
-git clone https://github.com/eiou-org/eiou-docker.git
+git clone https://github.com/Vowels-Group/eiou-docker.git
 cd eiou-docker
 
 # Install PHP dependencies
@@ -535,40 +534,6 @@ git pull origin main
 # Delete your feature branch
 git branch -d your-branch-name
 ```
-
----
-
-## Reporting Issues
-
-Report bugs and request features through [GitHub Issues](https://github.com/eiou-org/eiou-docker/issues).
-
-### Before Creating a New Issue
-
-**Always search existing issues first.** Before opening a new issue:
-
-1. Search [open issues](https://github.com/eiou-org/eiou-docker/issues) for keywords related to your problem or feature idea.
-2. Search [closed issues](https://github.com/eiou-org/eiou-docker/issues?q=is%3Aissue+is%3Aclosed) — your issue may have already been resolved.
-3. Check the [CHANGELOG](CHANGELOG.md) — the behavior you're reporting may be an intentional change in a recent update.
-
-If you find an existing issue that matches, add a comment with any additional details rather than creating a duplicate. Duplicate issues fragment discussion and slow down resolution.
-
-### Filing a Bug Report
-
-When filing a bug report, include:
-
-- Steps to reproduce the issue.
-- Expected behavior vs. actual behavior.
-- Docker Compose configuration used.
-- Relevant container logs (`docker compose logs`).
-- PHP version and operating system.
-
-### Requesting a Feature
-
-When requesting a feature, include:
-
-- Description of the desired behavior.
-- Use case and motivation.
-- Any proposed implementation approach (optional).
 
 ---
 

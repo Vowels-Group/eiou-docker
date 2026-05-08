@@ -279,14 +279,19 @@ class SecureSeedphraseDisplayTest extends TestCase
     }
 
     /**
-     * Test TTL constant is 300 seconds (5 minutes)
+     * Test TTL constant is 900 seconds (15 minutes).
+     *
+     * The source has been on 15-minute TTL since the docker exec
+     * info-show-auth flow gained the auto-deletion banner; the
+     * test was carrying a stale 300s expectation from the original
+     * 5-minute value.
      */
-    public function testTtlConstantIs300Seconds(): void
+    public function testTtlConstantIs900Seconds(): void
     {
         $result = SecureSeedphraseDisplay::display($this->testSeedphrase, false);
 
         if ($result['method'] === 'file') {
-            $this->assertEquals(300, $result['ttl']);
+            $this->assertEquals(900, $result['ttl']);
         }
     }
 

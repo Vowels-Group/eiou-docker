@@ -505,7 +505,12 @@ class SyncServiceTest extends TestCase
 
         $this->mockBalanceRepo->expects($this->once())
             ->method('insertBalance')
-            ->with($contactPubkey, 500, 1000, 'USD');
+            ->with(
+                $contactPubkey,
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 500),
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 1000),
+                'USD'
+            );
 
         $result = $this->service->syncContactBalance($contactPubkey);
 
@@ -552,7 +557,8 @@ class SyncServiceTest extends TestCase
             ->method('updateBothDirectionBalance')
             ->with(
                 $this->callback(function ($amounts) {
-                    return $amounts['sent'] === 1000 && $amounts['received'] === 0;
+                    return $amounts['sent']->whole === 1000
+                        && $amounts['received']->whole === 0;
                 }),
                 $this->anything(),
                 'USD'
@@ -822,7 +828,12 @@ class SyncServiceTest extends TestCase
         // sent = 1000 (rejected 2000 excluded), received = 500 (expired 3000 excluded)
         $this->mockBalanceRepo->expects($this->once())
             ->method('insertBalance')
-            ->with($contactPubkey, 500, 1000, 'USD');
+            ->with(
+                $contactPubkey,
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 500),
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 1000),
+                'USD'
+            );
 
         $result = $this->service->syncContactBalance($contactPubkey);
 
@@ -941,7 +952,10 @@ class SyncServiceTest extends TestCase
             ->method('updateBothDirectionBalance')
             ->with(
                 $this->callback(function ($amounts) {
-                    return $amounts['sent'] === 1000 && $amounts['received'] === 750;
+                    // Source now passes SplitAmount instances in the
+                    // amounts map; legacy ints don't match.
+                    return $amounts['sent']->whole === 1000
+                        && $amounts['received']->whole === 750;
                 }),
                 $this->anything(),
                 'USD'
@@ -1017,7 +1031,12 @@ class SyncServiceTest extends TestCase
         // Only completed: sent=2000 (rejected 9000 excluded), received=1500 (expired 4000 excluded)
         $this->mockBalanceRepo->expects($this->once())
             ->method('insertBalance')
-            ->with('contact-pubkey-1', 1500, 2000, 'USD');
+            ->with(
+                'contact-pubkey-1',
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 1500),
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 2000),
+                'USD'
+            );
 
         $output->expects($this->once())
             ->method('success')
@@ -1094,7 +1113,12 @@ class SyncServiceTest extends TestCase
 
         $this->mockBalanceRepo->expects($this->once())
             ->method('insertBalance')
-            ->with('contact-b', 0, 3000, 'USD');
+            ->with(
+                'contact-b',
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 0),
+                $this->callback(fn(\Eiou\Core\SplitAmount $a) => $a->whole === 3000),
+                'USD'
+            );
 
         $output->expects($this->once())
             ->method('success')
@@ -1409,22 +1433,28 @@ class SyncServiceTest extends TestCase
     }
 
     /**
-     * Test message reconstruction includes all required fields
-     *
-     * Verifies that the signed message format includes all fields in the correct order.
-     * This is critical for signature verification to work consistently.
+     * Reconstructed signed message must include every field
+     * reconstructSignedMessage() emits — type, time, receiverAddress,
+     * receiverPublicKey, amount, currency, txid, previousTxid, memo,
+     * description (when memo=standard and non-empty), nonce — in that
+     * exact order. Sign with this hand-built shape and confirm
+     * verifyTransactionSignaturePublic() validates against an identical
+     * reconstruction from the database row.
      */
     public function testReconstructSignedMessageIncludesAllRequiredFields(): void
     {
         $senderKeys = $this->generateTestKeyPair();
         $receiverKeys = $this->generateTestKeyPair();
 
-        // Create transaction with specific values to verify reconstruction
         $specificTime = 1700000000;
         $specificTxid = 'specific-txid-12345';
         $specificPreviousTxid = 'previous-txid-67890';
+        $specificDescription = 'Test description — must be part of the signed payload';
 
-        // Build the expected message content manually
+        // Hand-build the canonical signed message in the exact order the
+        // source emits it. Description is included because memo=standard
+        // and we're providing one — that branch was added by the
+        // payload refactor that prompted the original skip.
         $expectedMessageContent = [
             'type' => 'send',
             'time' => $specificTime,
@@ -1435,15 +1465,14 @@ class SyncServiceTest extends TestCase
             'txid' => $specificTxid,
             'previousTxid' => $specificPreviousTxid,
             'memo' => 'standard',
-            'nonce' => $specificTime  // Using same value for simplicity
+            'description' => $specificDescription,
+            'nonce' => $specificTime,
         ];
 
-        // Sign with this exact message
         $message = json_encode($expectedMessageContent);
         $signature = '';
         openssl_sign($message, $signature, $senderKeys['keyResource']);
 
-        // Create transaction data that should reconstruct to the same message
         $transaction = [
             'txid' => $specificTxid,
             'previous_txid' => $specificPreviousTxid,
@@ -1459,12 +1488,30 @@ class SyncServiceTest extends TestCase
             'status' => Constants::STATUS_COMPLETED,
             'sender_signature' => base64_encode($signature),
             'signature_nonce' => $specificTime,
-            'description' => 'Test description - should not affect signature'
+            'description' => $specificDescription,
         ];
 
-        $result = $this->service->verifyTransactionSignaturePublic($transaction);
+        $this->assertTrue(
+            $this->service->verifyTransactionSignaturePublic($transaction),
+            'Hand-built signed message must round-trip through reconstructSignedMessage()'
+        );
 
-        $this->assertTrue($result, 'Message reconstruction should produce verifiable signature');
+        // Inverse: an empty/null description must NOT appear in the
+        // signed payload, even with memo=standard. Re-sign without it
+        // and verify the same path validates.
+        $bareMessage = $expectedMessageContent;
+        unset($bareMessage['description']);
+        $bareSignature = '';
+        openssl_sign(json_encode($bareMessage), $bareSignature, $senderKeys['keyResource']);
+
+        $bareTransaction = $transaction;
+        $bareTransaction['description'] = null;
+        $bareTransaction['sender_signature'] = base64_encode($bareSignature);
+
+        $this->assertTrue(
+            $this->service->verifyTransactionSignaturePublic($bareTransaction),
+            'Null description must be omitted from the signed payload'
+        );
     }
 
     /**
