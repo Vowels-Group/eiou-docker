@@ -137,32 +137,62 @@ class PluginDbUserServiceTest extends TestCase
     // grant() / revoke() / dropUser()
     // =========================================================================
 
-    public function testGrantEmitsExpectedStatement(): void
+    public function testGrantEmitsOneStatementPerOwnedTable(): void
     {
-        $this->svc->grant('my-plugin', ['plugin_my_plugin_subs']);
+        $this->svc->grant('my-plugin', [
+            'plugin_my_plugin_subs',
+            'plugin_my_plugin_log',
+        ]);
 
-        $this->assertCount(1, $this->execCalls);
-        $sql = $this->execCalls[0];
-
-        $this->assertStringStartsWith('GRANT ', $sql);
-        $this->assertStringContainsString('CREATE, ALTER, DROP, INDEX, SELECT, INSERT, UPDATE, DELETE', $sql);
-        $this->assertStringContainsString('ON `eiou`.`plugin_my_plugin_%`', $sql);
-        $this->assertStringContainsString("TO `plugin_my_plugin`@'localhost'", $sql);
-
-        // CRITICAL: REFERENCES and GRANT OPTION must never appear —
-        // documented security invariants.
-        $this->assertStringNotContainsString('REFERENCES', $sql);
-        $this->assertStringNotContainsString('GRANT OPTION', $sql);
+        $this->assertCount(2, $this->execCalls);
+        foreach ($this->execCalls as $sql) {
+            $this->assertStringStartsWith('GRANT ', $sql);
+            $this->assertStringContainsString('CREATE, ALTER, DROP, INDEX, SELECT, INSERT, UPDATE, DELETE', $sql);
+            $this->assertStringContainsString("TO `plugin_my_plugin`@'localhost'", $sql);
+            // CRITICAL: REFERENCES and GRANT OPTION must never appear in the
+            // grant — documented security invariants.
+            $this->assertStringNotContainsString('REFERENCES', $sql);
+            $this->assertStringNotContainsString('GRANT OPTION', $sql);
+            // The ON clause must reference an explicit table, never a
+            // wildcard pattern (which MariaDB stores as a literal name).
+            $this->assertStringNotContainsString('plugin_my_plugin_%', $sql);
+        }
+        $this->assertStringContainsString('ON `eiou`.`plugin_my_plugin_subs`', $this->execCalls[0]);
+        $this->assertStringContainsString('ON `eiou`.`plugin_my_plugin_log`', $this->execCalls[1]);
     }
 
-    public function testRevokeEmitsRevokeAllStatement(): void
+    public function testGrantWithEmptyOwnedTablesEmitsNoSql(): void
+    {
+        // owned_tables is required by the manifest validator, so this branch
+        // is defensive — if it ever fires we should silently skip rather
+        // than emit a malformed GRANT.
+        $this->svc->grant('my-plugin', []);
+        $this->assertCount(0, $this->execCalls);
+    }
+
+    public function testGrantRejectsTableMissingPluginPrefix(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->svc->grant('my-plugin', ['contacts']);
+    }
+
+    public function testGrantRejectsTableWithIllegalCharacters(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->svc->grant('my-plugin', ["plugin_my_plugin_x`; DROP TABLE x"]);
+    }
+
+    public function testRevokeEmitsRevokeAllPrivilegesGrantOption(): void
     {
         $this->svc->revoke('my-plugin');
 
+        $this->assertCount(1, $this->execCalls);
         $sql = $this->execCalls[0];
-        $this->assertStringContainsString('REVOKE ALL PRIVILEGES', $sql);
-        $this->assertStringContainsString('ON `eiou`.`plugin_my_plugin_%`', $sql);
+        $this->assertStringContainsString('REVOKE ALL PRIVILEGES, GRANT OPTION', $sql);
         $this->assertStringContainsString("FROM `plugin_my_plugin`@'localhost'", $sql);
+        // No ON clause — the all-privs form clears every grant the user
+        // holds without needing to know which tables were granted.
+        $this->assertStringNotContainsString(' ON ', $sql);
     }
 
     public function testRevokeToleratesErrorsFromAlreadyEmptyGrant(): void
@@ -195,11 +225,11 @@ class PluginDbUserServiceTest extends TestCase
         );
     }
 
-    public function testGrantPatternForKebabCasePluginName(): void
+    public function testTablePrefixForKebabCasePluginName(): void
     {
         $this->assertSame(
-            '`eiou`.`plugin_my_awesome_plugin_%`',
-            $this->svc->grantPatternFor('my-awesome-plugin')
+            'plugin_my_awesome_plugin_',
+            $this->svc->tablePrefixFor('my-awesome-plugin')
         );
     }
 
@@ -208,7 +238,7 @@ class PluginDbUserServiceTest extends TestCase
         // This is a correctness + security invariant — never emit
         // @'%' (wildcard host) for a plugin user.
         $this->svc->ensureUser('my-plugin', 'pw', []);
-        $this->svc->grant('my-plugin', []);
+        $this->svc->grant('my-plugin', ['plugin_my_plugin_x']);
         $this->svc->revoke('my-plugin');
         $this->svc->dropUser('my-plugin');
 
@@ -231,7 +261,7 @@ class PluginDbUserServiceTest extends TestCase
             ['dropUser', ['BAD']],
             ['userExists', ['BAD']],
             ['mysqlUsernameFor', ['BAD']],
-            ['grantPatternFor', ['BAD']],
+            ['tablePrefixFor', ['BAD']],
         ];
         foreach ($methods as [$method, $args]) {
             try {

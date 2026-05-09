@@ -31,10 +31,12 @@ class PluginCredentialRepository extends AbstractRepository
      */
     public function createCredential(string $pluginId, string $encryptedJson): bool
     {
-        return (bool) $this->insert([
+        // insert() returns lastInsertId() on success — the string "0" here since
+        // plugin_credentials has no AUTO_INCREMENT column, and (bool) "0" is false.
+        return $this->insert([
             'plugin_id' => $pluginId,
             'encrypted_password' => $encryptedJson,
-        ]);
+        ]) !== false;
     }
 
     /**

@@ -16,8 +16,9 @@ use RuntimeException;
  *
  *   ensureUser()       — idempotent CREATE USER + IDENTIFIED BY (first
  *                        time, and again on every boot for self-healing)
- *   grant()            — idempotent GRANT on plugin_<id>_% with resource
- *                        caps from manifest db_limits
+ *   grant()            — idempotent per-table GRANT on each manifest-declared
+ *                        owned_tables entry, with resource caps from
+ *                        manifest db_limits applied via ensureUser()
  *   revoke()           — REVOKE ALL PRIVILEGES (on plugin disable)
  *   dropUser()         — DROP USER (on uninstall, after tables are gone)
  *
@@ -123,69 +124,75 @@ class PluginDbUserService
     }
 
     /**
-     * Apply (or re-apply) the standard plugin GRANT on plugin_<id>_%.
+     * Apply (or re-apply) the standard plugin GRANT on each owned table.
      * Idempotent — re-running replaces whatever is there. Called on every
      * boot so operator-tuned limits in plugins.json take effect without
      * a manual ALTER USER.
      *
      * @param string $pluginId
      * @param list<string> $ownedTables Explicit table list from the manifest.
-     *                                  Not used by the GRANT itself (the grant
-     *                                  is on the prefix pattern), but passed
-     *                                  so a future refinement can narrow the
-     *                                  grant to specific tables if desired.
+     *                                  Each table receives its own GRANT
+     *                                  statement. Wildcards in the table
+     *                                  portion of `db.tbl` are NOT expanded
+     *                                  by MySQL/MariaDB (only the database
+     *                                  portion supports them), so the
+     *                                  per-table form is the only one that
+     *                                  actually permits CREATE TABLE / DML
+     *                                  on the named tables.
      */
     public function grant(string $pluginId, array $ownedTables = []): void
     {
         $this->validatePluginId($pluginId);
 
         $username = $this->mysqlUsernameFor($pluginId);
-        $pattern = $this->grantPatternFor($pluginId);
 
-        // The grant is a single statement; `_` in the pattern is a MySQL
-        // LIKE metacharacter, but that's exactly what we want here —
-        // any table starting with `plugin_<snake_id>_` matches.
-        $sql = sprintf(
-            "GRANT %s ON %s TO %s",
-            self::PLUGIN_PRIVILEGES,
-            $pattern,
-            $username
-        );
-        $this->exec($sql, 'grant', $pluginId);
+        if (count($ownedTables) === 0) {
+            $this->log('info', 'plugin_db_grant_skipped_no_tables', [
+                'plugin_id' => $pluginId,
+            ]);
+            return;
+        }
+
+        foreach ($ownedTables as $table) {
+            $this->validateOwnedTable($pluginId, $table);
+            $sql = sprintf(
+                "GRANT %s ON `eiou`.%s TO %s",
+                self::PLUGIN_PRIVILEGES,
+                $this->quoteIdent($table),
+                $username
+            );
+            $this->exec($sql, 'grant', $pluginId);
+        }
 
         $this->log('info', 'plugin_db_grant_applied', [
             'plugin_id' => $pluginId,
-            'pattern' => $pattern,
-            'owned_tables_declared' => count($ownedTables),
+            'owned_tables_granted' => count($ownedTables),
         ]);
     }
 
     /**
-     * REVOKE ALL PRIVILEGES from the plugin user — used when the plugin
-     * is disabled. The MySQL user stays in place (re-enable is a single
-     * grant() call away), but until re-enabled every query from that
-     * user errors out at the privilege check.
+     * REVOKE all privileges (and GRANT OPTION, though the plugin user is
+     * never granted GRANT OPTION) from the plugin user — used when the
+     * plugin is disabled. Uses the `REVOKE ALL PRIVILEGES, GRANT OPTION
+     * FROM user` form which clears every global, database, table, column
+     * and routine privilege in one statement, so we don't need the caller
+     * to know which tables were granted (handles owned_tables shrinking
+     * between manifest versions). The MySQL user row stays in place;
+     * re-enable rebuilds the per-table grants.
      *
-     * Idempotent: revoking an already-empty grant raises a MySQL warning
-     * but not an error, and we swallow warnings here.
+     * Idempotent: revoking an already-empty grant set raises a MySQL
+     * warning but not an error, and we swallow warnings here.
      */
     public function revoke(string $pluginId): void
     {
         $this->validatePluginId($pluginId);
 
         $username = $this->mysqlUsernameFor($pluginId);
-        $pattern = $this->grantPatternFor($pluginId);
-
-        $sql = sprintf(
-            "REVOKE ALL PRIVILEGES ON %s FROM %s",
-            $pattern,
-            $username
-        );
+        $sql = sprintf("REVOKE ALL PRIVILEGES, GRANT OPTION FROM %s", $username);
         $this->exec($sql, 'revoke', $pluginId, /*tolerateErrors*/ true);
 
         $this->log('info', 'plugin_db_grant_revoked', [
             'plugin_id' => $pluginId,
-            'pattern' => $pattern,
         ]);
     }
 
@@ -240,16 +247,15 @@ class PluginDbUserService
     }
 
     /**
-     * Plugin's owned-table grant pattern, e.g. `eiou`.`plugin_my_plugin_%`.
-     * Database name is `eiou` — matches Constants / dbconfig. The backtick
-     * quoting is safe since the identifier is derived from the validated
-     * plugin id.
+     * The required prefix for any table this plugin may own, derived from
+     * its id (e.g. `plugin_my_plugin_`). Matches the prefix that
+     * PluginLoader's manifest validator enforces on every owned_tables
+     * entry, keeping the two sides in lockstep.
      */
-    public function grantPatternFor(string $pluginId): string
+    public function tablePrefixFor(string $pluginId): string
     {
         $this->validatePluginId($pluginId);
-        $snake = $this->snakeCasePluginId($pluginId);
-        return "`eiou`.`plugin_{$snake}_%`";
+        return 'plugin_' . $this->snakeCasePluginId($pluginId) . '_';
     }
 
     /**
@@ -258,6 +264,29 @@ class PluginDbUserService
     private function snakeCasePluginId(string $pluginId): string
     {
         return str_replace('-', '_', $pluginId);
+    }
+
+    /**
+     * Defence-in-depth on owned-table names before they reach a GRANT
+     * statement. PluginLoader validates the manifest, but grant() can be
+     * called from reconcileIsolation/setEnabled/uninstall paths that all
+     * accept arbitrary arrays — this guard refuses to interpolate any
+     * table name that doesn't carry the plugin's required prefix or that
+     * contains characters outside `[a-z0-9_]`.
+     */
+    private function validateOwnedTable(string $pluginId, string $table): void
+    {
+        $expectedPrefix = $this->tablePrefixFor($pluginId);
+        if (!preg_match('/^plugin_[a-z0-9_]+$/', $table)
+            || strpos($table, $expectedPrefix) !== 0
+            || strlen($table) <= strlen($expectedPrefix)
+            || strlen($table) > 64
+        ) {
+            throw new InvalidArgumentException(
+                "Owned table '{$table}' for plugin '{$pluginId}' is invalid: must match /^plugin_[a-z0-9_]+\$/, "
+                . "start with '{$expectedPrefix}', and be 1-64 chars total"
+            );
+        }
     }
 
     // =========================================================================
