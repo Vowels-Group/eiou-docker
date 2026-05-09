@@ -364,7 +364,7 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|----------|
 | **nodeIdentityTest.sh** | `EIOU_NAME`, `EIOU_HOST`, `EIOU_PORT` environment-variable handling and userconfig effects |
 | **hostnameTest.sh** | Hostname configuration in `userconfig.json` matches expected values |
-| **seedphraseTestSuite.sh** | Seedphrase generate / restore, secure display, authcode restoration, restore + `QUICKSTART` hostname application |
+| **seedphraseTestSuite.sh** | Seedphrase generate / restore, secure display, authcode restoration, restore + `EIOU_HOST` hostname application |
 | **sslCertificateTest.sh** | SSL certificate generation and HTTPS functionality |
 
 ### Process & Lifecycle (`tests/testfiles/`)

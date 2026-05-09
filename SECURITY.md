@@ -348,7 +348,7 @@ When set:
 services:
   alice:
     environment:
-      - QUICKSTART=alice
+      - EIOU_HOST=alice
     volumes:
       - ./volume-key.txt:/run/secrets/volume_key:ro
     environment:

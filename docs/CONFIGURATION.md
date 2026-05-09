@@ -33,7 +33,7 @@ A handful of constants resolve via `getenv()` at construction time (`Constants::
 
 Set via `.env`, `docker-compose.yml`, or the host environment. The canonical list is `.env.example`. Examples by category:
 
-- **Identity:** `QUICKSTART`, `EIOU_NAME`, `EIOU_HOST`, `EIOU_PORT`
+- **Identity:** `EIOU_HOST`, `EIOU_NAME`, `EIOU_PORT`
 - **Wallet restore:** `RESTORE_FILE`, `RESTORE`
 - **TLS:** `SSL_DOMAIN`, `SSL_EXTRA_SANS`, `LETSENCRYPT_*`
 - **Tor:** `EIOU_HS_TIMEOUT`, `EIOU_TOR_TIMEOUT`

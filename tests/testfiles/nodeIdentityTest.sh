@@ -11,7 +11,6 @@
 # - Empty name rejection
 # - Hostname integrity after name change
 # - EIOU_HOST, EIOU_PORT, EIOU_NAME env vars configure containers properly
-# - Backward compatibility with QUICKSTART-only containers
 #
 # Prerequisites:
 # - Containers must be running with userconfig.json initialized
@@ -158,7 +157,6 @@ else
         -v "nodeIdTest-mysql-data:/var/lib/mysql" \
         -v "nodeIdTest-config:/etc/eiou/config" \
         -v "nodeIdTest-backups:/var/lib/eiou/backups" \
-        -e QUICKSTART=nodeIdTest \
         -e EIOU_NAME="Production Node" \
         -e EIOU_HOST=10.0.0.99 \
         -e EIOU_PORT=8443 \
@@ -271,7 +269,6 @@ else
         -v "nodeIdTest2-mysql-data:/var/lib/mysql" \
         -v "nodeIdTest2-config:/etc/eiou/config" \
         -v "nodeIdTest2-backups:/var/lib/eiou/backups" \
-        -e QUICKSTART=nodeIdTest2 \
         -e EIOU_HOST=192.168.1.50 \
         -e EIOU_CONTACT_STATUS_ENABLED=false \
         eiou/eiou
@@ -301,36 +298,6 @@ else
     # Clean up nodeIdTest2
     remove_container_if_exists nodeIdTest2
 
-fi
-
-############################ BACKWARD COMPATIBILITY TEST ############################
-
-echo -e "\n[Backward Compatibility Test]"
-
-# Test 8: Container with only QUICKSTART (backward compatibility)
-totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing QUICKSTART-only container backward compatibility"
-
-# Use existing container which was created with QUICKSTART only
-# Prior system tests (seedphrase restore) may have wiped hostname, so check
-# that the container has at least one address (HTTP, HTTPS, or Tor) and a public key
-quickstartCheck=$(docker exec ${testContainer} php -r '
-    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
-    $h = $json["hostname"] ?? "";
-    $hs = $json["hostname_secure"] ?? "";
-    $tor = $json["torAddress"] ?? "";
-    $pub = $json["public"] ?? "";
-    $hasAddr = !empty($h) || !empty($hs) || !empty($tor);
-    echo ($hasAddr && !empty($pub)) ? "OK" : "FAIL:h=$h|hs=$hs|tor=$tor|pub=" . substr($pub, 0, 8);
-' 2>&1)
-
-# Container should have at least one address and a public key
-if [ "$quickstartCheck" = "OK" ]; then
-    printf "\t   QUICKSTART backward compatibility ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   QUICKSTART backward compatibility ${RED}FAILED${NC} (%s)\n" "$quickstartCheck"
-    failure=$(( failure + 1 ))
 fi
 
 ##################################################################

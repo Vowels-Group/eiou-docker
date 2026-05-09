@@ -40,10 +40,10 @@ services:
       - "127.0.0.1:8080:80"
       - "127.0.0.1:8443:443"
     environment:
-      - QUICKSTART=node-a
-      # Node Identity (optional - override QUICKSTART for production use):
-      # - EIOU_NAME=Node A       # Display name (defaults to QUICKSTART)
-      # - EIOU_HOST=10.0.0.1     # External address (defaults to QUICKSTART)
+      - EIOU_HOST=node-a
+      # Node Identity (optional - override EIOU_HOST for production use):
+      # - EIOU_NAME=Node A       # Display name (defaults to EIOU_HOST)
+      # - EIOU_HOST=10.0.0.1     # External address (defaults to EIOU_HOST)
       # - EIOU_PORT=8443         # Port for HTTP/HTTPS URLs
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
@@ -98,7 +98,7 @@ services:
       - "127.0.0.1:8081:80"
       - "127.0.0.1:8444:443"
     environment:
-      - QUICKSTART=node-b
+      - EIOU_HOST=node-b
     volumes:
       - node-b-mysql-data:/var/lib/mysql
       - node-b-config:/etc/eiou/config
@@ -149,7 +149,7 @@ services:
       - "127.0.0.1:8082:80"
       - "127.0.0.1:8445:443"
     environment:
-      - QUICKSTART=node-c
+      - EIOU_HOST=node-c
     volumes:
       - node-c-mysql-data:/var/lib/mysql
       - node-c-config:/etc/eiou/config
@@ -200,7 +200,7 @@ services:
       - "127.0.0.1:8083:80"
       - "127.0.0.1:8446:443"
     environment:
-      - QUICKSTART=node-d
+      - EIOU_HOST=node-d
     volumes:
       - node-d-mysql-data:/var/lib/mysql
       - node-d-config:/etc/eiou/config
@@ -251,7 +251,7 @@ services:
       - "127.0.0.1:8084:80"
       - "127.0.0.1:8447:443"
     environment:
-      - QUICKSTART=node-e
+      - EIOU_HOST=node-e
     volumes:
       - node-e-mysql-data:/var/lib/mysql
       - node-e-config:/etc/eiou/config
@@ -302,7 +302,7 @@ services:
       - "127.0.0.1:8085:80"
       - "127.0.0.1:8448:443"
     environment:
-      - QUICKSTART=node-f
+      - EIOU_HOST=node-f
     volumes:
       - node-f-mysql-data:/var/lib/mysql
       - node-f-config:/etc/eiou/config
@@ -353,7 +353,7 @@ services:
       - "127.0.0.1:8086:80"
       - "127.0.0.1:8449:443"
     environment:
-      - QUICKSTART=node-g
+      - EIOU_HOST=node-g
     volumes:
       - node-g-mysql-data:/var/lib/mysql
       - node-g-config:/etc/eiou/config
@@ -404,7 +404,7 @@ services:
       - "127.0.0.1:8087:80"
       - "127.0.0.1:8450:443"
     environment:
-      - QUICKSTART=node-h
+      - EIOU_HOST=node-h
     volumes:
       - node-h-mysql-data:/var/lib/mysql
       - node-h-config:/etc/eiou/config
@@ -455,7 +455,7 @@ services:
       - "127.0.0.1:8088:80"
       - "127.0.0.1:8451:443"
     environment:
-      - QUICKSTART=node-i
+      - EIOU_HOST=node-i
     volumes:
       - node-i-mysql-data:/var/lib/mysql
       - node-i-config:/etc/eiou/config
@@ -506,7 +506,7 @@ services:
       - "127.0.0.1:8089:80"
       - "127.0.0.1:8452:443"
     environment:
-      - QUICKSTART=node-j
+      - EIOU_HOST=node-j
     volumes:
       - node-j-mysql-data:/var/lib/mysql
       - node-j-config:/etc/eiou/config

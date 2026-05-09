@@ -21,7 +21,6 @@
 #   12. Keep container running while handling signals
 #
 # Environment Variables:
-#   QUICKSTART          - Hostname for quickstart mode (e.g., "alice", "192.168.1.100:8080")
 #   RESTORE             - 24-word seed phrase for wallet restoration
 #   RESTORE_FILE        - Path to file containing seed phrase (more secure)
 #   SSL_DOMAIN          - Primary domain for SSL certificate CN
@@ -291,12 +290,20 @@ graceful_shutdown() {
 # Register signal handlers for graceful shutdown
 trap graceful_shutdown SIGTERM SIGINT SIGHUP
 
-# Check for quickstart flag
-QUICKSTART=${QUICKSTART:-false}
+# Reject QUICKSTART up-front — removed in favour of EIOU_HOST + EIOU_NAME.
+# Failing loudly is much kinder than silently falling back to Tor-only mode
+# (which is what happens to a config that doesn't set any of these vars).
+if [ -n "${QUICKSTART:-}" ]; then
+    echo "ERROR: QUICKSTART is no longer supported."
+    echo "       Replace 'QUICKSTART=<hostname>' with 'EIOU_HOST=<hostname>'"
+    echo "       (and optionally 'EIOU_NAME=<display-name>' if you want a"
+    echo "       display name different from the hostname)."
+    echo "       See CHANGELOG.md for the migration notes."
+    exit 1
+fi
 
-# New optional env vars for address/name separation (issue #579)
-# These allow separating the node's display name from its network address.
-# When omitted, QUICKSTART provides backward-compatible behavior.
+# Address/name vars. Setting EIOU_HOST enables HTTP/HTTPS mode; with none of
+# these set, the node runs Tor-only.
 EIOU_NAME=${EIOU_NAME:-false}
 EIOU_HOST=${EIOU_HOST:-false}
 EIOU_PORT=${EIOU_PORT:-false}
@@ -322,7 +329,6 @@ validate_name() {
     fi
 }
 
-validate_hostname "$QUICKSTART" "QUICKSTART"
 validate_hostname "$EIOU_HOST" "EIOU_HOST"
 validate_name "$EIOU_NAME" "EIOU_NAME"
 if [ "$EIOU_PORT" != "false" ] && ! echo "$EIOU_PORT" | grep -qE '^[0-9]+$'; then
@@ -330,7 +336,7 @@ if [ "$EIOU_PORT" != "false" ] && ! echo "$EIOU_PORT" | grep -qE '^[0-9]+$'; the
     exit 1
 fi
 
-# Extract embedded port from QUICKSTART or EIOU_HOST (e.g., "192.168.1.100:8080")
+# Extract embedded port from EIOU_HOST (e.g., "192.168.1.100:8080")
 # The embedded port is used when EIOU_PORT is not explicitly set.
 extract_host_port() {
     local val="$1"
@@ -339,41 +345,26 @@ extract_host_port() {
     fi
 }
 
-if [ "$QUICKSTART" != "false" ] && echo "$QUICKSTART" | grep -qE ':[0-9]+$'; then
-    QUICKSTART_PORT=$(extract_host_port "$QUICKSTART")
-    QUICKSTART="${QUICKSTART%:*}"
-fi
 if [ "$EIOU_HOST" != "false" ] && echo "$EIOU_HOST" | grep -qE ':[0-9]+$'; then
     EIOU_HOST_PORT=$(extract_host_port "$EIOU_HOST")
     EIOU_HOST="${EIOU_HOST%:*}"
 fi
 
-# Resolve the effective address host:
-# Priority: EIOU_HOST > QUICKSTART (for address construction)
-if [ "$EIOU_HOST" != "false" ]; then
-    EFFECTIVE_HOST="$EIOU_HOST"
-elif [ "$QUICKSTART" != "false" ]; then
-    EFFECTIVE_HOST="$QUICKSTART"
-else
-    EFFECTIVE_HOST="false"
-fi
+# Resolve the effective address host
+EFFECTIVE_HOST="$EIOU_HOST"
 
 # Resolve the effective port:
-# Priority: EIOU_PORT (explicit) > embedded port from EIOU_HOST > embedded port from QUICKSTART
-if [ "$EIOU_PORT" = "false" ]; then
-    if [ -n "${EIOU_HOST_PORT:-}" ]; then
-        EIOU_PORT="$EIOU_HOST_PORT"
-    elif [ -n "${QUICKSTART_PORT:-}" ]; then
-        EIOU_PORT="$QUICKSTART_PORT"
-    fi
+# Priority: EIOU_PORT (explicit) > embedded port from EIOU_HOST
+if [ "$EIOU_PORT" = "false" ] && [ -n "${EIOU_HOST_PORT:-}" ]; then
+    EIOU_PORT="$EIOU_HOST_PORT"
 fi
 
 # Resolve the effective display name:
-# Priority: EIOU_NAME > QUICKSTART
+# Priority: EIOU_NAME > EIOU_HOST
 if [ "$EIOU_NAME" != "false" ]; then
     EFFECTIVE_NAME="$EIOU_NAME"
-elif [ "$QUICKSTART" != "false" ]; then
-    EFFECTIVE_NAME="$QUICKSTART"
+elif [ "$EIOU_HOST" != "false" ]; then
+    EFFECTIVE_NAME="$EIOU_HOST"
 else
     EFFECTIVE_NAME="false"
 fi
@@ -448,7 +439,7 @@ fi
 # SSL CERTIFICATE SETUP
 # =============================================================================
 # Environment Variables:
-#   SSL_DOMAIN          - Primary domain for certificate CN (default: QUICKSTART value or localhost)
+#   SSL_DOMAIN          - Primary domain for certificate CN (default: EIOU_HOST value or localhost)
 #   SSL_EXTRA_SANS      - Additional SANs in format "DNS:name,IP:addr" (comma-separated)
 #   LETSENCRYPT_EMAIL   - Email for Let's Encrypt registration (enables automatic LE certs)
 #   LETSENCRYPT_DOMAIN  - Domain for Let's Encrypt cert (default: SSL_DOMAIN)
@@ -561,7 +552,7 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ ! -f /etc/nginx/ssl/server.crt ]; th
     echo "Generating SSL certificate..."
 
     # Determine primary CN
-    # Priority: SSL_DOMAIN env var > QUICKSTART hostname > localhost
+    # Priority: SSL_DOMAIN env var > EIOU_HOST > localhost
     SSL_DOMAIN=${SSL_DOMAIN:-${EFFECTIVE_HOST:-localhost}}
     if [ "$SSL_DOMAIN" = "false" ]; then
         SSL_DOMAIN="localhost"
@@ -1260,7 +1251,7 @@ fi
 
 # Check if config/userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
-    # RESTORE_FILE takes priority over RESTORE, which takes priority over QUICKSTART
+    # RESTORE_FILE takes priority over RESTORE, which takes priority over EIOU_HOST mode
     if [ "$RESTORE_FILE" != "false" ]; then
         # Method 1: File-based restore (most secure)
         # The seedphrase is read from a mounted file, never exposed in environment
@@ -1300,7 +1291,7 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
 
         # Apply hostname to restored wallet if set
-        # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
+        # Restore only configures Tor address; EIOU_HOST adds HTTP/HTTPS addressing
         if [ "$EFFECTIVE_URL" != "false" ]; then
             echo "Applying hostname ($EFFECTIVE_URL) to restored wallet..."
             HOSTNAME_RESULT=$(eiou changesettings hostname "$EFFECTIVE_URL" 2>&1)
@@ -1314,17 +1305,6 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
             if [ "$EFFECTIVE_NAME" != "false" ]; then
                 eiou changesettings name "$EFFECTIVE_NAME" 2>&1
                 echo "Display name configured: $EFFECTIVE_NAME"
-            fi
-        elif [ "$QUICKSTART" != "false" ]; then
-            echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
-            HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
-            HOSTNAME_EXIT_CODE=$?
-            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
-                echo "WARNING: Failed to apply hostname ($QUICKSTART) to restored wallet:"
-                echo "$HOSTNAME_RESULT"
-                echo "You can set it manually later with: eiou changesettings hostname https://$QUICKSTART"
-            else
-                echo "HTTP/HTTPS hostname configured: https://$QUICKSTART"
             fi
         fi
 
@@ -1395,7 +1375,7 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "NOTE: RESTORE environment variable has been cleared from this shell."
 
         # Apply hostname to restored wallet if set
-        # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
+        # Restore only configures Tor address; EIOU_HOST adds HTTP/HTTPS addressing
         if [ "$EFFECTIVE_URL" != "false" ]; then
             echo "Applying hostname ($EFFECTIVE_URL) to restored wallet..."
             HOSTNAME_RESULT=$(eiou changesettings hostname "$EFFECTIVE_URL" 2>&1)
@@ -1410,21 +1390,10 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
                 eiou changesettings name "$EFFECTIVE_NAME" 2>&1
                 echo "Display name configured: $EFFECTIVE_NAME"
             fi
-        elif [ "$QUICKSTART" != "false" ]; then
-            echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
-            HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
-            HOSTNAME_EXIT_CODE=$?
-            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
-                echo "WARNING: Failed to apply hostname ($QUICKSTART) to restored wallet:"
-                echo "$HOSTNAME_RESULT"
-                echo "You can set it manually later with: eiou changesettings hostname https://$QUICKSTART"
-            else
-                echo "HTTP/HTTPS hostname configured: https://$QUICKSTART"
-            fi
         fi
 
     elif [ "$EFFECTIVE_URL" != "false" ]; then
-        echo "Quickstart mode enabled. Running generate command with address: $EFFECTIVE_URL"
+        echo "HTTP/HTTPS mode enabled. Running generate command with address: $EFFECTIVE_URL"
         # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)
         if [ "$EFFECTIVE_NAME" != "false" ]; then
             GENERATE_RESULT=$(eiou generate "$EFFECTIVE_URL" "$EFFECTIVE_NAME" 2>&1)

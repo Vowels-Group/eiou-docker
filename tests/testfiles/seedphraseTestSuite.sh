@@ -6,7 +6,7 @@
 # - Seed phrase generate and restore functionality
 # - Secure seedphrase display (security validation)
 # - Authcode restoration from seedphrase
-# - Restore + QUICKSTART hostname application
+# - Restore + EIOU_HOST hostname application
 #
 # NOTE: All paths use double slashes (//app/eiou/, //etc/eiou/config/) to prevent
 # Git Bash on Windows from converting paths. This is safe on Linux too.
@@ -20,7 +20,7 @@ echo -e "  - Seed phrase generate/restore"
 echo -e "  - Secure seedphrase display (security)"
 echo -e "  - Authcode restoration from seedphrase"
 echo -e "  - Master key deterministic derivation (M-13)"
-echo -e "  - Restore + QUICKSTART hostname application"
+echo -e "  - Restore + EIOU_HOST hostname application"
 echo -e "  - Startup authcode temp file creation"
 echo -e "================================================================\n"
 
@@ -1407,18 +1407,18 @@ fi
 echo -e "\t   ============================================\n"
 
 ################################################################################
-#                    PART 4: RESTORE + QUICKSTART HOSTNAME TEST
+#                    PART 4: RESTORE + EIOU_HOST HOSTNAME TEST
 ################################################################################
 
-echo -e "\n\n[PART 4: Restore + QUICKSTART Hostname Test]"
+echo -e "\n\n[PART 4: Restore + EIOU_HOST Hostname Test]"
 echo -e "================================================================"
-echo -e "Testing that QUICKSTART hostname is applied after wallet restore"
+echo -e "Testing that EIOU_HOST hostname is applied after wallet restore"
 echo -e "================================================================"
 
-############################ TEST 4.1: RESTORE ENV VAR + QUICKSTART ############################
+############################ TEST 4.1: RESTORE ENV VAR + EIOU_HOST ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Step 4.1: Testing RESTORE + QUICKSTART applies hostname to restored wallet"
+echo -e "\n\t-> Step 4.1: Testing RESTORE + EIOU_HOST applies hostname to restored wallet"
 
 # Get the current seedphrase from existing container
 restoreQsSeedPhrase=$(docker exec ${testContainer} php -r '
@@ -1433,14 +1433,14 @@ originalPubKeyQs=$(docker exec ${testContainer} php -r '
     echo $json["public"] ?? "ERROR";
 ' 2>&1)
 
-# Create a new container with both RESTORE and QUICKSTART
+# Create a new container with both RESTORE and EIOU_HOST
 restoreQsContainer="httpRestoreQuickstartTest"
 docker rm -f ${restoreQsContainer} > /dev/null 2>&1
 docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-config ${restoreQsContainer}-backups ${restoreQsContainer}-letsencrypt > /dev/null 2>&1
 
 docker run -d --network="${network}" --name "${restoreQsContainer}" \
     -e RESTORE="${restoreQsSeedPhrase}" \
-    -e QUICKSTART="${restoreQsContainer}" \
+    -e EIOU_HOST="${restoreQsContainer}" \
     -v "${restoreQsContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreQsContainer}-config:/etc/eiou/config" \
     eiou/eiou > /dev/null 2>&1
@@ -1458,7 +1458,7 @@ if [[ "$originalPubKeyQs" == "$restoredPubKeyQs" ]] && [[ "$restoredPubKeyQs" !=
     printf "\t   Wallet restored with matching public key ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Wallet restoration with QUICKSTART ${RED}FAILED${NC}\n"
+    printf "\t   Wallet restoration with EIOU_HOST ${RED}FAILED${NC}\n"
     printf "\t   Original: ${originalPubKeyQs:0:50}...\n"
     printf "\t   Restored: ${restoredPubKeyQs:0:50}...\n"
     failure=$(( failure + 1 ))
@@ -1467,7 +1467,7 @@ fi
 ############################ TEST 4.2: VERIFY HOSTNAME SET IN USERCONFIG ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Step 4.2: Verifying hostname is set in userconfig.json after RESTORE + QUICKSTART"
+echo -e "\n\t-> Step 4.2: Verifying hostname is set in userconfig.json after RESTORE + EIOU_HOST"
 
 hostnameCheck=$(docker exec ${restoreQsContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
@@ -1481,7 +1481,7 @@ hostnameValue=$(echo "$hostnameCheck" | php -r 'echo json_decode(file_get_conten
 hostnameSecureValue=$(echo "$hostnameCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["hostname_secure"] ?? "NOT_SET";')
 
 echo -e "\n\t   ============================================"
-echo -e "\t   HOSTNAME CHECK (RESTORE + QUICKSTART)"
+echo -e "\t   HOSTNAME CHECK (RESTORE + EIOU_HOST)"
 echo -e "\t   ============================================"
 echo -e "\t   hostname:        ${hostnameValue}"
 echo -e "\t   hostname_secure: ${hostnameSecureValue}"
@@ -1490,11 +1490,11 @@ echo -e "\t   expected_secure: https://${restoreQsContainer}"
 echo -e "\t   ============================================\n"
 
 if [[ "$hostnameValue" == "http://${restoreQsContainer}" ]] && [[ "$hostnameSecureValue" == "https://${restoreQsContainer}" ]]; then
-    printf "\t   ${GREEN}HOSTNAME SET CORRECTLY after RESTORE + QUICKSTART!${NC}\n"
+    printf "\t   ${GREEN}HOSTNAME SET CORRECTLY after RESTORE + EIOU_HOST!${NC}\n"
     printf "\t   Hostname verification ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}HOSTNAME NOT SET CORRECTLY after RESTORE + QUICKSTART${NC}\n"
+    printf "\t   ${RED}HOSTNAME NOT SET CORRECTLY after RESTORE + EIOU_HOST${NC}\n"
     if [[ "$hostnameValue" == "NOT_SET" ]]; then
         printf "\t   hostname field is missing from userconfig.json\n"
     fi
@@ -1516,7 +1516,7 @@ torAddressQs=$(docker exec ${restoreQsContainer} php -r '
 ' 2>&1)
 
 if [[ "$torAddressQs" != "NOT_SET" ]] && [[ -n "$torAddressQs" ]] && [[ "$torAddressQs" == *".onion" ]]; then
-    printf "\t   Tor address preserved after QUICKSTART hostname applied ${GREEN}PASSED${NC}\n"
+    printf "\t   Tor address preserved after EIOU_HOST hostname applied ${GREEN}PASSED${NC}\n"
     printf "\t   Tor: ${torAddressQs}\n"
     passed=$(( passed + 1 ))
 else
@@ -1525,23 +1525,23 @@ else
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 4.4: CLEANUP RESTORE ENV + QUICKSTART CONTAINER ############################
+############################ TEST 4.4: CLEANUP RESTORE ENV + EIOU_HOST CONTAINER ############################
 
-echo -e "\n\t-> Cleaning up RESTORE + QUICKSTART container..."
+echo -e "\n\t-> Cleaning up RESTORE + EIOU_HOST container..."
 docker rm -f ${restoreQsContainer} 2>/dev/null
 docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-config ${restoreQsContainer}-backups ${restoreQsContainer}-letsencrypt 2>/dev/null
 
-############################ TEST 4.5: RESTORE_FILE + QUICKSTART ############################
+############################ TEST 4.5: RESTORE_FILE + EIOU_HOST ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Step 4.4: Testing RESTORE_FILE + QUICKSTART applies hostname to restored wallet"
+echo -e "\n\t-> Step 4.4: Testing RESTORE_FILE + EIOU_HOST applies hostname to restored wallet"
 
 # Write seed phrase to temp file on host
 hostSeedFileQs="$(pwd)/eiou_test_restore_qs_seed_$$"
 echo "${restoreQsSeedPhrase}" > "${hostSeedFileQs}"
 chmod 600 "${hostSeedFileQs}"
 
-# Create a new container with both RESTORE_FILE and QUICKSTART
+# Create a new container with both RESTORE_FILE and EIOU_HOST
 restoreFileQsContainer="httpRestoreFileQsTest"
 docker rm -f ${restoreFileQsContainer} > /dev/null 2>&1
 docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-config ${restoreFileQsContainer}-backups ${restoreFileQsContainer}-letsencrypt > /dev/null 2>&1
@@ -1549,7 +1549,7 @@ docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-
 MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileQsContainer}" \
     -v "${hostSeedFileQs}:/restore/seed:ro" \
     -e RESTORE_FILE="/restore/seed" \
-    -e QUICKSTART="${restoreFileQsContainer}" \
+    -e EIOU_HOST="${restoreFileQsContainer}" \
     -v "${restoreFileQsContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreFileQsContainer}-config:/etc/eiou/config" \
     eiou/eiou > /dev/null 2>&1
@@ -1574,7 +1574,7 @@ pubKeyFileQs=$(echo "$hostnameFileQsCheck" | php -r 'echo json_decode(file_get_c
 torAddrFileQs=$(echo "$hostnameFileQsCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["torAddress"] ?? "NOT_SET";')
 
 echo -e "\n\t   ============================================"
-echo -e "\t   HOSTNAME CHECK (RESTORE_FILE + QUICKSTART)"
+echo -e "\t   HOSTNAME CHECK (RESTORE_FILE + EIOU_HOST)"
 echo -e "\t   ============================================"
 echo -e "\t   hostname:        ${hostnameFileQs}"
 echo -e "\t   hostname_secure: ${hostnameSecureFileQs}"
@@ -1602,14 +1602,14 @@ if [[ "$torAddrFileQs" != "NOT_SET" ]] && [[ "$torAddrFileQs" == *".onion" ]]; t
 fi
 
 if [[ "$hostnameFileOk" == "true" ]] && [[ "$keyFileOk" == "true" ]] && [[ "$torFileOk" == "true" ]]; then
-    printf "\t   ${GREEN}RESTORE_FILE + QUICKSTART: All checks passed!${NC}\n"
+    printf "\t   ${GREEN}RESTORE_FILE + EIOU_HOST: All checks passed!${NC}\n"
     printf "\t   - Hostname set correctly\n"
     printf "\t   - Public key matches original\n"
     printf "\t   - Tor address preserved\n"
-    printf "\t   RESTORE_FILE + QUICKSTART ${GREEN}PASSED${NC}\n"
+    printf "\t   RESTORE_FILE + EIOU_HOST ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}RESTORE_FILE + QUICKSTART: Some checks failed${NC}\n"
+    printf "\t   ${RED}RESTORE_FILE + EIOU_HOST: Some checks failed${NC}\n"
     if [[ "$hostnameFileOk" != "true" ]]; then
         printf "\t   - ${RED}Hostname NOT set correctly${NC}\n"
     fi
@@ -1619,13 +1619,13 @@ else
     if [[ "$torFileOk" != "true" ]]; then
         printf "\t   - ${RED}Tor address missing${NC}\n"
     fi
-    printf "\t   RESTORE_FILE + QUICKSTART ${RED}FAILED${NC}\n"
+    printf "\t   RESTORE_FILE + EIOU_HOST ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
-############################ CLEANUP RESTORE_FILE + QUICKSTART ############################
+############################ CLEANUP RESTORE_FILE + EIOU_HOST ############################
 
-echo -e "\n\t-> Cleaning up RESTORE_FILE + QUICKSTART container..."
+echo -e "\n\t-> Cleaning up RESTORE_FILE + EIOU_HOST container..."
 docker rm -f ${restoreFileQsContainer} 2>/dev/null
 docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-config ${restoreFileQsContainer}-backups ${restoreFileQsContainer}-letsencrypt 2>/dev/null
 rm -f "${hostSeedFileQs}"
@@ -1633,9 +1633,9 @@ rm -f "${hostSeedFileQs}"
 ############################ PART 4 SUMMARY ############################
 
 echo -e "\n\t   ============================================"
-echo -e "\t   RESTORE + QUICKSTART HOSTNAME TEST SUMMARY"
+echo -e "\t   RESTORE + EIOU_HOST HOSTNAME TEST SUMMARY"
 echo -e "\t   ============================================"
-echo -e "\t   Tests verify that when QUICKSTART is set alongside"
+echo -e "\t   Tests verify that when EIOU_HOST is set alongside"
 echo -e "\t   RESTORE or RESTORE_FILE, the hostname is automatically"
 echo -e "\t   applied to the restored wallet's userconfig.json."
 echo -e "\t   ============================================\n"

@@ -36,10 +36,10 @@ services:
       - "127.0.0.1:8080:80"
       - "127.0.0.1:8443:443"
     environment:
-      - QUICKSTART=alice
-      # Node Identity (optional - override QUICKSTART for production use):
-      # - EIOU_NAME=Alice        # Display name (defaults to QUICKSTART)
-      # - EIOU_HOST=10.0.0.1     # External address (defaults to QUICKSTART)
+      - EIOU_HOST=alice
+      # Node Identity (optional - override EIOU_HOST for production use):
+      # - EIOU_NAME=Alice        # Display name (defaults to EIOU_HOST)
+      # - EIOU_HOST=10.0.0.1     # External address (defaults to EIOU_HOST)
       # - EIOU_PORT=8443         # Port for HTTP/HTTPS URLs
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
@@ -103,7 +103,7 @@ services:
       - "127.0.0.1:8081:80"
       - "127.0.0.1:8444:443"
     environment:
-      - QUICKSTART=bob
+      - EIOU_HOST=bob
     volumes:
       - bob-mysql-data:/var/lib/mysql
       - bob-config:/etc/eiou/config
@@ -154,7 +154,7 @@ services:
       - "127.0.0.1:8082:80"
       - "127.0.0.1:8445:443"
     environment:
-      - QUICKSTART=carol
+      - EIOU_HOST=carol
     volumes:
       - carol-mysql-data:/var/lib/mysql
       - carol-config:/etc/eiou/config
@@ -205,7 +205,7 @@ services:
       - "127.0.0.1:8083:80"
       - "127.0.0.1:8446:443"
     environment:
-      - QUICKSTART=daniel
+      - EIOU_HOST=daniel
     volumes:
       - daniel-mysql-data:/var/lib/mysql
       - daniel-config:/etc/eiou/config

@@ -528,8 +528,8 @@ class TransportUtilityService implements TransportServiceInterface
 
         // SSL options for HTTPS connections
         // SSL peer verification is enabled by default (H-8 security remediation).
-        // Self-signed certificates (e.g. Docker mesh nodes using QUICKSTART) will
-        // be rejected unless one of the following is configured:
+        // Self-signed certificates (e.g. Docker mesh nodes with bare-hostname
+        // EIOU_HOST values) will be rejected unless one of the following is configured:
         //   - P2P_SSL_VERIFY=false      → disables verification (development only)
         //   - P2P_CA_CERT=/path/to/ca   → custom CA for verification
         //   - EIOU_TEST_MODE=true        → disables verification (test suites)
