@@ -293,6 +293,12 @@ services:
       # Safe to comment out if you will never use Let's Encrypt.
       - letsencrypt:/etc/letsencrypt
 
+      # nginx serving certs (the cert nginx actually presents on :443)
+      # Persists self-signed certs across `docker rm` + `docker run` (e.g. image
+      # updates) so clients don't see a brand-new fingerprint on every rebuild.
+      # Also receives Let's Encrypt certs copied here by startup.sh / renewal hook.
+      - nginx-ssl:/etc/nginx/ssl
+
       # OPTIONAL: External SSL certificates (Let's Encrypt wildcard, commercial CA)
       # Mount a directory containing server.crt and server.key (PEM format).
       # Optional: ca-chain.crt for the CA certificate chain.
@@ -382,3 +388,5 @@ volumes:
     name: ${NODE_NAME:-eiou-node}-backups
   letsencrypt:
     name: ${NODE_NAME:-eiou-node}-letsencrypt
+  nginx-ssl:
+    name: ${NODE_NAME:-eiou-node}-nginx-ssl

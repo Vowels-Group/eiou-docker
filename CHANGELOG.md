@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- **`docker-compose.yml` mounts a named `nginx-ssl` volume at `/etc/nginx/ssl`** so the cert nginx actually presents on :443 persists across `docker rm` + `docker run` (e.g. operator-driven image updates). Previously `/etc/nginx/ssl/` lived only in the container's writable layer: a restart preserved it, but any container recreation triggered `startup.sh` to generate a fresh self-signed cert, giving clients (direct-IP browsers, fingerprint-pinning peers) a "new" cert on every rebuild. The volume holds whichever cert wins the priority chain — self-signed, CA-signed, or the copy of the Let's Encrypt cert that `startup.sh` and the renewal cron deploy here. The existing `letsencrypt:/etc/letsencrypt` volume is unchanged. Safe to comment out; a fresh cert regenerates on next start.
+
 ### Security
 - **Custom payback methods now render fully redacted (`•••`) in the list view** instead of previewing the first 80 characters of the user-authored details. The field is free text and any prefix preview risks leaking whatever the user wrote — account numbers, contact handles, notes they didn't realize were sensitive — so the public-shape `masked_display` for `custom` is collapsed to the same opaque token the plugin fallback uses. The Payback Methods section intro and the Custom type's "Heads up" info copy are rewritten to match. The full value is still released after the same sensitive-access unlock that gates `bank_wire`; encryption-at-rest, storage, and the reveal path are unchanged — this only narrows what's visible before unlock.
 
