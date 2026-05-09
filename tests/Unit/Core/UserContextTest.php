@@ -442,7 +442,7 @@ class UserContextTest extends TestCase
     }
 
     /**
-     * Test getUserLocaters derives HTTP from HTTPS in QUICKSTART mode
+     * Test getUserLocaters derives HTTP from HTTPS when only HTTPS is set
      * When hostname is set to https:// (no separate HTTP), the HTTP version
      * should be derived automatically since Apache serves both.
      */
@@ -450,7 +450,7 @@ class UserContextTest extends TestCase
     {
         $instance = UserContext::getInstance();
         $instance->setUserData([
-            'hostname' => 'https://eiou',  // QUICKSTART sets hostname to https://
+            'hostname' => 'https://eiou',  // EIOU_HOST sets hostname to https://
             'torAddress' => 'abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.onion'
         ]);
 

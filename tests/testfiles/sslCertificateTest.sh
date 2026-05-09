@@ -396,7 +396,7 @@ for container in "${containers[@]}"; do
         printf "\t   Certificate CN matches hostname ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
-        # May still pass if CN is the container name (QUICKSTART value)
+        # May still pass if CN is the container name (EIOU_HOST value)
         if [[ "$certCN" == "${container}" ]]; then
             printf "\t   Certificate CN matches container name ${GREEN}PASSED${NC}\n"
             passed=$(( passed + 1 ))

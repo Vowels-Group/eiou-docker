@@ -39,16 +39,16 @@ services:
     # See docs/DOCKER_CONFIGURATION.md for complete documentation
     # =========================================================================
     environment:
-      # QUICKSTART (required for HTTP/HTTPS mode)
+      # EIOU_HOST (required for HTTP/HTTPS mode)
       # Sets the node's hostname. Node will be reachable at http://<value>
-      - QUICKSTART=eiou
+      - EIOU_HOST=eiou
 
-      # NODE IDENTITY (optional - override QUICKSTART for production use)
+      # NODE IDENTITY (optional - override EIOU_HOST for production use)
       # -----------------------------------------------------------------
-      # Display name (shown in local UI, defaults to QUICKSTART):
+      # Display name (shown in local UI, defaults to EIOU_HOST):
       # - EIOU_NAME=My Node
       #
-      # External address (IP or domain, defaults to QUICKSTART):
+      # External address (IP or domain, defaults to EIOU_HOST):
       # - EIOU_HOST=192.168.1.100
       #
       # Port for HTTP/HTTPS URLs (appended to addresses):

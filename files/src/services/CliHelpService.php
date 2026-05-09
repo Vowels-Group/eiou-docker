@@ -252,7 +252,7 @@ class CliHelpService
                 'usage' => 'generate',
                 'arguments' => [],
                 'examples' => [],
-                'note' => 'Wallet creation is handled automatically by startup.sh during container initialization via Docker environment variables (QUICKSTART, EIOU_HOST, EIOU_NAME, RESTORE, RESTORE_FILE). This command cannot be used after the wallet has been created.'
+                'note' => 'Wallet creation is handled automatically by startup.sh during container initialization via Docker environment variables (EIOU_HOST, EIOU_NAME, RESTORE, RESTORE_FILE). This command cannot be used after the wallet has been created.'
             ],
             'sync' => [
                 'description' => 'Synchronize data with contacts (contacts, transactions, balances)',

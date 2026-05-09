@@ -2755,7 +2755,7 @@ review rather than being silently dropped.
 6. Wallet generation or restoration
    - RESTORE_FILE (file-based, most secure)
    - RESTORE (env var)
-   - QUICKSTART (new wallet with hostname)
+   - EIOU_HOST set (new wallet with HTTP/HTTPS hostname)
    - Default (new wallet, Tor only)
          |
          v

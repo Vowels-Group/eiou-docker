@@ -117,16 +117,23 @@ show_alpha_warning_short() {
             local httpAddr="http://$http"
             local httpsAddr="https://$http"
         fi
+        # Heuristic: bare single-label hostname (no dots, not an IP) likely means
+        # the operator passed a Docker container name — reachable inside the
+        # Docker network only. Fully-qualified names and IPs skip the warning.
         local ADDR_WARN=""
-        if [ "${EIOU_HOST:-false}" = "false" ] && [ "${QUICKSTART:-false}" != "false" ]; then
+        local HOST_LOOKS_INTERNAL=false
+        if [ "${EIOU_HOST:-false}" != "false" ] \
+            && ! echo "$EIOU_HOST" | grep -qE '\.' \
+            && ! echo "$EIOU_HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            HOST_LOOKS_INTERNAL=true
             ADDR_WARN="\033[33m⚠\033[0m "
         fi
         echo -e "\t HTTPS address: ${ADDR_WARN}$httpsAddr"
         echo -e "\t HTTP address:  ${ADDR_WARN}$httpAddr"
-        if [ "${EIOU_HOST:-false}" = "false" ] && [ "${QUICKSTART:-false}" != "false" ]; then
-            echo -e "\t \033[33m⚠ These addresses are Docker-internal only (resolved via Docker DNS)."
-            echo -e "\t   They are not reachable from outside the Docker network."
-            echo -e "\t   For external access, set EIOU_HOST to a real IP or domain and EIOU_PORT to the mapped port."
+        if [ "$HOST_LOOKS_INTERNAL" = "true" ]; then
+            echo -e "\t \033[33m⚠ EIOU_HOST is a bare hostname (no domain, no IP) — likely Docker-internal only"
+            echo -e "\t   (resolved via Docker DNS). For access from outside the Docker network, set"
+            echo -e "\t   EIOU_HOST to a real IP or FQDN and EIOU_PORT to the mapped port."
             if [ "${P2P_SSL_VERIFY:-}" != "false" ] && [ -z "${P2P_CA_CERT:-}" ]; then
                 echo -e "\t   HTTPS between nodes will also fail — self-signed certs are rejected by default"
                 echo -e "\t   (P2P_SSL_VERIFY=true). Set P2P_SSL_VERIFY=false, use P2P_CA_CERT with a shared CA,"

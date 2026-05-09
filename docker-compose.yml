@@ -53,7 +53,7 @@ services:
     # ENVIRONMENT VARIABLES
     # =========================================================================
     #
-    # All variables have sensible defaults. Set QUICKSTART for HTTP/HTTPS
+    # All variables have sensible defaults. Set EIOU_HOST to enable HTTP/HTTPS
     # mode, or omit it entirely for a Tor-only node.
     #
     # Full reference: docs/DOCKER_CONFIGURATION.md
@@ -65,31 +65,26 @@ services:
       # NODE IDENTITY
       # -----------------------------------------------------------------------
 
-      # QUICKSTART (recommended)
-      # Sets the container hostname for HTTP/HTTPS mode. The node will be
-      # reachable at http://<value> and https://<value> within the Docker
-      # network only (Docker-internal DNS). These addresses are NOT
-      # reachable from outside Docker. A self-signed SSL certificate is
-      # auto-generated. Also used as the display name and SSL certificate
+      # EIOU_HOST (set this to enable HTTP/HTTPS mode)
+      # Sets the externally reachable address — IP, domain name, or a bare
+      # hostname for Docker-network-only access. The node will be reachable
+      # at http://<value> and https://<value>; a self-signed SSL certificate
+      # is auto-generated. Also used as the display name and SSL certificate
       # CN unless overridden by the variables below.
       # If omitted, the node runs in Tor-only mode (reachable only via
       # its auto-generated .onion address).
-      # For external access: set EIOU_HOST + EIOU_PORT below and use
-      # proper SSL (Let's Encrypt or CA-signed).
-      - QUICKSTART=eiou
+      # Examples:
+      #   eiou             — Docker-internal only (resolved via Docker DNS)
+      #   192.168.1.100    — LAN-reachable
+      #   node.example.com — public, use with Let's Encrypt or trusted CA
+      #   192.168.1.100:8080 — embedded port (extracted into EIOU_PORT)
+      - EIOU_HOST=eiou
 
       # EIOU_NAME (optional)
       # Display name shown in the local GUI wallet header and startup logs.
       # Purely cosmetic — never broadcast to contacts or other nodes.
-      # Default: uses QUICKSTART value.
+      # Default: uses EIOU_HOST value.
       # - EIOU_NAME=My Node
-
-      # EIOU_HOST (required for external access)
-      # Externally reachable address (IP or domain name).
-      # Use this when the node must be reachable from outside the Docker
-      # network (e.g., a public IP or domain for production).
-      # Default: uses QUICKSTART value (Docker-internal only).
-      # - EIOU_HOST=192.168.1.100
 
       # EIOU_PORT (optional)
       # Port appended to HTTP/HTTPS URLs. Use when mapping to a non-standard
@@ -117,8 +112,8 @@ services:
       # -----------------------------------------------------------------------
       # SSL CERTIFICATE CONFIGURATION (optional)
       # -----------------------------------------------------------------------
-      # When QUICKSTART is set, the container auto-generates a self-signed SSL
-      # certificate. These variables let you customize or replace it.
+      # When no external/CA/LE cert is provided, the container auto-generates a
+      # self-signed SSL certificate. These variables let you customize or replace it.
       #
       # Certificate selection priority:
       #   1. External certs mounted at /ssl-certs (server.crt, server.key)
@@ -128,7 +123,7 @@ services:
 
       # SSL_DOMAIN (optional)
       # Override the Common Name (CN) in the SSL certificate.
-      # Default: uses EIOU_HOST, then QUICKSTART.
+      # Default: uses EIOU_HOST.
       # - SSL_DOMAIN=node.example.com
 
       # SSL_EXTRA_SANS (optional)
@@ -145,7 +140,7 @@ services:
 
       # LETSENCRYPT_DOMAIN (optional)
       # Domain for the Let's Encrypt certificate.
-      # Default: uses SSL_DOMAIN, then EIOU_HOST, then QUICKSTART.
+      # Default: uses SSL_DOMAIN, then EIOU_HOST.
       # - LETSENCRYPT_DOMAIN=node.example.com
 
       # LETSENCRYPT_STAGING (optional)
@@ -155,7 +150,8 @@ services:
 
       # P2P_SSL_VERIFY (optional)
       # Verify SSL certificates on outbound HTTPS P2P connections.
-      # Default: true — self-signed certs (from QUICKSTART) are REJECTED.
+      # Default: true — self-signed certs (auto-generated when no LE/CA/external
+      # cert is provided) are REJECTED.
       # Set to false when all nodes use self-signed certificates (dev/testing).
       # For production, use trusted certs (Let's Encrypt/CA) instead of disabling.
       # - P2P_SSL_VERIFY=false

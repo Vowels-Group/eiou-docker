@@ -53,10 +53,10 @@ services:
       - "127.0.0.1:8080:80"
       - "127.0.0.1:8443:443"
     environment:
-      - QUICKSTART=cluster-a0
-      # Node Identity (optional - override QUICKSTART for production use):
-      # - EIOU_NAME=Cluster Hub  # Display name (defaults to QUICKSTART)
-      # - EIOU_HOST=10.0.0.1     # External address (defaults to QUICKSTART)
+      - EIOU_HOST=cluster-a0
+      # Node Identity (optional - override EIOU_HOST for production use):
+      # - EIOU_NAME=Cluster Hub  # Display name (defaults to EIOU_HOST)
+      # - EIOU_HOST=10.0.0.1     # External address (defaults to EIOU_HOST)
       # - EIOU_PORT=8443         # Port for HTTP/HTTPS URLs
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
@@ -107,7 +107,7 @@ services:
       - "127.0.0.1:8081:80"
       - "127.0.0.1:8444:443"
     environment:
-      - QUICKSTART=cluster-a1
+      - EIOU_HOST=cluster-a1
     volumes:
       - cluster-a1-mysql-data:/var/lib/mysql
       - cluster-a1-config:/etc/eiou/config
@@ -153,7 +153,7 @@ services:
       - "127.0.0.1:8082:80"
       - "127.0.0.1:8445:443"
     environment:
-      - QUICKSTART=cluster-a2
+      - EIOU_HOST=cluster-a2
     volumes:
       - cluster-a2-mysql-data:/var/lib/mysql
       - cluster-a2-config:/etc/eiou/config
@@ -199,7 +199,7 @@ services:
       - "127.0.0.1:8083:80"
       - "127.0.0.1:8446:443"
     environment:
-      - QUICKSTART=cluster-a3
+      - EIOU_HOST=cluster-a3
     volumes:
       - cluster-a3-mysql-data:/var/lib/mysql
       - cluster-a3-config:/etc/eiou/config
@@ -245,7 +245,7 @@ services:
       - "127.0.0.1:8084:80"
       - "127.0.0.1:8447:443"
     environment:
-      - QUICKSTART=cluster-a4
+      - EIOU_HOST=cluster-a4
     volumes:
       - cluster-a4-mysql-data:/var/lib/mysql
       - cluster-a4-config:/etc/eiou/config
@@ -292,7 +292,7 @@ services:
       - "127.0.0.1:8085:80"
       - "127.0.0.1:8448:443"
     environment:
-      - QUICKSTART=cluster-a11
+      - EIOU_HOST=cluster-a11
     volumes:
       - cluster-a11-mysql-data:/var/lib/mysql
       - cluster-a11-config:/etc/eiou/config
@@ -338,7 +338,7 @@ services:
       - "127.0.0.1:8086:80"
       - "127.0.0.1:8449:443"
     environment:
-      - QUICKSTART=cluster-a12
+      - EIOU_HOST=cluster-a12
     volumes:
       - cluster-a12-mysql-data:/var/lib/mysql
       - cluster-a12-config:/etc/eiou/config
@@ -384,7 +384,7 @@ services:
       - "127.0.0.1:8087:80"
       - "127.0.0.1:8450:443"
     environment:
-      - QUICKSTART=cluster-a21
+      - EIOU_HOST=cluster-a21
     volumes:
       - cluster-a21-mysql-data:/var/lib/mysql
       - cluster-a21-config:/etc/eiou/config
@@ -430,7 +430,7 @@ services:
       - "127.0.0.1:8088:80"
       - "127.0.0.1:8451:443"
     environment:
-      - QUICKSTART=cluster-a22
+      - EIOU_HOST=cluster-a22
     volumes:
       - cluster-a22-mysql-data:/var/lib/mysql
       - cluster-a22-config:/etc/eiou/config
@@ -476,7 +476,7 @@ services:
       - "127.0.0.1:8089:80"
       - "127.0.0.1:8452:443"
     environment:
-      - QUICKSTART=cluster-a31
+      - EIOU_HOST=cluster-a31
     volumes:
       - cluster-a31-mysql-data:/var/lib/mysql
       - cluster-a31-config:/etc/eiou/config
@@ -522,7 +522,7 @@ services:
       - "127.0.0.1:8090:80"
       - "127.0.0.1:8453:443"
     environment:
-      - QUICKSTART=cluster-a32
+      - EIOU_HOST=cluster-a32
     volumes:
       - cluster-a32-mysql-data:/var/lib/mysql
       - cluster-a32-config:/etc/eiou/config
@@ -568,7 +568,7 @@ services:
       - "127.0.0.1:8091:80"
       - "127.0.0.1:8454:443"
     environment:
-      - QUICKSTART=cluster-a41
+      - EIOU_HOST=cluster-a41
     volumes:
       - cluster-a41-mysql-data:/var/lib/mysql
       - cluster-a41-config:/etc/eiou/config
@@ -614,7 +614,7 @@ services:
       - "127.0.0.1:8092:80"
       - "127.0.0.1:8455:443"
     environment:
-      - QUICKSTART=cluster-a42
+      - EIOU_HOST=cluster-a42
     volumes:
       - cluster-a42-mysql-data:/var/lib/mysql
       - cluster-a42-config:/etc/eiou/config
