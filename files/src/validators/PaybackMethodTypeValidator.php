@@ -403,12 +403,9 @@ class PaybackMethodTypeValidator
                         . 'etc. Put the instructions a payer needs to actually settle into the '
                         . '<em>Details</em> field (up to 1024 characters). '
                         . '<br><br>'
-                        . '<strong>Heads up — custom details are only loosely masked.</strong> '
-                        . 'The list row shows the first 80 characters as a preview since this field '
-                        . 'is usually descriptive; the rest is hidden until you unlock. If you '
-                        . 'absolutely need a secret (a password, a seed phrase) to live in a payback '
-                        . 'method, put it behind the 80-character mark or use a typed rail designed '
-                        . 'for that kind of value.',
+                        . '<strong>Heads up — the list view redacts custom details entirely</strong> '
+                        . '(<code>•••</code>). Because this field is free text, no prefix preview is '
+                        . 'safe; the full value is released only after you unlock with your auth code.',
                     'currencies' => null,
                     'fields' => [
                         ['name' => 'details', 'label' => 'Details', 'type' => 'textarea', 'required' => true,

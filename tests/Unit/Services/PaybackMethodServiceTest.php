@@ -171,7 +171,8 @@ class PaybackMethodServiceTest extends TestCase
 
     public function testGetReturnsPublicShapeOnly(): void
     {
-        // Custom type: mask shows first 8 chars of the details free text.
+        // Custom type: mask is fully redacted — no prefix preview, since
+        // the field is free text and any leaked chars could be sensitive.
         $this->repo->method('getByMethodId')->willReturn([
             'method_id' => 'm-2', 'type' => 'custom', 'label' => 'personal',
             'currency' => 'EUR', 'priority' => 100, 'enabled' => 1,
@@ -187,9 +188,8 @@ class PaybackMethodServiceTest extends TestCase
         ]);
         $row = $this->svc->get('m-2');
         $this->assertArrayNotHasKey('fields', $row);
-        // `custom` is user-authored free text — short details (≤ 80 chars)
-        // render as-is; only longer ones get a trailing ellipsis.
-        $this->assertSame('DM me first, I will share the QR code.', $row['masked_display']);
+        $this->assertSame('•••', $row['masked_display']);
+        $this->assertStringNotContainsString('DM me first', $row['masked_display']);
     }
 
     public function testGetRevealIncludesFullFields(): void
