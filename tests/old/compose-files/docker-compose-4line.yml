@@ -57,7 +57,7 @@ services:
       - alice-mysql-data:/var/lib/mysql
       - alice-config:/etc/eiou/config
       - alice-backups:/var/lib/eiou/backups
-      - alice-letsencrypt:/etc/letsencrypt
+      - alice-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -108,7 +108,7 @@ services:
       - bob-mysql-data:/var/lib/mysql
       - bob-config:/etc/eiou/config
       - bob-backups:/var/lib/eiou/backups
-      - bob-letsencrypt:/etc/letsencrypt
+      - bob-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -159,7 +159,7 @@ services:
       - carol-mysql-data:/var/lib/mysql
       - carol-config:/etc/eiou/config
       - carol-backups:/var/lib/eiou/backups
-      - carol-letsencrypt:/etc/letsencrypt
+      - carol-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -210,7 +210,7 @@ services:
       - daniel-mysql-data:/var/lib/mysql
       - daniel-config:/etc/eiou/config
       - daniel-backups:/var/lib/eiou/backups
-      - daniel-letsencrypt:/etc/letsencrypt
+      - daniel-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -257,8 +257,8 @@ volumes:
     name: alice-config
   alice-backups:
     name: alice-backups
-  alice-letsencrypt:
-    name: alice-letsencrypt
+  alice-ssl-cert:
+    name: alice-ssl-cert
 
   bob-mysql-data:
     name: bob-mysql-data
@@ -266,8 +266,8 @@ volumes:
     name: bob-config
   bob-backups:
     name: bob-backups
-  bob-letsencrypt:
-    name: bob-letsencrypt
+  bob-ssl-cert:
+    name: bob-ssl-cert
 
   carol-mysql-data:
     name: carol-mysql-data
@@ -275,8 +275,8 @@ volumes:
     name: carol-config
   carol-backups:
     name: carol-backups
-  carol-letsencrypt:
-    name: carol-letsencrypt
+  carol-ssl-cert:
+    name: carol-ssl-cert
 
   daniel-mysql-data:
     name: daniel-mysql-data
@@ -284,5 +284,5 @@ volumes:
     name: daniel-config
   daniel-backups:
     name: daniel-backups
-  daniel-letsencrypt:
-    name: daniel-letsencrypt
+  daniel-ssl-cert:
+    name: daniel-ssl-cert

@@ -47,6 +47,7 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 | Database credentials (encrypted) | `{node}-config` | `/etc/eiou/config/dbconfig.json` | Auto-generated; encrypted at rest with AES-256-GCM |
 | User settings | `{node}-config` | `/etc/eiou/config/defaultconfig.json` | Fee preferences, transport mode, update check preference, etc. |
 | Encrypted backups | `{node}-backups` | `/var/lib/eiou/backups/*.eiou.enc` | AES-256-GCM encrypted database dumps |
+| SSL certificates and certbot state | `{node}-ssl-cert` | `/var/lib/eiou/ssl` | One volume with `ssl/letsencrypt/` (certbot bookkeeping) and `ssl/nginx/` (cert nginx serves on :443) subdirectories; `startup.sh` symlinks `/etc/letsencrypt` and `/etc/nginx/ssl` into them. Self-signed cert fingerprint stable across rebuilds |
 
 ### Updated automatically (overwritten by new image)
 
@@ -62,7 +63,6 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 
 | Data | Container Path | Notes |
 |------|----------------|-------|
-| SSL certificates | `/etc/nginx/ssl/` | Self-signed certs regenerated; external certs re-copied from mount |
 | Tor hidden service keys | `/var/lib/tor/hidden_service/` | Deterministically derived from wallet seed phrase |
 | MariaDB TDE config | `/etc/mysql/conf.d/encryption.cnf` | Generated on first boot; recreated from master key on subsequent boots |
 | MariaDB TDE key file | `/dev/shm/.mariadb-encryption-key` | RAM-backed; re-derived from master key on every boot |

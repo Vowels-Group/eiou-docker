@@ -215,7 +215,7 @@ These named volumes persist your data across container restarts and rebuilds. Vo
 | `{NODE_NAME}-config` | `/etc/eiou/config` | Wallet private keys, encryption keys, configuration | **Critical** |
 | `{NODE_NAME}-backups` | `/var/lib/eiou/backups` | Encrypted database backups (AES-256-GCM) | **Critical** |
 | `{NODE_NAME}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins are seeded from the image on first boot; operator-installed ones live only here | Important |
-| `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if you will never use Let's Encrypt | Low |
+| `{NODE_NAME}-ssl-cert` | `/var/lib/eiou/ssl` | All SSL state on one logical volume, organised into subdirectories. `ssl/letsencrypt/` holds Let's Encrypt accounts and renewal config (symlinked to `/etc/letsencrypt` inside the container), `ssl/nginx/` holds the cert nginx actually presents on :443 (symlinked to `/etc/nginx/ssl`; persists self-signed certs across `docker rm` so clients don't see a fresh fingerprint on every rebuild). Operators can add subdirectories for additional SSL providers without touching the volumes section. Safe to comment out — fresh certs regenerate on next start. | Low |
 
 To completely reset and start fresh: `docker compose down -v`
 

@@ -257,7 +257,7 @@ remove_container_if_exists() {
     remove_volume_if_exists "$container_name-mysql-data"
     remove_volume_if_exists "$container_name-config"
     remove_volume_if_exists "$container_name-plugins"
-    remove_volume_if_exists "$container_name-letsencrypt"
+    remove_volume_if_exists "$container_name-ssl-cert"
     remove_volume_if_exists "$container_name-backups"
 }
 

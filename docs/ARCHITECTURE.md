@@ -3319,7 +3319,7 @@ reconstructing from plaintext DB fields, which would produce a different hash.
 | Priority | Source | Configuration |
 |----------|--------|---------------|
 | 1 | External certificates | Mount to `/ssl-certs/` volume |
-| 2 | Let's Encrypt (certbot) | `LETSENCRYPT_EMAIL` env var; persistent `/etc/letsencrypt` volume |
+| 2 | Let's Encrypt (certbot) | `LETSENCRYPT_EMAIL` env var; certbot state persisted under the `ssl/letsencrypt/` subdirectory of the unified `ssl-cert` volume (symlinked to `/etc/letsencrypt`) |
 | 3 | CA-signed generation | Mount CA key/cert to `/ssl-ca/` volume |
 | 4 | Self-signed (fallback) | Auto-generated on startup |
 

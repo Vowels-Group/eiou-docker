@@ -5,31 +5,31 @@ docker network create -d bridge demo-net
 docker rm -f httpA httpB httpC httpD httpE httpF httpG httpH httpI httpJ
 
 # Remove associated volumes (if any)
-docker volume rm httpA-mysql-data httpA-config httpA-backups httpA-letsencrypt
-docker volume rm httpB-mysql-data httpB-config httpB-backups httpB-letsencrypt
-docker volume rm httpC-mysql-data httpC-config httpC-backups httpC-letsencrypt
-docker volume rm httpD-mysql-data httpD-config httpD-backups httpD-letsencrypt
-docker volume rm httpE-mysql-data httpE-config httpE-backups httpE-letsencrypt
-docker volume rm httpF-mysql-data httpF-config httpF-backups httpF-letsencrypt
-docker volume rm httpG-mysql-data httpG-config httpG-backups httpG-letsencrypt
-docker volume rm httpH-mysql-data httpH-config httpH-backups httpH-letsencrypt
-docker volume rm httpI-mysql-data httpI-config httpI-backups httpI-letsencrypt
-docker volume rm httpJ-mysql-data httpJ-config httpJ-backups httpJ-letsencrypt
+docker volume rm httpA-mysql-data httpA-config httpA-backups httpA-ssl-cert
+docker volume rm httpB-mysql-data httpB-config httpB-backups httpB-ssl-cert
+docker volume rm httpC-mysql-data httpC-config httpC-backups httpC-ssl-cert
+docker volume rm httpD-mysql-data httpD-config httpD-backups httpD-ssl-cert
+docker volume rm httpE-mysql-data httpE-config httpE-backups httpE-ssl-cert
+docker volume rm httpF-mysql-data httpF-config httpF-backups httpF-ssl-cert
+docker volume rm httpG-mysql-data httpG-config httpG-backups httpG-ssl-cert
+docker volume rm httpH-mysql-data httpH-config httpH-backups httpH-ssl-cert
+docker volume rm httpI-mysql-data httpI-config httpI-backups httpI-ssl-cert
+docker volume rm httpJ-mysql-data httpJ-config httpJ-backups httpJ-ssl-cert
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped  --network=demo-net --name httpA -v "httpA-mysql-data:/var/lib/mysql" -v "httpA-config:/etc/eiou/config" -v "httpA-plugins:/etc/eiou/plugins" -v "httpA-backups:/var/lib/eiou/backups" -v "httpA-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpA eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpB -v "httpB-mysql-data:/var/lib/mysql" -v "httpB-config:/etc/eiou/config" -v "httpB-plugins:/etc/eiou/plugins" -v "httpB-backups:/var/lib/eiou/backups" -v "httpB-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpB eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpC -v "httpC-mysql-data:/var/lib/mysql" -v "httpC-config:/etc/eiou/config" -v "httpC-plugins:/etc/eiou/plugins" -v "httpC-backups:/var/lib/eiou/backups" -v "httpC-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpC eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpD -v "httpD-mysql-data:/var/lib/mysql" -v "httpD-config:/etc/eiou/config" -v "httpD-plugins:/etc/eiou/plugins" -v "httpD-backups:/var/lib/eiou/backups" -v "httpD-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpD eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpE -v "httpE-mysql-data:/var/lib/mysql" -v "httpE-config:/etc/eiou/config" -v "httpE-plugins:/etc/eiou/plugins" -v "httpE-backups:/var/lib/eiou/backups" -v "httpE-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpE eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpF -v "httpF-mysql-data:/var/lib/mysql" -v "httpF-config:/etc/eiou/config" -v "httpF-plugins:/etc/eiou/plugins" -v "httpF-backups:/var/lib/eiou/backups" -v "httpF-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpF eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpG -v "httpG-mysql-data:/var/lib/mysql" -v "httpG-config:/etc/eiou/config" -v "httpG-plugins:/etc/eiou/plugins" -v "httpG-backups:/var/lib/eiou/backups" -v "httpG-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpG eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpH -v "httpH-mysql-data:/var/lib/mysql" -v "httpH-config:/etc/eiou/config" -v "httpH-plugins:/etc/eiou/plugins" -v "httpH-backups:/var/lib/eiou/backups" -v "httpH-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpH eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpI -v "httpI-mysql-data:/var/lib/mysql" -v "httpI-config:/etc/eiou/config" -v "httpI-plugins:/etc/eiou/plugins" -v "httpI-backups:/var/lib/eiou/backups" -v "httpI-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpI eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name httpJ -v "httpJ-mysql-data:/var/lib/mysql" -v "httpJ-config:/etc/eiou/config" -v "httpJ-plugins:/etc/eiou/plugins" -v "httpJ-backups:/var/lib/eiou/backups" -v "httpJ-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=httpJ eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpA -v "httpA-mysql-data:/var/lib/mysql" -v "httpA-config:/etc/eiou/config" -v "httpA-plugins:/etc/eiou/plugins" -v "httpA-backups:/var/lib/eiou/backups" -v "httpA-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpA eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpB -v "httpB-mysql-data:/var/lib/mysql" -v "httpB-config:/etc/eiou/config" -v "httpB-plugins:/etc/eiou/plugins" -v "httpB-backups:/var/lib/eiou/backups" -v "httpB-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpB eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpC -v "httpC-mysql-data:/var/lib/mysql" -v "httpC-config:/etc/eiou/config" -v "httpC-plugins:/etc/eiou/plugins" -v "httpC-backups:/var/lib/eiou/backups" -v "httpC-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpC eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpD -v "httpD-mysql-data:/var/lib/mysql" -v "httpD-config:/etc/eiou/config" -v "httpD-plugins:/etc/eiou/plugins" -v "httpD-backups:/var/lib/eiou/backups" -v "httpD-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpD eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpE -v "httpE-mysql-data:/var/lib/mysql" -v "httpE-config:/etc/eiou/config" -v "httpE-plugins:/etc/eiou/plugins" -v "httpE-backups:/var/lib/eiou/backups" -v "httpE-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpE eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpF -v "httpF-mysql-data:/var/lib/mysql" -v "httpF-config:/etc/eiou/config" -v "httpF-plugins:/etc/eiou/plugins" -v "httpF-backups:/var/lib/eiou/backups" -v "httpF-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpF eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpG -v "httpG-mysql-data:/var/lib/mysql" -v "httpG-config:/etc/eiou/config" -v "httpG-plugins:/etc/eiou/plugins" -v "httpG-backups:/var/lib/eiou/backups" -v "httpG-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpG eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpH -v "httpH-mysql-data:/var/lib/mysql" -v "httpH-config:/etc/eiou/config" -v "httpH-plugins:/etc/eiou/plugins" -v "httpH-backups:/var/lib/eiou/backups" -v "httpH-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpH eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpI -v "httpI-mysql-data:/var/lib/mysql" -v "httpI-config:/etc/eiou/config" -v "httpI-plugins:/etc/eiou/plugins" -v "httpI-backups:/var/lib/eiou/backups" -v "httpI-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpI eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpJ -v "httpJ-mysql-data:/var/lib/mysql" -v "httpJ-config:/etc/eiou/config" -v "httpJ-plugins:/etc/eiou/plugins" -v "httpJ-backups:/var/lib/eiou/backups" -v "httpJ-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=httpJ eiou/eiou
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 # add contacts

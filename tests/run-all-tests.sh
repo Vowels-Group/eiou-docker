@@ -482,6 +482,7 @@ printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 # Full test order (all tests)
 TESTS_ALL="
 sslCertificateTest
+sslVolumeLayoutTest
 torTestSuite
 mutualContactTest
 addContactsTest
@@ -579,6 +580,7 @@ chainDropTestSuite
 # Connection tests (SSL/Tor)
 TESTS_CONNECTIONS="
 sslCertificateTest
+sslVolumeLayoutTest
 torTestSuite
 "
 

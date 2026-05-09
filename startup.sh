@@ -454,6 +454,30 @@ fi
 # Priority: 1. External (/ssl-certs/) 2. Let's Encrypt 3. CA-signed (/ssl-ca/) 4. Self-signed
 # =============================================================================
 
+# --- Unified ssl-cert volume layout ---
+# All SSL state (certbot bookkeeping, the cert nginx serves on :443, room for
+# future providers) lives under /var/lib/eiou/ssl/<provider>/. The canonical
+# container paths /etc/letsencrypt and /etc/nginx/ssl are symlinks into that
+# tree, so certbot/nginx see the paths they expect while operators see one
+# logical volume on disk. Idempotent: re-symlinks existing symlinks, replaces
+# any stray real directory left over from older images.
+mkdir -p /var/lib/eiou/ssl/letsencrypt /var/lib/eiou/ssl/nginx
+for src_target in "/var/lib/eiou/ssl/letsencrypt:/etc/letsencrypt" "/var/lib/eiou/ssl/nginx:/etc/nginx/ssl"; do
+    src="${src_target%%:*}"
+    target="${src_target##*:}"
+    if [ -L "$target" ]; then
+        ln -sfn "$src" "$target"
+    elif [ -d "$target" ]; then
+        # Real directory from an older image layout — migrate any contents in,
+        # then replace with the symlink.
+        cp -an "$target/." "$src/" 2>/dev/null || true
+        rm -rf "$target"
+        ln -sfn "$src" "$target"
+    else
+        ln -sfn "$src" "$target"
+    fi
+done
+
 SSL_CERT_INSTALLED=false
 
 # --- Priority 1: Externally provided certificates ---

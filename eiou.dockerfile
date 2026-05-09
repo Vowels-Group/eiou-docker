@@ -278,11 +278,15 @@ RUN printf '/var/log/nginx/*.log {\n    weekly\n    rotate 4\n    compress\n    
 #   via startup.sh using `cp -rn`, so operator-installed plugins survive image
 #   upgrades and bundled-plugin removals persist)
 # - /var/lib/eiou/backups: Encrypted database backups
-# - /etc/letsencrypt: Let's Encrypt certificates and renewal state
+#
+# SSL paths (/etc/letsencrypt and /etc/nginx/ssl) are not declared here. They
+# are mounted by docker-compose.yml as subpaths of a single named ssl-cert
+# volume, which keeps all certificate state on one logical volume and lets
+# operators add more SSL provider subpaths without further compose surgery.
 #
 # Source code is NOT in a volume — it lives in /app/eiou/ (image filesystem)
 # and updates automatically with each new image build.
-VOLUME ["/var/lib/mysql", "/etc/eiou/config", "/etc/eiou/plugins", "/var/lib/eiou/backups", "/etc/letsencrypt"]
+VOLUME ["/var/lib/mysql", "/etc/eiou/config", "/etc/eiou/plugins", "/var/lib/eiou/backups"]
 
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/
