@@ -406,6 +406,7 @@ All eIOU containers use named volumes for data persistence:
 | `{node}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins (e.g. `hello-eiou`) are baked into the image at `/app/plugins/` and seeded into this volume on first boot via `startup.sh` with `cp -rn`, so operator-added plugins survive container rebuilds and removed bundled plugins stay removed across upgrades. | **IMPORTANT** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
 | `{node}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if not using Let's Encrypt | Low |
+| `{node}-nginx-ssl` | `/etc/nginx/ssl` | The cert nginx actually presents on :443. Persists self-signed certs across `docker rm` + `docker run` (e.g. image updates) so clients don't see a new fingerprint on every rebuild. Also holds the copy of any Let's Encrypt cert. Safe to comment out — fresh cert will regenerate on next start. | Low |
 
 **Example:**
 ```yaml
