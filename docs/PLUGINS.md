@@ -57,6 +57,12 @@ boot.
 - Crash the node during discovery, registration, or boot — failures are caught
   per-plugin, logged, and the plugin is marked as `failed`; core keeps running
 - Persist state outside their own directory or the shared state file
+- Read core tables (`contacts`, `transactions`, `api_keys`, `balances`,
+  `payback_methods`, …) or other plugins' tables via raw SQL — the plugin's
+  own MySQL user has grants only on its `owned_tables`. Core data must be
+  reached through host services on `ServiceContainer`. See
+  [How plugins interact with core data](#how-plugins-interact-with-core-data)
+  for the full split.
 - Take effect without a node restart — see [Lifecycle](#lifecycle) below
 
 
@@ -314,6 +320,71 @@ Not included:
 
 The user is bound to `'plugin_<snake_id>'@'localhost'` — never `'%'`. A
 network-layer compromise cannot reach it via remote MySQL auth.
+
+### How plugins interact with core data
+
+The MySQL grants above describe what the plugin's *own database connection*
+can touch. They are not the whole picture — plugins can still interact with
+core data, but they have to go through a curated, in-process API. Two
+distinct layers:
+
+**Layer 1 — Raw SQL via the plugin's PDO (`$container->getPluginPdo($id)`)**
+
+What it sees: only the tables listed in this plugin's `owned_tables`. Core
+tables (`contacts`, `transactions`, `api_keys`, `payback_methods`,
+`balances`, …) and other plugins' tables are not just hidden — they are
+denied at the MySQL privilege check. A `SELECT * FROM contacts` from a
+plugin's PDO returns MySQL error 1142.
+
+This is the path you use for anything the plugin *owns*: storing its own
+state, building its own indexes, running its own analytics on its own
+rows.
+
+**Layer 2 — Host services via the `ServiceContainer` (`$container->getXxxService()`)**
+
+What it sees: whatever each host service chooses to expose. Plugins
+receive `ServiceContainer` in `register()` and `boot()` and can call into
+any registered core service — `ContactService`, `TransactionService`,
+`BalanceService`, etc. Those services run inside the host process with
+full app-user database privileges and return whatever shape they
+normally return.
+
+This is the path you use for anything the plugin needs to *read* or
+*react to* in core data. A notifications plugin doesn't query
+`transactions` directly — it subscribes to `TransactionEvents` and/or
+calls `TransactionService::getRecent()`. A custom payback-method type
+doesn't query `payback_methods` directly — it registers via
+`PaybackMethodTypeRegistry` and gets called by the host with the rows
+already loaded.
+
+Why the split: the host services act as a typed, business-rule-aware
+boundary. They redact what shouldn't leave the core, gate sensitive
+operations behind sensitive-access, and stay stable across schema
+changes. A direct `SELECT * FROM api_keys` by a plugin would be a
+disaster on multiple axes (schema coupling, no redaction, no
+authorization, no audit) — `ApiKeyService::list()` returns hashed
+identifiers and never plaintext, regardless of caller.
+
+What this means in practice:
+
+| Goal | Right path |
+| ---- | ---------- |
+| Read recent transactions | `TransactionService::getRecent()` |
+| Look up a contact by pubkey | `ContactService::getByPublicKey()` |
+| React to a sync event | subscribe to `SyncEvents::SYNC_COMPLETED` |
+| Store the plugin's own state | `getPluginPdo()` + own table |
+
+Common asks that are deliberately unreachable:
+
+- Reading all wallet keys — no service exposes plaintext private keys; the
+  PDO can't read the wallet table either.
+- Reading API key plaintext — `ApiKeyService` returns only hashed
+  identifiers; the PDO can't read `api_keys` either.
+- `SELECT * FROM contacts` — privilege denied at MySQL.
+- Modifying another plugin's tables — privilege denied at MySQL.
+
+If a host service doesn't yet expose the data your plugin needs, the
+right move is to add or extend a service — not to widen MySQL grants.
 
 ### Resource limits
 
