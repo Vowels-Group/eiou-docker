@@ -316,10 +316,11 @@ class PaybackMethodService
      * Short redacted string shown on list rows before reveal.
      *
      * Core-shipped types: `bank_wire` (shows the last 4 of the IBAN or
-     * account number) and `custom` (shows the first 8 chars of the free-
-     * text details). Plugin-registered types fall back to a generic mask
-     * until plugins can register their own masker — for now they see
-     * `•••` which is safe but uninformative.
+     * account number) and `custom` (fully redacted — the field is free
+     * text and any prefix preview risks leaking whatever the user wrote).
+     * Plugin-registered types fall back to a generic mask until plugins
+     * can register their own masker — for now they see `•••` which is
+     * safe but uninformative.
      */
     protected function maskForType(string $type, array $fields): string
     {
@@ -328,11 +329,11 @@ class PaybackMethodService
                 $tail = $fields['iban'] ?? $fields['account_number'] ?? '';
                 return '••••' . substr($tail, -4);
             case 'custom':
-                // `details` is user-authored free text — not sensitive like an
-                // IBAN, so show a wide preview and let the table's own CSS
-                // ellipsis handle truncation at the column boundary.
-                $details = (string) ($fields['details'] ?? '');
-                return mb_strlen($details) > 80 ? mb_substr($details, 0, 80) . '…' : $details;
+                // Free-text — even the first few chars can leak, since users
+                // routinely paste account details, contact info, or notes
+                // they didn't realize were sensitive. Hide entirely until
+                // unlock.
+                return '•••';
         }
         // Plugin-registered types get to define their own masked display.
         if ($this->registry !== null) {
