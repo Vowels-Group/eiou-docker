@@ -85,9 +85,17 @@ function freshInstall(){
 
             // Create user with limited privileges (if not exists)
             // Note: If user already exists, this will fail but that's OK - we'll catch it
+            //
+            // GRANT OPTION on eiou.* and CREATE USER ON *.* are required by the
+            // plugin isolation feature: PluginDbUserService runs as this app
+            // user to CREATE plugin_<id> users and GRANT them per-table
+            // privileges on eiou.plugin_<id>_* tables. Without these two
+            // privileges, every plugin enable fails with MySQL error 1227
+            // (Access denied; you need the CREATE USER privilege).
             try {
                 $rootConn->exec("CREATE USER '$dbUser'@'$dbHost' IDENTIFIED BY '$dbPass'");
-                $rootConn->exec("GRANT ALL PRIVILEGES ON `$dbName`.* TO '$dbUser'@'$dbHost'");
+                $rootConn->exec("GRANT ALL PRIVILEGES ON `$dbName`.* TO '$dbUser'@'$dbHost' WITH GRANT OPTION");
+                $rootConn->exec("GRANT CREATE USER ON *.* TO '$dbUser'@'$dbHost'");
                 $rootConn->exec("FLUSH PRIVILEGES");
             } catch (PDOException $userExists) {
                 // User might already exist - try to use existing credentials

@@ -1242,6 +1242,22 @@ if [ "$REDO_LOG_RECOVERY" = "true" ] && [ -f /etc/eiou/config/dbconfig.json ]; t
     # and cannot be restored until TDE is active on the new database).
 fi
 
+# Ensure the app DB user holds the privileges required by the plugin
+# isolation feature (CREATE USER on *.* and GRANT OPTION on eiou.*).
+# Idempotent and safe to run on every boot. No-ops on truly fresh installs
+# (no dbconfig.json yet) and when the master key isn't loadable. Fresh
+# installs receive the same grants directly in DatabaseSetup::freshInstall;
+# this step exists so upgrades from versions that pre-date the feature, and
+# self-healing after manual REVOKEs, don't leave the app user under-granted.
+if [ -f /etc/eiou/config/dbconfig.json ]; then
+    GRANT_RESULT=$(php /app/eiou/scripts/grant-app-user-plugin-privileges.php 2>&1)
+    GRANT_EXIT=$?
+    echo "$GRANT_RESULT"
+    if [ $GRANT_EXIT -ne 0 ]; then
+        echo "WARNING: plugin-isolation grant step exited $GRANT_EXIT — plugin enable will fail until resolved"
+    fi
+fi
+
 # Check if config/userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
     # RESTORE_FILE takes priority over RESTORE, which takes priority over QUICKSTART

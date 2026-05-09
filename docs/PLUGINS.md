@@ -57,6 +57,12 @@ boot.
 - Crash the node during discovery, registration, or boot — failures are caught
   per-plugin, logged, and the plugin is marked as `failed`; core keeps running
 - Persist state outside their own directory or the shared state file
+- Read core tables (`contacts`, `transactions`, `api_keys`, `balances`,
+  `payback_methods`, …) or other plugins' tables via raw SQL — the plugin's
+  own MySQL user has grants only on its `owned_tables`. Core data must be
+  reached through host services on `ServiceContainer`. See
+  [How plugins interact with core data](#how-plugins-interact-with-core-data)
+  for the full split.
 - Take effect without a node restart — see [Lifecycle](#lifecycle) below
 
 
@@ -284,24 +290,101 @@ identifier limit.
 
 ### What a plugin user can do
 
-Each plugin user gets exactly these privileges on its own table namespace:
+Each plugin user gets exactly these privileges, **issued per-table** for every
+entry in the manifest's `owned_tables`:
 
 ```
-CREATE, ALTER, DROP, INDEX, SELECT, INSERT, UPDATE, DELETE ON eiou.plugin_<snake_id>_%
+CREATE, ALTER, DROP, INDEX, SELECT, INSERT, UPDATE, DELETE ON eiou.<owned_table>
 ```
+
+(One `GRANT` statement per entry. MySQL/MariaDB only treats `%`/`_` as LIKE
+wildcards in the *database* portion of `db.tbl`; the *table* portion is
+stored as a literal name in `mysql.tables_priv`, which is why the grants
+have to enumerate each table individually.)
 
 Not included:
 
 - **`REFERENCES`** — plugins cannot create foreign keys pointing at core
   tables. They can FK between their own tables freely.
 - **`GRANT OPTION`** — plugins cannot sub-grant privileges to other users.
-- **Any privilege on core tables** — `contacts`, `transactions`, `api_keys`,
-  `payback_methods`, etc. are invisible and inaccessible.
+- **Any privilege on `eiou.*`** — there is no database-level grant. Core
+  tables (`contacts`, `transactions`, `api_keys`, `payback_methods`, …) are
+  invisible and inaccessible, and the plugin user cannot even `SHOW TABLES`.
 - **Any privilege on other plugins' tables** — Plugin A cannot read,
   modify, or even enumerate Plugin B's tables.
+- **Any privilege on tables not in this plugin's `owned_tables`** — adding
+  a new table at runtime requires updating the manifest and re-enabling
+  (or re-running boot-time reconciliation) so the per-table grant is
+  issued. A plugin that tries to `CREATE TABLE plugin_<id>_<unlisted>` at
+  runtime will be denied at the privilege check.
 
 The user is bound to `'plugin_<snake_id>'@'localhost'` — never `'%'`. A
 network-layer compromise cannot reach it via remote MySQL auth.
+
+### How plugins interact with core data
+
+The MySQL grants above describe what the plugin's *own database connection*
+can touch. They are not the whole picture — plugins can still interact with
+core data, but they have to go through a curated, in-process API. Two
+distinct layers:
+
+**Layer 1 — Raw SQL via the plugin's PDO (`$container->getPluginPdo($id)`)**
+
+What it sees: only the tables listed in this plugin's `owned_tables`. Core
+tables (`contacts`, `transactions`, `api_keys`, `payback_methods`,
+`balances`, …) and other plugins' tables are not just hidden — they are
+denied at the MySQL privilege check. A `SELECT * FROM contacts` from a
+plugin's PDO returns MySQL error 1142.
+
+This is the path you use for anything the plugin *owns*: storing its own
+state, building its own indexes, running its own analytics on its own
+rows.
+
+**Layer 2 — Host services via the `ServiceContainer` (`$container->getXxxService()`)**
+
+What it sees: whatever each host service chooses to expose. Plugins
+receive `ServiceContainer` in `register()` and `boot()` and can call into
+any registered core service — `ContactService`, `TransactionService`,
+`BalanceService`, etc. Those services run inside the host process with
+full app-user database privileges and return whatever shape they
+normally return.
+
+This is the path you use for anything the plugin needs to *read* or
+*react to* in core data. A notifications plugin doesn't query
+`transactions` directly — it subscribes to `TransactionEvents` and/or
+calls `TransactionService::getRecent()`. A custom payback-method type
+doesn't query `payback_methods` directly — it registers via
+`PaybackMethodTypeRegistry` and gets called by the host with the rows
+already loaded.
+
+Why the split: the host services act as a typed, business-rule-aware
+boundary. They redact what shouldn't leave the core, gate sensitive
+operations behind sensitive-access, and stay stable across schema
+changes. A direct `SELECT * FROM api_keys` by a plugin would be a
+disaster on multiple axes (schema coupling, no redaction, no
+authorization, no audit) — `ApiKeyService::list()` returns hashed
+identifiers and never plaintext, regardless of caller.
+
+What this means in practice:
+
+| Goal | Right path |
+| ---- | ---------- |
+| Read recent transactions | `TransactionService::getRecent()` |
+| Look up a contact by pubkey | `ContactService::getByPublicKey()` |
+| React to a sync event | subscribe to `SyncEvents::SYNC_COMPLETED` |
+| Store the plugin's own state | `getPluginPdo()` + own table |
+
+Common asks that are deliberately unreachable:
+
+- Reading all wallet keys — no service exposes plaintext private keys; the
+  PDO can't read the wallet table either.
+- Reading API key plaintext — `ApiKeyService` returns only hashed
+  identifiers; the PDO can't read `api_keys` either.
+- `SELECT * FROM contacts` — privilege denied at MySQL.
+- Modifying another plugin's tables — privilege denied at MySQL.
+
+If a host service doesn't yet expose the data your plugin needs, the
+right move is to add or extend a service — not to widen MySQL grants.
 
 ### Resource limits
 
@@ -372,17 +455,50 @@ On every node boot, after the master key is loaded and before plugins'
 `register()` runs, the loader runs an idempotent reconcile pass:
 
 - For each enabled plugin with `database.user: true`: `CREATE USER IF NOT
-  EXISTS` + `ALTER USER` + `GRANT`. Self-heals after a `mysql-data` volume
-  recreation, a manual `DROP USER`, an operator `db_limits` edit, or a
-  master-key rotation.
+  EXISTS` + `ALTER USER` + one `GRANT` per `owned_tables` entry. Self-heals
+  after a `mysql-data` volume recreation, a manual `DROP USER`, an operator
+  `db_limits` edit, or a master-key rotation. A manifest that adds a new
+  table is picked up automatically on the next reconcile.
 - For each disabled plugin that still has a credential row: `REVOKE ALL
-  PRIVILEGES`. Self-heals cases where `setEnabled(false)` flipped the flag
-  but didn't revoke (shouldn't happen in current code, but the reconciler
-  is defensive).
+  PRIVILEGES, GRANT OPTION FROM <plugin_user>` (the no-`ON` form, which
+  drops every grant the user holds without needing to know which tables
+  were granted). Self-heals cases where `setEnabled(false)` flipped the
+  flag but didn't revoke (shouldn't happen in current code, but the
+  reconciler is defensive).
 
 Per-plugin reconcile errors are logged and surfaced as `error:<msg>` in
 the plugin list's status field. They do **not** block node boot — the
 operator investigates via the GUI/CLI list.
+
+### App DB user privileges
+
+The plugin isolation feature requires the application's own MySQL user
+(`eiou_user_<hex>`, generated by `DatabaseSetup::freshInstall`) to hold
+two upstream privileges so it can in turn create plugin users and grant
+them their per-table access:
+
+```
+GRANT ALL ON `eiou`.* TO 'eiou_user_<hex>'@'localhost' WITH GRANT OPTION;
+GRANT CREATE USER ON *.* TO 'eiou_user_<hex>'@'localhost';
+```
+
+Fresh installs receive these directly during database provisioning. On
+container boot a small root-credentialed helper (`files/scripts/grant-app-user-plugin-privileges.php`,
+invoked from `startup.sh` after MariaDB is up) re-applies them
+idempotently — no-op when the master key isn't loadable yet, and no-op
+when the user already holds them. This exists so installs that pre-date
+the plugin isolation feature pick up the required grants on first boot
+under a new image, and so a manual `REVOKE` against the app user
+self-heals on the next restart.
+
+These privileges are scoped to user creation and `eiou.*`-grant
+delegation only — the app user cannot read `mysql.*`, cannot `FILE`,
+`PROCESS`, or `SHUTDOWN`, and cannot escalate to MariaDB root. The
+threat-model trade-off is that an attacker who already controls the app
+user (which has full read/write on `eiou.*`, including wallet keys) can
+now also create persistent backdoor users — but they could already
+self-grant equivalent access via `WITH GRANT OPTION`, so this is a
+timing change, not a privilege-surface widening.
 
 ### Uninstall
 
@@ -399,8 +515,10 @@ status so the operator can investigate):
    `onUninstall()` method runs while the plugin still has MySQL grants
    so it can clean up its own data. Exceptions are logged but do not
    block the remaining steps.
-2. **`REVOKE ALL PRIVILEGES`** — locks out the plugin user before the
-   table drops, so a hostile plugin can't race the next steps.
+2. **`REVOKE ALL PRIVILEGES, GRANT OPTION FROM <plugin_user>`** — the
+   no-`ON` form drops every privilege the user holds in one statement,
+   regardless of which tables had grants. Locks out the plugin user before
+   the table drops so a hostile plugin can't race the next steps.
 3. **`DROP TABLE IF EXISTS`** for every table in `owned_tables`. Each
    name is revalidated against the `/^plugin_[a-z0-9_]+$/` shape so a
    manifest edited between install and uninstall cannot inject
