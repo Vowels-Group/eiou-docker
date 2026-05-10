@@ -290,12 +290,15 @@ remove_container_if_exists() {
 # is acceptable for the tests it intends to run.
 #
 # Usage: wait_for_tor_mesh container1 container2 [container3 ...]
-# Env:   EIOU_TOR_MESH_TIMEOUT  Per-pair cap in seconds (default 600 = 10 min)
-#        EIOU_TOR_MESH_INTERVAL Seconds between probes (default 10)
+# Env:   EIOU_TOR_MESH_TIMEOUT  Total wall-clock cap in seconds (default 600 = 10 min).
+#                               Bounds the WHOLE call, not each pair — pairs are
+#                               probed in parallel each iteration, so the slowest
+#                               pair sets the floor, not the sum.
+#        EIOU_TOR_MESH_INTERVAL Seconds between iterations (default 10)
 # Returns: 0 if every pair converged, 1 if any pair timed out
 wait_for_tor_mesh() {
     local containers=("$@")
-    local per_pair_timeout="${EIOU_TOR_MESH_TIMEOUT:-600}"
+    local total_timeout="${EIOU_TOR_MESH_TIMEOUT:-600}"
     local probe_interval="${EIOU_TOR_MESH_INTERVAL:-10}"
     local n=${#containers[@]}
 
@@ -322,48 +325,115 @@ wait_for_tor_mesh() {
         onion_map="${onion_map} ${c}=${addr}"
     done
 
-    printf "\n${GREEN}Waiting for cross-container Tor mesh to converge "
-    printf "(per-pair cap: ${per_pair_timeout}s, %d directed pairs)...${NC}\n" $((n * (n - 1)))
-
-    # Probe every directed pair. Each pair is independent.
-    local all_ok=true
-    local from to target elapsed converged
+    # Build pair list: "from to target" lines. Tracking convergence via a
+    # status file (one line per pair) so each parallel-probed iteration can
+    # independently mark its pair done without inter-process locking.
+    local pair_status_file
+    pair_status_file=$(mktemp /tmp/tor_mesh_status.XXXXXX)
+    trap "rm -f '$pair_status_file' '${pair_status_file}'.*" RETURN
+    local from to target
     for from in "${containers[@]}"; do
         for to in "${containers[@]}"; do
             [ "$from" = "$to" ] && continue
-            # Look up `to`'s onion from the precomputed map
             target=$(echo "$onion_map" | tr ' ' '\n' | grep "^${to}=" | cut -d= -f2)
-            elapsed=0
-            converged=false
-
-            printf "  %s -> %s (%s…)... " "$from" "$to" "${target:0:16}"
-
-            while [ $elapsed -lt $per_pair_timeout ]; do
-                if docker exec "$from" curl --socks5-hostname 127.0.0.1:9050 \
-                        --connect-timeout 8 \
-                        --max-time 20 \
-                        --silent \
-                        --fail \
-                        --output /dev/null \
-                        "$target" 2>/dev/null; then
-                    converged=true
-                    break
-                fi
-                sleep $probe_interval
-                elapsed=$((elapsed + probe_interval))
-            done
-
-            if [ "$converged" = true ]; then
-                printf "${GREEN}reachable after %ds${NC}\n" "$elapsed"
-            else
-                printf "${YELLOW}not reachable after %ds (giving up)${NC}\n" "$elapsed"
-                all_ok=false
-            fi
+            echo "${from} ${to} ${target} pending" >> "$pair_status_file"
         done
     done
 
-    if [ "$all_ok" = true ]; then
-        printf "${GREEN}Tor mesh fully converged${NC}\n"
+    local total_pairs=$((n * (n - 1)))
+    printf "\n${GREEN}Waiting for cross-container Tor mesh to converge "
+    printf "(total cap: ${total_timeout}s, %d directed pairs probed in parallel)...${NC}\n" "$total_pairs"
+
+    local start_time
+    start_time=$(date +%s)
+    local elapsed=0
+    local iteration=0
+
+    while [ $elapsed -lt $total_timeout ]; do
+        iteration=$((iteration + 1))
+
+        # Spawn parallel probes for every still-pending pair this iteration.
+        # Each probe writes its pair-line back as "from to target reachable@${elapsed}s"
+        # on success. Failures leave the pending status untouched so they retry
+        # next iteration.
+        local pids=()
+        while IFS= read -r pair_line; do
+            local pf pt ptarget pstatus
+            read -r pf pt ptarget pstatus <<< "$pair_line"
+            if [ "$pstatus" = "pending" ]; then
+                (
+                    if docker exec "$pf" curl --socks5-hostname 127.0.0.1:9050 \
+                            --connect-timeout 8 \
+                            --max-time 20 \
+                            --silent \
+                            --fail \
+                            --output /dev/null \
+                            "$ptarget" 2>/dev/null; then
+                        # Atomic per-pair result file; merged later.
+                        echo "$pf $pt $ptarget reachable@${elapsed}s" > "${pair_status_file}.${pf}_${pt}"
+                    fi
+                ) &
+                pids+=($!)
+            fi
+        done < "$pair_status_file"
+
+        # Wait for all probes this iteration to finish (each is bounded by
+        # curl's max-time, so this is at most ~20s per iteration).
+        if [ ${#pids[@]} -gt 0 ]; then
+            wait "${pids[@]}" 2>/dev/null || true
+        fi
+
+        # Merge per-pair result files into the status file. Per-pair files
+        # only exist for pairs that succeeded this iteration.
+        local result_file new_status_file
+        new_status_file=$(mktemp "${pair_status_file}.merge.XXXXXX")
+        while IFS= read -r pair_line; do
+            local pf pt ptarget pstatus
+            read -r pf pt ptarget pstatus <<< "$pair_line"
+            result_file="${pair_status_file}.${pf}_${pt}"
+            if [ -s "$result_file" ]; then
+                cat "$result_file" >> "$new_status_file"
+                rm -f "$result_file"
+            else
+                echo "$pair_line" >> "$new_status_file"
+            fi
+        done < "$pair_status_file"
+        mv "$new_status_file" "$pair_status_file"
+
+        # Count remaining
+        local pending_count
+        pending_count=$(grep -c " pending$" "$pair_status_file" || true)
+        local reachable_count=$((total_pairs - pending_count))
+
+        printf "  iteration %d (%ds elapsed): %d/%d pairs reachable\n" \
+            "$iteration" "$elapsed" "$reachable_count" "$total_pairs"
+
+        if [ "$pending_count" -eq 0 ]; then
+            break
+        fi
+
+        sleep $probe_interval
+        elapsed=$(($(date +%s) - start_time))
+    done
+
+    # Final report
+    local converged_lines failed_lines
+    converged_lines=$(grep " reachable@" "$pair_status_file" || true)
+    failed_lines=$(grep " pending$" "$pair_status_file" || true)
+
+    if [ -n "$converged_lines" ]; then
+        echo "$converged_lines" | while IFS= read -r line; do
+            printf "  ${GREEN}✓${NC} %s\n" "$line"
+        done
+    fi
+    if [ -n "$failed_lines" ]; then
+        echo "$failed_lines" | while IFS= read -r line; do
+            printf "  ${YELLOW}✗${NC} %s (not reachable after ${elapsed}s)\n" "$line"
+        done
+    fi
+
+    if [ -z "$failed_lines" ]; then
+        printf "${GREEN}Tor mesh fully converged in %ds${NC}\n" "$elapsed"
         return 0
     else
         printf "${YELLOW}Tor mesh PARTIALLY converged. Tests that route over Tor "

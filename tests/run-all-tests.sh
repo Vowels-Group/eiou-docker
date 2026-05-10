@@ -436,18 +436,22 @@ printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
 # Brief buffer time for message processors (using environment variable if set)
 sleep ${TEST_POLL_INTERVAL:-1}
 
-# Optional: wait for full cross-container Tor mesh convergence.
+# Wait for full cross-container Tor mesh convergence.
 #
 # The per-container init loop above only verifies SELF-reachability (a
 # container can curl its own .onion through its own SOCKS5). Tests that
 # route over Tor between PEERS — chainDropTestSuite's ping/auto-propose
 # flow, parts of syncTestSuite — also need every other peer's hidden
 # service descriptor to be reachable, which can take 5–15 minutes on
-# fresh Tor v3 services and may never fully converge in a Docker bridge
-# with low entropy. Off by default because the wait is slow and most
-# tests don't need it; set EIOU_TOR_MESH_WAIT=true (or =1) to enable.
+# fresh Tor v3 services and may never fully converge in a Docker bridge.
+#
+# ON by default since the helper now probes pairs in parallel each
+# iteration (total wall time bounded by EIOU_TOR_MESH_TIMEOUT, default
+# 600s) — happy path completes in ~30–90s, the same range the
+# per-container Tor self-test already takes. Set EIOU_TOR_MESH_WAIT=false
+# (or =0) to skip when running suites that don't route over Tor.
 # See `wait_for_tor_mesh` in tests/baseconfig/config.sh.
-if [ "${EIOU_TOR_MESH_WAIT:-false}" = "true" ] || [ "${EIOU_TOR_MESH_WAIT:-0}" = "1" ]; then
+if [ "${EIOU_TOR_MESH_WAIT:-true}" != "false" ] && [ "${EIOU_TOR_MESH_WAIT:-1}" != "0" ]; then
     if ! wait_for_tor_mesh $CONTAINER_LIST; then
         printf "${YELLOW}Continuing with partial Tor mesh — Tor-routed tests may have intermittent failures.${NC}\n"
     fi
