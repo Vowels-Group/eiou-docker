@@ -263,6 +263,116 @@ remove_container_if_exists() {
 
 #############################################################################
 
+# Wait for a fully-connected Tor hidden-service mesh between containers.
+#
+# WHY: tests/run-all-tests.sh's per-container `tor_ready` check verifies only
+# that a container can reach its OWN .onion through its OWN SOCKS5 proxy.
+# That succeeds quickly because the descriptor is in the local Tor cache;
+# it does NOT prove cross-container reachability, which requires:
+#   (a) container B's descriptor uploaded to enough HSDirs in the consensus,
+#   (b) container A successfully fetching B's descriptor from an HSDir,
+#   (c) circuit through B's introduction points + rendezvous negotiation.
+# Real-world cross-node convergence on a freshly-started Tor v3 hidden
+# service is typically 3–10 min and may exceed 15 min on first publish.
+# In a 4-container Docker bridge, the consensus is the same as the public
+# Tor network (we don't run a private testnet), so the bottleneck is
+# descriptor propagation, not local routing.
+#
+# Tests that exercise contact-pings or P2P delivery via Tor (chainDrop,
+# parts of sync) need cross-mesh reachability, not just self-reachability.
+#
+# WHAT IT DOES: For every (from, to) pair of accepted contact containers,
+# repeatedly curls "to"'s .onion through "from"'s SOCKS5 until success or
+# timeout. Caches successes so each pair only needs to converge once.
+# Reports per-pair status at the end; returns 0 only if every pair
+# converged. The mesh may genuinely never fully connect (HSDir uploads
+# can fail silently), so the caller must decide whether a partial mesh
+# is acceptable for the tests it intends to run.
+#
+# Usage: wait_for_tor_mesh container1 container2 [container3 ...]
+# Env:   EIOU_TOR_MESH_TIMEOUT  Per-pair cap in seconds (default 600 = 10 min)
+#        EIOU_TOR_MESH_INTERVAL Seconds between probes (default 10)
+# Returns: 0 if every pair converged, 1 if any pair timed out
+wait_for_tor_mesh() {
+    local containers=("$@")
+    local per_pair_timeout="${EIOU_TOR_MESH_TIMEOUT:-600}"
+    local probe_interval="${EIOU_TOR_MESH_INTERVAL:-10}"
+    local n=${#containers[@]}
+
+    if [ "$n" -lt 2 ]; then
+        echo "wait_for_tor_mesh: need at least 2 containers"
+        return 0
+    fi
+
+    # Resolve and validate every container's .onion before any probing.
+    # Builds a plain space-separated "name=onion" map so this works under
+    # plain bash without `declare -A` portability concerns.
+    local onion_map=""
+    local c addr
+    for c in "${containers[@]}"; do
+        addr=$(docker exec "$c" php -r '
+            if (file_exists("/etc/eiou/config/userconfig.json")) {
+                $j = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
+                if (isset($j["torAddress"])) echo $j["torAddress"];
+            }' 2>/dev/null)
+        if [ -z "$addr" ]; then
+            printf "  ${RED}%s has no torAddress in userconfig.json${NC}\n" "$c"
+            return 1
+        fi
+        onion_map="${onion_map} ${c}=${addr}"
+    done
+
+    printf "\n${GREEN}Waiting for cross-container Tor mesh to converge "
+    printf "(per-pair cap: ${per_pair_timeout}s, %d directed pairs)...${NC}\n" $((n * (n - 1)))
+
+    # Probe every directed pair. Each pair is independent.
+    local all_ok=true
+    local from to target elapsed converged
+    for from in "${containers[@]}"; do
+        for to in "${containers[@]}"; do
+            [ "$from" = "$to" ] && continue
+            # Look up `to`'s onion from the precomputed map
+            target=$(echo "$onion_map" | tr ' ' '\n' | grep "^${to}=" | cut -d= -f2)
+            elapsed=0
+            converged=false
+
+            printf "  %s -> %s (%s…)... " "$from" "$to" "${target:0:16}"
+
+            while [ $elapsed -lt $per_pair_timeout ]; do
+                if docker exec "$from" curl --socks5-hostname 127.0.0.1:9050 \
+                        --connect-timeout 8 \
+                        --max-time 20 \
+                        --silent \
+                        --fail \
+                        --output /dev/null \
+                        "$target" 2>/dev/null; then
+                    converged=true
+                    break
+                fi
+                sleep $probe_interval
+                elapsed=$((elapsed + probe_interval))
+            done
+
+            if [ "$converged" = true ]; then
+                printf "${GREEN}reachable after %ds${NC}\n" "$elapsed"
+            else
+                printf "${YELLOW}not reachable after %ds (giving up)${NC}\n" "$elapsed"
+                all_ok=false
+            fi
+        done
+    done
+
+    if [ "$all_ok" = true ]; then
+        printf "${GREEN}Tor mesh fully converged${NC}\n"
+        return 0
+    else
+        printf "${YELLOW}Tor mesh PARTIALLY converged. Tests that route over Tor "
+        printf "between non-converged pairs will fail; check Tor logs in the "
+        printf "affected containers for HSDir upload errors.${NC}\n"
+        return 1
+    fi
+}
+
 ########################## Test Helper Functions ############################
 # Source consolidated test helper functions
 # These provide common utilities used across multiple test suites

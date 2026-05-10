@@ -270,6 +270,22 @@ If your reverse proxy handles SSL and forwards plain HTTP to the container, poin
 
 The two layers complement each other. The external proxy handles infrastructure concerns; the built-in nginx handles application-level protections. Both rate limiters operate independently — the external proxy may enforce its own limits before traffic reaches the container.
 
+### Tor ControlPort Security
+
+The container exposes Tor's control protocol on `127.0.0.1:9051` for first-boot HS-descriptor publication monitoring (see `startup.sh::watch_hs_descriptor_publication`). The bind is **localhost-only** and cookie-authenticated; no externally-reachable surface is added.
+
+**Hard rules — do not change without re-evaluating the threat model:**
+
+1. **Never bind ControlPort to anything other than `127.0.0.1`.** The line in `eiou.dockerfile`'s torrc setup is `ControlPort 127.0.0.1:9051`. Binding to `0.0.0.0` or any external interface exposes a control surface that lets an attacker list circuits, change exit policies, signal shutdown, or in some Tor configurations modify hidden-service settings. The bind is the security boundary; auth is defense-in-depth.
+
+2. **Never set `CookieAuthFileGroupReadable 1`.** The cookie file is intentionally `0600` owned by `debian-tor`. Only root processes inside the container (the descriptor watcher, the watchdog) need to authenticate to ControlPort. Making the cookie group-readable would let any process that joins the `debian-tor` group authenticate.
+
+3. **Never add `www-data` to the `debian-tor` group.** PHP-FPM workers, the eIOU CLI, and (especially) plugins all run as `www-data`. Granting them group access to `debian-tor`-owned files would let plugin code talk to ControlPort and the Tor data directory directly. The current model — plugins access nothing Tor-related — is a critical isolation boundary.
+
+4. **Never use `HashedControlPassword` instead of cookie auth.** The hash would have to live in `/etc/tor/torrc` (or a similar config file), making the credential discoverable by any reader of that file. Cookie auth uses a per-restart random cookie that is not stored anywhere persistent.
+
+The threat model is documented at length above in [Why HTTPS Alone Doesn't Equal Tor (Metadata Privacy)](#why-https-alone-doesnt-equal-tor-metadata-privacy); ControlPort access does not in itself break that model (Tor cells are still onion-routed), but it does let a local attacker enumerate connections and circuits, which is information leakage of its own.
+
 ### Container Security
 
 | Setting | Default | Purpose |

@@ -119,9 +119,19 @@ RUN apt-get update && apt-get install -y \
 # Configure Tor hidden service:
 # - HiddenServiceDir: Directory for Tor identity keys and hostname
 # - HiddenServicePort: Maps Tor port 80 to internal nginx
+# - ControlPort: Loopback-only control interface for HS_DESC publication-status
+#   monitoring. Bound to 127.0.0.1 only — not reachable from outside the
+#   container's network namespace. Cookie auth (default cookie file owned by
+#   debian-tor, mode 0600) gates access so only processes that can read the
+#   cookie can issue commands. Cookie is intentionally NOT made group-readable:
+#   only root (startup.sh, watchdog) needs to talk to ControlPort, www-data
+#   (PHP-FPM, plugins) does not. See SECURITY.md for the threat-model
+#   rationale.
 RUN chmod o+w /etc/tor/torrc && \
     echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc && \
     echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc && \
+    echo "ControlPort 127.0.0.1:9051" >> /etc/tor/torrc && \
+    echo "CookieAuthentication 1" >> /etc/tor/torrc && \
     chmod o-w /etc/tor/torrc
 
 # Expose HTTP and HTTPS ports

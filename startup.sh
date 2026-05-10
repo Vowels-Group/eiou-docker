@@ -1037,11 +1037,240 @@ if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
 fi
 
 
+# -----------------------------------------------------------------------------
+# Tor hidden-service descriptor publication watcher
+# -----------------------------------------------------------------------------
+# Subscribes to Tor's ControlPort HS_DESC events and counts successful UPLOADED
+# events to HSDirs. After the configured threshold (default 3) is reached, the
+# descriptor is practically reachable from any Tor client; we surface this to
+# the GUI via /tmp/tor-gui-status so the existing notification banner can show
+# "Tor descriptor publishing — N/3 HSDirs confirmed" → "Tor descriptor
+# published" instead of operators staring at a "starting up" screen for 1–3
+# minutes wondering if anything is happening.
+#
+# Runs in the background; never blocks startup. Exits when the threshold is
+# reached, when the timeout elapses (leaving partial-status in place — peers
+# may still reach us via HSDirs that did succeed), or when the ControlPort
+# connection drops. Tor restarts are handled by the watchdog independently;
+# this watcher is intentionally one-shot and only covers the first-boot
+# publish window.
+#
+# Authenticates via the cookie file Tor writes on startup (default
+# /run/tor/control.authcookie or /var/lib/tor/control_auth_cookie depending on
+# Debian version). Cookie auth is the canonical Tor mechanism; cookie file is
+# 0600 owned by debian-tor and intentionally NOT made group-readable, so
+# only root (this watcher) can authenticate.
+# -----------------------------------------------------------------------------
+watch_hs_descriptor_publication() {
+    local target_uploads="${1:-3}"
+    local total_timeout="${2:-300}"
+    local cookie_file=""
+    local control_host="127.0.0.1"
+    local control_port="9051"
+    local status_file="/tmp/tor-gui-status"
+
+    # Find cookie file (location varies by Debian/Tor version)
+    local candidate
+    for candidate in /run/tor/control.authcookie /var/lib/tor/control_auth_cookie /var/run/tor/control.authcookie; do
+        if [ -r "$candidate" ]; then
+            cookie_file="$candidate"
+            break
+        fi
+    done
+
+    # Wait briefly for cookie to appear (Tor just started)
+    if [ -z "$cookie_file" ]; then
+        local cwait=0
+        while [ $cwait -lt 30 ]; do
+            for candidate in /run/tor/control.authcookie /var/lib/tor/control_auth_cookie /var/run/tor/control.authcookie; do
+                if [ -r "$candidate" ]; then
+                    cookie_file="$candidate"
+                    break 2
+                fi
+            done
+            sleep 1
+            cwait=$((cwait + 1))
+        done
+    fi
+
+    if [ -z "$cookie_file" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)"
+        return 1
+    fi
+
+    # Hex-encode cookie for AUTHENTICATE (od is in coreutils, always available)
+    local cookie_hex
+    cookie_hex=$(od -An -tx1 < "$cookie_file" 2>/dev/null | tr -d ' \n')
+    if [ -z "$cookie_hex" ] || [ ${#cookie_hex} -ne 64 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled"
+        return 1
+    fi
+
+    # Open bidirectional TCP connection on FD 3 via bash's /dev/tcp.
+    # `service tor start` returns once the daemon is launched, but the
+    # ControlPort socket can take another second or two to start accepting.
+    # Retry briefly to absorb that race.
+    local connect_attempts=0
+    local connected=false
+    while [ $connect_attempts -lt 15 ]; do
+        if exec 3<>/dev/tcp/${control_host}/${control_port} 2>/dev/null; then
+            connected=true
+            break
+        fi
+        connect_attempts=$((connect_attempts + 1))
+        sleep 1
+    done
+    if [ "$connected" != true ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled"
+        return 1
+    fi
+
+    # AUTHENTICATE
+    printf 'AUTHENTICATE %s\r\n' "$cookie_hex" >&3
+    local auth_reply
+    if ! IFS= read -r -t 5 auth_reply <&3; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out"
+        exec 3<&-
+        return 1
+    fi
+    case "$auth_reply" in
+        '250 OK'*) ;;
+        *)
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply"
+            exec 3<&-
+            return 1
+            ;;
+    esac
+
+    # Subscribe to HS_DESC events
+    printf 'SETEVENTS HS_DESC\r\n' >&3
+    local sub_reply
+    if ! IFS= read -r -t 5 sub_reply <&3; then
+        exec 3<&-
+        return 1
+    fi
+    case "$sub_reply" in
+        '250 OK'*) ;;
+        *)
+            exec 3<&-
+            return 1
+            ;;
+    esac
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)"
+
+    # Initial publishing status
+    rm -f "$status_file" 2>/dev/null
+    echo "{\"status\":\"publishing\",\"uploads\":0,\"target\":$target_uploads,\"timestamp\":$(date +%s),\"message\":\"Tor descriptor publishing — 0/$target_uploads HSDirs confirmed\"}" > "$status_file" 2>/dev/null
+    chmod 666 "$status_file" 2>/dev/null
+    chown www-data:www-data "$status_file" 2>/dev/null
+
+    local upload_count=0
+    local fail_count=0
+    local connection_dropped=false
+    local start_time
+    start_time=$(date +%s)
+    local now elapsed line read_rc
+
+    while [ $upload_count -lt $target_uploads ]; do
+        now=$(date +%s)
+        elapsed=$((now - start_time))
+        if [ $elapsed -ge $total_timeout ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)"
+            break
+        fi
+
+        # 5s read timeout lets us re-check elapsed periodically.
+        # Distinguish three read outcomes:
+        #   rc=0    — got a line, parse it
+        #   rc>128  — read timed out (no event in 5s), retry the elapsed check
+        #   rc=1    — EOF on the FD, meaning Tor closed the connection
+        #             (Tor restart or daemon exit). Exit the loop cleanly so
+        #             we don't keep ticking elapsed and don't fire a spurious
+        #             restart-requested signal. The watchdog handles Tor
+        #             restarts; a fresh watcher will be launched there.
+        if IFS= read -r -t 5 line <&3; then
+            read_rc=0
+        else
+            read_rc=$?
+        fi
+
+        if [ $read_rc -eq 0 ]; then
+            case "$line" in
+                650*HS_DESC*UPLOADED*)
+                    upload_count=$((upload_count + 1))
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}"
+                    rm -f "$status_file" 2>/dev/null
+                    echo "{\"status\":\"publishing\",\"uploads\":$upload_count,\"target\":$target_uploads,\"timestamp\":$now,\"message\":\"Tor descriptor publishing — $upload_count/$target_uploads HSDirs confirmed\"}" > "$status_file" 2>/dev/null
+                    chmod 666 "$status_file" 2>/dev/null
+                    chown www-data:www-data "$status_file" 2>/dev/null
+                    ;;
+                650*HS_DESC*FAILED*)
+                    fail_count=$((fail_count + 1))
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line"
+                    ;;
+            esac
+        elif [ $read_rc -le 128 ]; then
+            # EOF — Tor closed the control connection
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher"
+            connection_dropped=true
+            break
+        fi
+        # rc > 128: read timeout, retry loop
+    done
+
+    # Cleanly close
+    printf 'QUIT\r\n' >&3 2>/dev/null
+    exec 3<&-
+
+    if [ $upload_count -ge $target_uploads ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)"
+        # Mark "published" briefly, then clear (the GUI banner only shows
+        # publishing/issue/restarting; "published" status fires the
+        # "Tor Restored" toast via the recovered branch).
+        rm -f "$status_file" 2>/dev/null
+        echo "{\"status\":\"recovered\",\"timestamp\":$(date +%s),\"message\":\"Tor descriptor published\"}" > "$status_file" 2>/dev/null
+        chmod 666 "$status_file" 2>/dev/null
+        chown www-data:www-data "$status_file" 2>/dev/null
+        return 0
+    elif [ "$connection_dropped" = true ]; then
+        # ControlPort connection dropped mid-watch (Tor restart was already
+        # underway from another path — watchdog or setup-time regeneration).
+        # Don't signal another restart; the in-flight one will produce its
+        # own telemetry, and the watchdog will relaunch this watcher after
+        # the new Tor instance comes up.
+        return 1
+    else
+        # Timed out without enough uploads. Some HSDirs may have failed and
+        # others may not have responded; in either case the right recovery
+        # is to ask the watchdog to bounce Tor — the same signal path
+        # TransportUtilityService::sendByTor uses on SOCKS5 failure. Watchdog
+        # will pick up /tmp/tor-restart-requested in its next 30s sweep,
+        # restart Tor, and then (per the watchdog patch below) relaunch
+        # this watcher so the next publish attempt gets fresh telemetry.
+        local signal_file="/tmp/tor-restart-requested"
+        if [ ! -f "$signal_file" ]; then
+            echo "$(date +%s)" > "$signal_file" 2>/dev/null
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart"
+        fi
+
+        # Leave status as 'publishing' with whatever we got. The watchdog
+        # will write 'restarting' when it kicks Tor, then 'issue' or
+        # 'recovered' as the new attempt progresses, so the user sees a
+        # coherent story.
+        return 1
+    fi
+}
+
 # Start services
 service cron start
 service tor start
 service "$PHP_FPM_SERVICE" start
 service nginx start
+
+# Background descriptor-publication watcher (logs to startup.sh stdout/stderr)
+watch_hs_descriptor_publication 3 300 &
+HS_DESC_WATCHER_PID=$!
 
 # Helper: wait for MariaDB with timeout, returns 0 on success, 1 on timeout
 wait_for_mariadb() {
@@ -2143,6 +2372,11 @@ watchdog() {
                         TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
                         # Update GUI status to indicate Tor is restarting
                         write_tor_gui_status "{\"status\":\"restarting\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor service restarted — verifying connectivity\"}"
+                        # Relaunch the HS_DESC publication watcher against the
+                        # fresh Tor instance. The boot-time watcher's connection
+                        # dropped when we pkilled Tor; this gives the operator a
+                        # progress signal again as the new descriptor publishes.
+                        watch_hs_descriptor_publication 3 300 &
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
                         write_tor_gui_status "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}"
@@ -2212,6 +2446,8 @@ watchdog() {
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~90s"
                             # Schedule a follow-up self-check in 90s to allow descriptor propagation (typically 60-120s)
                             TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
+                            # Relaunch HS_DESC publication watcher against the fresh Tor instance
+                            watch_hs_descriptor_publication 3 300 &
                         else
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                         fi
@@ -2246,6 +2482,8 @@ watchdog() {
                             if pgrep -x "tor" > /dev/null 2>&1; then
                                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~90s"
                                 TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
+                                # Relaunch HS_DESC publication watcher against the fresh Tor instance
+                                watch_hs_descriptor_publication 3 300 &
                             else
                                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                             fi
