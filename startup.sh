@@ -503,7 +503,8 @@ fi
 # --- Priority 2: Let's Encrypt automatic certificate ---
 # Requires LETSENCRYPT_EMAIL to be set and a valid FQDN domain.
 # Uses HTTP-01 challenge via certbot standalone mode (port 80 must be reachable).
-# Certs persist in /etc/letsencrypt/ volume across container restarts.
+# Certs persist across container restarts via the unified ssl-cert volume
+# (/etc/letsencrypt is a symlink into /var/lib/eiou/ssl/letsencrypt).
 if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
     LE_DOMAIN="${LETSENCRYPT_DOMAIN:-${SSL_DOMAIN:-${EFFECTIVE_HOST:-}}}"
 

@@ -279,10 +279,12 @@ RUN printf '/var/log/nginx/*.log {\n    weekly\n    rotate 4\n    compress\n    
 #   upgrades and bundled-plugin removals persist)
 # - /var/lib/eiou/backups: Encrypted database backups
 #
-# SSL paths (/etc/letsencrypt and /etc/nginx/ssl) are not declared here. They
-# are mounted by docker-compose.yml as subpaths of a single named ssl-cert
-# volume, which keeps all certificate state on one logical volume and lets
-# operators add more SSL provider subpaths without further compose surgery.
+# SSL paths (/etc/letsencrypt and /etc/nginx/ssl) are not declared here.
+# docker-compose.yml mounts a single named ssl-cert volume at
+# /var/lib/eiou/ssl, and startup.sh symlinks the canonical container paths
+# into subdirectories of it (ssl/letsencrypt/, ssl/nginx/). All certificate
+# state therefore lives on one logical volume on disk, and operators can add
+# further SSL provider subdirectories without touching the volumes section.
 #
 # Source code is NOT in a volume — it lives in /app/eiou/ (image filesystem)
 # and updates automatically with each new image build.
