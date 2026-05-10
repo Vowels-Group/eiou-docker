@@ -1094,7 +1094,7 @@ watch_hs_descriptor_publication() {
     fi
 
     if [ -z "$cookie_file" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)" >&2
+        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)"
         return 1
     fi
 
@@ -1102,7 +1102,7 @@ watch_hs_descriptor_publication() {
     local cookie_hex
     cookie_hex=$(od -An -tx1 < "$cookie_file" 2>/dev/null | tr -d ' \n')
     if [ -z "$cookie_hex" ] || [ ${#cookie_hex} -ne 64 ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled" >&2
+        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled"
         return 1
     fi
 
@@ -1121,7 +1121,7 @@ watch_hs_descriptor_publication() {
         sleep 1
     done
     if [ "$connected" != true ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled" >&2
+        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled"
         return 1
     fi
 
@@ -1129,14 +1129,14 @@ watch_hs_descriptor_publication() {
     printf 'AUTHENTICATE %s\r\n' "$cookie_hex" >&3
     local auth_reply
     if ! IFS= read -r -t 5 auth_reply <&3; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out" >&2
+        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out"
         exec 3<&-
         return 1
     fi
     case "$auth_reply" in
         '250 OK'*) ;;
         *)
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply" >&2
+            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply"
             exec 3<&-
             return 1
             ;;
@@ -1157,7 +1157,7 @@ watch_hs_descriptor_publication() {
             ;;
     esac
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)" >&2
+    echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)"
 
     # Initial publishing status
     rm -f "$status_file" 2>/dev/null
@@ -1176,7 +1176,7 @@ watch_hs_descriptor_publication() {
         now=$(date +%s)
         elapsed=$((now - start_time))
         if [ $elapsed -ge $total_timeout ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)" >&2
+            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)"
             break
         fi
 
@@ -1199,7 +1199,7 @@ watch_hs_descriptor_publication() {
             case "$line" in
                 650*HS_DESC*UPLOADED*)
                     upload_count=$((upload_count + 1))
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}" >&2
+                    echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}"
                     rm -f "$status_file" 2>/dev/null
                     echo "{\"status\":\"publishing\",\"uploads\":$upload_count,\"target\":$target_uploads,\"timestamp\":$now,\"message\":\"Tor descriptor publishing — $upload_count/$target_uploads HSDirs confirmed\"}" > "$status_file" 2>/dev/null
                     chmod 666 "$status_file" 2>/dev/null
@@ -1207,12 +1207,12 @@ watch_hs_descriptor_publication() {
                     ;;
                 650*HS_DESC*FAILED*)
                     fail_count=$((fail_count + 1))
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line" >&2
+                    echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line"
                     ;;
             esac
         elif [ $read_rc -le 128 ]; then
             # EOF — Tor closed the control connection
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher" >&2
+            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher"
             connection_dropped=true
             break
         fi
@@ -1224,7 +1224,7 @@ watch_hs_descriptor_publication() {
     exec 3<&-
 
     if [ $upload_count -ge $target_uploads ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)" >&2
+        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)"
         # Mark "published" briefly, then clear (the GUI banner only shows
         # publishing/issue/restarting; "published" status fires the
         # "Tor Restored" toast via the recovered branch).
@@ -1251,7 +1251,7 @@ watch_hs_descriptor_publication() {
         local signal_file="/tmp/tor-restart-requested"
         if [ ! -f "$signal_file" ]; then
             echo "$(date +%s)" > "$signal_file" 2>/dev/null
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart" >&2
+            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart"
         fi
 
         # Leave status as 'publishing' with whatever we got. The watchdog
