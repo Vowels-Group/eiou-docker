@@ -1094,7 +1094,7 @@ watch_hs_descriptor_publication() {
     fi
 
     if [ -z "$cookie_file" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)" >&2
         return 1
     fi
 
@@ -1102,7 +1102,7 @@ watch_hs_descriptor_publication() {
     local cookie_hex
     cookie_hex=$(od -An -tx1 < "$cookie_file" 2>/dev/null | tr -d ' \n')
     if [ -z "$cookie_hex" ] || [ ${#cookie_hex} -ne 64 ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled" >&2
         return 1
     fi
 
@@ -1121,7 +1121,7 @@ watch_hs_descriptor_publication() {
         sleep 1
     done
     if [ "$connected" != true ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled" >&2
         return 1
     fi
 
@@ -1129,14 +1129,14 @@ watch_hs_descriptor_publication() {
     printf 'AUTHENTICATE %s\r\n' "$cookie_hex" >&3
     local auth_reply
     if ! IFS= read -r -t 5 auth_reply <&3; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out" >&2
         exec 3<&-
         return 1
     fi
     case "$auth_reply" in
         '250 OK'*) ;;
         *)
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply" >&2
             exec 3<&-
             return 1
             ;;
@@ -1157,7 +1157,7 @@ watch_hs_descriptor_publication() {
             ;;
     esac
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)" >&2
 
     # Initial publishing status
     rm -f "$status_file" 2>/dev/null
@@ -1176,7 +1176,7 @@ watch_hs_descriptor_publication() {
         now=$(date +%s)
         elapsed=$((now - start_time))
         if [ $elapsed -ge $total_timeout ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)" >&2
             break
         fi
 
@@ -1199,7 +1199,7 @@ watch_hs_descriptor_publication() {
             case "$line" in
                 650*HS_DESC*UPLOADED*)
                     upload_count=$((upload_count + 1))
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}"
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}" >&2
                     rm -f "$status_file" 2>/dev/null
                     echo "{\"status\":\"publishing\",\"uploads\":$upload_count,\"target\":$target_uploads,\"timestamp\":$now,\"message\":\"Tor descriptor publishing — $upload_count/$target_uploads HSDirs confirmed\"}" > "$status_file" 2>/dev/null
                     chmod 666 "$status_file" 2>/dev/null
@@ -1207,12 +1207,12 @@ watch_hs_descriptor_publication() {
                     ;;
                 650*HS_DESC*FAILED*)
                     fail_count=$((fail_count + 1))
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line"
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line" >&2
                     ;;
             esac
         elif [ $read_rc -le 128 ]; then
             # EOF — Tor closed the control connection
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher" >&2
             connection_dropped=true
             break
         fi
@@ -1224,7 +1224,7 @@ watch_hs_descriptor_publication() {
     exec 3<&-
 
     if [ $upload_count -ge $target_uploads ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)" >&2
         # Mark "published" briefly, then clear (the GUI banner only shows
         # publishing/issue/restarting; "published" status fires the
         # "Tor Restored" toast via the recovered branch).
@@ -1251,7 +1251,7 @@ watch_hs_descriptor_publication() {
         local signal_file="/tmp/tor-restart-requested"
         if [ ! -f "$signal_file" ]; then
             echo "$(date +%s)" > "$signal_file" 2>/dev/null
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart" >&2
         fi
 
         # Leave status as 'publishing' with whatever we got. The watchdog
@@ -1974,9 +1974,24 @@ while true; do
     fi
 done
 
-# Wait for Tor to be ready and connected
-echo "Waiting for Tor to establish connection with container..."
-# WSL2 environments have slower network; use EIOU_TOR_TIMEOUT env var to override
+# Wait for Tor SOCKS5 to be ready (self-reachability check).
+#
+# IMPORTANT: this only proves "the Tor daemon is running and our SOCKS5
+# proxy is responsive". It does NOT prove peers can reach us — the curl
+# below targets our OWN .onion through OUR OWN SOCKS5, and Tor's client
+# code resolves own-service .onions from the local descriptor cache
+# (the cache the service-side just populated), bypassing the HSDir
+# round-trip that real peer traffic requires. Cross-mesh reachability
+# is a separate concern handled by:
+#   - watch_hs_descriptor_publication() — counts HS_DESC UPLOADED
+#     events from Tor's control protocol; surfaces "Tor descriptor
+#     publishing — N/3 HSDirs confirmed" → "Tor descriptor published"
+#     in the GUI banner.
+#   - The watchdog's periodic Tor self-check + restart cycle.
+#   - tests/baseconfig/config.sh::wait_for_tor_mesh — explicit cross-
+#     container reachability probe for tests.
+# WSL2 environments have slower network; use EIOU_TOR_TIMEOUT env var to override.
+echo "Waiting for Tor SOCKS5 self-test (daemon-up check, not cross-peer reachability)..."
 TOR_MAX_WAIT=${EIOU_TOR_TIMEOUT:-120}  # Maximum wait time in seconds
 TOR_START_TIME=$(date +%s)
 TOR_TEST_URL="${tor}"
@@ -1995,8 +2010,8 @@ while true; do
         break
     fi
 
-    # Try to access the .onion address through Tor's SOCKS proxy
-    # Reduced --max-time from 10 to 8 to allow faster iteration
+    # Self-curl through our own SOCKS5 — see comment block above.
+    # Reduced --max-time from 10 to 8 to allow faster iteration.
     if curl --socks5-hostname 127.0.0.1:9050 \
             --connect-timeout 5 \
             --max-time 8 \
@@ -2004,14 +2019,14 @@ while true; do
             --fail \
             --output /dev/null \
             "$TOR_TEST_URL" 2>/dev/null; then
-        echo "Tor connected successfully (${TOR_ELAPSED}s)"
+        echo "Tor SOCKS5 self-test passed (${TOR_ELAPSED}s) — daemon up; descriptor publication to HSDirs runs in background (see HS_DESC log lines)"
         TOR_CONNECTED=true
         break
     fi
 
     # Show waiting message on first attempt only
     if [ "$TOR_FIRST_ATTEMPT" = true ]; then
-        echo "Waiting for Tor connection (timeout: ${TOR_MAX_WAIT}s)..."
+        echo "Waiting for Tor SOCKS5 self-test (timeout: ${TOR_MAX_WAIT}s)..."
         TOR_FIRST_ATTEMPT=false
     fi
 
@@ -2019,9 +2034,9 @@ while true; do
     sleep 2
 done
 
-# Check if Tor connection was established
+# Check if Tor SOCKS5 self-test succeeded
 if [ "$TOR_CONNECTED" = false ]; then
-    echo "WARNING: Tor connection could not be verified after ${TOR_MAX_WAIT}s"
+    echo "WARNING: Tor SOCKS5 self-test could not be verified after ${TOR_MAX_WAIT}s — daemon may not be running, or local routing is broken"
     echo "Continuing startup anyway. Tor-dependent features may not work."
 fi
 

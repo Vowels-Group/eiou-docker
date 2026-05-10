@@ -345,7 +345,11 @@ for container in $CONTAINER_LIST; do
                 fi
             fi
 
-            # Then check Tor connectivity (processors won't start until Tor is ready)
+            # Then check Tor SOCKS5 self-test (processors won't start until SOCKS5 is up).
+            # NB: this curl resolves our OWN .onion through OUR OWN SOCKS5 — Tor uses
+            # the local descriptor cache, NOT the HSDir lookup peers do, so success
+            # only proves the daemon is up. For cross-peer reachability use the
+            # opt-in EIOU_TOR_MESH_WAIT helper or run torDescriptorPublishTest.
             if [ "$hostname_ready" == "true" ] && [ "$tor_ready" != "true" ]; then
                 torAddress=$(docker exec "$container" php -r '
                     if (file_exists("/etc/eiou/config/userconfig.json")) {
@@ -355,7 +359,7 @@ for container in $CONTAINER_LIST; do
                         }
                     }')
                 if [[ ! -z ${torAddress} ]]; then
-                    # Verify actual TOR connectivity via SOCKS proxy
+                    # Self-curl through SOCKS5 — see comment block above.
                     if docker exec "$container" curl --socks5-hostname 127.0.0.1:9050 \
                         --connect-timeout 5 \
                         --max-time 10 \
@@ -376,15 +380,15 @@ for container in $CONTAINER_LIST; do
                 if [ "$processors_started" -ge 2 ] 2>/dev/null; then
                     if [ "$tor_ready" == "true" ]; then
                         if [ "$MODE" == 'https' ]; then
-                            printf "${GREEN}Ready (HTTPS + Tor)${NC}\n"
+                            printf "${GREEN}Ready (HTTPS + Tor SOCKS5 self-test)${NC}\n"
                         else
-                            printf "${GREEN}Ready (HTTP + Tor)${NC}\n"
+                            printf "${GREEN}Ready (HTTP + Tor SOCKS5 self-test)${NC}\n"
                         fi
                     else
                         if [ "$MODE" == 'https' ]; then
-                            printf "${YELLOW}Ready (HTTPS, Tor not verified)${NC}\n"
+                            printf "${YELLOW}Ready (HTTPS, Tor SOCKS5 self-test failed)${NC}\n"
                         else
-                            printf "${YELLOW}Ready (HTTP, Tor not verified)${NC}\n"
+                            printf "${YELLOW}Ready (HTTP, Tor SOCKS5 self-test failed)${NC}\n"
                         fi
                     fi
                     break
@@ -399,7 +403,8 @@ for container in $CONTAINER_LIST; do
                     }
                 }')
             if [[ ! -z ${torAddress} ]]; then
-                # Verify actual TOR connectivity, not just presence of torAddress
+                # Self-curl through SOCKS5 — proves daemon up, not cross-peer reachability.
+                # See comment in HTTP/HTTPS branch above.
                 if docker exec "$container" curl --socks5-hostname 127.0.0.1:9050 \
                     --connect-timeout 5 \
                     --max-time 10 \
@@ -407,7 +412,7 @@ for container in $CONTAINER_LIST; do
                     --fail \
                     --output /dev/null \
                     "$torAddress" 2>/dev/null; then
-                    printf "${GREEN}Ready (Tor connected)${NC}\n"
+                    printf "${GREEN}Ready (Tor SOCKS5 self-test passed)${NC}\n"
                     break
                 fi
             fi
