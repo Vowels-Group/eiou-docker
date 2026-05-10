@@ -87,9 +87,17 @@ class ErrorHandler {
             return true;
         }
 
-        // In development, show detailed error
+        // In development, show detailed error.
+        //
+        // CLI: write to STDERR, not stdout. CLI commands (notably with
+        // --json) emit structured output on stdout that downstream
+        // consumers parse — leaking a "[Warning] ..." line into stdout
+        // breaks JSON parsers and mixes diagnostics with payload data.
+        // Dev visibility is preserved (stderr is still attached to
+        // most terminals); tests that genuinely want both streams
+        // merged can still use `2>&1`.
         if (php_sapi_name() === 'cli') {
-            echo "[$errorType] $message in $file:$line\n";
+            fwrite(STDERR, "[$errorType] $message in $file:$line\n");
         } else {
             echo "<div style='border:1px solid red;padding:10px;margin:10px;'>";
             echo "<strong>$errorType:</strong> $message<br>";
@@ -114,7 +122,10 @@ class ErrorHandler {
         // Log the exception
         self::logException($exception);
 
-        // Handle ServiceException with consistent formatting
+        // Handle ServiceException with consistent formatting.
+        // ServiceException IS the structured payload — emit it on stdout
+        // (CLI consumers parse this) — see the unstructured fallback
+        // branch below for stderr routing.
         if ($exception instanceof ServiceException) {
             $response = self::createErrorResponseWithContext($exception);
 
@@ -134,11 +145,13 @@ class ErrorHandler {
             return;
         }
 
-        // In development, show detailed exception
+        // In development, show detailed exception.
+        // CLI: STDERR for the same reason warnings go to STDERR — keeps
+        // stdout clean for structured payloads downstream consumers parse.
         if (php_sapi_name() === 'cli') {
-            echo "\nUncaught Exception: $message\n";
-            echo "File: $file:$line\n";
-            echo "Stack trace:\n$trace\n";
+            fwrite(STDERR, "\nUncaught Exception: $message\n");
+            fwrite(STDERR, "File: $file:$line\n");
+            fwrite(STDERR, "Stack trace:\n$trace\n");
         } else {
             echo "<div style='border:2px solid red;padding:15px;margin:10px;background:#ffe;'>";
             echo "<h3>Uncaught Exception</h3>";

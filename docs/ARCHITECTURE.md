@@ -982,6 +982,24 @@ chains. Operates in 5-minute cycles.
 - Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
 
+**Privacy: Tor-only by design (no transport fallback):**
+
+Pings deliberately use the contact's Tor address with no fallback to HTTPS or HTTP, even when the user's general-purpose `torFailureTransportFallback` setting is enabled. This is intentional and asymmetric with `TransportUtilityService::send()`, which does fall back.
+
+The address-priority chain in `ContactStatusService::pingContact()` is `tor > https > http`, and on Tor failure the method returns a structured `tor_unavailable` error rather than retrying over a clearer-text transport.
+
+The reason is metadata privacy. Ping payloads are E2E encrypted via ECDH + AES-256-GCM (`PayloadEncryption::encryptForRecipient()` — see `TransportUtilityService::signWithCapture()`, where only `type='create'` is excluded), so an HTTPS observer can't read the body. But pings are also small, frequent, and emit a recognizable timing/size pattern — exactly the kind of traffic that lets a network observer reconstruct the contact graph (who-pings-whom-and-how-often) from metadata alone:
+
+| Observer | Sees over HTTPS | Sees over Tor |
+|---|---|---|
+| Local ISP / coffee-shop net | Source IP, destination SNI hostname, packet sizes, timing | Encrypted Tor traffic to a guard relay; nothing about the actual peer |
+| Peer's ISP / hosting provider | Your real IP, connection times | Tor exit (or rendezvous, for `.onion`) — no link to you |
+| State-level adversary correlating both ends | The full contact graph with timing | Distributed across three relays; no single observer holds both ends |
+
+Because content is already encrypted, switching from Tor to HTTPS for ping doesn't restore content secrecy — it only weakens metadata privacy below what the user opted into when they enabled Tor. So `pingContact()` fails closed (returns `tor_unavailable`, suggests retry — see `SECURITY.md` Network Security for details), and the watchdog attempts a Tor restart within ~30 seconds via `/tmp/tor-restart-requested`.
+
+`TransportUtilityService::send()` (regular transactions) keeps fallback because the value tradeoff is different: a delivered transaction with weaker metadata privacy is usually preferable to a failed payment, and operators can opt out via the setting. Pings are a status-only operation where reliability matters less than the privacy guarantee.
+
 **Wallet Restore Contact Re-establishment:**
 
 When a wallet is restored from a seed phrase (empty database, same keys/address) and a former
