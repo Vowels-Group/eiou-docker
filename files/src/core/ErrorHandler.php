@@ -81,21 +81,23 @@ class ErrorHandler {
         // Log the error
         self::logError($errorType, $message, $file, $line);
 
-        // In production, don't expose errors
+        // STDERR vs stdout (transverse to prod/dev):
+        // CLI commands — notably anything called with --json — emit their
+        // structured payload on stdout, and downstream consumers (the wallet
+        // GUI's CLI bridge, jq pipelines, test harnesses) parse it. PHP error
+        // diagnostics must therefore go to STDERR regardless of env, otherwise
+        // the message text gets prepended to stdout and breaks JSON parsing.
+        // STDERR is still attached to most terminals so dev visibility is
+        // preserved; tests that genuinely want both streams merged can use 2>&1.
+        // displaySafeError() handles the prod-CLI STDERR routing internally.
+
+        // In production, don't expose error details — emit a generic message.
         if (self::isProduction()) {
             self::displaySafeError();
             return true;
         }
 
-        // In development, show detailed error.
-        //
-        // CLI: write to STDERR, not stdout. CLI commands (notably with
-        // --json) emit structured output on stdout that downstream
-        // consumers parse — leaking a "[Warning] ..." line into stdout
-        // breaks JSON parsers and mixes diagnostics with payload data.
-        // Dev visibility is preserved (stderr is still attached to
-        // most terminals); tests that genuinely want both streams
-        // merged can still use `2>&1`.
+        // Development: emit the full diagnostic.
         if (php_sapi_name() === 'cli') {
             fwrite(STDERR, "[$errorType] $message in $file:$line\n");
         } else {
@@ -123,9 +125,10 @@ class ErrorHandler {
         self::logException($exception);
 
         // Handle ServiceException with consistent formatting.
-        // ServiceException IS the structured payload — emit it on stdout
-        // (CLI consumers parse this) — see the unstructured fallback
-        // branch below for stderr routing.
+        // ServiceException IS the structured payload (intentionally JSON-
+        // encoded for CLI/HTTP consumers), so it stays on stdout. Every
+        // OTHER error path in this class routes diagnostics to STDERR for
+        // CLI — see the STDERR-vs-stdout note in handleError().
         if ($exception instanceof ServiceException) {
             $response = self::createErrorResponseWithContext($exception);
 
@@ -145,9 +148,8 @@ class ErrorHandler {
             return;
         }
 
-        // In development, show detailed exception.
-        // CLI: STDERR for the same reason warnings go to STDERR — keeps
-        // stdout clean for structured payloads downstream consumers parse.
+        // Development: emit the full exception trace. CLI on STDERR (see
+        // STDERR-vs-stdout note in handleError()).
         if (php_sapi_name() === 'cli') {
             fwrite(STDERR, "\nUncaught Exception: $message\n");
             fwrite(STDERR, "File: $file:$line\n");
@@ -235,11 +237,16 @@ class ErrorHandler {
     }
 
     /**
-     * Display a safe error message to users
+     * Display a safe error message to users.
+     *
+     * CLI: STDERR (not stdout) — see the STDERR-vs-stdout note in
+     * handleError(). Even the generic "an error occurred" message would
+     * contaminate --json payload data on stdout, so it goes to STDERR
+     * regardless of prod/dev mode.
      */
     private static function displaySafeError() {
         if (php_sapi_name() === 'cli') {
-            echo ErrorCodes::MESSAGE_GENERIC . "\n";
+            fwrite(STDERR, ErrorCodes::MESSAGE_GENERIC . "\n");
         } else {
             http_response_code(ErrorCodes::HTTP_INTERNAL_SERVER_ERROR);
             echo ErrorCodes::MESSAGE_GENERIC;
