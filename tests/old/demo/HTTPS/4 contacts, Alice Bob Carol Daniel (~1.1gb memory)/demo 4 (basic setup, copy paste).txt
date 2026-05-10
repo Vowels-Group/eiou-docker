@@ -5,19 +5,19 @@ docker network create -d bridge demo-net
 docker rm -f Alice Bob Carol Daniel
 
 # Remove associated volumes (if any)
-docker volume rm Alice-mysql-data Alice-config Alice-backups Alice-letsencrypt
-docker volume rm Bob-mysql-data Bob-config Bob-backups Bob-letsencrypt
-docker volume rm Carol-mysql-data Carol-config Carol-backups Carol-letsencrypt
-docker volume rm Daniel-mysql-data Daniel-config Daniel-backups Daniel-letsencrypt
+docker volume rm Alice-mysql-data Alice-config Alice-backups Alice-ssl-cert
+docker volume rm Bob-mysql-data Bob-config Bob-backups Bob-ssl-cert
+docker volume rm Carol-mysql-data Carol-config Carol-backups Carol-ssl-cert
+docker volume rm Daniel-mysql-data Daniel-config Daniel-backups Daniel-ssl-cert
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --restart unless-stopped  --network=demo-net --name Alice -v "Alice-mysql-data:/var/lib/mysql" -v "Alice-config:/etc/eiou/config" -v "Alice-plugins:/etc/eiou/plugins" -v "Alice-backups:/var/lib/eiou/backups" -v "Alice-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=Alice eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name Bob -v "Bob-mysql-data:/var/lib/mysql" -v "Bob-config:/etc/eiou/config" -v "Bob-plugins:/etc/eiou/plugins" -v "Bob-backups:/var/lib/eiou/backups" -v "Bob-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=Bob eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name Carol -v "Carol-mysql-data:/var/lib/mysql" -v "Carol-config:/etc/eiou/config" -v "Carol-plugins:/etc/eiou/plugins" -v "Carol-backups:/var/lib/eiou/backups" -v "Carol-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=Carol eiou/eiou
-docker run -d --restart unless-stopped  --network=demo-net --name Daniel -v "Daniel-mysql-data:/var/lib/mysql" -v "Daniel-config:/etc/eiou/config" -v "Daniel-plugins:/etc/eiou/plugins" -v "Daniel-backups:/var/lib/eiou/backups" -v "Daniel-letsencrypt:/etc/letsencrypt" -e EIOU_HOST=Daniel eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name Alice -v "Alice-mysql-data:/var/lib/mysql" -v "Alice-config:/etc/eiou/config" -v "Alice-plugins:/etc/eiou/plugins" -v "Alice-backups:/var/lib/eiou/backups" -v "Alice-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=Alice eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name Bob -v "Bob-mysql-data:/var/lib/mysql" -v "Bob-config:/etc/eiou/config" -v "Bob-plugins:/etc/eiou/plugins" -v "Bob-backups:/var/lib/eiou/backups" -v "Bob-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=Bob eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name Carol -v "Carol-mysql-data:/var/lib/mysql" -v "Carol-config:/etc/eiou/config" -v "Carol-plugins:/etc/eiou/plugins" -v "Carol-backups:/var/lib/eiou/backups" -v "Carol-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=Carol eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name Daniel -v "Daniel-mysql-data:/var/lib/mysql" -v "Daniel-config:/etc/eiou/config" -v "Daniel-plugins:/etc/eiou/plugins" -v "Daniel-backups:/var/lib/eiou/backups" -v "Daniel-ssl-cert:/var/lib/eiou/ssl" -e EIOU_HOST=Daniel eiou/eiou
 sleep 160 # Safety wait for all Tor connections to be properly ready
 
 

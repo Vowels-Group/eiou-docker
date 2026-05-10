@@ -52,7 +52,7 @@ services:
       - node-a-mysql-data:/var/lib/mysql
       - node-a-config:/etc/eiou/config
       - node-a-backups:/var/lib/eiou/backups
-      - node-a-letsencrypt:/etc/letsencrypt
+      - node-a-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -103,7 +103,7 @@ services:
       - node-b-mysql-data:/var/lib/mysql
       - node-b-config:/etc/eiou/config
       - node-b-backups:/var/lib/eiou/backups
-      - node-b-letsencrypt:/etc/letsencrypt
+      - node-b-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -154,7 +154,7 @@ services:
       - node-c-mysql-data:/var/lib/mysql
       - node-c-config:/etc/eiou/config
       - node-c-backups:/var/lib/eiou/backups
-      - node-c-letsencrypt:/etc/letsencrypt
+      - node-c-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -205,7 +205,7 @@ services:
       - node-d-mysql-data:/var/lib/mysql
       - node-d-config:/etc/eiou/config
       - node-d-backups:/var/lib/eiou/backups
-      - node-d-letsencrypt:/etc/letsencrypt
+      - node-d-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -256,7 +256,7 @@ services:
       - node-e-mysql-data:/var/lib/mysql
       - node-e-config:/etc/eiou/config
       - node-e-backups:/var/lib/eiou/backups
-      - node-e-letsencrypt:/etc/letsencrypt
+      - node-e-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -307,7 +307,7 @@ services:
       - node-f-mysql-data:/var/lib/mysql
       - node-f-config:/etc/eiou/config
       - node-f-backups:/var/lib/eiou/backups
-      - node-f-letsencrypt:/etc/letsencrypt
+      - node-f-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -358,7 +358,7 @@ services:
       - node-g-mysql-data:/var/lib/mysql
       - node-g-config:/etc/eiou/config
       - node-g-backups:/var/lib/eiou/backups
-      - node-g-letsencrypt:/etc/letsencrypt
+      - node-g-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -409,7 +409,7 @@ services:
       - node-h-mysql-data:/var/lib/mysql
       - node-h-config:/etc/eiou/config
       - node-h-backups:/var/lib/eiou/backups
-      - node-h-letsencrypt:/etc/letsencrypt
+      - node-h-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -460,7 +460,7 @@ services:
       - node-i-mysql-data:/var/lib/mysql
       - node-i-config:/etc/eiou/config
       - node-i-backups:/var/lib/eiou/backups
-      - node-i-letsencrypt:/etc/letsencrypt
+      - node-i-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -511,7 +511,7 @@ services:
       - node-j-mysql-data:/var/lib/mysql
       - node-j-config:/etc/eiou/config
       - node-j-backups:/var/lib/eiou/backups
-      - node-j-letsencrypt:/etc/letsencrypt
+      - node-j-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -558,8 +558,8 @@ volumes:
     name: node-a-config
   node-a-backups:
     name: node-a-backups
-  node-a-letsencrypt:
-    name: node-a-letsencrypt
+  node-a-ssl-cert:
+    name: node-a-ssl-cert
 
   node-b-mysql-data:
     name: node-b-mysql-data
@@ -567,8 +567,8 @@ volumes:
     name: node-b-config
   node-b-backups:
     name: node-b-backups
-  node-b-letsencrypt:
-    name: node-b-letsencrypt
+  node-b-ssl-cert:
+    name: node-b-ssl-cert
 
   node-c-mysql-data:
     name: node-c-mysql-data
@@ -576,8 +576,8 @@ volumes:
     name: node-c-config
   node-c-backups:
     name: node-c-backups
-  node-c-letsencrypt:
-    name: node-c-letsencrypt
+  node-c-ssl-cert:
+    name: node-c-ssl-cert
 
   node-d-mysql-data:
     name: node-d-mysql-data
@@ -585,8 +585,8 @@ volumes:
     name: node-d-config
   node-d-backups:
     name: node-d-backups
-  node-d-letsencrypt:
-    name: node-d-letsencrypt
+  node-d-ssl-cert:
+    name: node-d-ssl-cert
 
   node-e-mysql-data:
     name: node-e-mysql-data
@@ -594,8 +594,8 @@ volumes:
     name: node-e-config
   node-e-backups:
     name: node-e-backups
-  node-e-letsencrypt:
-    name: node-e-letsencrypt
+  node-e-ssl-cert:
+    name: node-e-ssl-cert
 
   node-f-mysql-data:
     name: node-f-mysql-data
@@ -603,8 +603,8 @@ volumes:
     name: node-f-config
   node-f-backups:
     name: node-f-backups
-  node-f-letsencrypt:
-    name: node-f-letsencrypt
+  node-f-ssl-cert:
+    name: node-f-ssl-cert
 
   node-g-mysql-data:
     name: node-g-mysql-data
@@ -612,8 +612,8 @@ volumes:
     name: node-g-config
   node-g-backups:
     name: node-g-backups
-  node-g-letsencrypt:
-    name: node-g-letsencrypt
+  node-g-ssl-cert:
+    name: node-g-ssl-cert
 
   node-h-mysql-data:
     name: node-h-mysql-data
@@ -621,8 +621,8 @@ volumes:
     name: node-h-config
   node-h-backups:
     name: node-h-backups
-  node-h-letsencrypt:
-    name: node-h-letsencrypt
+  node-h-ssl-cert:
+    name: node-h-ssl-cert
 
   node-i-mysql-data:
     name: node-i-mysql-data
@@ -630,8 +630,8 @@ volumes:
     name: node-i-config
   node-i-backups:
     name: node-i-backups
-  node-i-letsencrypt:
-    name: node-i-letsencrypt
+  node-i-ssl-cert:
+    name: node-i-ssl-cert
 
   node-j-mysql-data:
     name: node-j-mysql-data
@@ -639,5 +639,5 @@ volumes:
     name: node-j-config
   node-j-backups:
     name: node-j-backups
-  node-j-letsencrypt:
-    name: node-j-letsencrypt
+  node-j-ssl-cert:
+    name: node-j-ssl-cert

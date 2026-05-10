@@ -392,8 +392,7 @@ All eIOU containers use named volumes for data persistence:
 | `{node}-config` | `/etc/eiou/config` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
 | `{node}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins (e.g. `hello-eiou`) are baked into the image at `/app/plugins/` and seeded into this volume on first boot via `startup.sh` with `cp -rn`, so operator-added plugins survive container rebuilds and removed bundled plugins stay removed across upgrades. | **IMPORTANT** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
-| `{node}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if not using Let's Encrypt | Low |
-| `{node}-nginx-ssl` | `/etc/nginx/ssl` | The cert nginx actually presents on :443. Persists self-signed certs across `docker rm` + `docker run` (e.g. image updates) so clients don't see a new fingerprint on every rebuild. Also holds the copy of any Let's Encrypt cert. Safe to comment out — fresh cert will regenerate on next start. | Low |
+| `{node}-ssl-cert` | `/var/lib/eiou/ssl` | All SSL state on one logical volume, organised into subdirectories. `startup.sh` creates `ssl/letsencrypt/` and `ssl/nginx/` on first boot and symlinks `/etc/letsencrypt` and `/etc/nginx/ssl` into them, so certbot and nginx see the canonical paths they expect while operators see one volume on disk. `ssl/letsencrypt/` holds certbot accounts, renewal configs, and live cert symlinks (mostly empty on nodes that never enable Let's Encrypt). `ssl/nginx/` holds the cert nginx actually presents on :443 — persists self-signed certs across `docker rm` + `docker run` (e.g. image updates) so clients don't see a new fingerprint on every rebuild, and also receives the copy of any Let's Encrypt cert. Operators can add subdirectories under `ssl/` for additional SSL providers without touching the volumes section. Safe to comment out — fresh cert regenerates on next start. | Low |
 
 **Example:**
 ```yaml
@@ -624,9 +623,9 @@ services:
       - LETSENCRYPT_EMAIL=admin@example.com
       # - LETSENCRYPT_STAGING=true   # Uncomment to test first (avoids rate limits)
     volumes:
-      - eiou-letsencrypt:/etc/letsencrypt   # Persist certs across restarts
+      - ssl-cert:/var/lib/eiou/ssl   # Persist certs across restarts
 volumes:
-  eiou-letsencrypt:
+  ssl-cert:
 ```
 
 The container will:
