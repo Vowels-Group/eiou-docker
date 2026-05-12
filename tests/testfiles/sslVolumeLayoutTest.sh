@@ -90,8 +90,31 @@ else
     exit 1
 fi
 
-# Wait for startup.sh to reach the SSL section and write a self-signed cert.
-sleep 30
+# Wait for startup.sh to finish the SSL section. Polls for the self-signed
+# cert file (the LAST artifact the section writes — after the dir + symlink
+# setup) instead of a fixed sleep. A fixed `sleep 30` was racy: on slow hosts,
+# first-boot MariaDB init, or cold image pulls, the SSL section could still
+# be running at t=30s — producing confusing output where the early
+# subdir/symlink checks failed while the later cert checks (a few seconds
+# of test runtime later) passed.
+wait_for_ssl_setup() {
+    local timeout=120
+    local start=$SECONDS
+    while [ $(( SECONDS - start )) -lt $timeout ]; do
+        if docker exec "${testContainer}" test -f /var/lib/eiou/ssl/nginx/server.crt 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+if ! wait_for_ssl_setup; then
+    printf "\t   Timeout waiting for SSL setup to complete inside container ${RED}FAILED${NC}\n"
+    echo ""
+    succesrate "${totaltests}" "${passed}" "${failure}" "'ssl volume layout'"
+    exit 1
+fi
 
 ############################ VOLUME EXISTS ############################
 
@@ -204,7 +227,19 @@ else
         -e EIOU_TOR_FORCE_FAST=true \
         "${image}" >/dev/null 2>&1; then
 
-        sleep 20
+        # Same poll-for-completion as the first boot — the recreated container
+        # has to re-run startup.sh and re-establish the /etc/nginx/ssl symlink
+        # before the fingerprint read can succeed. Persisted cert on the
+        # volume means startup.sh skips regeneration, so this is usually
+        # faster than the first boot, but a fixed sleep here would race for
+        # the same reasons as above.
+        if ! wait_for_ssl_setup; then
+            printf "\t   Timeout waiting for recreated container's SSL setup ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+            echo ""
+            succesrate "${totaltests}" "${passed}" "${failure}" "'ssl volume layout'"
+            exit 1
+        fi
 
         fingerprintAfter=$(docker exec "${testContainer}" openssl x509 -in /etc/nginx/ssl/server.crt -noout -fingerprint -sha256 2>/dev/null | awk -F= '{print $2}')
 
