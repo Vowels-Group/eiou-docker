@@ -9,11 +9,24 @@ Set / rotate / clear are all gated on the *primary* (re-entered in band)
 and refused outright for alt-authenticated sessions — see AltCodeController.
 -->
 <?php
+use Eiou\Utils\AltCodeValidator;
+
 ob_start();
 
 $hasAltCode = $user->hasAltCode();
 $authViaAlt = $secureSession->authenticatedViaAlt();
 ?>
+    <!--
+        Constants exposed to the alt-code IIFE in script.js via data
+        attributes — keeps the JS static (live in assets/, no PHP
+        templating) while letting AltCodeValidator stay the single
+        source of truth for length bounds.
+    -->
+    <div id="alt-code-config"
+         data-min-length="<?php echo (int) AltCodeValidator::MIN_LENGTH; ?>"
+         data-max-length="<?php echo (int) AltCodeValidator::MAX_LENGTH; ?>"
+         hidden></div>
+
     <div id="alt-code-status-row" class="alt-code-status-row" style="font-size: 0.95rem; padding: 0.25rem 0 0.5rem;">
         <?php if ($hasAltCode): ?>
             <i class="fas fa-check-circle" style="color: var(--success-color, #28a745);"></i>
@@ -82,7 +95,7 @@ echo renderSection([
         . 'with <em>either</em> code.'
         . '<br><br>'
         . 'Strength rules &mdash; enforced server-side: at least '
-        . (int) \Eiou\Utils\AltCodeValidator::MIN_LENGTH . ' characters, '
+        . (int) AltCodeValidator::MIN_LENGTH . ' characters, '
         . 'and at least one of each: uppercase letter, lowercase letter, digit, '
         . 'symbol. Long sequences (<code>1234</code>, <code>abcd</code>) and '
         . 'common-password substrings are rejected.'
@@ -111,28 +124,59 @@ echo renderSection([
                 <div id="altCodeSetError" class="form-error d-none"></div>
 
                 <div class="form-group">
-                    <label for="altCodeSetPrimary">Primary auth code</label>
-                    <input type="password" id="altCodeSetPrimary" name="primary_authcode"
-                           required autocomplete="off" spellcheck="false">
-                    <small class="form-hint">
-                        Re-entered for this action. Find it in your seed-phrase backup
-                        or <code>eiou info --show-auth</code>.
-                    </small>
+                    <label for="altCodeSetPrimary">Primary auth code
+                        <i class="fas fa-info-circle info-tooltip-icon"
+                           data-action="showInfoModal"
+                           role="button"
+                           tabindex="0"
+                           aria-label="Where to find your primary auth code"
+                           title="Re-entered for this action — the alt code itself can't rotate or remove itself.&#10;&#10;Where to find it:&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file.&#10;• In your password manager if you stored it there at wallet creation."></i>
+                    </label>
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeSetPrimary" name="primary_authcode"
+                               required autocomplete="off" spellcheck="false">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeSetPrimary"
+                                aria-label="Show or hide primary auth code"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-group">
                     <label for="altCodeSetNew">New alt code</label>
-                    <input type="password" id="altCodeSetNew" name="new_alt_code"
-                           required autocomplete="new-password" spellcheck="false"
-                           minlength="<?php echo (int) \Eiou\Utils\AltCodeValidator::MIN_LENGTH; ?>"
-                           maxlength="<?php echo (int) \Eiou\Utils\AltCodeValidator::MAX_LENGTH; ?>">
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeSetNew" name="new_alt_code"
+                               required autocomplete="new-password" spellcheck="false"
+                               minlength="<?php echo (int) AltCodeValidator::MIN_LENGTH; ?>"
+                               maxlength="<?php echo (int) AltCodeValidator::MAX_LENGTH; ?>">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeSetNew"
+                                aria-label="Show or hide new alt code"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                     <div id="altCodeStrength" class="alt-code-strength" style="font-size: 0.85rem; margin-top: 0.25rem; color: var(--text-muted);"></div>
                 </div>
 
                 <div class="form-group">
                     <label for="altCodeSetConfirm">Confirm new alt code</label>
-                    <input type="password" id="altCodeSetConfirm" name="confirm_alt_code"
-                           required autocomplete="new-password" spellcheck="false">
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeSetConfirm" name="confirm_alt_code"
+                               required autocomplete="new-password" spellcheck="false">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeSetConfirm"
+                                aria-label="Show or hide confirmation"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div id="altCodeMatch" class="alt-code-match" style="font-size: 0.85rem; margin-top: 0.25rem;"></div>
                 </div>
 
                 <div class="modal-footer modal-footer-flush">
@@ -159,9 +203,25 @@ echo renderSection([
                 <div id="altCodeClearError" class="form-error d-none"></div>
 
                 <div class="form-group">
-                    <label for="altCodeClearPrimary">Primary auth code</label>
-                    <input type="password" id="altCodeClearPrimary" name="primary_authcode"
-                           required autocomplete="off" spellcheck="false">
+                    <label for="altCodeClearPrimary">Primary auth code
+                        <i class="fas fa-info-circle info-tooltip-icon"
+                           data-action="showInfoModal"
+                           role="button"
+                           tabindex="0"
+                           aria-label="Where to find your primary auth code"
+                           title="Re-entered for this action.&#10;&#10;Where to find it:&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file.&#10;• In your password manager if you stored it there at wallet creation."></i>
+                    </label>
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeClearPrimary" name="primary_authcode"
+                               required autocomplete="off" spellcheck="false">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeClearPrimary"
+                                aria-label="Show or hide primary auth code"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="modal-footer modal-footer-flush">
@@ -173,230 +233,3 @@ echo renderSection([
     </div>
 </div>
 
-<script nonce="<?php echo cspNonce(); ?>">
-// Alt-code section client-side glue. Kept inline + self-contained so the
-// initial cut doesn't sprawl across script.js. Uses only vanilla DOM APIs
-// for Tor Browser compatibility (no async/await, no fetch shorthand).
-(function () {
-    var MIN_LEN = <?php echo (int) \Eiou\Utils\AltCodeValidator::MIN_LENGTH; ?>;
-    var MAX_LEN = <?php echo (int) \Eiou\Utils\AltCodeValidator::MAX_LENGTH; ?>;
-
-    function el(id) { return document.getElementById(id); }
-    function showError(node, msg) {
-        if (!node) return;
-        node.textContent = msg;
-        node.classList.remove('d-none');
-    }
-    function clearError(node) {
-        if (!node) return;
-        node.textContent = '';
-        node.classList.add('d-none');
-    }
-    function csrf() {
-        var input = document.querySelector('input[name="csrf_token"]');
-        return input ? input.value : '';
-    }
-
-    function postAction(payload) {
-        var body = new FormData();
-        Object.keys(payload).forEach(function (k) {
-            if (payload[k] !== null && payload[k] !== undefined) {
-                body.append(k, payload[k]);
-            }
-        });
-        if (!body.has('csrf_token')) body.append('csrf_token', csrf());
-        return fetch(window.location.pathname, {
-            method: 'POST',
-            body: body,
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' }
-        }).then(function (res) {
-            return res.json().then(function (data) {
-                return { status: res.status, data: data };
-            }, function () {
-                return { status: res.status, data: { error: 'Bad response' } };
-            });
-        });
-    }
-
-    // Inline strength feedback. Mirrors the server-side rules in
-    // AltCodeValidator — the server is authoritative; this is just UX so
-    // the user knows what's missing before submitting.
-    function scoreCandidate(s) {
-        if (!s) return { score: 0, hints: [] };
-        var hints = [];
-        if (s.length < MIN_LEN)            hints.push('at least ' + MIN_LEN + ' characters');
-        if (!/[a-z]/.test(s))              hints.push('a lowercase letter');
-        if (!/[A-Z]/.test(s))              hints.push('an uppercase letter');
-        if (!/[0-9]/.test(s))              hints.push('a digit');
-        if (!/[^A-Za-z0-9]/.test(s))       hints.push('a symbol');
-        if (/(.)\1\1/.test(s))             hints.push('no triple-repeated characters');
-
-        var lenScore = Math.min(4, Math.floor(s.length / 4));
-        var classScore = (/[a-z]/.test(s) ? 1 : 0)
-                       + (/[A-Z]/.test(s) ? 1 : 0)
-                       + (/[0-9]/.test(s) ? 1 : 0)
-                       + (/[^A-Za-z0-9]/.test(s) ? 1 : 0);
-        var score = Math.max(0, lenScore + classScore - (hints.length > 0 ? 2 : 0));
-        return { score: score, hints: hints };
-    }
-
-    function renderStrength(s) {
-        var box = el('altCodeStrength');
-        if (!box) return;
-        if (!s) { box.textContent = ''; return; }
-        var r = scoreCandidate(s);
-        var labels = ['very weak', 'weak', 'fair', 'good', 'strong'];
-        var label = labels[Math.min(r.score, labels.length - 1)];
-        var hint = r.hints.length ? ' — still needs: ' + r.hints.join(', ') : '';
-        box.textContent = 'Strength: ' + label + hint;
-    }
-
-    function openModal(id) {
-        var m = el(id); if (m) m.classList.remove('d-none');
-        var first = m && m.querySelector('input[type="password"]');
-        if (first) setTimeout(function () { first.focus(); }, 50);
-    }
-    function closeModal(id) { var m = el(id); if (m) m.classList.add('d-none'); }
-
-    function clearForm(formId) {
-        var f = el(formId);
-        if (!f) return;
-        Array.prototype.forEach.call(f.querySelectorAll('input[type="password"]'), function (i) { i.value = ''; });
-    }
-
-    // Event wiring. Inline data-action handlers in this codebase route
-    // through script.js's central click dispatcher, but that module is
-    // already 11k lines — easier to attach our own listeners locally and
-    // leave script.js alone for this initial cut.
-    function flashLockedExplanation() {
-        // Find the warning box rendered above the buttons when the
-        // session is alt-authenticated. Scroll it into view and flash
-        // its border so the user can see *why* the button they just
-        // tried to click is disabled.
-        var alertBox = document.querySelector('#alt-code-section .alert-warning');
-        if (!alertBox) return;
-        try {
-            alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } catch (e) {
-            // Older Tor Browser builds may not have smooth scroll;
-            // fall back to a hard jump.
-            alertBox.scrollIntoView();
-        }
-        // Flash: pulse the background once. Reset any prior flash so
-        // repeated clicks always retrigger.
-        alertBox.style.transition = 'box-shadow 0.4s ease-in-out';
-        alertBox.style.boxShadow = '0 0 0 4px rgba(255, 193, 7, 0.55)';
-        setTimeout(function () { alertBox.style.boxShadow = ''; }, 900);
-    }
-
-    document.addEventListener('click', function (ev) {
-        var target = ev.target.closest && ev.target.closest('[data-action]');
-        if (!target) return;
-        var action = target.getAttribute('data-action');
-        switch (action) {
-            case 'openAltCodeSetModal':
-                clearError(el('altCodeSetError'));
-                clearForm('altCodeSetForm');
-                renderStrength('');
-                openModal('altCodeSetModal');
-                ev.preventDefault();
-                break;
-            case 'closeAltCodeSetModal':
-                closeModal('altCodeSetModal');
-                ev.preventDefault();
-                break;
-            case 'openAltCodeClearModal':
-                clearError(el('altCodeClearError'));
-                clearForm('altCodeClearForm');
-                openModal('altCodeClearModal');
-                ev.preventDefault();
-                break;
-            case 'closeAltCodeClearModal':
-                closeModal('altCodeClearModal');
-                ev.preventDefault();
-                break;
-            case 'explainAltCodeLocked':
-                // The button is visually disabled but still clickable
-                // (we use aria-disabled instead of the disabled
-                // attribute so clicks fire and we can surface this
-                // explanation). Scroll the warning box into view and
-                // flash it.
-                flashLockedExplanation();
-                ev.preventDefault();
-                break;
-        }
-    });
-
-    var newInput = el('altCodeSetNew');
-    if (newInput) {
-        newInput.addEventListener('input', function () { renderStrength(newInput.value); });
-    }
-
-    var setForm = el('altCodeSetForm');
-    if (setForm) {
-        setForm.addEventListener('submit', function (ev) {
-            ev.preventDefault();
-            var errNode = el('altCodeSetError');
-            clearError(errNode);
-            var primary = (el('altCodeSetPrimary') || {}).value || '';
-            var newAlt  = (el('altCodeSetNew') || {}).value || '';
-            var confirm = (el('altCodeSetConfirm') || {}).value || '';
-            if (!primary)                       { showError(errNode, 'Primary auth code is required.'); return; }
-            if (newAlt.length < MIN_LEN)        { showError(errNode, 'New alt code must be at least ' + MIN_LEN + ' characters.'); return; }
-            if (newAlt.length > MAX_LEN)        { showError(errNode, 'New alt code is too long.'); return; }
-            if (newAlt !== confirm)             { showError(errNode, 'Alt codes do not match.'); return; }
-
-            var btn = el('altCodeSetSubmit'); if (btn) btn.disabled = true;
-            postAction({
-                action: 'altCodeSet',
-                primary_authcode: primary,
-                new_alt_code: newAlt
-            }).then(function (r) {
-                if (btn) btn.disabled = false;
-                if (r.status === 200 && r.data && r.data.success) {
-                    closeModal('altCodeSetModal');
-                    window.location.reload();
-                    return;
-                }
-                var msg = (r.data && r.data.error) ? r.data.error : 'Could not save alt code.';
-                if (r.data && Array.isArray(r.data.errors) && r.data.errors.length) {
-                    msg += ' ' + r.data.errors.join(' ');
-                }
-                showError(errNode, msg);
-            }).catch(function () {
-                if (btn) btn.disabled = false;
-                showError(errNode, 'Network error. Try again.');
-            });
-        });
-    }
-
-    var clearFormEl = el('altCodeClearForm');
-    if (clearFormEl) {
-        clearFormEl.addEventListener('submit', function (ev) {
-            ev.preventDefault();
-            var errNode = el('altCodeClearError');
-            clearError(errNode);
-            var primary = (el('altCodeClearPrimary') || {}).value || '';
-            if (!primary) { showError(errNode, 'Primary auth code is required.'); return; }
-
-            var btn = el('altCodeClearSubmit'); if (btn) btn.disabled = true;
-            postAction({
-                action: 'altCodeClear',
-                primary_authcode: primary
-            }).then(function (r) {
-                if (btn) btn.disabled = false;
-                if (r.status === 200 && r.data && r.data.success) {
-                    closeModal('altCodeClearModal');
-                    window.location.reload();
-                    return;
-                }
-                showError(errNode, (r.data && r.data.error) || 'Could not remove alt code.');
-            }).catch(function () {
-                if (btn) btn.disabled = false;
-                showError(errNode, 'Network error. Try again.');
-            });
-        });
-    }
-})();
-</script>

@@ -3,8 +3,10 @@
 
 namespace Eiou\Gui\Includes;
 
+use Eiou\Core\Constants;
 use Eiou\Core\ErrorCodes;
 use Eiou\Gui\Includes\SessionKeys;
+use Eiou\Utils\AltCodeVerifier;
 
 /**
  *
@@ -107,7 +109,7 @@ class Session
     /** Cookie name the remember-me token is stored under, per-node. */
     public static function rememberCookieName(): string
     {
-        return \Eiou\Core\Constants::REMEMBER_ME_COOKIE_NAME . '_' . self::getNodeCookieSuffix();
+        return Constants::REMEMBER_ME_COOKIE_NAME . '_' . self::getNodeCookieSuffix();
     }
 
     /**
@@ -176,7 +178,7 @@ class Session
         // auth path's wall-clock time identical whether or not an alt
         // code is set, so a network attacker timing failed logins cannot
         // deduce alt-code presence from latency alone.
-        $altOk = \Eiou\Utils\AltCodeVerifier::verify($submitted, $altCodeHash);
+        $altOk = AltCodeVerifier::verify($submitted, $altCodeHash);
 
         if ($primaryOk || $altOk) {
             $_SESSION[SessionKeys::AUTHENTICATED] = true;

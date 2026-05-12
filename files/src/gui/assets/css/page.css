@@ -6469,3 +6469,67 @@ details.payback-type-group > summary.payback-type-group-label:hover { background
     }
 }
 
+/* ============================================================
+ * Alternate auth-code section + modals.
+ * Scoped to .alt-code-* classes — no collisions with general
+ * .form-group / .alert styles.
+ * ============================================================ */
+
+.alt-code-input-wrap {
+    position: relative;
+    display: block;
+}
+
+.alt-code-input-wrap input {
+    padding-right: 2.5rem; /* room for the absolute-positioned eye btn */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.alt-code-reveal-btn {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 2.25rem;
+    background: transparent;
+    border: none;
+    color: var(--text-muted, #6c757d);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 0.95rem;
+}
+
+.alt-code-reveal-btn:hover {
+    color: var(--text-primary, #212529);
+}
+
+.alt-code-reveal-btn:focus {
+    outline: 2px solid var(--focus-ring, rgba(13, 110, 253, 0.45));
+    outline-offset: -2px;
+    border-radius: 3px;
+}
+
+.alt-code-match--ok    { color: var(--success-color, #198754); }
+.alt-code-match--diff  { color: var(--danger-color,  #b02a37); }
+
+/*
+ * Strength meter tiers — applied to #altCodeStrength by the
+ * renderStrength() JS in script.js. Five buckets mirror the five labels
+ * (very weak → weak → fair → good → strong) and the gradient gives
+ * obvious at-a-glance feedback without needing to read the label.
+ */
+.alt-code-strength {
+    /* Base tier (no class set yet) — neutral muted text. */
+    color: var(--text-muted, #6c757d);
+    font-weight: 500;
+}
+.alt-code-strength--very-weak { color: #b02a37; }                 /* deep red    */
+.alt-code-strength--weak      { color: #d95b00; }                 /* orange      */
+.alt-code-strength--fair      { color: #b88900; }                 /* amber       */
+.alt-code-strength--good      { color: #2f8b3c; }                 /* light green */
+.alt-code-strength--strong    { color: #14732a; font-weight: 600; } /* deep green  */
+

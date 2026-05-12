@@ -5,10 +5,12 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
+use Eiou\Core\UserContext;
 use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PluginLoader;
 use Eiou\Services\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
+use Eiou\Services\UpdateCheckService;
 use Eiou\Utils\Logger;
 use Throwable;
 
@@ -199,7 +201,7 @@ class PluginController
         // requestor empty in the audit log.
         $pubkeyHash = '';
         try {
-            $user = \Eiou\Core\UserContext::getInstance();
+            $user = UserContext::getInstance();
             if ($user->getPublicKey() !== null) {
                 $pubkeyHash = (string) $user->getPublicKeyHash();
             }
@@ -324,7 +326,7 @@ class PluginController
         $this->respond([
             'success' => true,
             'plugin' => $name,
-            'html' => \Eiou\Services\UpdateCheckService::markdownToHtml($markdown),
+            'html' => UpdateCheckService::markdownToHtml($markdown),
         ]);
     }
 

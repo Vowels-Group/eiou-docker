@@ -1,6 +1,11 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
+use Eiou\Database\AddressRepository;
+use Eiou\Services\TabRegistry;
+
 /**
  * Post-authentication template helpers — for wallet.html and its sub-
  * templates only.
@@ -39,11 +44,11 @@ function getOrderedAddressSchemaTypes(): array {
     if ($cached !== null) {
         return $cached;
     }
-    $schemaTypes = \Eiou\Core\Application::getInstance()->services
+    $schemaTypes = Application::getInstance()->services
         ->getRepositoryFactory()
-        ->get(\Eiou\Database\AddressRepository::class)
+        ->get(AddressRepository::class)
         ->getAllAddressTypes();
-    $priority = \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
+    $priority = Constants::VALID_TRANSPORT_INDICES;
     $known = array_values(array_intersect($priority, $schemaTypes));
     $unknown = array_values(array_diff($schemaTypes, $priority));
     $cached = array_merge($known, $unknown);
@@ -70,6 +75,19 @@ function contactAddressSearchAttr(array $contact): string {
         }
     }
     return strtolower(implode(' ', $values));
+}
+
+/**
+ * Resolve a tab definition to its current badge count via TabRegistry.
+ * Used by wallet.html's tab strip (twice — once per render pass for
+ * mobile + desktop). Wrapped so wallet.html doesn't need to
+ * `use Eiou\Services\TabRegistry` just for these two call sites.
+ *
+ * @param array $tab Tab registry entry
+ * @return int Badge count (0 = no badge)
+ */
+function tabBadge(array $tab): int {
+    return TabRegistry::resolveBadge($tab);
 }
 
 /**
@@ -151,7 +169,7 @@ function renderSection(array $spec): string
     // hook) will need passthrough sanitization.
     $hooks = null;
     try {
-        $hooks = \Eiou\Core\Application::getInstance()->services->getHooks();
+        $hooks = Application::getInstance()->services->getHooks();
     } catch (\Throwable $_) {
         // Pre-boot or test scaffolding — silently skip the hook fires.
     }

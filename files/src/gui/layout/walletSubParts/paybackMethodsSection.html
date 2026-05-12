@@ -10,12 +10,15 @@
     first time the user expands the section.
 -->
 <?php
+    use Eiou\Services\ServiceContainer;
+    use Eiou\Validators\PaybackMethodTypeValidator;
+
     // Route through the container so plugin-registered rail types (BTC,
     // PayPal, …) layered onto the core bank_wire/custom entries are
     // included in the GUI type picker. Falls back to the core-only
     // catalog if the container hasn't wired a registry yet.
-    $paybackMethodsCatalog = (new \Eiou\Validators\PaybackMethodTypeValidator(
-        \Eiou\Services\ServiceContainer::getInstance()->getPaybackMethodTypeRegistry()
+    $paybackMethodsCatalog = (new PaybackMethodTypeValidator(
+        ServiceContainer::getInstance()->getPaybackMethodTypeRegistry()
     ))->getCatalog();
 
     $body = '<div id="payback-methods-list" class="payback-methods-list">'

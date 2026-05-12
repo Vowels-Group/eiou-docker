@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Services\PluginAssetServer;
+
 /**
  * Plugin asset entry point.
  *
@@ -15,7 +17,7 @@
 
 require_once '/app/eiou/vendor/autoload.php';
 
-$server = new \Eiou\Services\PluginAssetServer();
+$server = new PluginAssetServer();
 $response = $server->handle();
 
 http_response_code($response['status']);

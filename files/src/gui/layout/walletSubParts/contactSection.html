@@ -2,6 +2,7 @@
 
 <!-- Contacts Section -->
 <?php
+
 ob_start();
 ?>
     <?php if (!empty($allContacts)): ?>
@@ -1225,7 +1226,7 @@ ob_start();
                 <div class="pending-addresses-compact mb-sm">
                     <?php foreach (getOrderedAddressSchemaTypes() as $_pillType):
                         if (empty($contact[$_pillType])) continue;
-                        $_pillDisplay = \Eiou\Core\Constants::getAddressTypeDisplay($_pillType);
+                        $_pillDisplay = addressTypeDisplay($_pillType);
                     ?>
                         <button type="button" class="pending-addr-icon address-<?php echo htmlspecialchars($_pillType); ?>"
                                 data-action="showInfoModal"

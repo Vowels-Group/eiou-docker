@@ -145,7 +145,7 @@ class PaymentRequestController
                 MessageHelper::redirectMessage('Payment request not found', 'error');
                 return;
             }
-            $maxNote = \Eiou\Services\PaymentRequestService::maxPayerNoteLength($existing['description'] ?? null);
+            $maxNote = PaymentRequestService::maxPayerNoteLength($existing['description'] ?? null);
             if ($maxNote === 0) {
                 MessageHelper::redirectMessage('Requester description leaves no room for a note', 'error');
                 return;

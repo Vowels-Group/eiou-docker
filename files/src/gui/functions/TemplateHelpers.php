@@ -1,6 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
+use Eiou\Core\UserContext;
+use Eiou\Database\DeadLetterQueueRepository;
+use Eiou\Utils\Security;
+
 /**
  * Template helper functions — shorthand for FQN calls used in .html templates.
  *
@@ -19,36 +25,51 @@
 // =========================================================================
 
 function appVersion(): string {
-    return \Eiou\Core\Constants::APP_VERSION;
+    return Constants::APP_VERSION;
 }
 
 function appVersionDisplay(): string {
     // Strip pre-release suffix (-alpha, -beta, -rcN) and prefix with 'v'
-    return 'v' . preg_replace('/-(alpha|beta|rc\d*)$/i', '', \Eiou\Core\Constants::APP_VERSION);
+    return 'v' . preg_replace('/-(alpha|beta|rc\d*)$/i', '', Constants::APP_VERSION);
 }
 
 function displayDecimals(): int {
-    return \Eiou\Core\Constants::getDisplayDecimals();
+    return Constants::getDisplayDecimals();
 }
 
 function cspNonce(): string {
-    return \Eiou\Utils\Security::getCspNonce();
+    return Security::getCspNonce();
 }
 
 function internalPrecision(): int {
-    return \Eiou\Core\Constants::INTERNAL_PRECISION;
+    return Constants::INTERNAL_PRECISION;
 }
 
 function conversionFactor(): int {
-    return \Eiou\Core\Constants::INTERNAL_CONVERSION_FACTOR;
+    return Constants::INTERNAL_CONVERSION_FACTOR;
 }
 
 function isSplitAmount($value): bool {
-    return $value instanceof \Eiou\Core\SplitAmount;
+    return $value instanceof SplitAmount;
 }
 
 function transactionMinimumFee(): float {
-    return \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE;
+    return Constants::TRANSACTION_MINIMUM_FEE;
+}
+
+/**
+ * Resolve an address-schema column name (e.g. `tor`, `hostname_secure`)
+ * to its display descriptor — icon class + human label — via the
+ * Constants registry. Used by wallet.html (initial address-type display
+ * map for the JS layer) and contactSection.html (transport pills on
+ * pending-contact rows). Wrapped so the templates don't need to
+ * `use Eiou\Core\Constants` just for one call site each.
+ *
+ * @param string $type schema column name
+ * @return array{icon: string, label: string}
+ */
+function addressTypeDisplay(string $type): array {
+    return Constants::getAddressTypeDisplay($type);
 }
 
 /**
@@ -96,10 +117,10 @@ function buildTxContactLookupMaps(array $acceptedContacts, array $pendingUserCon
 function fetchDlqActiveTxMessageIds($serviceContainer): array
 {
     try {
-        $dlqRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
+        $dlqRepo = $serviceContainer->getRepositoryFactory()->get(DeadLetterQueueRepository::class);
         $active = array_merge(
-            $dlqRepo->getByMessageType('transaction', 'pending',  \Eiou\Core\Constants::DLQ_BATCH_SIZE),
-            $dlqRepo->getByMessageType('transaction', 'retrying', \Eiou\Core\Constants::DLQ_BATCH_SIZE)
+            $dlqRepo->getByMessageType('transaction', 'pending',  Constants::DLQ_BATCH_SIZE),
+            $dlqRepo->getByMessageType('transaction', 'retrying', Constants::DLQ_BATCH_SIZE)
         );
         $ids = [];
         foreach ($active as $entry) {
@@ -292,67 +313,67 @@ function renderPaymentRequestRowsForAjax(
 }
 
 function validTransportIndices(): array {
-    return \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
+    return Constants::VALID_TRANSPORT_INDICES;
 }
 
 function p2pMaxRoutingLevel(): int {
-    return \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL;
+    return Constants::P2P_MAX_ROUTING_LEVEL;
 }
 
 function p2pMinExpirationSeconds(): int {
-    return \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS;
+    return Constants::P2P_MIN_EXPIRATION_SECONDS;
 }
 
 function isDebugMode(): bool {
-    return \Eiou\Core\Constants::isDebug();
+    return Constants::isDebug();
 }
 
 function allConstants(): array {
-    return \Eiou\Core\Constants::all();
+    return Constants::all();
 }
 
 function deliveryMaxRetries(): int {
-    return \Eiou\Core\Constants::DELIVERY_MAX_RETRIES;
+    return Constants::DELIVERY_MAX_RETRIES;
 }
 
 function p2pDefaultExpirationSeconds(): int {
-    return \Eiou\Core\Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
+    return Constants::P2P_DEFAULT_EXPIRATION_SECONDS;
 }
 
 function cleanupDlqRetentionDays(): int {
-    return \Eiou\Core\Constants::CLEANUP_DLQ_RETENTION_DAYS;
+    return Constants::CLEANUP_DLQ_RETENTION_DAYS;
 }
 
 function rememberMeMaxDaysOptions(): array {
-    return \Eiou\Core\Constants::REMEMBER_ME_MAX_DAYS_OPTIONS;
+    return Constants::REMEMBER_ME_MAX_DAYS_OPTIONS;
 }
 
 function rememberMeMaxDevicesOptions(): array {
-    return \Eiou\Core\Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS;
+    return Constants::REMEMBER_ME_MAX_DEVICES_OPTIONS;
 }
 
 function sessionTimeoutOptions(): array {
-    return \Eiou\Core\Constants::SESSION_TIMEOUT_OPTIONS;
+    return Constants::SESSION_TIMEOUT_OPTIONS;
 }
 
 function contactAvatarStyleOptions(): array {
-    return \Eiou\Core\Constants::CONTACT_AVATAR_STYLE_OPTIONS;
+    return Constants::CONTACT_AVATAR_STYLE_OPTIONS;
 }
 
 function validDateFormats(): array {
-    return \Eiou\Core\Constants::VALID_DATE_FORMATS;
+    return Constants::VALID_DATE_FORMATS;
 }
 
 function amountColorSchemeOptions(): array {
-    return \Eiou\Core\Constants::AMOUNT_COLOR_SCHEME_OPTIONS;
+    return Constants::AMOUNT_COLOR_SCHEME_OPTIONS;
 }
 
 function statusColorSchemeOptions(): array {
-    return \Eiou\Core\Constants::STATUS_COLOR_SCHEME_OPTIONS;
+    return Constants::STATUS_COLOR_SCHEME_OPTIONS;
 }
 
 function displayDateFormat(): string {
-    return \Eiou\Core\UserContext::getInstance()->getDisplayDateFormat();
+    return UserContext::getInstance()->getDisplayDateFormat();
 }
 
 function formatTimestamp(string $timestamp): string {

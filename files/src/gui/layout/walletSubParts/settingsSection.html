@@ -2,6 +2,8 @@
 
 <!-- Settings Section -->
 <?php
+use Eiou\Core\Constants;
+
 ob_start();
 ?>
     <!-- AJAX-submitted form. The submit handler in script.js (look for
@@ -832,7 +834,7 @@ ob_start();
                     <?php
                     try {
                         $rememberService = $serviceContainer->getRememberTokenService();
-                        $pubkeyHashForList = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
+                        $pubkeyHashForList = hash(Constants::HASH_ALGORITHM, $user->getPublicKey());
                         $currentRawToken = $secureSession->getRememberCookie();
                         $activeSessions = $rememberService->listForUser($pubkeyHashForList, $currentRawToken);
                     } catch (\Throwable $e) {
