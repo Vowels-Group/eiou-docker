@@ -11650,13 +11650,28 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         if (!/[^A-Za-z0-9]/.test(s))       hints.push('a symbol');
         if (/(.)\1\1/.test(s))             hints.push('no triple-repeated characters');
 
-        var lenScore = Math.min(4, Math.floor(s.length / 4));
-        var classScore = (/[a-z]/.test(s) ? 1 : 0)
-                       + (/[A-Z]/.test(s) ? 1 : 0)
-                       + (/[0-9]/.test(s) ? 1 : 0)
-                       + (/[^A-Za-z0-9]/.test(s) ? 1 : 0);
-        var score = Math.max(0, lenScore + classScore - (hints.length > 0 ? 2 : 0));
-        return { score: score, hints: hints };
+        // If ANY required rule is unmet, the server will reject this
+        // submission. Hard-cap the tier at "fair" so the user never
+        // sees a "good" or "strong" badge for input the verifier
+        // would refuse — that was the bug a long passphrase missing
+        // a digit + symbol previously rendered as "strong" because
+        // length overpowered the small unmet-rule penalty.
+        if (hints.length > 0) {
+            var failTier;
+            if (s.length < 6 || hints.length >= 4)  failTier = 0;  // very weak
+            else if (hints.length >= 2)             failTier = 1;  // weak
+            else                                    failTier = 2;  // fair (only one rule unmet)
+            return { score: failTier, hints: hints };
+        }
+
+        // No hints — input would pass server validation. Tier by
+        // length only; class-coverage is already guaranteed because
+        // missing any class would have produced a hint above.
+        var tier;
+        if (s.length >= 16)      tier = 4;  // strong
+        else if (s.length >= 13) tier = 3;  // good
+        else                     tier = 2;  // fair (exactly minimum length)
+        return { score: tier, hints: hints };
     }
 
     // CSS tier classes keyed by label, lined up with the `labels` array

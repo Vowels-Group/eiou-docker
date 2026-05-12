@@ -5113,7 +5113,8 @@ hr.currency-separator-double {
    catches cases where a single h5 follows a grid (e.g. Active Remembered
    Sessions below the GUI Security fields), which `:first-of-type`
    incorrectly treated as first. */
-.settings-grid + .settings-group-heading {
+.settings-grid + .settings-group-heading,
+.active-sessions-container + .settings-group-heading {
     margin-top: 2.25rem;
     padding-top: 1.25rem;
     border-top: 1px solid #dee2e6;

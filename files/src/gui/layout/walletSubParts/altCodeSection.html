@@ -1,114 +1,35 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
 <!--
-Alt-code (alternate authentication code) settings section.
+Alt-code (alternate authentication code) — modals + JS bootstrap.
 
-User-chosen credential that may be submitted at the GUI login form or the
-sensitive-action gate in addition to the BIP39-derived primary auth code.
+User-visible status row, warning callout, and set/rotate/clear buttons
+live inside settingsSection.html's GUI Security subsection, alongside
+session timeout and remember-me. This file is responsible only for the
+page-scoped overlays (set/rotate and clear modals) and the hidden
+data-config element the script.js IIFE reads.
+
 Set / rotate / clear are all gated on the *primary* (re-entered in band)
 and refused outright for alt-authenticated sessions — see AltCodeController.
 -->
 <?php
 use Eiou\Utils\AltCodeValidator;
-
-ob_start();
-
-$hasAltCode = $user->hasAltCode();
-$authViaAlt = $secureSession->authenticatedViaAlt();
 ?>
-    <!--
-        Constants exposed to the alt-code IIFE in script.js via data
-        attributes — keeps the JS static (live in assets/, no PHP
-        templating) while letting AltCodeValidator stay the single
-        source of truth for length bounds.
-    -->
-    <div id="alt-code-config"
-         data-min-length="<?php echo (int) AltCodeValidator::MIN_LENGTH; ?>"
-         data-max-length="<?php echo (int) AltCodeValidator::MAX_LENGTH; ?>"
-         hidden></div>
+<!--
+    Constants exposed to the alt-code IIFE in script.js via data
+    attributes — keeps the JS static (live in assets/, no PHP
+    templating) while letting AltCodeValidator stay the single
+    source of truth for length bounds.
 
-    <div id="alt-code-status-row" class="alt-code-status-row" style="font-size: 0.95rem; padding: 0.25rem 0 0.5rem;">
-        <?php if ($hasAltCode): ?>
-            <i class="fas fa-check-circle" style="color: var(--success-color, #28a745);"></i>
-            <span>An alternate auth code is currently configured.</span>
-        <?php else: ?>
-            <i class="fas fa-circle" style="color: var(--text-muted, #888);"></i>
-            <span>No alternate auth code is set.</span>
-        <?php endif; ?>
-    </div>
-
-    <?php if ($authViaAlt): ?>
-        <div class="alert alert-warning" role="alert" style="margin-bottom: 0.75rem;">
-            <strong><i class="fas fa-exclamation-triangle"></i> Locked this session.</strong>
-            You logged in with the alternate auth code, so rotating or removing the alt code is
-            disabled until you re-authenticate with the primary auth code (from your seed phrase).
-            This is intentional: it prevents an attacker who learns the alt code from locking you
-            out by overwriting it.
-            <div style="margin-top: 0.5rem; font-size: 0.9rem;">
-                <strong>To manage the alt code:</strong> log out, then log in again using the
-                primary auth code instead.
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <div class="alt-code-actions" style="padding-top: 0.5rem;">
-        <button type="button"
-                id="altCodeSetBtn"
-                class="btn btn-success btn-compact"
-                data-action="<?php echo $authViaAlt ? 'explainAltCodeLocked' : 'openAltCodeSetModal'; ?>"
-                <?php if ($authViaAlt): ?>
-                    aria-disabled="true"
-                    title="Disabled: log in with the primary auth code to manage the alt code."
-                    style="opacity: 0.55; cursor: not-allowed;"
-                <?php endif; ?>>
-            <i class="fas fa-<?php echo $authViaAlt ? 'lock' : 'key'; ?>"></i>
-            <?php echo $hasAltCode ? 'Rotate alt code' : 'Set alt code'; ?>
-        </button>
-        <?php if ($hasAltCode): ?>
-            <button type="button"
-                    id="altCodeClearBtn"
-                    class="btn btn-danger btn-compact"
-                    data-action="<?php echo $authViaAlt ? 'explainAltCodeLocked' : 'openAltCodeClearModal'; ?>"
-                    <?php if ($authViaAlt): ?>
-                        aria-disabled="true"
-                        title="Disabled: log in with the primary auth code to manage the alt code."
-                        style="opacity: 0.55; cursor: not-allowed;"
-                    <?php endif; ?>>
-                <i class="fas fa-<?php echo $authViaAlt ? 'lock' : 'trash'; ?>"></i>
-                Remove alt code
-            </button>
-        <?php endif; ?>
-    </div>
-<?php
-$body = ob_get_clean();
-
-echo renderSection([
-    'id'    => 'alt-code-section',
-    'icon'  => 'fas fa-user-shield',
-    'title' => 'Alternate Auth Code',
-    'introTitle' => 'About the alternate auth code',
-    'intro' =>
-          'The primary auth code is derived from your seed phrase &mdash; '
-        . 'twenty random hex characters that are hard to memorise. The '
-        . '<strong>alternate auth code</strong> is a passphrase you choose '
-        . 'yourself; once set, you can log in (and confirm sensitive actions) '
-        . 'with <em>either</em> code.'
-        . '<br><br>'
-        . 'Strength rules &mdash; enforced server-side: at least '
-        . (int) AltCodeValidator::MIN_LENGTH . ' characters, '
-        . 'and at least one of each: uppercase letter, lowercase letter, digit, '
-        . 'symbol. Long sequences (<code>1234</code>, <code>abcd</code>) and '
-        . 'common-password substrings are rejected.'
-        . '<br><br>'
-        . 'Setting, rotating, or clearing the alt code always requires re-entering '
-        . 'your <strong>primary</strong> auth code &mdash; the alt code cannot '
-        . 'rotate or clear itself, so an attacker who learns the alt code cannot '
-        . 'lock you out by replacing it. If you forget the alt code, you can '
-        . 'always log in with the primary and rotate it; if you forget the '
-        . 'primary, recover it from your seed phrase.',
-    'body' => $body,
-]);
-?>
+    The IIFE bootstrap early-returns on `!cfgEl` (i.e. when the page
+    doesn't include this partial), so this file MUST be required on
+    every wallet render that hosts the alt-code controls — currently
+    settingsTab.html does that.
+-->
+<div id="alt-code-config"
+     data-min-length="<?php echo (int) AltCodeValidator::MIN_LENGTH; ?>"
+     data-max-length="<?php echo (int) AltCodeValidator::MAX_LENGTH; ?>"
+     hidden></div>
 
 <!-- Set / rotate alt-code modal -->
 <div id="altCodeSetModal" class="modal d-none">
@@ -130,7 +51,7 @@ echo renderSection([
                            role="button"
                            tabindex="0"
                            aria-label="Where to find your primary auth code"
-                           title="Re-entered for this action — the alt code itself can't rotate or remove itself.&#10;&#10;Where to find it:&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file.&#10;• In your password manager if you stored it there at wallet creation."></i>
+                           title="Re-entered for this action — the alt code itself can't rotate or remove itself.&#10;&#10;Where to find it:&#10;• In your password manager if you stored it there at wallet creation.&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file."></i>
                     </label>
                     <div class="alt-code-input-wrap">
                         <input type="password" id="altCodeSetPrimary" name="primary_authcode"
@@ -160,7 +81,13 @@ echo renderSection([
                             <i class="fas fa-eye" aria-hidden="true"></i>
                         </button>
                     </div>
-                    <div id="altCodeStrength" class="alt-code-strength" style="font-size: 0.85rem; margin-top: 0.25rem; color: var(--text-muted);"></div>
+                    <!--
+                        No inline `color:` here — it would override the
+                        .alt-code-strength--<tier> class the JS sets per
+                        keystroke (inline styles always win over class
+                        rules unless the class uses !important).
+                    -->
+                    <div id="altCodeStrength" class="alt-code-strength" style="font-size: 0.85rem; margin-top: 0.25rem;"></div>
                 </div>
 
                 <div class="form-group">
@@ -209,7 +136,7 @@ echo renderSection([
                            role="button"
                            tabindex="0"
                            aria-label="Where to find your primary auth code"
-                           title="Re-entered for this action.&#10;&#10;Where to find it:&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file.&#10;• In your password manager if you stored it there at wallet creation."></i>
+                           title="Re-entered for this action.&#10;&#10;Where to find it:&#10;• In your password manager if you stored it there at wallet creation.&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file."></i>
                     </label>
                     <div class="alt-code-input-wrap">
                         <input type="password" id="altCodeClearPrimary" name="primary_authcode"
