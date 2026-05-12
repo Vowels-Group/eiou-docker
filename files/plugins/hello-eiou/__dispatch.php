@@ -179,6 +179,32 @@ switch ($type) {
                   . '</section>';
             respond(200, ['ok' => true, 'result' => $html], $log);
         }
+        // Tab render — forwarder POSTs name="tab:<id>" to indicate the
+        // request is for a registered tab's body. The dispatcher
+        // returns the HTML the tab pane should display.
+        if ($name === 'tab:hello-eiou-fortunes') {
+            $items = '';
+            foreach (Fortunes::LINES as $f) {
+                $items .= '<li>' . htmlspecialchars($f, ENT_QUOTES) . '</li>';
+            }
+            // renderSection() is a host helper not reachable from the
+            // sandboxed pool (it lives in the wallet's PHP namespace),
+            // so we hand-roll the same chrome. Matches the legacy
+            // entry-class output close enough that the styling carries.
+            $html = '<div class="form-container fade-in-up" id="hello-eiou-fortunes">'
+                  . '<div class="section-header">'
+                  . '<h2><i class="fas fa-cookie-bite"></i> Fortunes</h2>'
+                  . '</div>'
+                  . '<details class="section-intro text-muted">'
+                  . '<summary><i class="fas fa-info-circle"></i> <span>About these fortunes</span></summary>'
+                  . '<div class="section-intro-body">A demo of the sandboxed-plugin tab IPC. '
+                  . 'This list is rendered by hello-eiou\'s __dispatch.php inside its own '
+                  . 'FPM pool, then forwarded to core via a render hook.</div>'
+                  . '</details>'
+                  . '<div class="plugin-hello-eiou-tab"><ul>' . $items . '</ul></div>'
+                  . '</div>';
+            respond(200, ['ok' => true, 'result' => $html], $log);
+        }
         respond(501, ['ok' => false, 'error' => ['code' => 'handler_not_found', 'message' => "no render handler for {$name}"]], $log);
 
     case 'filter':
@@ -205,6 +231,23 @@ switch ($type) {
         respond(501, ['ok' => false, 'error' => ['code' => 'handler_not_found', 'message' => "no filter handler for {$name}"]], $log);
 
     case 'action':
+        if ($name === 'helloEiouFortune') {
+            respond(200, [
+                'ok' => true,
+                'result' => [
+                    'success' => true,
+                    'fortune' => Fortunes::pick(),
+                ],
+            ], $log);
+        }
+        respond(501, [
+            'ok' => false,
+            'error' => [
+                'code' => 'handler_not_found',
+                'message' => "no action handler for '{$name}'",
+            ],
+        ], $log);
+
     case 'rest':
     case 'cli':
         // Surfaces not yet migrated — entry class still serves these

@@ -35,5 +35,22 @@
     "Logger.warning",
     "Logger.error",
     "Logger.debug"
+  ],
+
+  "gui_assets": [
+    {"type": "css", "path": "assets/styles.css"}
+  ],
+
+  "tabs": [
+    {
+      "id": "hello-eiou-fortunes",
+      "label": "Fortunes",
+      "icon": "fas fa-cookie-bite",
+      "order": 45
+    }
+  ],
+
+  "gui_actions": [
+    {"name": "helloEiouFortune", "tier": "csrf"}
   ]
 }

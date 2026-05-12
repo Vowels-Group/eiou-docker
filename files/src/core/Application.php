@@ -187,7 +187,10 @@ class Application {
             // register first and sandboxed forwarders register
             // alongside them — both fire when an event dispatches.
             $this->services->getPluginIpcForwarder($this->pluginLoader)->registerAll(
-                $this->services->getHooks()
+                $this->services->getHooks(),
+                $this->services->getAssetRegistry(),
+                $this->services->getTabRegistry(),
+                $this->services->getActionRegistry()
             );
 
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)

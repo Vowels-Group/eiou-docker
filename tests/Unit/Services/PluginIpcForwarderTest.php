@@ -4,8 +4,11 @@ namespace Eiou\Tests\Services;
 use Eiou\Core\AppConfig;
 use Eiou\Events\EventDispatcher;
 use Eiou\Services\Hooks;
+use Eiou\Services\GuiActionRegistry;
+use Eiou\Services\PluginAssetRegistry;
 use Eiou\Services\PluginIpcForwarder;
 use Eiou\Services\PluginLoader;
+use Eiou\Services\TabRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -210,6 +213,213 @@ class PluginIpcForwarderTest extends TestCase
         // The render hook MUST return a string. Empty is the only safe
         // fallback when the plugin's dispatch fails.
         $this->assertSame('', $out);
+    }
+
+    // ===================================================================
+    // GUI action IPC (Phase 5e)
+    // ===================================================================
+
+    #[Test]
+    public function actionRegistrationProducesAWorkingIpcHandler(): void
+    {
+        $this->nextResponse = [
+            'ok' => true, 'status' => 200,
+            'body' => ['ok' => true, 'result' => ['success' => true, 'fortune' => 'test']],
+        ];
+        $actions = new GuiActionRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', [
+                'gui_actions' => [['name' => 'helloEiouFortune', 'tier' => 'csrf']],
+            ]),
+        ]);
+
+        $report = $this->svc->registerAll($this->hooks, null, null, $actions);
+
+        $this->assertSame([['plugin' => 'hello-eiou', 'name' => 'helloEiouFortune']], $report['actions']);
+        $this->assertTrue($actions->has('helloEiouFortune'));
+        $this->assertSame('csrf', $actions->getTier('helloEiouFortune'));
+        $this->assertSame('hello-eiou', $actions->getPluginId('helloEiouFortune'));
+
+        // Invoke the handler — captures stdout to verify the JSON
+        // envelope. headers_sent() can't be exercised in CLI tests; we
+        // just check the body got echoed.
+        $handler = $actions->getHandler('helloEiouFortune');
+        ob_start();
+        $handler(['arg' => 'foo']);
+        $body = (string) ob_get_clean();
+
+        $this->assertJson($body);
+        $payload = json_decode($body, true);
+        $this->assertTrue($payload['success']);
+        $this->assertSame('test', $payload['fortune']);
+
+        // Forwarder posted POST data inside context.post.
+        $this->assertSame('action', $this->httpLog[0]['body']['type']);
+        $this->assertSame('helloEiouFortune', $this->httpLog[0]['body']['name']);
+        $this->assertSame(['arg' => 'foo'], $this->httpLog[0]['body']['context']['post']);
+    }
+
+    #[Test]
+    public function actionPluginUnavailableSurfacesAs502Body(): void
+    {
+        $this->nextResponse = ['ok' => false, 'status' => 0, 'body' => null];
+        $actions = new GuiActionRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('flaky', ['gui_actions' => [['name' => 'doSomething']]]),
+        ]);
+
+        $this->svc->registerAll($this->hooks, null, null, $actions);
+
+        ob_start();
+        ($actions->getHandler('doSomething'))([]);
+        $body = (string) ob_get_clean();
+
+        $payload = json_decode($body, true);
+        $this->assertSame('plugin_unavailable', $payload['error']);
+    }
+
+    #[Test]
+    public function actionRegistryIsOptional(): void
+    {
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('demo', ['gui_actions' => [['name' => 'foo']]]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks);
+        $this->assertSame([], $report['actions']);
+    }
+
+    // ===================================================================
+    // Tab IPC (Phase 5d)
+    // ===================================================================
+
+    #[Test]
+    public function tabRegistrationProducesAWorkingIpcRender(): void
+    {
+        $this->nextResponse = [
+            'ok' => true, 'status' => 200,
+            'body' => ['ok' => true, 'result' => '<div>tab body from plugin</div>'],
+        ];
+        $tabs = new TabRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', [
+                'tabs' => [
+                    ['id' => 'fortunes', 'label' => 'Fortunes', 'icon' => 'fa-x', 'order' => 45],
+                ],
+            ]),
+        ]);
+
+        $report = $this->svc->registerAll($this->hooks, null, $tabs);
+
+        $this->assertSame([['plugin' => 'hello-eiou', 'id' => 'fortunes']], $report['tabs']);
+
+        $registered = $tabs->find('fortunes');
+        $this->assertNotNull($registered);
+        $this->assertSame('Fortunes', $registered['label']);
+        $this->assertSame(45, $registered['order']);
+
+        // The render closure IPCs to the plugin and returns the result.
+        $html = ($registered['render'])();
+        $this->assertSame('<div>tab body from plugin</div>', $html);
+        // Verify the envelope shape — name carries the tab: prefix so
+        // the dispatcher can disambiguate from regular render hooks.
+        $this->assertSame('render', $this->httpLog[0]['body']['type']);
+        $this->assertSame('tab:fortunes', $this->httpLog[0]['body']['name']);
+    }
+
+    #[Test]
+    public function tabRegistrationDefaultsMissingIconAndOrder(): void
+    {
+        $tabs = new TabRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            // Manifest only required id + label per Phase 5a's shape
+            // validator. Icon + order must default to keep TabRegistry
+            // happy.
+            $this->pluginRow('demo', [
+                'tabs' => [['id' => 'minimal', 'label' => 'Minimal']],
+            ]),
+        ]);
+
+        $this->svc->registerAll($this->hooks, null, $tabs);
+
+        $entry = $tabs->find('minimal');
+        $this->assertNotNull($entry, 'tab with minimal manifest entry must register');
+        $this->assertSame('fas fa-puzzle-piece', $entry['icon']);
+        $this->assertSame(50, $entry['order']);
+    }
+
+    #[Test]
+    public function tabRegistryIsOptional(): void
+    {
+        // Test scaffolds that only care about events keep working.
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('demo', [
+                'tabs' => [['id' => 'will-skip', 'label' => 'Skipped']],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks);
+        $this->assertSame([], $report['tabs']);
+    }
+
+    // ===================================================================
+    // Declarative gui_assets (Phase 5h) — no IPC, direct registry call
+    // ===================================================================
+
+    #[Test]
+    public function declaredCssAssetEnqueuesIntoAssetRegistry(): void
+    {
+        $assets = new PluginAssetRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', [
+                'gui_assets' => [
+                    ['type' => 'css', 'path' => 'assets/styles.css'],
+                ],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks, $assets);
+
+        $this->assertSame(
+            [['plugin' => 'hello-eiou', 'type' => 'css', 'path' => 'assets/styles.css']],
+            $report['assets']
+        );
+        $styles = $assets->listStyles();
+        $this->assertCount(1, $styles);
+        $this->assertSame('hello-eiou', $styles[0]['pluginId']);
+        $this->assertSame('assets/styles.css', $styles[0]['relPath']);
+    }
+
+    #[Test]
+    public function declaredJsAssetEnqueuesAsScript(): void
+    {
+        $assets = new PluginAssetRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', [
+                'gui_assets' => [
+                    ['type' => 'js', 'path' => 'assets/widget.js'],
+                ],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks, $assets);
+
+        $this->assertCount(1, $report['assets']);
+        $this->assertCount(1, $assets->listScripts());
+        $this->assertSame('assets/widget.js', $assets->listScripts()[0]['relPath']);
+    }
+
+    #[Test]
+    public function assetRegistryIsOptional(): void
+    {
+        // Existing test scaffolds call registerAll($hooks) without an
+        // asset registry. Backward-compat: asset entries get silently
+        // skipped, no exception thrown.
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', [
+                'gui_assets' => [
+                    ['type' => 'css', 'path' => 'assets/styles.css'],
+                ],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks);
+        $this->assertSame([], $report['assets']);
     }
 
     // ===================================================================
