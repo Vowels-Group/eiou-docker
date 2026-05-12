@@ -1086,6 +1086,44 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginUserService — Phase 1 of plugin sandboxing.
+     * Manages the per-plugin Unix-user lifecycle (eiou-p-<hash>) that
+     * a sandboxed plugin's FPM pool runs as. See
+     * docs/PLUGIN_SANDBOXING.md.
+     */
+    public function getPluginUserService(): \Eiou\Services\PluginUserService {
+        if (!isset($this->services['PluginUserService'])) {
+            $this->services['PluginUserService'] = new \Eiou\Services\PluginUserService();
+        }
+        return $this->services['PluginUserService'];
+    }
+
+    /**
+     * Get PluginPoolService — Phase 2 of plugin sandboxing. Renders
+     * + applies per-plugin PHP-FPM pool config so a sandboxed plugin
+     * runs in its own pool, as its own UID, with open_basedir and
+     * disable_functions restricted.
+     */
+    public function getPluginPoolService(): \Eiou\Services\PluginPoolService {
+        if (!isset($this->services['PluginPoolService'])) {
+            $this->services['PluginPoolService'] = new \Eiou\Services\PluginPoolService();
+        }
+        return $this->services['PluginPoolService'];
+    }
+
+    /**
+     * Get PluginNginxConfigService — Phase 2 of plugin sandboxing.
+     * Renders the per-plugin nginx location-block snippet that
+     * PluginPoolService bundles into its supervisor request.
+     */
+    public function getPluginNginxConfigService(): \Eiou\Services\PluginNginxConfigService {
+        if (!isset($this->services['PluginNginxConfigService'])) {
+            $this->services['PluginNginxConfigService'] = new \Eiou\Services\PluginNginxConfigService();
+        }
+        return $this->services['PluginNginxConfigService'];
+    }
+
+    /**
      * Get PluginUninstallService instance.
      *
      * Runs the full uninstall flow (onUninstall hook, revoke, drop tables,

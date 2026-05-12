@@ -147,6 +147,14 @@ class Application {
                 $this->services->getPluginCredentialService(),
                 $this->services->getPluginDbUserService()
             );
+            // Sandbox services for Phase 2.5 — when wired, plugins whose
+            // manifest declares "sandboxed": true get their own Unix
+            // user + FPM pool on enable. See docs/PLUGIN_SANDBOXING.md.
+            $this->pluginLoader->setSandboxServices(
+                $this->services->getPluginUserService(),
+                $this->services->getPluginPoolService(),
+                $this->services->getPluginNginxConfigService()
+            );
             // Wire the signature verifier with the configured mode. Default
             // 'off' keeps backwards compat; operators opt in via Constants
             // (will move to userconfig.json in a follow-up once other
@@ -162,6 +170,10 @@ class Application {
             // plugins.json. Runs before registerAll() so plugins needing DB
             // access during register() find their user ready.
             $this->pluginLoader->reconcileIsolation();
+            // Sandbox reconcile — self-heals after a missed enable/disable
+            // (e.g. supervisor restart mid-transition, or a manual edit of
+            // plugins.json). Idempotent. See docs/PLUGIN_SANDBOXING.md.
+            $this->pluginLoader->reconcileSandbox();
             $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services
             $this->services->wireAllServices();
