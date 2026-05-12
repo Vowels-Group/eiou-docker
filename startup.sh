@@ -2629,7 +2629,10 @@ restart_poller() {
 # request file can't be used to drop www-data or root.
 # =============================================================================
 plugin_user_poller() {
-    local POLL_INTERVAL=0.1
+    # Poll once a second — plugin enable/disable is operator-driven
+    # and infrequent. Faster polling burns container PIDs (each sleep
+    # spawns a child process) without buying meaningful latency.
+    local POLL_INTERVAL=1
     local REQ_GLOB="/tmp/eiou-pluser-req-*.json"
     local LOG_PREFIX="[PLUGIN USER POLLER]"
 
@@ -2742,7 +2745,10 @@ plugin_user_poller() {
 #     nginx_snippet }
 # =============================================================================
 plugin_routing_poller() {
-    local POLL_INTERVAL=0.2
+    # Poll once a second — see plugin_user_poller for why we don't
+    # spin tighter. Operator-driven traffic; FPM/nginx reload cost
+    # dwarfs the poll interval.
+    local POLL_INTERVAL=1
     local REQ_GLOB="/tmp/eiou-routing-req-*.json"
     local LOG_PREFIX="[PLUGIN ROUTING POLLER]"
     local SNIPPET_PATH="/etc/nginx/snippets/eiou-plugins.conf"
