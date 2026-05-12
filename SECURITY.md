@@ -511,7 +511,7 @@ State is file-based in `/tmp/tor-circuit-health/` (clears on container restart).
 | Rate limiting | Per-key limits (default: 100 requests/minute) via `RateLimiterService` |
 | Security headers | `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` on all responses; CSP with per-request nonces at the application layer |
 | Secure logging | Automatic masking of passwords, auth codes, API keys, and mnemonics in log output |
-| Plugin zip upload validation | `PluginInstallService` rejects zip uploads on magic-byte mismatch, path traversal (`..`, absolute paths, `\`), multiple top-level directories, disallowed file extensions, hidden dotfiles, oversized files (>10 MiB / file or >50 MiB total), suspicious compression ratios (>100:1), >500-file archives, or extracted symlinks. Uploaded plugins land disabled and never auto-execute. See [PLUGINS.md → Installing Plugins](docs/PLUGINS.md#installing-plugins). |
+| Plugin zip upload validation | `PluginInstallService` rejects zip uploads on magic-byte mismatch, path traversal (`..`, absolute paths, `\`), multiple top-level directories, disallowed file extensions, hidden dotfiles, oversized files (>15 MiB / file or >50 MiB total), suspicious compression ratios (>100:1), >500-file archives, or extracted symlinks. Uploaded plugins land disabled and never auto-execute. See [PLUGINS.md → Installing Plugins](docs/PLUGINS.md#installing-plugins). |
 
 ### Transport Security
 

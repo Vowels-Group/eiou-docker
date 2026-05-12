@@ -81,8 +81,12 @@ class PluginInstallService
     /** Total uncompressed bytes across all entries. Reject during walk. */
     public const MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;  // 50 MiB
 
-    /** Any single entry above this is rejected. */
-    public const MAX_FILE_BYTES = 10 * 1024 * 1024;      // 10 MiB
+    /**
+     * Any single entry above this is rejected. Sized to forgive heavy
+     * single assets — a 4K splash image at high quality, an uncompressed
+     * font, a bundled chart library — without raising the aggregate cap.
+     */
+    public const MAX_FILE_BYTES = 15 * 1024 * 1024;      // 15 MiB
 
     /** Maximum number of file entries (not directory entries). */
     public const MAX_FILE_COUNT = 500;

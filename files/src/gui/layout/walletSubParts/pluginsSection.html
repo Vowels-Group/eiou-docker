@@ -50,14 +50,20 @@ echo renderSection([
     'icon'  => 'fas fa-puzzle-piece',
     'title' => 'Plugins',
     'headerExtras' => ''
-        . '<button type="button" class="btn btn-secondary btn-sm" data-action="uploadPlugin" title="Upload a plugin .zip">'
-        .   '<i class="fas fa-upload"></i> <span class="btn-text-collapse">Upload .zip</span>'
-        . '</button> '
-        . '<button type="button" class="btn btn-primary btn-sm" data-action="reloadPlugins" title="Refresh the list from disk">'
-        .   '<i class="fas fa-sync"></i> <span class="btn-text-collapse">Refresh</span>'
-        . '</button>'
+        // .section-header-actions wraps the buttons into a single flex item
+        // so renderSection()'s `justify-content: space-between` doesn't
+        // strand the upload button in the middle of the header — the row
+        // stays {title} on the left and {actions group} on the right.
+        . '<div class="section-header-actions">'
+        .   '<button type="button" class="btn btn-secondary btn-sm" data-action="uploadPlugin" title="Upload a plugin .zip">'
+        .     '<i class="fas fa-upload"></i> <span class="btn-text-collapse">Upload .zip</span>'
+        .   '</button>'
+        .   '<button type="button" class="btn btn-primary btn-sm" data-action="reloadPlugins" title="Refresh the list from disk">'
+        .     '<i class="fas fa-sync"></i> <span class="btn-text-collapse">Refresh</span>'
+        .   '</button>'
+        . '</div>'
         // Hidden file input lives in the section header so a screen reader
-        // can still tab into it; the modal's button just triggers a click.
+        // can still tab into it; the upload button just triggers a click.
         . '<input type="file" id="plugins-upload-input" name="plugin_zip" accept=".zip,application/zip" hidden>',
     'introTitle' => 'About Plugins',
     'intro' => 'Plugins live under <code>/etc/eiou/plugins/</code>. They subscribe to '
