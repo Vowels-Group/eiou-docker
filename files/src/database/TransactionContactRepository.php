@@ -43,6 +43,9 @@ class TransactionContactRepository extends AbstractRepository {
         'sending_started_at', 'recovery_count', 'needs_manual_review'
     ];
 
+    /** Cached `transactions_archive` existence probe — see archiveTableExists(). */
+    private ?bool $archiveTableExistsCache = null;
+
     /**
      * Constructor
      *
@@ -52,6 +55,24 @@ class TransactionContactRepository extends AbstractRepository {
         parent::__construct($pdo);
         $this->tableName = 'transactions';
         $this->primaryKey = 'id';
+    }
+
+    /**
+     * Whether `transactions_archive` exists in this database. Cached per
+     * request. Used by `getTransactionsWithContactsBatch` to decide whether
+     * to UNION archive rows into the per-contact recent-tx ranked query.
+     */
+    private function archiveTableExists(): bool {
+        if ($this->archiveTableExistsCache !== null) {
+            return $this->archiveTableExistsCache;
+        }
+        try {
+            $stmt = $this->pdo->query("SELECT 1 FROM transactions_archive LIMIT 1");
+            $this->archiveTableExistsCache = ($stmt !== false);
+        } catch (PDOException $e) {
+            $this->archiveTableExistsCache = false;
+        }
+        return $this->archiveTableExistsCache;
     }
 
     /**
@@ -360,6 +381,28 @@ class TransactionContactRepository extends AbstractRepository {
         // ROW_NUMBER() partitioned by the counterparty hash, ordered by
         // timestamp DESC — one ranked pass per contact instead of a separate
         // query per contact. Outer filter keeps only the top N per partition.
+        //
+        // Source is a UNION ALL of `transactions` + `transactions_archive`
+        // (when the archive table is present), so the contact-panel's
+        // "Showing the last N transactions with this contact" surfaces
+        // archived rows. Without this, transactions older than the
+        // retention cutoff (default 30 days) silently vanish from the
+        // panel even though balances still account for them, producing
+        // confusing patterns like an initial contact-request handshake
+        // being invisible while the chain it heads is still intact.
+        $baseCols = "txid, tx_type, status, sender_public_key_hash, receiver_public_key_hash,
+                     sender_address, receiver_address,
+                     amount_whole, amount_frac, currency, timestamp, memo, description";
+        $branchWhere = "(sender_public_key_hash = ? AND receiver_public_key_hash IN ($contactPlaceholders))
+                     OR (sender_public_key_hash IN ($contactPlaceholders) AND receiver_public_key_hash = ?)";
+
+        $useArchive = $this->archiveTableExists();
+        $liveBranch    = "SELECT {$baseCols} FROM transactions WHERE {$branchWhere}";
+        $archiveBranch = "SELECT {$baseCols} FROM transactions_archive WHERE {$branchWhere}";
+        $sourceExpr = $useArchive
+            ? "( ({$liveBranch}) UNION ALL ({$archiveBranch}) )"
+            : "({$liveBranch})";
+
         $query = "SELECT contact_hash, txid, tx_type, status, sender_address, receiver_address,
                          amount_whole, amount_frac, currency, timestamp, memo, description
                     FROM (
@@ -374,19 +417,26 @@ class TransactionContactRepository extends AbstractRepository {
                                                   ELSE sender_public_key_hash END
                                 ORDER BY timestamp DESC
                             ) AS rn
-                        FROM {$this->tableName}
-                        WHERE (sender_public_key_hash = ? AND receiver_public_key_hash IN ($contactPlaceholders))
-                           OR (sender_public_key_hash IN ($contactPlaceholders) AND receiver_public_key_hash = ?)
+                        FROM {$sourceExpr} src
                     ) ranked
                     WHERE rn <= ?
                     ORDER BY contact_hash, timestamp DESC";
 
-        $params = array_merge(
-            [$myHash, $myHash, $myHash],
+        // Branch params (used once per UNION branch): myHash, contactHashes,
+        // contactHashes, myHash — matching the two-clause WHERE.
+        $branchParams = array_merge(
+            [$myHash],
             $contactPubkeyHashes,
             $contactPubkeyHashes,
-            [$myHash, $limitPerContact]
+            [$myHash]
         );
+
+        // Outer params: the two ROW_NUMBER CASE-WHEN myHash bindings, then the rn limit.
+        $outerParams = [$myHash, $myHash, $limitPerContact];
+
+        $params = $useArchive
+            ? array_merge($branchParams, $branchParams, $outerParams)
+            : array_merge($branchParams, $outerParams);
 
         try {
             $stmt = $this->pdo->prepare($query);

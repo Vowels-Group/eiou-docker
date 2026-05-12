@@ -47,6 +47,16 @@ class TransactionRepository extends AbstractRepository {
     protected array $splitAmountColumns = ['amount'];
 
     /**
+     * Cached `transactions_archive` existence probe — null until first call.
+     *
+     * Some installs (pre-migration, or hand-broken environments) lack the
+     * archive table. Read paths that UNION the archive need to know whether
+     * to include the branch at SQL build time, so we probe once per request
+     * and reuse the result.
+     */
+    private ?bool $archiveTableExistsCache = null;
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
@@ -55,6 +65,29 @@ class TransactionRepository extends AbstractRepository {
         parent::__construct($pdo);
         $this->tableName = 'transactions';
         $this->primaryKey = 'id';
+    }
+
+    /**
+     * Whether `transactions_archive` exists in this database.
+     *
+     * Cached per-request. Used by the GUI-facing read paths
+     * (`getTransactionHistory`, `searchTransactions`) to decide whether to
+     * UNION archive rows into the result. A missing archive (v9→v10
+     * transitional installs, hand-broken environments) leaves the result
+     * as live-only, matching the existing graceful-degradation contract
+     * elsewhere in this file.
+     */
+    private function archiveTableExists(): bool {
+        if ($this->archiveTableExistsCache !== null) {
+            return $this->archiveTableExistsCache;
+        }
+        try {
+            $stmt = $this->pdo->query("SELECT 1 FROM transactions_archive LIMIT 1");
+            $this->archiveTableExistsCache = ($stmt !== false);
+        } catch (PDOException $e) {
+            $this->archiveTableExistsCache = false;
+        }
+        return $this->archiveTableExistsCache;
     }
     /**
      * Check if transaction is completed by memo
@@ -659,7 +692,85 @@ class TransactionRepository extends AbstractRepository {
         // Create placeholders for IN clause
         $placeholders = $this->createPlaceholders($userAddresses);
 
-        // Query with LEFT JOINs to get contact names, p2p details, and full transaction details
+        // Query with LEFT JOINs to get contact names, p2p details, and full
+        // transaction details. The FROM clause is built from `transactions`
+        // alone, or as a UNION ALL of `transactions` + `transactions_archive`
+        // when the archive table is present, so archived rows surface in
+        // the Recent Transactions list instead of silently disappearing past
+        // the retention cutoff (default 30 days). Address / currency /
+        // cursor filters are pushed into each UNION branch so each branch
+        // returns at most `limit + offset` rows before merge, keeping the
+        // hot path tight even with a large archive.
+        $baseCols = "id, txid, tx_type, type, status,
+                     sender_address, sender_public_key, sender_public_key_hash,
+                     receiver_address, receiver_public_key, receiver_public_key_hash,
+                     amount_whole, amount_frac, currency,
+                     timestamp, time, memo, description, previous_txid,
+                     end_recipient_address, initial_sender_address";
+
+        $branchWhere = "(sender_address IN ($placeholders) OR receiver_address IN ($placeholders))";
+        $branchParamsTemplate = [];  // params for a single branch — used twice if archive included
+
+        if ($currency !== null) {
+            $branchWhere .= " AND currency = ?";
+            $branchParamsTemplate[] = $currency;
+        }
+
+        // Cursor mode wins over offset mode when both supplied. The
+        // OR-expanded keyset predicate is more index-friendly across
+        // older MySQL/MariaDB versions than the row-value form
+        // `(a,b,c) < (?,?,?)` — both are semantically equivalent but
+        // the optimizer picks ranges more reliably from the OR form.
+        $isCursor = (
+            $cursor !== null
+            && isset($cursor['time'], $cursor['timestamp'], $cursor['txid'])
+        );
+        if ($isCursor) {
+            $branchWhere .= " AND (
+                COALESCE(time, 0) < ?
+                OR (COALESCE(time, 0) = ? AND timestamp < ?)
+                OR (COALESCE(time, 0) = ? AND timestamp = ? AND txid < ?)
+            )";
+            $branchParamsTemplate[] = (int) $cursor['time'];
+            $branchParamsTemplate[] = (int) $cursor['time'];
+            $branchParamsTemplate[] = (string) $cursor['timestamp'];
+            $branchParamsTemplate[] = (int) $cursor['time'];
+            $branchParamsTemplate[] = (string) $cursor['timestamp'];
+            $branchParamsTemplate[] = (string) $cursor['txid'];
+        }
+
+        // Inner per-branch LIMIT: in offset mode we need `limit + offset`
+        // rows per branch so the outer slice has enough material; in cursor
+        // mode `limit` is enough because the cursor predicate already
+        // narrows the window.
+        $branchLimit = $isCursor ? $limit : ($limit + max(0, $offset));
+        $branchTail = $isCursor
+            ? " ORDER BY COALESCE(time, 0) DESC, timestamp DESC, txid DESC LIMIT ?"
+            : " ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT ?";
+
+        $buildBranch = function (string $table) use ($baseCols, $branchWhere, $branchTail): string {
+            return "SELECT {$baseCols} FROM {$table} WHERE {$branchWhere}{$branchTail}";
+        };
+
+        // Each branch consumes: addresses x2 (sender/receiver IN), then the
+        // template params (currency, cursor), then LIMIT.
+        $branchParams = array_merge(
+            $this->buildInClauseParams($userAddresses, 2, $branchParamsTemplate),
+            [$branchLimit]
+        );
+
+        $useArchive = $this->archiveTableExists();
+        if ($useArchive) {
+            $liveBranch    = $buildBranch('transactions');
+            $archiveBranch = $buildBranch('transactions_archive');
+            $fromExpr      = "( ({$liveBranch}) UNION ALL ({$archiveBranch}) ) t";
+            $innerParams   = array_merge($branchParams, $branchParams);
+        } else {
+            $liveBranch  = $buildBranch($this->tableName);
+            $fromExpr    = "({$liveBranch}) t";
+            $innerParams = $branchParams;
+        }
+
         $query = "SELECT
                     t.id,
                     t.txid,
@@ -689,54 +800,24 @@ class TransactionRepository extends AbstractRepository {
                     p2p.amount_frac AS p2p_amount_frac,
                     p2p.my_fee_amount_whole AS p2p_fee_whole,
                     p2p.my_fee_amount_frac AS p2p_fee_frac
-                  FROM {$this->tableName} t
+                  FROM {$fromExpr}
                   LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
                   LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
                   LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
                   LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
-                  LEFT JOIN p2p ON t.memo = p2p.hash
-                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))";
+                  LEFT JOIN p2p ON t.memo = p2p.hash";
 
-        $additionalParams = [];
-        if ($currency !== null) {
-            $query .= " AND t.currency = ?";
-            $additionalParams[] = $currency;
-        }
-
-        // Cursor mode wins over offset mode when both supplied. The
-        // OR-expanded keyset predicate is more index-friendly across
-        // older MySQL/MariaDB versions than the row-value form
-        // `(a,b,c) < (?,?,?)` — both are semantically equivalent but
-        // the optimizer picks ranges more reliably from the OR form.
-        if (
-            $cursor !== null
-            && isset($cursor['time'], $cursor['timestamp'], $cursor['txid'])
-        ) {
-            $query .= " AND (
-                COALESCE(t.time, 0) < ?
-                OR (COALESCE(t.time, 0) = ? AND t.timestamp < ?)
-                OR (COALESCE(t.time, 0) = ? AND t.timestamp = ? AND t.txid < ?)
-            )";
-            $additionalParams[] = (int) $cursor['time'];
-            $additionalParams[] = (int) $cursor['time'];
-            $additionalParams[] = (string) $cursor['timestamp'];
-            $additionalParams[] = (int) $cursor['time'];
-            $additionalParams[] = (string) $cursor['timestamp'];
-            $additionalParams[] = (string) $cursor['txid'];
-
-            // Cursor mode: txid as final tiebreaker so the order is a
-            // strict total order — avoids the duplicate-row hazard if
-            // two transactions share both `time` and `timestamp`.
+        $outerParams = [];
+        if ($isCursor) {
             $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC, t.txid DESC LIMIT ?";
-            $additionalParams[] = $limit;
+            $outerParams[] = $limit;
         } else {
             $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ? OFFSET ?";
-            $additionalParams[] = $limit;
-            $additionalParams[] = max(0, $offset);
+            $outerParams[] = $limit;
+            $outerParams[] = max(0, $offset);
         }
 
-        // Bind parameters - addresses twice for both IN clauses, then optional currency, then keyset/offset tail
-        $params = $this->buildInClauseParams($userAddresses, 2, $additionalParams);
+        $params = array_merge($innerParams, $outerParams);
         try {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
@@ -808,6 +889,38 @@ class TransactionRepository extends AbstractRepository {
         // it on the received-P2P side. Without these JOINs the WHERE
         // could only match direct neighbours, which missed every P2P tx
         // where the search term names someone further down the chain.
+        //
+        // FROM clause is a UNION ALL of `transactions` + `transactions_archive`
+        // (when the archive table is present), so the "Search database"
+        // button finds rows that have been moved to cold storage. Without
+        // this, transactions older than the retention cutoff (default 30
+        // days) silently vanish from search results even though the button
+        // claims to search the whole database. The address-IN filter is
+        // pushed into each UNION branch (uses the per-table address index);
+        // the LIKE filters stay at the outer level because they reference
+        // joined contact columns that the JOIN computes after the merge.
+        $baseCols = "id, txid, tx_type, type, status,
+                     sender_address, sender_public_key, sender_public_key_hash,
+                     receiver_address, receiver_public_key, receiver_public_key_hash,
+                     amount_whole, amount_frac, currency,
+                     timestamp, time, memo, description, previous_txid,
+                     end_recipient_address, initial_sender_address";
+
+        $branchWhere = "(sender_address IN ($placeholders) OR receiver_address IN ($placeholders))";
+        $branchParams = $this->buildInClauseParams($userAddresses, 2, []);
+
+        $useArchive = $this->archiveTableExists();
+        if ($useArchive) {
+            $liveBranch    = "SELECT {$baseCols} FROM transactions WHERE {$branchWhere}";
+            $archiveBranch = "SELECT {$baseCols} FROM transactions_archive WHERE {$branchWhere}";
+            $fromExpr      = "( ({$liveBranch}) UNION ALL ({$archiveBranch}) ) t";
+            $innerParams   = array_merge($branchParams, $branchParams);
+        } else {
+            $liveBranch  = "SELECT {$baseCols} FROM {$this->tableName} WHERE {$branchWhere}";
+            $fromExpr    = "({$liveBranch}) t";
+            $innerParams = $branchParams;
+        }
+
         $query = "SELECT
                     t.id, t.txid, t.tx_type, t.type AS direction, t.status,
                     t.sender_address, t.receiver_address,
@@ -823,7 +936,7 @@ class TransactionRepository extends AbstractRepository {
                     p2p.amount_frac AS p2p_amount_frac,
                     p2p.my_fee_amount_whole AS p2p_fee_whole,
                     p2p.my_fee_amount_frac AS p2p_fee_frac
-                  FROM {$this->tableName} t
+                  FROM {$fromExpr}
                   LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
                   LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
                   LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
@@ -833,8 +946,7 @@ class TransactionRepository extends AbstractRepository {
                   LEFT JOIN addresses init_addr ON (t.initial_sender_address = init_addr.http OR t.initial_sender_address = init_addr.https OR t.initial_sender_address = init_addr.tor)
                   LEFT JOIN contacts init_contact ON init_addr.pubkey_hash = init_contact.pubkey_hash
                   LEFT JOIN p2p ON t.memo = p2p.hash
-                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
-                    AND (
+                  WHERE (
                          LOWER(COALESCE(sender_contact.name, '')) LIKE ?
                       OR LOWER(COALESCE(receiver_contact.name, '')) LIKE ?
                       OR LOWER(COALESCE(end_contact.name, '')) LIKE ?
@@ -847,12 +959,12 @@ class TransactionRepository extends AbstractRepository {
                       OR LOWER(COALESCE(t.txid, '')) LIKE ?
                     )";
 
-        $additional = [$like, $like, $like, $like, $like, $like, $like, $like, $like, $like];
+        $outerParams = [$like, $like, $like, $like, $like, $like, $like, $like, $like, $like];
 
         // status is a direct column filter
         if ($status !== null && $status !== '') {
             $query .= " AND t.status = ?";
-            $additional[] = $status;
+            $outerParams[] = $status;
         }
         // tx_type: the client-side filter uses 'direct' / 'p2p' /
         // 'contact' labels. DB stores 'standard' / 'p2p' / 'contact' —
@@ -863,15 +975,14 @@ class TransactionRepository extends AbstractRepository {
                 $query .= " AND t.tx_type IN ('standard', 'direct')";
             } else {
                 $query .= " AND t.tx_type = ?";
-                $additional[] = $txType;
+                $outerParams[] = $txType;
             }
         }
 
         $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
-        $additional[] = max(1, $maxResults);
+        $outerParams[] = max(1, $maxResults);
 
-        // addresses twice for the two IN clauses, then the tail params
-        $params = $this->buildInClauseParams($userAddresses, 2, $additional);
+        $params = array_merge($innerParams, $outerParams);
         try {
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
