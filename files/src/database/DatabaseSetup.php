@@ -125,6 +125,8 @@ function freshInstall(){
 
                 // Transactions & Chain Integrity
                 $dbConn->exec(getTransactionsTableSchema());
+                $dbConn->exec(getTransactionsArchiveTableSchema());
+                $dbConn->exec(getTransactionChainCheckpointsTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
                 $dbConn->exec(getChainDropProposalsTableSchema());
                 $dbConn->exec(getRememberTokensTableSchema());

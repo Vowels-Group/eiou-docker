@@ -52,7 +52,7 @@ class Constants {
     // Migrations only run when the stored version (in /etc/eiou/config/.schema_version)
     // is lower than this value. After all migrations succeed the file is updated,
     // so subsequent requests skip migration queries entirely.
-    const SCHEMA_VERSION = 14;
+    const SCHEMA_VERSION = 15;
 
     /**
      * Plugin signature enforcement mode. One of:
