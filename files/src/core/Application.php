@@ -181,6 +181,15 @@ class Application {
             // when plugins subscribe to events or decorate services.
             $this->pluginLoader->bootAll($this->services);
 
+            // Phase 5: register IPC forwarders for every sandboxed,
+            // enabled plugin's declared events / filter hooks / render
+            // hooks. Done AFTER bootAll() so in-process subscribers
+            // register first and sandboxed forwarders register
+            // alongside them — both fire when an event dispatches.
+            $this->services->getPluginIpcForwarder()->registerAll(
+                $this->services->getHooks()
+            );
+
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)
             // This prevents unnecessary recovery runs and potential race conditions on every API call
             // Recovery is only needed when message processor daemons start up after a crash

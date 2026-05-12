@@ -370,6 +370,59 @@ class PluginLoader
             } else {
                 $row['core_services'] = [];
             }
+
+            // Phase 5: declarative surface fields. These tell the IPC
+            // forwarder which events/filters/renders to bridge from
+            // in-process firing to a sandboxed plugin's __dispatch.php.
+            // Each list is filtered to a safe shape so a malformed
+            // manifest can't poison the forwarder's registrations.
+            $row['subscribes_to'] = $this->stringListField($manifest, 'subscribes_to', '/^[a-z][a-z0-9_.-]*$/');
+            $row['filter_hooks']  = $this->stringListField($manifest, 'filter_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
+            $row['render_hooks']  = $this->stringListField($manifest, 'render_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
+            // gui_actions, tabs, gui_assets, api_routes, cli_commands
+            // carry richer payloads. Phase 5 forwarders read them
+            // through the list; basic structural validation here
+            // keeps the forwarder code simpler.
+            $row['gui_actions'] = $this->shapedListField(
+                $manifest,
+                'gui_actions',
+                fn($e): bool => is_array($e)
+                    && isset($e['name']) && is_string($e['name'])
+                    && preg_match('/^[a-z][a-zA-Z0-9_]*$/', $e['name']) === 1
+            );
+            $row['tabs'] = $this->shapedListField(
+                $manifest,
+                'tabs',
+                fn($e): bool => is_array($e)
+                    && isset($e['id']) && is_string($e['id'])
+                    && preg_match('/^[a-z0-9][a-z0-9_-]*$/', $e['id']) === 1
+                    && isset($e['label']) && is_string($e['label'])
+            );
+            $row['gui_assets'] = $this->shapedListField(
+                $manifest,
+                'gui_assets',
+                fn($e): bool => is_array($e)
+                    && isset($e['type'], $e['path'])
+                    && in_array($e['type'], ['css', 'js'], true)
+                    && is_string($e['path'])
+                    && strpos($e['path'], '..') === false
+            );
+            $row['api_routes'] = $this->shapedListField(
+                $manifest,
+                'api_routes',
+                fn($e): bool => is_array($e)
+                    && isset($e['method'], $e['path'])
+                    && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
+                    && is_string($e['path'])
+                    && strpos($e['path'], '..') === false
+            );
+            $row['cli_commands'] = $this->shapedListField(
+                $manifest,
+                'cli_commands',
+                fn($e): bool => is_array($e)
+                    && isset($e['name']) && is_string($e['name'])
+                    && preg_match('/^[a-z][a-z0-9-]*$/', $e['name']) === 1
+            );
             if (isset($live[$name]['error'])) {
                 $row['error'] = (string) $live[$name]['error'];
             }
@@ -641,6 +694,43 @@ class PluginLoader
             }
         }
         return $result;
+    }
+
+    /**
+     * Extract a manifest field that should be a list of strings matching
+     * a regex. Drops entries that don't match. Empty / non-array values
+     * normalize to []. Used by Phase 5 declarative surface parsing.
+     *
+     * @return list<string>
+     */
+    private function stringListField(array $manifest, string $key, string $regex): array
+    {
+        $raw = $manifest[$key] ?? [];
+        if (!is_array($raw)) return [];
+        return array_values(array_filter(
+            $raw,
+            fn($entry): bool => is_string($entry) && preg_match($regex, $entry) === 1
+        ));
+    }
+
+    /**
+     * Extract a manifest field that should be a list of objects passing
+     * a per-entry validator. Used for richer Phase 5 fields (tabs,
+     * actions, etc.) where entries carry sub-keys.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function shapedListField(array $manifest, string $key, callable $validator): array
+    {
+        $raw = $manifest[$key] ?? [];
+        if (!is_array($raw)) return [];
+        $out = [];
+        foreach ($raw as $entry) {
+            if ($validator($entry)) {
+                $out[] = $entry;
+            }
+        }
+        return $out;
     }
 
     /**

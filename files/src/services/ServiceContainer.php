@@ -1086,6 +1086,21 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginIpcForwarder — Phase 5 of plugin sandboxing.
+     * Bridges in-process firing of events / filters / render hooks
+     * to sandboxed plugins' __dispatch.php endpoints.
+     */
+    public function getPluginIpcForwarder(): \Eiou\Services\PluginIpcForwarder {
+        if (!isset($this->services['PluginIpcForwarder'])) {
+            $this->services['PluginIpcForwarder'] = new \Eiou\Services\PluginIpcForwarder(
+                \Eiou\Core\Application::getInstance()->pluginLoader,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginIpcForwarder'];
+    }
+
+    /**
      * Get PluginUserService — Phase 1 of plugin sandboxing.
      * Manages the per-plugin Unix-user lifecycle (eiou-p-<hash>) that
      * a sandboxed plugin's FPM pool runs as. See

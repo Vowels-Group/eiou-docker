@@ -1,7 +1,7 @@
 {
   "name": "hello-eiou",
-  "version": "1.2.0",
-  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the eIOU plugin API surface: events, CLI, REST, and the GUI hooks system (render hooks, asset enqueue, tab registry, action registry, filter slots).",
+  "version": "1.3.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Phase 5 migration in progress: events, render hooks, and filter hooks now run in sandboxed mode; tab, GUI action, REST endpoint, and CLI subcommand still in-process via the entry class until their Phase 5 sub-phases ship.",
   "author": {
     "name": "EIOU",
     "url": "https://eiou.org"
@@ -13,5 +13,27 @@
     "psr-4": {
       "Eiou\\Plugins\\HelloEiou\\": "src/"
     }
-  }
+  },
+
+  "sandboxed": true,
+
+  "subscribes_to": [
+    "sync.completed"
+  ],
+
+  "render_hooks": [
+    "gui.dashboard.after"
+  ],
+
+  "filter_hooks": [
+    "gui.dashboard.widgets",
+    "gui.contact.actions"
+  ],
+
+  "core_services": [
+    "Logger.info",
+    "Logger.warning",
+    "Logger.error",
+    "Logger.debug"
+  ]
 }
