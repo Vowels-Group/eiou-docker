@@ -3,12 +3,15 @@
 
 namespace Eiou\Gui\Controllers;
 
+use Eiou\Contracts\RateLimiterServiceInterface;
+use Eiou\Core\AppConfig;
 use Eiou\Core\UserContext;
 use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\GuiActionRegistry;
 use Eiou\Utils\AltCodeValidator;
 use Eiou\Utils\Logger;
+use Eiou\Utils\Security;
 use Throwable;
 
 /**
@@ -30,11 +33,34 @@ use Throwable;
  */
 class AltCodeController
 {
-    private Session $session;
+    /**
+     * Rate-limit bucket name and shape for `altCodeSet` / `altCodeClear`.
+     *
+     * Tighter than `gui_login` (which is 10/60s, 5-min block) because
+     * these actions verify the PRIMARY auth code in band — an attacker
+     * with a stolen session cookie could otherwise probe primary
+     * candidates here at unlimited rate. The primary is 80 bits so
+     * brute-forcing is infeasible regardless, but defense in depth is
+     * cheap. Aligned with the existing `cli_altcode` limit (5 per 5 min)
+     * for consistency across surfaces.
+     */
+    private const RATE_LIMIT_BUCKET   = 'gui_altcode_modify';
+    private const RATE_LIMIT_ATTEMPTS = 5;
+    private const RATE_LIMIT_WINDOW   = 300; // 5 minutes
+    private const RATE_LIMIT_BLOCK    = 900; // 15 minutes after exceeding
 
-    public function __construct(Session $session)
-    {
+    private Session $session;
+    private RateLimiterServiceInterface $rateLimiter;
+    private AppConfig $appConfig;
+
+    public function __construct(
+        Session $session,
+        RateLimiterServiceInterface $rateLimiter,
+        AppConfig $appConfig
+    ) {
         $this->session = $session;
+        $this->rateLimiter = $rateLimiter;
+        $this->appConfig = $appConfig;
     }
 
     public function registerActions(GuiActionRegistry $registry): void
@@ -137,6 +163,13 @@ class AltCodeController
             );
         }
 
+        // Rate limit BEFORE the credential check so primary-code probing
+        // burns the bucket the same way wrong submissions do. Validation
+        // failures (missing fields, weak alt code) also count — keeps
+        // the gate from being trivially bypassed by submitting malformed
+        // requests in a loop.
+        $this->enforceModifyRateLimit();
+
         $primaryCandidate = (string) ($_POST['primary_authcode'] ?? '');
         $newAltCode = (string) ($_POST['new_alt_code'] ?? '');
 
@@ -208,6 +241,11 @@ class AltCodeController
             );
         }
 
+        // Same bucket as setAlt — both verify the primary in band, and a
+        // shared bucket means an attacker cannot launder attempts across
+        // the two endpoints.
+        $this->enforceModifyRateLimit();
+
         $primaryCandidate = (string) ($_POST['primary_authcode'] ?? '');
         if ($primaryCandidate === '') {
             $this->respondError('missing_primary', 'Primary auth code is required', 400);
@@ -231,6 +269,36 @@ class AltCodeController
             'success' => true,
             'has_alt_code' => false,
         ]);
+    }
+
+    /**
+     * Enforce the modify-rate-limit bucket. Per-IP, 5 attempts per
+     * 5 minutes; 15-minute block on exceed. Calls respondError() (and
+     * therefore unwinds the request) when the bucket is exhausted —
+     * callers never see the false return path.
+     *
+     * The bucket is shared between setAlt() and clearAlt() so an
+     * attacker cannot launder attempts by alternating endpoints.
+     */
+    private function enforceModifyRateLimit(): void
+    {
+        $clientIp = Security::getClientIp($this->appConfig);
+        $result = $this->rateLimiter->checkLimit(
+            $clientIp,
+            self::RATE_LIMIT_BUCKET,
+            self::RATE_LIMIT_ATTEMPTS,
+            self::RATE_LIMIT_WINDOW,
+            self::RATE_LIMIT_BLOCK
+        );
+        if (!$result['allowed']) {
+            $retryAfter = $result['retry_after'] ?? self::RATE_LIMIT_BLOCK;
+            $this->respondError(
+                'rate_limited',
+                'Too many alt-code modify attempts. Please try again later.',
+                429,
+                ['retry_after' => $retryAfter]
+            );
+        }
     }
 
     /**

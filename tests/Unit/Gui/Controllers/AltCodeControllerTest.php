@@ -5,6 +5,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Gui\Controllers;
 
+use Eiou\Contracts\RateLimiterServiceInterface;
+use Eiou\Core\AppConfig;
 use Eiou\Core\UserContext;
 use Eiou\Gui\Controllers\AltCodeController;
 use Eiou\Gui\Controllers\AltCodeControllerResponseSent;
@@ -34,6 +36,8 @@ class CapturingAltCodeController extends AltCodeController
 class AltCodeControllerTest extends TestCase
 {
     private Session $session;
+    private RateLimiterServiceInterface $rateLimiter;
+    private AppConfig $appConfig;
     private CapturingAltCodeController $controller;
 
     protected function setUp(): void
@@ -43,7 +47,23 @@ class AltCodeControllerTest extends TestCase
         $_POST = [];
         $this->resetUserContextSingleton();
         $this->session = $this->createMock(Session::class);
-        $this->controller = new CapturingAltCodeController($this->session);
+        $this->rateLimiter = $this->createMock(RateLimiterServiceInterface::class);
+        // Default behavior: allow every request. Individual tests can
+        // override with a returnValueMap to simulate throttling.
+        $this->rateLimiter->method('checkLimit')->willReturn([
+            'allowed' => true,
+            'remaining' => 5,
+            'reset_at' => time() + 300,
+        ]);
+        // AppConfig is final — cannot be doubled. Build a real instance
+        // from environment (matches the pattern used by the API
+        // controller tests; see memory note on `final` value objects).
+        $this->appConfig = AppConfig::fromEnvironment();
+        $this->controller = new CapturingAltCodeController(
+            $this->session,
+            $this->rateLimiter,
+            $this->appConfig
+        );
     }
 
     protected function tearDown(): void
@@ -354,5 +374,109 @@ class AltCodeControllerTest extends TestCase
         $this->assertSame(200, $result['status']);
         $this->assertTrue($result['payload']['success']);
         $this->assertFalse($result['payload']['has_alt_code']);
+    }
+
+    // =========================================================================
+    // Rate limiting
+    // =========================================================================
+
+    #[Test]
+    public function setRespectsRateLimit(): void
+    {
+        $_POST = [
+            'action' => 'altCodeSet',
+            'csrf_token' => 't',
+            'primary_authcode' => 'primary_xyz',
+            'new_alt_code' => 'AnotherAlt12!Ok',
+        ];
+        $this->session->method('validateCSRFToken')->willReturn(true);
+        $this->session->method('authenticatedViaAlt')->willReturn(false);
+        $this->seedUserContextWithPrimary('primary_xyz', null);
+
+        // Override the default-allow mock with a deny — the bucket is
+        // exhausted on this attempt. We rebuild the controller because
+        // PHPUnit method stubs can't be re-stubbed after setUp's
+        // willReturn baked them in.
+        $rateLimiter = $this->createMock(RateLimiterServiceInterface::class);
+        $rateLimiter->method('checkLimit')->willReturn([
+            'allowed' => false,
+            'remaining' => 0,
+            'reset_at' => time() + 900,
+            'retry_after' => 873,
+        ]);
+        $this->controller = new CapturingAltCodeController(
+            $this->session,
+            $rateLimiter,
+            $this->appConfig
+        );
+
+        $result = $this->dispatch();
+
+        $this->assertSame(429, $result['status']);
+        $this->assertSame('rate_limited', $result['payload']['code']);
+        $this->assertSame(873, $result['payload']['retry_after']);
+    }
+
+    #[Test]
+    public function clearRespectsRateLimit(): void
+    {
+        $_POST = [
+            'action' => 'altCodeClear',
+            'csrf_token' => 't',
+            'primary_authcode' => 'primary_xyz',
+        ];
+        $this->session->method('validateCSRFToken')->willReturn(true);
+        $this->session->method('authenticatedViaAlt')->willReturn(false);
+        $this->seedUserContextWithPrimary('primary_xyz', password_hash('SomeAlt12!Safe', PASSWORD_ARGON2ID));
+
+        $rateLimiter = $this->createMock(RateLimiterServiceInterface::class);
+        $rateLimiter->method('checkLimit')->willReturn([
+            'allowed' => false,
+            'remaining' => 0,
+            'reset_at' => time() + 900,
+        ]);
+        $this->controller = new CapturingAltCodeController(
+            $this->session,
+            $rateLimiter,
+            $this->appConfig
+        );
+
+        $result = $this->dispatch();
+
+        $this->assertSame(429, $result['status']);
+        $this->assertSame('rate_limited', $result['payload']['code']);
+    }
+
+    #[Test]
+    public function rateLimitChecksAfterAltSessionRejection(): void
+    {
+        // An alt-authenticated session should be refused with the
+        // specific `alt_session_forbidden` code BEFORE the rate-limit
+        // bucket is touched. This keeps an attacker logged in via the
+        // alt code from being able to exhaust the bucket and lock the
+        // legitimate operator out of rotating it.
+        $_POST = [
+            'action' => 'altCodeSet',
+            'csrf_token' => 't',
+            'primary_authcode' => 'primary_xyz',
+            'new_alt_code' => 'AnotherAlt12!Ok',
+        ];
+        $this->session->method('validateCSRFToken')->willReturn(true);
+        $this->session->method('authenticatedViaAlt')->willReturn(true);
+        $this->seedUserContextWithPrimary('primary_xyz', null);
+
+        // Spy: this mock will fail the test if checkLimit is called.
+        $rateLimiter = $this->createMock(RateLimiterServiceInterface::class);
+        $rateLimiter->expects($this->never())->method('checkLimit');
+        $this->controller = new CapturingAltCodeController(
+            $this->session,
+            $rateLimiter,
+            $this->appConfig
+        );
+
+        $result = $this->dispatch();
+
+        $this->assertSame(403, $result['status']);
+        $this->assertSame('alt_session_forbidden', $result['payload']['code']);
     }
 }

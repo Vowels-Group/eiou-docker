@@ -199,9 +199,10 @@ class ApiKeysController
         $altHash = $user->getAltCodeHash();
 
         $primaryOk = $expected !== null && hash_equals($expected, $authCode);
-        $altOk = ($altHash !== null && $altHash !== '')
-            ? password_verify($authCode, $altHash)
-            : false;
+        // Constant-time alt check — AltCodeVerifier always runs Argon2id
+        // work (against a placeholder when no hash is configured) so the
+        // re-auth path doesn't reveal alt-code presence via latency.
+        $altOk = \Eiou\Utils\AltCodeVerifier::verify($authCode, $altHash);
 
         if (!$primaryOk && !$altOk) {
             // Same generic failure message the login form uses — don't

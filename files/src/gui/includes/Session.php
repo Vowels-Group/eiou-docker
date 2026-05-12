@@ -170,14 +170,13 @@ class Session
         // Constant-time primary check.
         $primaryOk = hash_equals($userAuthCode, $submitted);
 
-        // Argon2id is intentionally slow; password_verify() is constant-
-        // time. Always run it when a hash is configured, regardless of
-        // $primaryOk, so the auth path's timing profile doesn't reveal
-        // which credential matched.
-        $altOk = false;
-        if ($altCodeHash !== null && $altCodeHash !== '') {
-            $altOk = password_verify($submitted, $altCodeHash);
-        }
+        // Always-runs alt check — AltCodeVerifier compares against the
+        // real hash when configured, otherwise against a per-process
+        // placeholder with the same Argon2id work factor. This keeps the
+        // auth path's wall-clock time identical whether or not an alt
+        // code is set, so a network attacker timing failed logins cannot
+        // deduce alt-code presence from latency alone.
+        $altOk = \Eiou\Utils\AltCodeVerifier::verify($submitted, $altCodeHash);
 
         if ($primaryOk || $altOk) {
             $_SESSION[SessionKeys::AUTHENTICATED] = true;

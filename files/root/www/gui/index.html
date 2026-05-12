@@ -77,8 +77,15 @@ $apiKeysController->registerActions($serviceContainer->getActionRegistry());
 // Alt-code controller — owns altCode* AJAX actions for set/rotate/clear
 // of the user-chosen alternate auth code. No repository wiring needed;
 // the controller talks to UserContext directly the way the auth-code
-// re-verify endpoint in ApiKeysController already does.
-$altCodeController = new AltCodeController($secureSession);
+// re-verify endpoint in ApiKeysController already does. The rate
+// limiter + AppConfig are passed so the controller can throttle
+// set/clear attempts independently of the login bucket (defense in
+// depth against primary-code probing through a stolen session).
+$altCodeController = new AltCodeController(
+    $secureSession,
+    $serviceContainer->getRateLimiterService(),
+    $serviceContainer->getAppConfig()
+);
 $altCodeController->registerActions($serviceContainer->getActionRegistry());
 $paymentRequestController = new PaymentRequestController(
     $secureSession,
