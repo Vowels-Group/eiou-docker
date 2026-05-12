@@ -7,6 +7,7 @@ use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PaybackMethodService;
+use Eiou\Services\ServiceContainer;
 use Eiou\Utils\Logger;
 use Throwable;
 
@@ -274,7 +275,7 @@ class PaybackMethodsController
             $currency = null;
         }
 
-        $container = \Eiou\Services\ServiceContainer::getInstance();
+        $container = ServiceContainer::getInstance();
         $currentUser = $container->getCurrentUser();
         $delivery = $container->getMessageDeliveryService();
         $transport = $container->getUtilityContainer()->getTransportUtility();

@@ -1,7 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Gui\Helpers\ContactDataBuilder;
 use Eiou\Gui\Helpers\GuiErrorResponse;
+use Eiou\Services\GuiActionRegistry;
+use Eiou\Services\UpdateCheckService;
+use Eiou\Utils\Logger;
 use Eiou\Utils\PaginationCursor;
 
 /**
@@ -35,19 +44,19 @@ $registry = $serviceContainer->getActionRegistry();
 $registry->register('whatsNewDismiss', function (): void {
     header('Content-Type: application/json');
     try {
-        \Eiou\Services\UpdateCheckService::dismissWhatsNew();
+        UpdateCheckService::dismissWhatsNew();
         echo json_encode(['success' => true]);
         exit;
     } catch (Exception $e) {
         GuiErrorResponse::send('whats_new_dismiss_failed', $e->getMessage(), 500);
     }
-}, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
+}, GuiActionRegistry::TIER_AUTH, 'core');
 
 $registry->register('whatsNewNotes', function (): void {
     header('Content-Type: application/json');
     try {
-        $version = $_POST['version'] ?? \Eiou\Core\Constants::APP_VERSION;
-        $notes = \Eiou\Services\UpdateCheckService::getReleaseNotes($version);
+        $version = $_POST['version'] ?? Constants::APP_VERSION;
+        $notes = UpdateCheckService::getReleaseNotes($version);
         if ($notes !== null) {
             echo json_encode(['success' => true, 'data' => $notes]);
             exit;
@@ -56,7 +65,7 @@ $registry->register('whatsNewNotes', function (): void {
     } catch (Exception $e) {
         GuiErrorResponse::send('whats_new_notes_failed', $e->getMessage(), 500);
     }
-}, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
+}, GuiActionRegistry::TIER_AUTH, 'core');
 
 // =============================================================================
 // Remember-me session management
@@ -71,7 +80,7 @@ $rememberSessionHandler = function (array $request) use ($serviceContainer, $sec
             GuiErrorResponse::send('csrf_invalid', 'Invalid CSRF token', 403);
         }
 
-        $pubkeyHashForAction = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
+        $pubkeyHashForAction = hash(Constants::HASH_ALGORITHM, $user->getPublicKey());
         $rememberService = $serviceContainer->getRememberTokenService();
 
         if ($action === 'revokeRememberSession') {
@@ -120,15 +129,15 @@ $rememberSessionHandler = function (array $request) use ($serviceContainer, $sec
             exit;
         }
     } catch (\Throwable $e) {
-        \Eiou\Utils\Logger::getInstance()->logException($e, [
+        Logger::getInstance()->logException($e, [
             'context' => 'remember_session_action',
             'action'  => $action,
         ]);
         GuiErrorResponse::send('server_error', $e->getMessage(), 500);
     }
 };
-$registry->register('revokeRememberSession',     $rememberSessionHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
-$registry->register('revokeAllRememberSessions', $rememberSessionHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
+$registry->register('revokeRememberSession',     $rememberSessionHandler, GuiActionRegistry::TIER_AUTH, 'core');
+$registry->register('revokeAllRememberSessions', $rememberSessionHandler, GuiActionRegistry::TIER_AUTH, 'core');
 
 // =============================================================================
 // "Search entire database" handlers for Recent Transactions and
@@ -206,15 +215,15 @@ $searchHandler = function (array $request) use ($serviceContainer, $secureSessio
             exit;
         }
     } catch (\Throwable $e) {
-        \Eiou\Utils\Logger::getInstance()->logException($e, [
+        Logger::getInstance()->logException($e, [
             'context' => 'search_handler',
             'action'  => $action,
         ]);
         GuiErrorResponse::send('server_error', $e->getMessage(), 500);
     }
 };
-$registry->register('searchTransactions',    $searchHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
-$registry->register('searchPaymentRequests', $searchHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
+$registry->register('searchTransactions',    $searchHandler, GuiActionRegistry::TIER_AUTH, 'core');
+$registry->register('searchPaymentRequests', $searchHandler, GuiActionRegistry::TIER_AUTH, 'core');
 
 // =============================================================================
 // "Load older" handlers for the three paginated tables (Recent
@@ -327,8 +336,8 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             // Credit + currency enrichment (mirrors the
             // $contactArraysForCredit loop further down in
             // Functions.php).
-            $contactCreditRepo   = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCreditRepository::class);
-            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
+            $contactCreditRepo   = $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class);
+            $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
 
             foreach ($moreWithBalances as &$contact) {
                 $hash = $contact['pubkey_hash'] ?? '';
@@ -344,7 +353,7 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
                     $allCredits = $hash ? $contactCreditRepo->getAvailableCreditAllCurrencies($hash) : [];
                     $creditMap = [];
                     foreach ($allCredits as $cr) {
-                        $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
+                        $cur = $cr['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                         $creditMap[$cur] = $cr['available_credit']->toMajorUnits();
                     }
 
@@ -355,11 +364,11 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
                         if (($cc['status'] ?? 'accepted') !== 'accepted') { continue; }
                         $cur = $cc['currency'];
                         $ccDirection = $cc['direction'] ?? 'outgoing';
-                        $creditLimitMajor = ($cc['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $cc['credit_limit']->toMajorUnits() : 0;
+                        $creditLimitMajor = ($cc['credit_limit'] instanceof SplitAmount) ? $cc['credit_limit']->toMajorUnits() : 0;
                         $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
                         $entry = [
                             'currency' => $cur,
-                            'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
+                            'fee' => ($cc['fee_percent'] ?? 0) / Constants::FEE_CONVERSION_FACTOR,
                             'credit_limit' => $creditLimitMajor,
                             'my_available_credit' => $creditMap[$cur] ?? null,
                             'their_available_credit' => ($creditLimitMajor > 0 || $balanceForCur != 0) ? round($creditLimitMajor - $balanceForCur, 2) : null,
@@ -382,9 +391,9 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
 
             // Partial dependencies the template pulls from scope.
             $addressTypesForBuilder = $serviceContainer->getRepositoryFactory()
-                ->get(\Eiou\Database\AddressRepository::class)
+                ->get(AddressRepository::class)
                 ->getAllAddressTypes();
-            $contactDataBuilder = new \Eiou\Gui\Helpers\ContactDataBuilder($addressTypesForBuilder);
+            $contactDataBuilder = new ContactDataBuilder($addressTypesForBuilder);
             $contactAvatarStyle = $user->getContactAvatarStyle();
 
             ob_start();
@@ -414,13 +423,13 @@ $loadMoreHandler = function (array $request) use ($serviceContainer, $secureSess
             exit;
         }
     } catch (\Throwable $e) {
-        \Eiou\Utils\Logger::getInstance()->logException($e, [
+        Logger::getInstance()->logException($e, [
             'context' => 'load_more_handler',
             'action'  => $action,
         ]);
         GuiErrorResponse::send('server_error', $e->getMessage(), 500);
     }
 };
-$registry->register('loadMoreTransactions',    $loadMoreHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
-$registry->register('loadMoreContacts',        $loadMoreHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
-$registry->register('loadMorePaymentRequests', $loadMoreHandler, \Eiou\Services\GuiActionRegistry::TIER_AUTH, 'core');
+$registry->register('loadMoreTransactions',    $loadMoreHandler, GuiActionRegistry::TIER_AUTH, 'core');
+$registry->register('loadMoreContacts',        $loadMoreHandler, GuiActionRegistry::TIER_AUTH, 'core');
+$registry->register('loadMorePaymentRequests', $loadMoreHandler, GuiActionRegistry::TIER_AUTH, 'core');

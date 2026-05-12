@@ -1,0 +1,162 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<!--
+Alt-code (alternate authentication code) — modals + JS bootstrap.
+
+User-visible status row, warning callout, and set/rotate/clear buttons
+live inside settingsSection.html's GUI Security subsection, alongside
+session timeout and remember-me. This file is responsible only for the
+page-scoped overlays (set/rotate and clear modals) and the hidden
+data-config element the script.js IIFE reads.
+
+Set / rotate / clear are all gated on the *primary* (re-entered in band)
+and refused outright for alt-authenticated sessions — see AltCodeController.
+-->
+<?php
+use Eiou\Utils\AltCodeValidator;
+?>
+<!--
+    Constants exposed to the alt-code IIFE in script.js via data
+    attributes — keeps the JS static (live in assets/, no PHP
+    templating) while letting AltCodeValidator stay the single
+    source of truth for length bounds.
+
+    The IIFE bootstrap early-returns on `!cfgEl` (i.e. when the page
+    doesn't include this partial), so this file MUST be required on
+    every wallet render that hosts the alt-code controls — currently
+    settingsTab.html does that.
+-->
+<div id="alt-code-config"
+     data-min-length="<?php echo (int) AltCodeValidator::MIN_LENGTH; ?>"
+     data-max-length="<?php echo (int) AltCodeValidator::MAX_LENGTH; ?>"
+     hidden></div>
+
+<!-- Set / rotate alt-code modal -->
+<div id="altCodeSetModal" class="modal d-none">
+    <div class="modal-content modal-content-md">
+        <div class="modal-header">
+            <h3><i class="fas fa-key"></i> <?php echo $hasAltCode ? 'Rotate alt code' : 'Set alt code'; ?></h3>
+            <span class="close" data-action="closeAltCodeSetModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <form id="altCodeSetForm" autocomplete="off">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+                <div id="altCodeSetError" class="form-error d-none"></div>
+
+                <div class="form-group">
+                    <label for="altCodeSetPrimary">Primary auth code
+                        <i class="fas fa-info-circle info-tooltip-icon"
+                           data-action="showInfoModal"
+                           role="button"
+                           tabindex="0"
+                           aria-label="Where to find your primary auth code"
+                           title="Re-entered for this action — the alt code itself can't rotate or remove itself.&#10;&#10;Where to find it:&#10;• In your password manager if you stored it there at wallet creation.&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file."></i>
+                    </label>
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeSetPrimary" name="primary_authcode"
+                               required autocomplete="off" spellcheck="false">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeSetPrimary"
+                                aria-label="Show or hide primary auth code"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="altCodeSetNew">New alt code</label>
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeSetNew" name="new_alt_code"
+                               required autocomplete="new-password" spellcheck="false"
+                               minlength="<?php echo (int) AltCodeValidator::MIN_LENGTH; ?>"
+                               maxlength="<?php echo (int) AltCodeValidator::MAX_LENGTH; ?>">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeSetNew"
+                                aria-label="Show or hide new alt code"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <!--
+                        No inline `color:` here — it would override the
+                        .alt-code-strength--<tier> class the JS sets per
+                        keystroke (inline styles always win over class
+                        rules unless the class uses !important).
+                    -->
+                    <div id="altCodeStrength" class="alt-code-strength" style="font-size: 0.85rem; margin-top: 0.25rem;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="altCodeSetConfirm">Confirm new alt code</label>
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeSetConfirm" name="confirm_alt_code"
+                               required autocomplete="new-password" spellcheck="false">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeSetConfirm"
+                                aria-label="Show or hide confirmation"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div id="altCodeMatch" class="alt-code-match" style="font-size: 0.85rem; margin-top: 0.25rem;"></div>
+                </div>
+
+                <div class="modal-footer modal-footer-flush">
+                    <button type="button" class="btn btn-secondary" data-action="closeAltCodeSetModal">Cancel</button>
+                    <button type="submit" id="altCodeSetSubmit" class="btn btn-success">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Clear alt-code modal -->
+<div id="altCodeClearModal" class="modal d-none">
+    <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-trash"></i> Remove alt code</h3>
+            <span class="close" data-action="closeAltCodeClearModal">&times;</span>
+        </div>
+        <div class="modal-body modal-body-padded">
+            <p>Remove the alternate auth code. Logins will only accept the primary code afterwards.</p>
+            <form id="altCodeClearForm" autocomplete="off">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+                <div id="altCodeClearError" class="form-error d-none"></div>
+
+                <div class="form-group">
+                    <label for="altCodeClearPrimary">Primary auth code
+                        <i class="fas fa-info-circle info-tooltip-icon"
+                           data-action="showInfoModal"
+                           role="button"
+                           tabindex="0"
+                           aria-label="Where to find your primary auth code"
+                           title="Re-entered for this action.&#10;&#10;Where to find it:&#10;• In your password manager if you stored it there at wallet creation.&#10;• In your seed-phrase backup (it's derived from the seed).&#10;• From the CLI on the node: run `eiou info --show-auth` and read the printed file."></i>
+                    </label>
+                    <div class="alt-code-input-wrap">
+                        <input type="password" id="altCodeClearPrimary" name="primary_authcode"
+                               required autocomplete="off" spellcheck="false">
+                        <button type="button" class="alt-code-reveal-btn"
+                                data-action="toggleAltCodeReveal"
+                                data-target="altCodeClearPrimary"
+                                aria-label="Show or hide primary auth code"
+                                title="Show / hide">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-footer modal-footer-flush">
+                    <button type="button" class="btn btn-secondary" data-action="closeAltCodeClearModal">Cancel</button>
+                    <button type="submit" id="altCodeClearSubmit" class="btn btn-danger">Remove</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

@@ -1,5 +1,6 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
+
 <!-- Toast notifications for operation results -->
 <?php if (!empty($messageForDisplay)): ?>
     <script nonce="<?php echo cspNonce(); ?>">
@@ -94,7 +95,7 @@ echo renderAlertBanner([
        upgraded — node has been upgraded from an earlier version      -->
 <?php if (!empty($whatsNewVariant)): ?>
 <?php
-$appVer = htmlspecialchars(\Eiou\Core\Constants::APP_VERSION);
+$appVer = htmlspecialchars(appVersion());
 $isFresh = $whatsNewVariant === 'fresh';
 echo renderAlertBanner([
     'id' => 'whats-new-banner',

@@ -1,9 +1,24 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactCreditRepository;
+use Eiou\Database\ContactCurrencyRepository;
+use Eiou\Database\DeadLetterQueueRepository;
+use Eiou\Database\ChainDropProposalRepository;
+use Eiou\Database\PaymentRequestRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\TransactionRepository;
 use Eiou\Gui\Helpers\ContactDataBuilder;
 use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\SessionKeys;
+use Eiou\Services\AnalyticsService;
+use Eiou\Services\UpdateCheckService;
+use Eiou\Utils\Logger;
 
 /**
  * GUI Request Router and View Data Initializer
@@ -87,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         try {
             ($actionRegistry->getHandler($action))($_POST);
         } catch (\Throwable $e) {
-            \Eiou\Utils\Logger::getInstance()->logException($e, [
+            Logger::getInstance()->logException($e, [
                 'context' => 'gui_action_registry_dispatch',
                 'action'  => $action,
                 'plugin'  => $actionRegistry->getPluginId($action),
@@ -129,8 +144,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
     $liveEnabled = $user->getLiveNotificationsEnabled();
     $verbosity = $user->getLiveNotificationsVerbosity();
     $toastDuration = $user->getLiveNotificationsToastDurationMs();
-    $pollIntervalMs = \Eiou\Core\Constants::LIVE_NOTIFICATIONS_POLL_INTERVAL_MS;
-    $maxPerKind = \Eiou\Core\Constants::LIVE_NOTIFICATIONS_MAX_PER_KIND;
+    $pollIntervalMs = Constants::LIVE_NOTIFICATIONS_POLL_INTERVAL_MS;
+    $maxPerKind = Constants::LIVE_NOTIFICATIONS_MAX_PER_KIND;
 
     // Release the session lock ASAP so a page render in the same tab
     // (or another poll from the same session) doesn't queue behind us.
@@ -184,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
             // getPendingIncoming() lives on the repository, not the service
             // (the service only exposes countPendingIncoming). Pulling the
             // repo directly is the existing pattern for DLQ access below.
-            $prRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestRepository::class);
+            $prRepo = $serviceContainer->getRepositoryFactory()->get(PaymentRequestRepository::class);
             $pendingPr = $prRepo->getPendingIncoming() ?: [];
             foreach ($pendingPr as $pr) {
                 $createdAt = isset($pr['created_at']) ? strtotime((string) $pr['created_at']) : 0;
@@ -195,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
                     // ship `{whole, frac}` to the client, which the JS toast
                     // template string-concats into "[object Object] USD".
                     $prAmount = $pr['amount'] ?? null;
-                    if ($prAmount instanceof \Eiou\Core\SplitAmount) {
+                    if ($prAmount instanceof SplitAmount) {
                         $prAmount = $prAmount->toMajorUnits();
                     }
                     $payload['new']['payment_requests'][] = [
@@ -219,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
             // the addresses table flows through to the live-notif payload with
             // zero changes here, and the client iterates whatever keys arrive
             // under `addresses`.
-            $addressRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\AddressRepository::class);
+            $addressRepo = $serviceContainer->getRepositoryFactory()->get(AddressRepository::class);
             $addressTypes = $addressRepo->getAllAddressTypes();
             $pendingContacts = $contactService->getPendingContactRequests() ?: [];
             foreach ($pendingContacts as $c) {
@@ -243,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
             }
 
             // Transactions — dedicated SQL time-filter, bounded.
-            $txRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
+            $txRepo = $serviceContainer->getRepositoryFactory()->get(TransactionRepository::class);
             $txRows = $txRepo->getIncomingSince($since, $maxPerKind);
             foreach ($txRows as $tx) {
                 $tsEpoch = isset($tx['timestamp']) ? strtotime((string) $tx['timestamp']) : 0;
@@ -261,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
             }
 
             // DLQ — dedicated SQL time-filter, bounded.
-            $dlqRepoPoll = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
+            $dlqRepoPoll = $serviceContainer->getRepositoryFactory()->get(DeadLetterQueueRepository::class);
             $dlqRows = $dlqRepoPoll->getItemsSince($since, $maxPerKind);
             foreach ($dlqRows as $d) {
                 $createdAt = isset($d['created_at']) ? strtotime((string) $d['created_at']) : 0;
@@ -274,7 +289,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_incoming'])) {
                 ];
             }
         } catch (\Throwable $e) {
-            \Eiou\Utils\Logger::getInstance()->logException($e, ['context' => 'check_incoming_handler']);
+            Logger::getInstance()->logException($e, ['context' => 'check_incoming_handler']);
             // Don't leak internals; return empty deltas so the client
             // backs off gracefully on transient server errors.
         }
@@ -299,17 +314,17 @@ if (isset($_SESSION[SessionKeys::MESSAGE])) {
 $maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
 $totalEarningsSplit = $p2pService->getUserTotalEarnings();
-$totalEarnings = ($totalEarningsSplit instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($totalEarningsSplit) : 0;
+$totalEarnings = ($totalEarningsSplit instanceof SplitAmount) ? $currencyUtility->convertMinorToMajor($totalEarningsSplit) : 0;
 
 // Per-currency balance data for future-proof dashboard display
 $totalBalanceByCurrency = [];
-$balancesRaw = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\BalanceRepository::class)->getUserBalance();
+$balancesRaw = $serviceContainer->getRepositoryFactory()->get(BalanceRepository::class)->getUserBalance();
 if (!empty($balancesRaw)) {
     foreach ($balancesRaw as $bal) {
         $totalBalanceByCurrency[] = [
             'currency' => $bal['currency'],
             'total' => number_format(
-                ($bal['total_balance'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($bal['total_balance'], $bal['currency']) : 0,
+                ($bal['total_balance'] instanceof SplitAmount) ? $currencyUtility->convertMinorToMajor($bal['total_balance'], $bal['currency']) : 0,
                 displayDecimals()
             )
         ];
@@ -324,7 +339,7 @@ if (!empty($earningsRaw)) {
         $totalEarningsByCurrency[] = [
             'currency' => $earn['currency'],
             'total' => number_format(
-                ($earn['total_amount'] instanceof \Eiou\Core\SplitAmount) ? $currencyUtility->convertMinorToMajor($earn['total_amount'], $earn['currency']) : 0,
+                ($earn['total_amount'] instanceof SplitAmount) ? $currencyUtility->convertMinorToMajor($earn['total_amount'], $earn['currency']) : 0,
                 displayDecimals()
             )
         ];
@@ -340,7 +355,7 @@ foreach ($totalEarningsByCurrency as $item) {
 }
 // totalAvailableCreditByCurrency is populated later, so also check contact_credit directly
 try {
-    $creditCurrencies = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCreditRepository::class)->getTotalAvailableCreditByCurrency();
+    $creditCurrencies = $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class)->getTotalAvailableCreditByCurrency();
     foreach ($creditCurrencies as $row) {
         $knownCurrencies[$row['currency']] = true;
     }
@@ -349,7 +364,7 @@ try {
 }
 // Include currencies from accepted contact currency relationships
 try {
-    $acceptedCurrencies = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class)->getDistinctAcceptedCurrencies();
+    $acceptedCurrencies = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class)->getDistinctAcceptedCurrencies();
     foreach ($acceptedCurrencies as $cur) {
         $knownCurrencies[$cur] = true;
     }
@@ -379,17 +394,17 @@ $transactions = $transactionService->getTransactionHistory($recentTransactionsLi
 $inProgressTransactions = $transactionService->getInProgressTransactions($recentTransactionsLimit);
 
 // Update check status (reads cache only — never triggers a new check on page load)
-$updateCheckStatus = \Eiou\Services\UpdateCheckService::getStatus();
+$updateCheckStatus = UpdateCheckService::getStatus();
 
 // "What's New" notification (shown after version upgrade until dismissed).
 // `fresh`    — node is on the version it was first installed on
 // `upgraded` — node has seen a previous version's banner and is now newer
 // null       — no banner (already dismissed this version, or pre-setup)
-$whatsNewVariant = \Eiou\Services\UpdateCheckService::getWhatsNewVariant();
+$whatsNewVariant = UpdateCheckService::getWhatsNewVariant();
 
 // Analytics status (reads cache only — never triggers a new submission on page load)
 try {
-    $analyticsStatus = \Eiou\Services\AnalyticsService::getStatus();
+    $analyticsStatus = AnalyticsService::getStatus();
 } catch (\Throwable $e) {
     $analyticsStatus = [];
 }
@@ -470,8 +485,8 @@ $pendingContacts = $contactService->getPendingContactRequests();
 // Check if pending contacts have prior transaction history (wallet restore scenario)
 // and retrieve the description from the contact transaction (sent with the request)
 if (!empty($pendingContacts) && $user->has('public')) {
-    $txRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionRepository::class);
-    $txContactRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionContactRepository::class);
+    $txRepo = $serviceContainer->getRepositoryFactory()->get(TransactionRepository::class);
+    $txContactRepo = $serviceContainer->getRepositoryFactory()->get(TransactionContactRepository::class);
     $myPubkey = $user->getPublicKey();
     foreach ($pendingContacts as &$pc) {
         // Check for prior non-contact transaction history
@@ -494,7 +509,7 @@ if (!empty($pendingContacts) && $user->has('public')) {
 // Enrich pending contacts with per-currency data from contact_currencies (direction-aware)
 if (!empty($pendingContacts)) {
     try {
-        $pendingCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $pendingCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
         foreach ($pendingContacts as &$pc) {
             $hash = $pc['pubkey_hash'] ?? '';
             if ($hash) {
@@ -558,7 +573,7 @@ foreach ($acceptedContacts as $c) {
 // Enrich pending user contacts (our outgoing requests) with direction-aware currency data
 if (!empty($pendingUserContacts)) {
     try {
-        $currencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $currencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
         foreach ($pendingUserContacts as &$puc) {
             $hash = $puc['pubkey_hash'] ?? '';
             if ($hash) {
@@ -573,7 +588,7 @@ if (!empty($pendingUserContacts)) {
 // Enrich accepted contacts with pending incoming currency requests
 if (!empty($acceptedContacts)) {
     try {
-        $currencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
+        $currencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
         foreach ($acceptedContacts as &$ac) {
             $hash = $ac['pubkey_hash'] ?? '';
             if ($hash) {
@@ -641,7 +656,7 @@ $addressTypes = $contactService->getAllAddressTypes();
 $chainDropProposalsByContact = [];
 try {
     $chainDropService = $serviceContainer->getChainDropService();
-    $chainDropProposalRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ChainDropProposalRepository::class);
+    $chainDropProposalRepo = $serviceContainer->getRepositoryFactory()->get(ChainDropProposalRepository::class);
 
     $incomingProposals = $chainDropService->getIncomingPendingProposals();
     $outgoingProposals = $chainDropProposalRepo->getOutgoingPending();
@@ -687,7 +702,7 @@ unset($contacts);
 // Shows which txids are valid before/after each gap so users can investigate
 $tcRepo = null;
 try {
-    $tcRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\TransactionChainRepository::class);
+    $tcRepo = $serviceContainer->getRepositoryFactory()->get(TransactionChainRepository::class);
 } catch (Exception $e) {
     // Repository not available, skip gap details
 }
@@ -721,7 +736,7 @@ if ($tcRepo && $user->has('public')) {
 // Dead Letter Queue - track newly added items for notification
 $newlyAddedToDlq = [];
 try {
-    $dlqRepository = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
+    $dlqRepository = $serviceContainer->getRepositoryFactory()->get(DeadLetterQueueRepository::class);
     $currentDlqItems = $dlqRepository->getPendingItems(50);
 
     // Get previously known DLQ item IDs from session
@@ -747,9 +762,9 @@ $dlqItems = [];
 $dlqStats = [];
 $dlqPendingCount = 0;
 try {
-    $dlqRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\DeadLetterQueueRepository::class);
+    $dlqRepo = $serviceContainer->getRepositoryFactory()->get(DeadLetterQueueRepository::class);
     // Always load all items — client-side JS handles tab filtering with no page reload
-    $dlqItems = $dlqRepo->getItems(null, \Eiou\Core\Constants::DLQ_BATCH_SIZE);
+    $dlqItems = $dlqRepo->getItems(null, Constants::DLQ_BATCH_SIZE);
 
     $dlqStats        = $dlqRepo->getStatistics();
     $dlqPendingCount = $dlqRepo->getPendingCount();
@@ -758,8 +773,8 @@ try {
     // the transaction history can show a DLQ indicator on affected transactions.
     $dlqActiveTxMessageIds = [];
     $activeTxDlq = array_merge(
-        $dlqRepo->getByMessageType('transaction', 'pending',  \Eiou\Core\Constants::DLQ_BATCH_SIZE),
-        $dlqRepo->getByMessageType('transaction', 'retrying', \Eiou\Core\Constants::DLQ_BATCH_SIZE)
+        $dlqRepo->getByMessageType('transaction', 'pending',  Constants::DLQ_BATCH_SIZE),
+        $dlqRepo->getByMessageType('transaction', 'retrying', Constants::DLQ_BATCH_SIZE)
     );
     foreach ($activeTxDlq as $dlqEntry) {
         $dlqActiveTxMessageIds[] = $dlqEntry['message_id'];
@@ -773,14 +788,14 @@ try {
 $availableCreditByContact = [];
 $totalAvailableCreditByCurrency = [];
 try {
-    $contactCreditRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCreditRepository::class);
+    $contactCreditRepo = $serviceContainer->getRepositoryFactory()->get(ContactCreditRepository::class);
     // Get per-contact credits for merging into contact cards
     foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
         $hash = $c['pubkey_hash'] ?? '';
         if ($hash && !isset($availableCreditByContact[$hash])) {
             $creditData = $contactCreditRepo->getAvailableCredit($hash);
             if ($creditData !== null) {
-                $contactCurrency = $c['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $contactCurrency = $c['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $availableCreditByContact[$hash] = $creditData['available_credit']->toMajorUnits();
             }
         }
@@ -801,7 +816,7 @@ try {
 // Fetch per-contact currency configs for multi-currency support
 $contactCurrenciesByHash = [];
 try {
-    $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(\Eiou\Database\ContactCurrencyRepository::class);
+    $contactCurrencyRepo = $serviceContainer->getRepositoryFactory()->get(ContactCurrencyRepository::class);
     foreach (array_merge($acceptedContacts, $pendingUserContacts, $blockedContacts) as $c) {
         $hash = $c['pubkey_hash'] ?? '';
         if ($hash && !isset($contactCurrenciesByHash[$hash])) {
@@ -821,7 +836,7 @@ try {
             $allCredits = $contactCreditRepo->getAvailableCreditAllCurrencies($hash);
             $creditMap = [];
             foreach ($allCredits as $cr) {
-                $cur = $cr['currency'] ?? \Eiou\Core\Constants::TRANSACTION_DEFAULT_CURRENCY;
+                $cur = $cr['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
                 $creditMap[$cur] = $cr['available_credit']->toMajorUnits();
             }
             $availableCreditAllByHash[$hash] = $creditMap;
@@ -852,11 +867,11 @@ foreach ($contactArraysForCredit as &$contacts) {
             $cur = $cc['currency'];
             $ccStatus = $cc['status'] ?? 'accepted';
             $ccDirection = $cc['direction'] ?? 'outgoing';
-            $creditLimitMajor = ($cc['credit_limit'] instanceof \Eiou\Core\SplitAmount) ? $cc['credit_limit']->toMajorUnits() : 0;
+            $creditLimitMajor = ($cc['credit_limit'] instanceof SplitAmount) ? $cc['credit_limit']->toMajorUnits() : 0;
             $balanceForCur = floatval($contactBalancesByCurrency[$cur] ?? 0);
             $entry = [
                 'currency' => $cur,
-                'fee' => ($cc['fee_percent'] ?? 0) / \Eiou\Core\Constants::FEE_CONVERSION_FACTOR,
+                'fee' => ($cc['fee_percent'] ?? 0) / Constants::FEE_CONVERSION_FACTOR,
                 'credit_limit' => $creditLimitMajor,
                 'my_available_credit' => $allCredits[$cur] ?? null,
                 'their_available_credit' => ($creditLimitMajor > 0 || $balanceForCur != 0) ? round($creditLimitMajor - $balanceForCur, 2) : null,

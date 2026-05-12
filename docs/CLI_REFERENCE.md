@@ -1181,6 +1181,64 @@ eiou apikey enable eiou_abc123
 
 ---
 
+## Alternate Auth Code
+
+### altcode
+
+Manage the alternate authentication code — a user-chosen passphrase that can be
+submitted at the GUI login form or the sensitive-action gate alongside the
+seed-derived primary auth code. Useful because the primary is 20 random hex
+characters that aren't memorable; the alt code is whatever the operator can
+actually recall.
+
+**Syntax:**
+```bash
+eiou altcode <action>
+```
+
+**Actions:**
+
+| Action   | Syntax            | Description                                                |
+|----------|-------------------|------------------------------------------------------------|
+| `status` | `altcode status`  | Show whether an alt code is currently set                  |
+| `set`    | `altcode set`     | Set or rotate the alt code (interactively prompts for the primary first; then for the new alt code with confirmation) |
+| `clear`  | `altcode clear`   | Remove the alt code (interactively prompts for the primary first) |
+| `help`   | `altcode help`    | Show detailed alt-code help                                |
+
+**Strength rules** (enforced server-side and mirrored in the GUI):
+
+- minimum 12 characters
+- at least one uppercase letter, one lowercase letter, one digit, one symbol
+- no three repeated characters in a row (`aaa`, `111`)
+- no monotonic ascending/descending run of length 4+ (`abcd`, `4321`)
+- not a substring of a bundled common-password list
+
+**Examples:**
+```bash
+# Check status (no secrets read)
+eiou altcode status
+
+# Set (prompts: Primary auth code → New alt code → Confirm new alt code)
+eiou altcode set
+
+# Remove (prompts: Primary auth code)
+eiou altcode clear
+```
+
+**Security notes:**
+- Set / clear always require the **primary** auth code. The alt code itself can
+  never rotate or remove itself — this prevents an attacker who learns the alt
+  code from locking the legitimate operator out.
+- Inputs are read with `stty -echo` when stdin is a TTY so the plaintext does
+  not appear in shell history or terminal scrollback.
+- Stored as a one-way Argon2id hash in `userconfig.json` under `altcode_hash`.
+  Forgetting it is recoverable only by re-running `altcode set` from a session
+  that authenticates with the primary; there is no separate recovery code.
+- The CLI rate limiter caps `altcode` invocations at 5 attempts per 5 minutes
+  to slow online brute-force against the primary.
+
+---
+
 ## Payback Methods
 
 ### payback

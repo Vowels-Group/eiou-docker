@@ -22,7 +22,13 @@ class UserContext {
     /**
      * Keys containing sensitive encrypted data that should not be exposed via getAll()/toArray()
      */
-    private const SENSITIVE_KEYS = ['private_encrypted', 'authcode_encrypted', 'mnemonic_encrypted'];
+    private const SENSITIVE_KEYS = ['private_encrypted', 'authcode_encrypted', 'mnemonic_encrypted', 'altcode_hash'];
+
+    /**
+     * Runtime location of userconfig.json. Centralized so getters/setters
+     * agree on the path even if the layout changes.
+     */
+    private const USER_CONFIG_PATH = '/etc/eiou/config/userconfig.json';
 
     private bool $initialized = false;
 
@@ -256,6 +262,112 @@ class UserContext {
             }
         }
         return null;
+    }
+
+    /**
+     * Whether the user has set an alternate authentication code.
+     *
+     * Cheap presence check — does not touch the hash material.
+     */
+    public function hasAltCode(): bool {
+        return $this->has('altcode_hash')
+            && is_string($this->get('altcode_hash'))
+            && $this->get('altcode_hash') !== '';
+    }
+
+    /**
+     * Get the stored Argon2id hash for the alternate auth code.
+     *
+     * Unlike the primary auth code, the alt code is stored as a one-way
+     * password hash (`password_hash(... PASSWORD_ARGON2ID)`) — there is no
+     * plaintext to retrieve. Callers should pass the returned hash to
+     * `password_verify($submitted, $hash)` to authenticate.
+     */
+    public function getAltCodeHash(): ?string {
+        return $this->hasAltCode() ? (string) $this->get('altcode_hash') : null;
+    }
+
+    /**
+     * Set (or replace) the alternate auth code.
+     *
+     * The caller is responsible for having gated this operation behind a
+     * fresh primary-auth-code check — the alt code MUST NOT be allowed to
+     * rotate itself, otherwise an attacker who compromises only the alt
+     * code can lock the legitimate user out.
+     *
+     * @param string $plaintext User-chosen code (already validated for
+     *                          strength by AltCodeValidator).
+     * @throws \RuntimeException on hashing or write failure.
+     */
+    public function setAltCode(string $plaintext): void {
+        $hash = password_hash($plaintext, PASSWORD_ARGON2ID);
+        if (!is_string($hash) || $hash === '') {
+            throw new \RuntimeException('Failed to hash alternate auth code');
+        }
+        $this->writeUserConfigField('altcode_hash', $hash);
+        $this->set('altcode_hash', $hash);
+        // Scrub the plaintext from this scope (best-effort — PHP doesn't
+        // guarantee memory clearing for normal strings, but we follow the
+        // same discipline used for the primary auth code path).
+        KeyEncryption::secureClear($plaintext);
+    }
+
+    /**
+     * Remove the alternate auth code. No-op if none is set.
+     *
+     * Caller MUST gate this behind a fresh primary-auth-code check (see
+     * setAltCode() docblock).
+     *
+     * @throws \RuntimeException on write failure.
+     */
+    public function clearAltCode(): void {
+        $this->writeUserConfigField('altcode_hash', null);
+        // Remove from in-memory state so subsequent has()/getAltCodeHash()
+        // reflect the change without reloading.
+        unset($this->userData['altcode_hash']);
+    }
+
+    /**
+     * Atomically write a single field into userconfig.json, preserving all
+     * other fields. Passing `$value === null` removes the field.
+     *
+     * Mirrors the file-permission discipline used by Wallet.php when it
+     * first creates userconfig.json: LOCK_EX, chmod 0600, chown www-data.
+     * Throws on any failure — the partially-written state is the empty set
+     * (json_encode failure) or the prior state (write failure).
+     *
+     * @throws \RuntimeException
+     */
+    private function writeUserConfigField(string $field, $value): void {
+        $path = self::USER_CONFIG_PATH;
+        $current = [];
+        if (file_exists($path)) {
+            $contents = file_get_contents($path);
+            if ($contents === false) {
+                throw new \RuntimeException('Failed to read ' . $path);
+            }
+            $decoded = json_decode($contents, true);
+            if (is_array($decoded)) {
+                $current = $decoded;
+            }
+        }
+        if ($value === null) {
+            unset($current[$field]);
+        } else {
+            $current[$field] = $value;
+        }
+        $encoded = json_encode($current, JSON_PRETTY_PRINT);
+        if ($encoded === false) {
+            throw new \RuntimeException('Failed to encode userconfig.json');
+        }
+        if (file_put_contents($path, $encoded, LOCK_EX) === false) {
+            throw new \RuntimeException('Failed to write ' . $path);
+        }
+        // chown/chmod errors are non-fatal — log via error_log so a failed
+        // first-run (where www-data may not exist yet) does not block the
+        // CLI flow, but a hardening regression is still visible.
+        if (function_exists('chown')) { @chown($path, 'www-data'); }
+        if (function_exists('chmod')) { @chmod($path, 0600); }
     }
 
     /**

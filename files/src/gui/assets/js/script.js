@@ -11544,3 +11544,388 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
     })();
 
 })();
+// Copyright 2025-2026 Vowels Group, LLC
+//
+// Client-side glue for the Alternate Auth Code settings section. Loaded
+// from wallet.html alongside script.js.
+//
+// Tor Browser compatibility notes:
+//   - Vanilla DOM only; no async/await, no arrow functions, no
+//     destructuring, no template literals — Tor Browser ESR builds
+//     follow Firefox ESR which supports modern JS, but we mirror the
+//     codebase-wide style used in script.js (and the project memory)
+//     for "Safer"/"Standard" Tor Browser users on older ESR baselines.
+//   - `NodeList.forEach` is avoided in favour of
+//     `Array.prototype.forEach.call(list, fn)` (older NodeList builds).
+//   - `scrollIntoView({behavior: 'smooth'})` is wrapped in try/catch
+//     with a hard-jump fallback.
+//   - CSS variables in inline `style.boxShadow` use a literal RGBA so
+//     they work in custom-property-disabled environments.
+//   - "Safest" Tor Browser mode disables JS entirely; the section is
+//     server-rendered with all status text + the warning callout
+//     present in HTML, so a no-JS user still sees the locked-state
+//     reasoning. The modal-driven set/clear flow is JS-only; a user
+//     on "Safest" should use `eiou altcode set` from the CLI instead.
+
+(function () {
+    // ---- bootstrap ---------------------------------------------------------
+    //
+    // wallet.html loads script.js from <head>, so this IIFE executes BEFORE
+    // the body has been parsed and #alt-code-config doesn't exist yet. Wait
+    // for DOMContentLoaded before reading the config / wiring listeners.
+    // The previous inline <script> at the bottom of altCodeSection.html
+    // happened to run after the section's DOM existed; the asset-file
+    // version needs to defer explicitly.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAltCodeSection);
+    } else {
+        initAltCodeSection();
+    }
+
+    // Hoisted-friendly: declared as a function statement so it's available
+    // to the addEventListener call above regardless of source order.
+    function initAltCodeSection() {
+
+    var cfgEl = document.getElementById('alt-code-config');
+    if (!cfgEl) {
+        // Section not on this page (e.g. user landed on a non-Settings tab
+        // and the partial wasn't included). Silent no-op.
+        return;
+    }
+    var MIN_LEN = parseInt(cfgEl.getAttribute('data-min-length') || '12', 10);
+    var MAX_LEN = parseInt(cfgEl.getAttribute('data-max-length') || '256', 10);
+
+    // ---- tiny DOM helpers --------------------------------------------------
+
+    function el(id) { return document.getElementById(id); }
+
+    function showError(node, msg) {
+        if (!node) return;
+        node.textContent = msg;
+        node.classList.remove('d-none');
+    }
+
+    function clearError(node) {
+        if (!node) return;
+        node.textContent = '';
+        node.classList.add('d-none');
+    }
+
+    function csrf() {
+        var input = document.querySelector('input[name="csrf_token"]');
+        return input ? input.value : '';
+    }
+
+    function postAction(payload) {
+        var body = new FormData();
+        Object.keys(payload).forEach(function (k) {
+            if (payload[k] !== null && payload[k] !== undefined) {
+                body.append(k, payload[k]);
+            }
+        });
+        if (!body.has('csrf_token')) body.append('csrf_token', csrf());
+        return fetch(window.location.pathname, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (res) {
+            return res.json().then(function (data) {
+                return { status: res.status, data: data };
+            }, function () {
+                return { status: res.status, data: { error: 'Bad response' } };
+            });
+        });
+    }
+
+    // ---- strength meter (client-side, server is authoritative) ------------
+
+    function scoreCandidate(s) {
+        if (!s) return { score: 0, hints: [] };
+        var hints = [];
+        if (s.length < MIN_LEN)            hints.push('at least ' + MIN_LEN + ' characters');
+        if (!/[a-z]/.test(s))              hints.push('a lowercase letter');
+        if (!/[A-Z]/.test(s))              hints.push('an uppercase letter');
+        if (!/[0-9]/.test(s))              hints.push('a digit');
+        if (!/[^A-Za-z0-9]/.test(s))       hints.push('a symbol');
+        if (/(.)\1\1/.test(s))             hints.push('no triple-repeated characters');
+
+        // If ANY required rule is unmet, the server will reject this
+        // submission. Hard-cap the tier at "fair" so the user never
+        // sees a "good" or "strong" badge for input the verifier
+        // would refuse — that was the bug a long passphrase missing
+        // a digit + symbol previously rendered as "strong" because
+        // length overpowered the small unmet-rule penalty.
+        if (hints.length > 0) {
+            var failTier;
+            if (s.length < 6 || hints.length >= 4)  failTier = 0;  // very weak
+            else if (hints.length >= 2)             failTier = 1;  // weak
+            else                                    failTier = 2;  // fair (only one rule unmet)
+            return { score: failTier, hints: hints };
+        }
+
+        // No hints — input would pass server validation. Tier by
+        // length only; class-coverage is already guaranteed because
+        // missing any class would have produced a hint above.
+        var tier;
+        if (s.length >= 16)      tier = 4;  // strong
+        else if (s.length >= 13) tier = 3;  // good
+        else                     tier = 2;  // fair (exactly minimum length)
+        return { score: tier, hints: hints };
+    }
+
+    // CSS tier classes keyed by label, lined up with the `labels` array
+    // below. Aliased here so any future label edit only needs one site.
+    var STRENGTH_TIER_CLASSES = [
+        'alt-code-strength--very-weak',
+        'alt-code-strength--weak',
+        'alt-code-strength--fair',
+        'alt-code-strength--good',
+        'alt-code-strength--strong'
+    ];
+
+    function renderStrength(s) {
+        var box = el('altCodeStrength');
+        if (!box) return;
+        // Strip any prior tier class so cycling weak→strong→weak doesn't
+        // leave the wrong colour stuck on the element.
+        for (var i = 0; i < STRENGTH_TIER_CLASSES.length; i++) {
+            box.classList.remove(STRENGTH_TIER_CLASSES[i]);
+        }
+        if (!s) { box.textContent = ''; return; }
+        var r = scoreCandidate(s);
+        var labels = ['very weak', 'weak', 'fair', 'good', 'strong'];
+        var idx = Math.min(r.score, labels.length - 1);
+        var label = labels[idx];
+        var hint = r.hints.length ? ' — still needs: ' + r.hints.join(', ') : '';
+        box.textContent = 'Strength: ' + label + hint;
+        box.classList.add(STRENGTH_TIER_CLASSES[idx]);
+    }
+
+    // ---- live confirm-match indicator -------------------------------------
+
+    function renderMatch() {
+        var box = el('altCodeMatch');
+        var a = (el('altCodeSetNew') || {}).value || '';
+        var b = (el('altCodeSetConfirm') || {}).value || '';
+        if (!box) return;
+        box.classList.remove('alt-code-match--ok', 'alt-code-match--diff');
+        if (!a || !b) { box.textContent = ''; return; }
+        if (a === b) {
+            box.textContent = 'Codes match.';
+            box.classList.add('alt-code-match--ok');
+        } else {
+            box.textContent = "Codes don't match yet.";
+            box.classList.add('alt-code-match--diff');
+        }
+    }
+
+    // ---- modal open/close + state hygiene ---------------------------------
+
+    function openModal(id) {
+        var m = el(id); if (m) m.classList.remove('d-none');
+        // Use the structural wrapper (.alt-code-input-wrap input) rather
+        // than [type="password"] — after a reveal toggle the input may
+        // be type="text" and the password-only selector would miss it.
+        var first = m && m.querySelector('.alt-code-input-wrap input');
+        if (first) setTimeout(function () { first.focus(); }, 50);
+    }
+
+    function closeModal(id) {
+        var m = el(id); if (m) m.classList.add('d-none');
+        // Re-mask any inputs the user toggled to plaintext, so reopening
+        // the modal never starts pre-revealed.
+        if (m) maskAllInputs(m);
+    }
+
+    function clearForm(formId) {
+        var f = el(formId);
+        if (!f) return;
+        Array.prototype.forEach.call(
+            f.querySelectorAll('.alt-code-input-wrap input'),
+            function (i) { i.value = ''; }
+        );
+        renderStrength('');
+        renderMatch();
+    }
+
+    // ---- reveal toggle ----------------------------------------------------
+
+    function toggleReveal(btn) {
+        var targetId = btn.getAttribute('data-target');
+        var input = targetId && el(targetId);
+        if (!input) return;
+        var icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (icon) {
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            }
+        } else {
+            input.type = 'password';
+            if (icon) {
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+    }
+
+    function maskAllInputs(container) {
+        Array.prototype.forEach.call(
+            container.querySelectorAll('.alt-code-input-wrap input'),
+            function (input) {
+                if (input.type === 'text') input.type = 'password';
+            }
+        );
+        Array.prototype.forEach.call(
+            container.querySelectorAll('.alt-code-reveal-btn i'),
+            function (i) {
+                i.classList.remove('fa-eye-slash');
+                if (!i.classList.contains('fa-eye')) i.classList.add('fa-eye');
+            }
+        );
+    }
+
+    // ---- locked-button explainer flash ------------------------------------
+
+    function flashLockedExplanation() {
+        var alertBox = document.querySelector('#alt-code-section .alert-warning');
+        if (!alertBox) return;
+        try {
+            alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) {
+            // Older Tor Browser ESR builds lacking smooth scroll fall
+            // back to a hard jump.
+            alertBox.scrollIntoView();
+        }
+        // Literal RGBA — CSS variables are fine in Firefox ESR but we
+        // use a literal here for resilience against custom-property-
+        // disabled environments and to keep the "flash" colour stable
+        // across themes.
+        alertBox.style.transition = 'box-shadow 0.4s ease-in-out';
+        alertBox.style.boxShadow = '0 0 0 4px rgba(255, 193, 7, 0.55)';
+        setTimeout(function () { alertBox.style.boxShadow = ''; }, 900);
+    }
+
+    // ---- event wiring -----------------------------------------------------
+
+    document.addEventListener('click', function (ev) {
+        var target = ev.target.closest && ev.target.closest('[data-action]');
+        if (!target) return;
+        var action = target.getAttribute('data-action');
+        switch (action) {
+            case 'toggleAltCodeReveal':
+                toggleReveal(target);
+                ev.preventDefault();
+                break;
+            case 'openAltCodeSetModal':
+                clearError(el('altCodeSetError'));
+                clearForm('altCodeSetForm');
+                renderStrength('');
+                renderMatch();
+                openModal('altCodeSetModal');
+                ev.preventDefault();
+                break;
+            case 'closeAltCodeSetModal':
+                closeModal('altCodeSetModal');
+                ev.preventDefault();
+                break;
+            case 'openAltCodeClearModal':
+                clearError(el('altCodeClearError'));
+                clearForm('altCodeClearForm');
+                openModal('altCodeClearModal');
+                ev.preventDefault();
+                break;
+            case 'closeAltCodeClearModal':
+                closeModal('altCodeClearModal');
+                ev.preventDefault();
+                break;
+            case 'explainAltCodeLocked':
+                flashLockedExplanation();
+                ev.preventDefault();
+                break;
+        }
+    });
+
+    var newInput = el('altCodeSetNew');
+    if (newInput) {
+        newInput.addEventListener('input', function () {
+            renderStrength(newInput.value);
+            renderMatch();
+        });
+    }
+    var confirmInput = el('altCodeSetConfirm');
+    if (confirmInput) {
+        confirmInput.addEventListener('input', renderMatch);
+    }
+
+    var setForm = el('altCodeSetForm');
+    if (setForm) {
+        setForm.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var errNode = el('altCodeSetError');
+            clearError(errNode);
+            var primary = (el('altCodeSetPrimary') || {}).value || '';
+            var newAlt  = (el('altCodeSetNew') || {}).value || '';
+            var confirm = (el('altCodeSetConfirm') || {}).value || '';
+            if (!primary)                       { showError(errNode, 'Primary auth code is required.'); return; }
+            if (newAlt.length < MIN_LEN)        { showError(errNode, 'New alt code must be at least ' + MIN_LEN + ' characters.'); return; }
+            if (newAlt.length > MAX_LEN)        { showError(errNode, 'New alt code is too long.'); return; }
+            if (newAlt !== confirm)             { showError(errNode, 'Alt codes do not match.'); return; }
+
+            var btn = el('altCodeSetSubmit'); if (btn) btn.disabled = true;
+            postAction({
+                action: 'altCodeSet',
+                primary_authcode: primary,
+                new_alt_code: newAlt
+            }).then(function (r) {
+                if (btn) btn.disabled = false;
+                if (r.status === 200 && r.data && r.data.success) {
+                    closeModal('altCodeSetModal');
+                    window.location.reload();
+                    return;
+                }
+                var msg = (r.data && r.data.error) ? r.data.error : 'Could not save alt code.';
+                if (r.data && Array.isArray(r.data.errors) && r.data.errors.length) {
+                    msg += ' ' + r.data.errors.join(' ');
+                }
+                showError(errNode, msg);
+            }).catch(function () {
+                if (btn) btn.disabled = false;
+                showError(errNode, 'Network error. Try again.');
+            });
+        });
+    }
+
+    var clearFormEl = el('altCodeClearForm');
+    if (clearFormEl) {
+        clearFormEl.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var errNode = el('altCodeClearError');
+            clearError(errNode);
+            var primary = (el('altCodeClearPrimary') || {}).value || '';
+            if (!primary) { showError(errNode, 'Primary auth code is required.'); return; }
+
+            var btn = el('altCodeClearSubmit'); if (btn) btn.disabled = true;
+            postAction({
+                action: 'altCodeClear',
+                primary_authcode: primary
+            }).then(function (r) {
+                if (btn) btn.disabled = false;
+                if (r.status === 200 && r.data && r.data.success) {
+                    closeModal('altCodeClearModal');
+                    window.location.reload();
+                    return;
+                }
+                showError(errNode, (r.data && r.data.error) || 'Could not remove alt code.');
+            }).catch(function () {
+                if (btn) btn.disabled = false;
+                showError(errNode, 'Network error. Try again.');
+            });
+        });
+    }
+
+    } // end initAltCodeSection
+})();
+

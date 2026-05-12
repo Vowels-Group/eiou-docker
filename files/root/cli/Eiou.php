@@ -132,6 +132,7 @@ if ($app->currentPdoLoaded()) {
         'report' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 report generations per minute
         'p2p' => ['max' => 30, 'window' => 60, 'block' => 300],       // 30 P2P approval operations per minute
         'request' => ['max' => 20, 'window' => 60, 'block' => 300],   // 20 payment request operations per minute
+        'altcode' => ['max' => 5, 'window' => 300, 'block' => 900],   // 5 alt-code attempts per 5 minutes (the set/clear flow re-enters the primary auth code, so cap aggressively)
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
 
@@ -366,6 +367,15 @@ elseif($request === "payback"){
   $debugService->output("Executing payback method management request", 'SILENT');
   $paybackCli = $app->services->getPaybackMethodCliHandler($output);
   $paybackCli->handleCommand($cleanArgv);
+}
+// Alternate auth code — user-chosen credential that can be submitted at
+// the GUI login form or the sensitive-action gate alongside the BIP39-
+// derived primary auth code. Set/clear both gate on the primary; the
+// alt code may never rotate itself.
+elseif($request === "altcode"){
+  $debugService->output("Executing altcode request", 'SILENT');
+  $altCodeCli = new \Eiou\Cli\AltCodeCliHandler($output);
+  $altCodeCli->handleCommand($cleanArgv);
 }
 // Contacts (new namespace) — replaces the deprecated top-level
 // eiou add/accept/delete/block/unblock/viewcontact/ping/pending/search.

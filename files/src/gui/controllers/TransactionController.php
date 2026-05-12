@@ -20,6 +20,7 @@ use Eiou\Utils\Logger;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Core\SplitAmount;
 use Eiou\Gui\Helpers\MessageHelper;
 use Eiou\Formatters\TransactionFormatter;
 
@@ -429,16 +430,16 @@ class TransactionController
         }
 
         $candidates = $this->rp2pCandidateRepository->getCandidatesByHash($hash);
-        $baseAmount = ($p2p['amount'] instanceof \Eiou\Core\SplitAmount) ? $p2p['amount'] : \Eiou\Core\SplitAmount::from($p2p['amount']);
-        $myFeeAmount = isset($p2p['my_fee_amount']) && $p2p['my_fee_amount'] instanceof \Eiou\Core\SplitAmount ? $p2p['my_fee_amount'] : \Eiou\Core\SplitAmount::zero();
+        $baseAmount = ($p2p['amount'] instanceof SplitAmount) ? $p2p['amount'] : SplitAmount::from($p2p['amount']);
+        $myFeeAmount = isset($p2p['my_fee_amount']) && $p2p['my_fee_amount'] instanceof SplitAmount ? $p2p['my_fee_amount'] : SplitAmount::zero();
 
         $result = [];
         for ($i = 0; $i < count($candidates); $i++) {
             $c = $candidates[$i];
             $result[] = [
                 'id' => (int) $c['id'],
-                'amount' => ($c['amount'] instanceof \Eiou\Core\SplitAmount) ? $c['amount'] : \Eiou\Core\SplitAmount::from($c['amount']),
-                'fee_amount' => ($c['fee_amount'] instanceof \Eiou\Core\SplitAmount) ? $c['fee_amount'] : \Eiou\Core\SplitAmount::from($c['fee_amount']),
+                'amount' => ($c['amount'] instanceof SplitAmount) ? $c['amount'] : SplitAmount::from($c['amount']),
+                'fee_amount' => ($c['fee_amount'] instanceof SplitAmount) ? $c['fee_amount'] : SplitAmount::from($c['fee_amount']),
                 'sender_address' => $c['sender_address'],
             ];
         }
