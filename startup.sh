@@ -2721,6 +2721,179 @@ plugin_user_poller() {
     done
 }
 
+# =============================================================================
+# plugin_routing_poller() — Phase 2 of plugin sandboxing.
+#
+# Applies per-plugin FPM pool config + the shared nginx snippet that
+# routes /gui/plugin/<id>/* to each plugin's socket. www-data PHP cannot
+# write to /etc/php/*/fpm/pool.d/ or /etc/nginx/snippets/ (root-only),
+# so PluginPoolService writes /tmp/eiou-routing-req-<id>.json with the
+# rendered content and this loop applies it.
+#
+# Transactional shape: nginx -t verifies the new snippet BEFORE reload.
+# If verification fails, the previous snippet is restored from backup
+# and the result file reports the failure — the wallet's routes stay
+# intact. Same protection on the FPM pool file (a malformed pool would
+# fail-init on reload; we write a backup first so we can restore).
+#
+# Request schema:
+#   { ts, action: "apply-pool" | "drop-pool",
+#     plugin_id, system_user (apply only), pool_path, pool_config (apply only),
+#     nginx_snippet }
+# =============================================================================
+plugin_routing_poller() {
+    local POLL_INTERVAL=0.2
+    local REQ_GLOB="/tmp/eiou-routing-req-*.json"
+    local LOG_PREFIX="[PLUGIN ROUTING POLLER]"
+    local SNIPPET_PATH="/etc/nginx/snippets/eiou-plugins.conf"
+
+    write_result() {
+        local res_path="$1"; local status="$2"; local error="${3:-}"
+        local now; now=$(date +%s)
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            # Escape double-quotes in the error so the JSON stays valid.
+            local esc; esc=${error//\"/\\\"}
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$esc" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    # Atomic file write — content from the heredoc-style $2 string,
+    # restorable via the .bak we leave behind on every overwrite.
+    apply_file() {
+        local path="$1"
+        local content="$2"
+        if [ -f "$path" ]; then
+            cp -p "$path" "${path}.bak"
+        fi
+        local tmp="${path}.tmp"
+        printf '%s' "$content" > "$tmp"
+        chmod 644 "$tmp"
+        mv "$tmp" "$path"
+    }
+
+    restore_backup() {
+        local path="$1"
+        if [ -f "${path}.bak" ]; then
+            mv "${path}.bak" "$path"
+        else
+            rm -f "$path"
+        fi
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+            local res="${req/-req-/-res-}"
+
+            # Parse — grep fallback like plugin_user_poller, since jq
+            # isn't in the base image.
+            local action plugin_id system_user pool_path pool_config nginx_snippet
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty' "$req" 2>/dev/null)
+                plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
+                system_user=$(jq -r '.system_user // empty' "$req" 2>/dev/null)
+                pool_path=$(jq -r '.pool_path // empty' "$req" 2>/dev/null)
+                pool_config=$(jq -r '.pool_config // empty' "$req" 2>/dev/null)
+                nginx_snippet=$(jq -r '.nginx_snippet // empty' "$req" 2>/dev/null)
+            else
+                # Single-line JSON fields. Multi-line content (pool_config
+                # / nginx_snippet) is JSON-encoded into the request with
+                # \n escapes; we decode after extraction.
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
+                plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1)
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" | head -1)
+                pool_path=$(grep -oP '"pool_path"\s*:\s*"\K[^"]+' "$req" | head -1)
+                pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s/\\\\/\\/g')
+                nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s/\\\\/\\/g')
+            fi
+
+            rm -f "$req"
+
+            # Plugin-id and system-user validation — defence in depth so a
+            # corrupted request file can't be used to write arbitrary
+            # paths into /etc/php/*/fpm/pool.d/ or /etc/nginx/snippets/.
+            if [[ ! "$plugin_id" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid plugin_id='$plugin_id'"
+                write_result "$res" "failed" "invalid plugin_id"
+                continue
+            fi
+            if [ "$action" = "apply-pool" ] && [[ ! "$system_user" =~ ^eiou-p-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid system_user='$system_user'"
+                write_result "$res" "failed" "invalid system_user"
+                continue
+            fi
+            # Refuse pool paths outside /etc/php/*/fpm/pool.d/. Hard-pin
+            # the prefix here; the supervisor never writes anywhere else.
+            if [[ ! "$pool_path" =~ ^/etc/php/[0-9]\.[0-9]+/fpm/pool\.d/eiou-plugin-[a-z0-9_-]+\.conf$ ]]; then
+                echo "$LOG_PREFIX rejected unsafe pool_path='$pool_path'"
+                write_result "$res" "failed" "invalid pool_path"
+                continue
+            fi
+
+            case "$action" in
+                apply-pool)
+                    apply_file "$pool_path" "$pool_config"
+                    apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    ;;
+                drop-pool)
+                    if [ -f "$pool_path" ]; then
+                        cp -p "$pool_path" "${pool_path}.bak"
+                        rm -f "$pool_path"
+                    fi
+                    apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action'"
+                    write_result "$res" "failed" "unknown action: $action"
+                    continue
+                    ;;
+            esac
+
+            # Verify nginx config — REFUSE to reload if -t fails. Restore
+            # the previous snippet + pool file so the wallet keeps serving.
+            if ! nginx -t >/dev/null 2>&1; then
+                local nginx_err
+                nginx_err=$(nginx -t 2>&1 | tr '\n' ' ' | tr -d '\r')
+                echo "$LOG_PREFIX nginx -t FAILED: $nginx_err"
+                restore_backup "$SNIPPET_PATH"
+                [ "$action" = "apply-pool" ] && restore_backup "$pool_path"
+                # Still verify the restore was clean.
+                if ! nginx -t >/dev/null 2>&1; then
+                    echo "$LOG_PREFIX RESTORE ALSO FAILED — manual intervention required"
+                fi
+                write_result "$res" "failed" "nginx -t: $nginx_err"
+                continue
+            fi
+
+            # Reload nginx (graceful) + reload PHP-FPM (graceful).
+            if ! nginx -s reload >/dev/null 2>&1; then
+                echo "$LOG_PREFIX nginx reload failed"
+                write_result "$res" "failed" "nginx reload"
+                continue
+            fi
+            # Find the FPM master and signal SIGUSR2 (graceful pool reload).
+            # pgrep -o = oldest match = master process.
+            local fpm_master
+            fpm_master=$(pgrep -o "php-fpm: master" 2>/dev/null)
+            if [ -n "$fpm_master" ]; then
+                kill -USR2 "$fpm_master" 2>/dev/null || true
+            fi
+
+            # Drop the backup files now that the new state is verified.
+            rm -f "${SNIPPET_PATH}.bak" "${pool_path}.bak" 2>/dev/null
+            echo "$LOG_PREFIX $action complete for $plugin_id"
+            write_result "$res" "ok"
+        done
+    done
+}
+
 # Start watchdog in background
 watchdog &
 WATCHDOG_PID=$!
@@ -2739,6 +2912,14 @@ echo "Restart poller started (PID: $RESTART_POLLER_PID)"
 plugin_user_poller &
 PLUGIN_USER_POLLER_PID=$!
 echo "Plugin user poller started (PID: $PLUGIN_USER_POLLER_PID)"
+
+# Start plugin-routing poller in background. Phase 2 of plugin
+# sandboxing — applies per-plugin FPM pool config + nginx routing snippet
+# atomically, with nginx -t validation before reload so a malformed
+# entry cannot take down the wallet's routes.
+plugin_routing_poller &
+PLUGIN_ROUTING_POLLER_PID=$!
+echo "Plugin routing poller started (PID: $PLUGIN_ROUTING_POLLER_PID)"
 
 echo ""
 echo "=========================================="
