@@ -2,6 +2,7 @@
 namespace Eiou\Tests\Services;
 
 use Eiou\Services\PluginLoader;
+use Eiou\Services\PluginGatewayTokenService;
 use Eiou\Services\PluginNginxConfigService;
 use Eiou\Services\PluginPoolService;
 use Eiou\Services\PluginUserService;
@@ -79,6 +80,12 @@ class PluginLoaderSandboxTest extends TestCase
         $template = $this->tmpRoot . '/dispatch.php';
         file_put_contents($template, "<?php /* test dispatcher */");
 
+        // Token service writes into tmp so it doesn't touch /etc/eiou/config.
+        $tokenService = new PluginGatewayTokenService(
+            $this->tmpRoot . '/plugin-gateway-tokens.json',
+            $this->pluginDir
+        );
+
         $this->poolService = new PluginPoolService(
             null,
             function (string $action, array $payload): array {
@@ -88,7 +95,8 @@ class PluginLoaderSandboxTest extends TestCase
                 return $r;
             },
             $template,
-            $this->pluginDir
+            $this->pluginDir,
+            $tokenService
         );
 
         $this->loader = new PluginLoader($this->pluginDir, null, $this->stateFile);

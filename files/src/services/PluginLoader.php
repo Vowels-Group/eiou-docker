@@ -353,6 +353,23 @@ class PluginLoader
                 'status' => $status,
                 'sandboxed' => $sandboxed,
             ];
+
+            // Phase 4: core_services allow-list. Each entry is
+            // "<Service>.<method>" — the gateway checks every
+            // sandboxed-plugin call against this list before
+            // dispatching. Manifest fields outside the kebab/dotted
+            // shape are filtered out so a malformed manifest can't
+            // poison the gateway's match.
+            $coreServices = $manifest['core_services'] ?? [];
+            if (is_array($coreServices)) {
+                $row['core_services'] = array_values(array_filter(
+                    $coreServices,
+                    fn($entry): bool => is_string($entry)
+                        && preg_match('/^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9_]*$/', $entry) === 1
+                ));
+            } else {
+                $row['core_services'] = [];
+            }
             if (isset($live[$name]['error'])) {
                 $row['error'] = (string) $live[$name]['error'];
             }

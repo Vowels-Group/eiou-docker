@@ -96,21 +96,25 @@ class Logger implements LoggerInterface
     // LoggerInterface instance methods (for DI injection and testability)
     // =========================================================================
 
+    #[\Eiou\Contracts\PluginCallable(description: 'Write a debug-level log entry to the wallet log under the plugin name. Phase 4 of plugin sandboxing.')]
     public function debug(string $message, array $context = []): void
     {
         self::doLog('DEBUG', $message, $context);
     }
 
+    #[\Eiou\Contracts\PluginCallable(description: 'Write an info-level log entry to the wallet log under the plugin name. Phase 4 of plugin sandboxing.')]
     public function info(string $message, array $context = []): void
     {
         self::doLog('INFO', $message, $context);
     }
 
+    #[\Eiou\Contracts\PluginCallable(description: 'Write a warning-level log entry to the wallet log under the plugin name. Phase 4 of plugin sandboxing.')]
     public function warning(string $message, array $context = []): void
     {
         self::doLog('WARNING', $message, $context);
     }
 
+    #[\Eiou\Contracts\PluginCallable(description: 'Write an error-level log entry to the wallet log under the plugin name. Phase 4 of plugin sandboxing.')]
     public function error(string $message, array $context = []): void
     {
         self::doLog('ERROR', $message, $context);

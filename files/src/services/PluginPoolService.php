@@ -76,6 +76,7 @@ class PluginPoolService
     private ?Logger $logger;
     private string $dispatcherTemplate;
     private string $pluginRoot;
+    private PluginGatewayTokenService $tokenService;
 
     /** @var callable(string $action, array $payload): array{status:string, error?:string} */
     private $actionExecutor;
@@ -84,11 +85,14 @@ class PluginPoolService
         ?Logger $logger = null,
         ?callable $actionExecutor = null,
         ?string $dispatcherTemplate = null,
-        ?string $pluginRoot = null
+        ?string $pluginRoot = null,
+        ?PluginGatewayTokenService $tokenService = null
     ) {
         $this->logger = $logger;
         $this->dispatcherTemplate = $dispatcherTemplate ?? self::DEFAULT_DISPATCHER_TEMPLATE;
         $this->pluginRoot = rtrim($pluginRoot ?? self::PLUGIN_ROOT, '/');
+        $this->tokenService = $tokenService
+            ?? new PluginGatewayTokenService(null, $this->pluginRoot, $logger);
         $this->actionExecutor = $actionExecutor ?? function (string $action, array $payload): array {
             return $this->executeViaRequestFile($action, $payload);
         };
@@ -190,6 +194,20 @@ EOT;
             return false;
         }
 
+        // Phase 4: mint a fresh gateway token. The token is written to
+        // the plugin's dir (mode 600, the only file the plugin pool
+        // reads via __dispatch.php that the wallet pool also knows
+        // about). Rotating on every applyPool means a previously
+        // leaked token is invalidated by the next reconcile / enable.
+        try {
+            $this->tokenService->rotate($pluginId);
+        } catch (Throwable $e) {
+            $this->log('error', 'plugin_pool_token_mint_failed', [
+                'plugin' => $pluginId, 'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+
         $poolConfig = $this->renderPoolConfig($pluginId, $systemUser);
 
         $result = ($this->actionExecutor)('apply-pool', [
@@ -287,6 +305,19 @@ EOT;
             'plugin' => $pluginId,
             'result' => $result,
         ]);
+
+        // Phase 4: revoke the gateway token. Revoke even when the pool
+        // drop reported failure — keeping a stale token alive while
+        // the rest of the plugin is dismantled would be the worse
+        // failure mode. Idempotent; no-ops cleanly.
+        try {
+            $this->tokenService->revoke($pluginId);
+        } catch (Throwable $e) {
+            $this->log('warning', 'plugin_pool_token_revoke_failed', [
+                'plugin' => $pluginId, 'error' => $e->getMessage(),
+            ]);
+        }
+
         return $ok;
     }
 

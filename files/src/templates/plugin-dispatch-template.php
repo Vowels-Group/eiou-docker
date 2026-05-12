@@ -57,6 +57,100 @@ final class PluginLog
 
 $log = new PluginLog();
 
+// =============================================================================
+// core_call($service, $method, $args) — Phase 4 service gateway client.
+//
+// Plugins call this from inside handlers to reach a whitelisted subset of
+// core services. The gateway validates:
+//   - Bearer token (read from .gateway-token in this plugin's dir)
+//   - Plugin's manifest core_services allow-list
+//   - Target method has #[PluginCallable]
+//
+// Returns:
+//   - The method's return value on success
+//   - null on transport / auth / dispatch failure (also logs to $log).
+//
+// Caller handles error-path by checking the buffer in $log->entries
+// after the call — every failure mode emits a $log->error() entry
+// with structured context.
+// =============================================================================
+function core_call(string $service, string $method, array $args, PluginLog $log)
+{
+    static $cachedToken = null;
+    if ($cachedToken === null) {
+        // The token file lives in this plugin's dir, mode 600 owned
+        // by our pool's UID, so other plugin pools can't read it.
+        $tokenPath = __DIR__ . '/.gateway-token';
+        if (!is_file($tokenPath)) {
+            $log->error('core_call: token file missing', ['path' => $tokenPath]);
+            return null;
+        }
+        $cachedToken = trim((string) @file_get_contents($tokenPath));
+        if ($cachedToken === '') {
+            $log->error('core_call: token file empty');
+            $cachedToken = null;
+            return null;
+        }
+    }
+
+    $body = json_encode([
+        'service' => $service,
+        'method'  => $method,
+        'args'    => $args,
+    ]);
+    if ($body === false) {
+        $log->error('core_call: failed to encode args', ['service' => $service, 'method' => $method]);
+        return null;
+    }
+
+    // file_get_contents() is blocked under allow_url_fopen=0; use curl.
+    // curl_init / curl_exec are NOT in disable_functions because the
+    // sandbox needs an outbound HTTP mechanism for exactly this case.
+    $ch = curl_init('http://127.0.0.1/__plugin_gateway');
+    if ($ch === false) {
+        $log->error('core_call: curl_init failed');
+        return null;
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $cachedToken,
+            'Accept: application/json',
+        ],
+        CURLOPT_TIMEOUT        => 10,
+    ]);
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false) {
+        $log->error('core_call: transport failed', [
+            'service' => $service, 'method' => $method, 'error' => $curlError,
+        ]);
+        return null;
+    }
+    $decoded = json_decode((string) $response, true);
+    if (!is_array($decoded)) {
+        $log->error('core_call: gateway returned non-JSON', [
+            'status' => $status, 'body_preview' => substr((string) $response, 0, 200),
+        ]);
+        return null;
+    }
+    if (empty($decoded['ok'])) {
+        $log->error('core_call: gateway rejected', [
+            'service' => $service, 'method' => $method,
+            'status' => $status,
+            'error' => $decoded['error'] ?? null,
+        ]);
+        return null;
+    }
+    return $decoded['result'] ?? null;
+}
+
 /**
  * Emit a structured response and exit. Always called via this helper
  * so a partial write never reaches the wire.

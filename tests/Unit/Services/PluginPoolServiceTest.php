@@ -1,6 +1,7 @@
 <?php
 namespace Eiou\Tests\Services;
 
+use Eiou\Services\PluginGatewayTokenService;
 use Eiou\Services\PluginPoolService;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -47,11 +48,18 @@ class PluginPoolServiceTest extends TestCase
             $this->actionLog[] = ['action' => $action, 'payload' => $payload];
             return $this->nextResult;
         };
+        // Token service writes into tmp so it doesn't touch /etc/eiou/config.
+        $tokenService = new PluginGatewayTokenService(
+            $this->tmpRoot . '/plugin-gateway-tokens.json',
+            $this->pluginRoot
+        );
+
         $this->svc = new PluginPoolService(
             null,
             $executor,
             $this->template,
-            $this->pluginRoot
+            $this->pluginRoot,
+            $tokenService
         );
     }
 
