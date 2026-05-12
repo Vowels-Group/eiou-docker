@@ -1262,6 +1262,23 @@ watch_hs_descriptor_publication() {
     fi
 }
 
+# Launch / relaunch the HS_DESC publication watcher.
+#
+# Single entry point so the target-uploads count (3) and timeout (300s) live
+# in exactly one place: changing the budget here updates every site.
+#
+# Used at boot for the initial launch, after each boot-time Tor restart
+# (wallet generation, address-mismatch regeneration), and after every
+# watchdog-initiated Tor restart. The previous watcher exits on its own when
+# its ControlPort connection drops (the connection_dropped branch above), so
+# we don't kill it explicitly; if the old one somehow hasn't noticed yet,
+# both watchers race their AUTHENTICATE — at worst a few duplicate UPLOADED
+# log lines, no functional impact.
+start_hs_desc_watcher() {
+    watch_hs_descriptor_publication 3 300 &
+    HS_DESC_WATCHER_PID=$!
+}
+
 # Start services
 service cron start
 service tor start
@@ -1269,8 +1286,7 @@ service "$PHP_FPM_SERVICE" start
 service nginx start
 
 # Background descriptor-publication watcher (logs to startup.sh stdout/stderr)
-watch_hs_descriptor_publication 3 300 &
-HS_DESC_WATCHER_PID=$!
+start_hs_desc_watcher
 
 # Helper: wait for MariaDB with timeout, returns 0 on success, 1 on timeout
 wait_for_mariadb() {
@@ -1757,6 +1773,14 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
             echo "Recent Tor log entries:"
             tail -10 /var/log/tor/log 2>/dev/null || true
         fi
+    else
+        # The boot-time watcher launched before wallet generation was
+        # tracking Tor's first-boot random keys; its ControlPort dropped
+        # when we killed Tor above and it has already exited. Relaunch
+        # against the fresh Tor instance so the GUI's "Tor Descriptor
+        # Publishing — N/3 HSDirs confirmed" banner reflects publication
+        # of the new wallet's .onion address.
+        start_hs_desc_watcher
     fi
 else
     # Wallet already exists (volume restart) — check if Tor hidden service files need regeneration
@@ -1829,6 +1853,13 @@ else
                 sleep 3
                 if pgrep -x "tor" > /dev/null 2>&1; then
                     echo "Tor restarted with correct hidden service keys."
+                    # The boot-time watcher was tracking the wrong address
+                    # (Tor's first-boot random keys before this regen). It
+                    # exited when we pkilled Tor above; relaunch so the GUI
+                    # banner reflects publication of the correct seed-derived
+                    # .onion address instead of staying frozen at 0/3 and
+                    # eventually vanishing on UI-side staleness.
+                    start_hs_desc_watcher
                 else
                     echo "WARNING: Tor process not running after restart"
                 fi
@@ -2391,7 +2422,7 @@ watchdog() {
                         # fresh Tor instance. The boot-time watcher's connection
                         # dropped when we pkilled Tor; this gives the operator a
                         # progress signal again as the new descriptor publishes.
-                        watch_hs_descriptor_publication 3 300 &
+                        start_hs_desc_watcher
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
                         write_tor_gui_status "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}"
@@ -2462,7 +2493,7 @@ watchdog() {
                             # Schedule a follow-up self-check in 90s to allow descriptor propagation (typically 60-120s)
                             TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
                             # Relaunch HS_DESC publication watcher against the fresh Tor instance
-                            watch_hs_descriptor_publication 3 300 &
+                            start_hs_desc_watcher
                         else
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                         fi
@@ -2498,7 +2529,7 @@ watchdog() {
                                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~90s"
                                 TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
                                 # Relaunch HS_DESC publication watcher against the fresh Tor instance
-                                watch_hs_descriptor_publication 3 300 &
+                                start_hs_desc_watcher
                             else
                                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                             fi
