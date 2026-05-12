@@ -186,7 +186,8 @@ EOT;
     public function applyPool(
         string $pluginId,
         string $systemUser,
-        string $nginxSnippet
+        string $nginxSnippet,
+        bool $forceRotateToken = false
     ): bool {
         $this->validatePluginId($pluginId);
         $this->validateSystemUser($systemUser);
@@ -205,19 +206,24 @@ EOT;
             return false;
         }
 
-        // Phase 4: ensure a gateway token exists. Idempotent: minting
-        // only if the per-plugin file is missing. Rotating on every
-        // applyPool seems appealing but reconcileSandbox calls
-        // applyPool on every Application bootstrap (every FPM worker
-        // spawn), which would re-mint tokens on every request — and
-        // a plugin pool that read the old token loses its credential
-        // mid-flight. Tokens are rotated only on explicit operator
-        // request via PluginGatewayTokenService::rotate() (called
-        // directly from disable→enable cycles in setEnabled).
+        // Phase 4: ensure a gateway token exists.
+        //
+        // Two callers, two behaviours:
+        //
+        //   reconcileSandbox → $forceRotateToken=false. Idempotent
+        //     mint-if-missing. Reconcile fires on every Application
+        //     bootstrap (every FPM worker spawn), so unconditional
+        //     rotation would re-mint constantly and any plugin pool
+        //     that cached the old token would lose its credential.
+        //
+        //   setEnabled(true) explicit toggle → $forceRotateToken=true.
+        //     Operator-driven disable→enable cycle rotates the token
+        //     so a previously-leaked token is invalidated. This is
+        //     the security property the original design wanted.
         try {
             $tokenPath = $this->pluginRoot . '/' . $pluginId
                        . '/' . \Eiou\Services\PluginGatewayTokenService::PER_PLUGIN_TOKEN_FILENAME;
-            if (!is_file($tokenPath)) {
+            if ($forceRotateToken || !is_file($tokenPath)) {
                 $this->tokenService->rotate($pluginId);
             }
         } catch (Throwable $e) {
@@ -257,6 +263,61 @@ EOT;
      * target write fails — the caller treats this like any other
      * pool-apply failure.
      */
+    /**
+     * Compare the plugin's bundled dispatcher version against the
+     * template's. Logs a deprecation warning when the plugin is
+     * behind. Never overwrites — plugin authors own their __dispatch.
+     *
+     * Equal or higher: silent. Higher means the plugin author shipped
+     * against a future core; their problem if/when we ship the
+     * matching contract delta.
+     */
+    private function warnIfDispatcherStale(string $pluginId, string $targetPath): void
+    {
+        $bundled = $this->readDispatcherVersion($targetPath);
+        $current = $this->readDispatcherVersion($this->dispatcherTemplate);
+        if ($bundled === null || $current === null) {
+            // One side doesn't declare a version. Pre-Phase-3a
+            // dispatchers won't have the constant; treat as version 0
+            // (oldest possible) and warn.
+            $bundled ??= 0;
+            $current ??= 0;
+        }
+        if ($bundled < $current) {
+            $this->log('warning', 'plugin_dispatcher_version_stale', [
+                'plugin' => $pluginId,
+                'bundled_version' => $bundled,
+                'current_version' => $current,
+                'remediation' => 'Plugin author should refresh __dispatch.php from the latest template. '
+                               . 'Until then, the plugin runs against an older wire contract; '
+                               . 'behaviour may diverge from core.',
+            ]);
+        }
+    }
+
+    /**
+     * Parse `const PLUGIN_DISPATCH_VERSION = N;` from a dispatcher
+     * file without including it. Including would execute the file's
+     * top-level side effects (json header, php://input read, etc.)
+     * which is wrong for a passive version probe.
+     *
+     * @return int|null Returns the version if present, null if the
+     *                  file doesn't declare one or can't be read.
+     */
+    private function readDispatcherVersion(string $path): ?int
+    {
+        if (!is_file($path)) return null;
+        // Read just enough for the constant — it lives near the top of
+        // the file by convention. 2 KiB covers the header docblock
+        // plus the const line comfortably.
+        $head = @file_get_contents($path, false, null, 0, 2048);
+        if ($head === false) return null;
+        if (preg_match('/const\s+PLUGIN_DISPATCH_VERSION\s*=\s*(\d+)\s*;/', $head, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
+
     private function installDispatcher(string $pluginId): bool
     {
         $targetDir = $this->pluginRoot . '/' . $pluginId;
@@ -275,6 +336,11 @@ EOT;
         // it gives operators a 501-returning placeholder rather than 404.
         $target = $targetDir . '/__dispatch.php';
         if (is_file($target)) {
+            // Bundled dispatcher present — check version drift and warn
+            // the operator if the plugin's dispatcher predates the
+            // current wire contract. Operator can't fix this directly;
+            // plugin author needs to refresh their dispatcher.
+            $this->warnIfDispatcherStale($pluginId, $target);
             return true;
         }
         if (!is_file($this->dispatcherTemplate) || !is_readable($this->dispatcherTemplate)) {

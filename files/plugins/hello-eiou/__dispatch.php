@@ -25,6 +25,11 @@
 
 declare(strict_types=1);
 
+/** Wire-contract version this dispatcher targets. See
+ *  files/src/templates/plugin-dispatch-template.php for the canonical
+ *  current version; bump in lockstep when the wire contract evolves. */
+const PLUGIN_DISPATCH_VERSION = 1;
+
 header('Content-Type: application/json');
 
 // =============================================================================

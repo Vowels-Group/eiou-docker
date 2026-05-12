@@ -606,7 +606,10 @@ class PluginLoader
                 }
                 $systemUser = $this->userService->systemUsername($name);
                 $snippet = $this->renderNginxSnippetWithDelta($name, $systemUser, true);
-                if (!$this->poolService->applyPool($name, $systemUser, $snippet)) {
+                // Force-rotate the gateway token on explicit
+                // operator toggle so any previously-leaked token is
+                // invalidated. Reconcile uses the idempotent path.
+                if (!$this->poolService->applyPool($name, $systemUser, $snippet, true)) {
                     $this->logger->error("applyPool failed for sandboxed plugin", ['plugin' => $name]);
                     return false;
                 }

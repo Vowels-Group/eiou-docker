@@ -24,6 +24,23 @@
 
 declare(strict_types=1);
 
+/**
+ * PLUGIN_DISPATCH_VERSION — bumped every time core changes the wire
+ * contract (request/response envelope, _log shape, core_call signature,
+ * etc.). Plugins bundle their own __dispatch.php; at boot, core compares
+ * the bundled version against this template's version. A bundled version
+ * lower than the template triggers a deprecation warning so the plugin
+ * author knows to re-sync their dispatcher.
+ *
+ * Equal or higher → no warning. Higher means the plugin shipped against
+ * a newer core than ours; their author opted into the future contract.
+ *
+ * NEVER change this without (a) bumping the version, (b) updating the
+ * minimum version every bundled plugin author needs, (c) documenting
+ * the contract delta in CHANGELOG.md.
+ */
+const PLUGIN_DISPATCH_VERSION = 1;
+
 header('Content-Type: application/json');
 
 // =============================================================================

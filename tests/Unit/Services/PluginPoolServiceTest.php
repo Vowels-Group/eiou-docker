@@ -209,6 +209,33 @@ class PluginPoolServiceTest extends TestCase
     }
 
     #[Test]
+    public function applyPoolRotatesTokenWhenForced(): void
+    {
+        @mkdir($this->pluginRoot . '/demo', 0755, true);
+        // First apply mints the token (file didn't exist).
+        $this->assertTrue($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
+        $first = trim((string) @file_get_contents(
+            $this->pluginRoot . '/demo/.gateway-token'
+        ));
+        $this->assertNotEmpty($first);
+
+        // Idempotent applyPool — same token.
+        $this->assertTrue($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
+        $this->assertSame($first, trim((string) @file_get_contents(
+            $this->pluginRoot . '/demo/.gateway-token'
+        )));
+
+        // Force-rotate — token changes.
+        $this->assertTrue($this->svc->applyPool(
+            'demo', 'eiou-p-12345678', 'snippet', true
+        ));
+        $rotated = trim((string) @file_get_contents(
+            $this->pluginRoot . '/demo/.gateway-token'
+        ));
+        $this->assertNotSame($first, $rotated);
+    }
+
+    #[Test]
     public function applyPoolInstallsDispatcherBeforeSendingToSupervisor(): void
     {
         @mkdir($this->pluginRoot . '/demo', 0755, true);
@@ -228,6 +255,80 @@ class PluginPoolServiceTest extends TestCase
         // refuses, applyPool returns false, no supervisor call made.
         $this->assertFalse($this->svc->applyPool('ghost', 'eiou-p-12345678', 'snippet'));
         $this->assertSame([], $this->actionLog);
+    }
+
+    #[Test]
+    public function dispatcherStaleVersionLogsDeprecationWarning(): void
+    {
+        // Set the template to v2.
+        file_put_contents($this->template, "<?php const PLUGIN_DISPATCH_VERSION = 2;\n// template body\n");
+        @mkdir($this->pluginRoot . '/oldplug', 0755, true);
+        // Plugin ships a v1 dispatcher — should warn but not overwrite.
+        file_put_contents(
+            $this->pluginRoot . '/oldplug/__dispatch.php',
+            "<?php const PLUGIN_DISPATCH_VERSION = 1;\n// old plugin body\n"
+        );
+
+        $captured = [];
+        $logger = $this->createMock(\Eiou\Utils\Logger::class);
+        $logger->method('warning')
+            ->willReturnCallback(function (string $msg, array $ctx) use (&$captured): void {
+                $captured[] = ['msg' => $msg, 'ctx' => $ctx];
+            });
+        $svc = new \Eiou\Services\PluginPoolService(
+            $logger,
+            fn() => ['status' => 'ok'],
+            $this->template,
+            $this->pluginRoot,
+            new \Eiou\Services\PluginGatewayTokenService(
+                $this->tmpRoot . '/tokens.json',
+                $this->pluginRoot
+            )
+        );
+        $svc->applyPool('oldplug', 'eiou-p-12345678', 'snippet');
+
+        $warning = null;
+        foreach ($captured as $c) {
+            if ($c['msg'] === 'plugin_dispatcher_version_stale') { $warning = $c; break; }
+        }
+        $this->assertNotNull($warning, 'Expected version-stale warning');
+        $this->assertSame(1, $warning['ctx']['bundled_version']);
+        $this->assertSame(2, $warning['ctx']['current_version']);
+
+        // File NOT overwritten — plugin author owns it.
+        $contents = (string) file_get_contents($this->pluginRoot . '/oldplug/__dispatch.php');
+        $this->assertStringContainsString('old plugin body', $contents);
+    }
+
+    #[Test]
+    public function dispatcherCurrentVersionDoesNotWarn(): void
+    {
+        file_put_contents($this->template, "<?php const PLUGIN_DISPATCH_VERSION = 1;\n");
+        @mkdir($this->pluginRoot . '/current', 0755, true);
+        file_put_contents(
+            $this->pluginRoot . '/current/__dispatch.php',
+            "<?php const PLUGIN_DISPATCH_VERSION = 1;\n"
+        );
+
+        $captured = [];
+        $logger = $this->createMock(\Eiou\Utils\Logger::class);
+        $logger->method('warning')
+            ->willReturnCallback(function (string $msg) use (&$captured): void {
+                $captured[] = $msg;
+            });
+        $svc = new \Eiou\Services\PluginPoolService(
+            $logger,
+            fn() => ['status' => 'ok'],
+            $this->template,
+            $this->pluginRoot,
+            new \Eiou\Services\PluginGatewayTokenService(
+                $this->tmpRoot . '/tokens.json',
+                $this->pluginRoot
+            )
+        );
+        $svc->applyPool('current', 'eiou-p-12345678', 'snippet');
+
+        $this->assertNotContains('plugin_dispatcher_version_stale', $captured);
     }
 
     #[Test]

@@ -181,11 +181,19 @@ class PluginController
     private function computeRestartRequired(array $plugins): bool
     {
         // status values from PluginLoader: discovered, registered, booted,
-        // failed, disabled, not_loaded. Anything that ran register/boot is
-        // "actually loaded" from the worker's perspective.
+        // failed, disabled, sandboxed, not_loaded. Anything that ran
+        // register/boot is "actually loaded" from the worker's perspective.
         $loadedStatuses = ['discovered', 'registered', 'booted'];
 
         foreach ($plugins as $p) {
+            // Sandboxed plugins never load in-process — their pool is
+            // a separate FPM process. Their enabled flag took effect on
+            // applyPool / dropPool, not at PHP-FPM master startup, so a
+            // state vs in-process divergence here is expected and
+            // doesn't mean a restart is needed.
+            if (!empty($p['sandboxed'])) {
+                continue;
+            }
             $isLoaded = in_array($p['status'] ?? '', $loadedStatuses, true);
             if (($p['enabled'] ?? false) !== $isLoaded) {
                 return true;
@@ -252,16 +260,31 @@ class PluginController
             $this->respondError('persist_failed', 'Could not persist the new state', 500);
         }
 
+        // Sandboxed plugins took effect immediately (applyPool reloaded
+        // FPM + nginx). In-process plugins need a full node restart so
+        // PluginLoader's register()/boot() can re-run with the new
+        // state. Surface the distinction so the GUI doesn't raise a
+        // "restart required" banner when nothing actually requires it.
+        $isSandboxed = false;
+        foreach ($this->loader->listAllPlugins() as $row) {
+            if (($row['name'] ?? null) === $name) {
+                $isSandboxed = !empty($row['sandboxed']);
+                break;
+            }
+        }
+
         Logger::getInstance()->info('plugin_toggled_via_gui', [
             'plugin' => $name,
             'enabled' => $enabled,
+            'sandboxed' => $isSandboxed,
         ]);
 
         $this->respond([
             'success' => true,
             'plugin' => $name,
             'enabled' => $enabled,
-            'restart_required' => true,
+            'sandboxed' => $isSandboxed,
+            'restart_required' => !$isSandboxed,
         ]);
     }
 
