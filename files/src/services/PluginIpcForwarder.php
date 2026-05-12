@@ -95,9 +95,15 @@ class PluginIpcForwarder
         \Eiou\Services\Hooks $hooks,
         ?\Eiou\Services\PluginAssetRegistry $assetRegistry = null,
         ?\Eiou\Services\TabRegistry $tabRegistry = null,
-        ?\Eiou\Services\GuiActionRegistry $actionRegistry = null
+        ?\Eiou\Services\GuiActionRegistry $actionRegistry = null,
+        ?\Eiou\Services\PluginApiRegistry $apiRegistry = null,
+        ?\Eiou\Services\PluginCliRegistry $cliRegistry = null
     ): array {
-        $report = ['events' => [], 'filters' => [], 'renders' => [], 'assets' => [], 'tabs' => [], 'actions' => []];
+        $report = [
+            'events' => [], 'filters' => [], 'renders' => [],
+            'assets' => [], 'tabs' => [], 'actions' => [],
+            'api_routes' => [], 'cli_commands' => [],
+        ];
         foreach ($this->loader->listAllPlugins() as $row) {
             if (empty($row['enabled']) || empty($row['sandboxed'])) {
                 continue;
@@ -143,6 +149,38 @@ class PluginIpcForwarder
                     if ($this->registerAction($actionRegistry, $pluginId, $action)) {
                         $report['actions'][] = [
                             'plugin' => $pluginId, 'name' => (string) $action['name'],
+                        ];
+                    }
+                }
+            }
+
+            // REST routes — forwarder turns `/api/v1/plugins/<id>/<action>`
+            // hits into IPC POSTs to the plugin's __dispatch. The
+            // PluginApiRegistry plumbing already validates the action
+            // shape and dispatches; we just register handlers.
+            if ($apiRegistry !== null) {
+                foreach (($row['api_routes'] ?? []) as $route) {
+                    if (!is_array($route)) continue;
+                    if ($this->registerApiRoute($apiRegistry, $pluginId, $route)) {
+                        $report['api_routes'][] = [
+                            'plugin' => $pluginId,
+                            'method' => (string) $route['method'],
+                            'action' => (string) $route['action'],
+                        ];
+                    }
+                }
+            }
+
+            // CLI commands — same shape, registered into PluginCliRegistry.
+            // The eiou binary's dispatcher looks them up and the
+            // handler IPCs into the plugin's pool.
+            if ($cliRegistry !== null) {
+                foreach (($row['cli_commands'] ?? []) as $cmd) {
+                    if (!is_array($cmd)) continue;
+                    if ($this->registerCliCommand($cliRegistry, $pluginId, $cmd)) {
+                        $report['cli_commands'][] = [
+                            'plugin' => $pluginId,
+                            'name'   => (string) $cmd['name'],
                         ];
                     }
                 }
@@ -231,6 +269,120 @@ class PluginIpcForwarder
                 return is_string($result) ? $result : '';
             }
         );
+    }
+
+    /**
+     * Register a plugin REST endpoint that forwards into the plugin's
+     * dispatcher. Auth + admin-scope checks already happen upstream in
+     * ApiController; by the time we get here the request is allowed.
+     */
+    private function registerApiRoute(
+        \Eiou\Services\PluginApiRegistry $apiRegistry,
+        string $pluginId,
+        array $route
+    ): bool {
+        $method = (string) ($route['method'] ?? '');
+        $action = (string) ($route['action'] ?? '');
+        if ($method === '' || $action === '') return false;
+
+        $handler = function (string $method, array $params, string $body) use ($pluginId, $action) {
+            $response = $this->dispatch($pluginId, [
+                'type' => 'rest',
+                'name' => $action,
+                'context' => [
+                    'method' => $method,
+                    'params' => $params,
+                    'body' => $body,
+                ],
+            ]);
+            // PluginApiRegistry::dispatch wraps any non-array return as
+            // ['result' => …]. Return whatever the plugin emitted so
+            // the registry's behaviour is preserved.
+            if ($response === null) {
+                return [
+                    'success' => false,
+                    'error' => 'plugin_unavailable',
+                    'message' => 'Plugin did not respond to the REST dispatch',
+                ];
+            }
+            return is_array($response['result'] ?? null)
+                ? $response['result']
+                : ['result' => $response['result'] ?? null];
+        };
+
+        try {
+            $apiRegistry->register($pluginId, $method, $action, $handler);
+        } catch (Throwable $e) {
+            $this->log('warning', 'plugin_ipc_api_register_failed', [
+                'plugin' => $pluginId,
+                'method' => $method,
+                'action' => $action,
+                'error'  => $e->getMessage(),
+            ]);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Register a plugin CLI subcommand that forwards argv into the
+     * plugin's dispatcher. Stdout / stderr from the plugin's response
+     * (in result.stdout / result.stderr) come back to the operator's
+     * CliOutputManager.
+     */
+    private function registerCliCommand(
+        \Eiou\Services\PluginCliRegistry $cliRegistry,
+        string $pluginId,
+        array $cmd
+    ): bool {
+        $name = (string) ($cmd['name'] ?? '');
+        if ($name === '') return false;
+
+        $handler = function (array $argv, \Eiou\Cli\CliOutputManager $output) use ($pluginId, $name): void {
+            $response = $this->dispatch($pluginId, [
+                'type' => 'cli',
+                'name' => $name,
+                'context' => ['argv' => $argv],
+            ]);
+            if ($response === null) {
+                $output->error(
+                    "Plugin '{$pluginId}' did not respond to the CLI dispatch",
+                    \Eiou\Cli\ErrorCodes::GENERAL_ERROR ?? 'plugin_unavailable',
+                    502
+                );
+                return;
+            }
+            $result = is_array($response['result'] ?? null) ? $response['result'] : [];
+            $stdout = (string) ($result['stdout'] ?? '');
+            $exit   = (int) ($result['exit_code'] ?? 0);
+            if ($stdout !== '') {
+                $output->success($stdout, $result);
+            } else {
+                // No stdout but exit_code 0 — emit a JSON envelope so
+                // --json callers still see a success shape.
+                $output->success("OK", $result);
+            }
+            // Non-zero exit codes from the plugin propagate as error
+            // output. We don't have a clean way to set process exit
+            // code from inside the dispatch closure; the CliOutput
+            // surface treats errors as 1.
+            if ($exit !== 0) {
+                $stderr = (string) ($result['stderr'] ?? "Plugin exited with code {$exit}");
+                $output->error($stderr, $result['error_code'] ?? 'plugin_error', $exit);
+            }
+        };
+
+        try {
+            $cliRegistry->register($name, $handler);
+        } catch (Throwable $e) {
+            $this->log('warning', 'plugin_ipc_cli_register_failed', [
+                'plugin' => $pluginId,
+                'name'   => $name,
+                'error'  => $e->getMessage(),
+            ]);
+            return false;
+        }
+        return true;
     }
 
     /**

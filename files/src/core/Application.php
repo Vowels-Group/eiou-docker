@@ -190,7 +190,9 @@ class Application {
                 $this->services->getHooks(),
                 $this->services->getAssetRegistry(),
                 $this->services->getTabRegistry(),
-                $this->services->getActionRegistry()
+                $this->services->getActionRegistry(),
+                $this->services->getPluginApiRegistry(),
+                $this->services->getPluginCliRegistry()
             );
 
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)

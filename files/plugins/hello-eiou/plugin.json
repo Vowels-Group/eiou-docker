@@ -52,5 +52,13 @@
 
   "gui_actions": [
     {"name": "helloEiouFortune", "tier": "csrf"}
+  ],
+
+  "api_routes": [
+    {"method": "GET", "action": "fortune"}
+  ],
+
+  "cli_commands": [
+    {"name": "hello-eiou", "description": "Print a random eIOU fortune."}
   ]
 }

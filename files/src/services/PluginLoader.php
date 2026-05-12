@@ -407,14 +407,17 @@ class PluginLoader
                     && is_string($e['path'])
                     && strpos($e['path'], '..') === false
             );
+            // api_routes entries mirror PluginApiRegistry::register
+            // shape: {method, action} where method ∈ HTTP verbs and
+            // action is the path suffix under /api/v1/plugins/<id>/.
             $row['api_routes'] = $this->shapedListField(
                 $manifest,
                 'api_routes',
                 fn($e): bool => is_array($e)
-                    && isset($e['method'], $e['path'])
+                    && isset($e['method'], $e['action'])
                     && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
-                    && is_string($e['path'])
-                    && strpos($e['path'], '..') === false
+                    && is_string($e['action'])
+                    && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
             );
             $row['cli_commands'] = $this->shapedListField(
                 $manifest,

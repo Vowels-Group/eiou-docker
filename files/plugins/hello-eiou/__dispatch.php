@@ -249,15 +249,39 @@ switch ($type) {
         ], $log);
 
     case 'rest':
-    case 'cli':
-        // Surfaces not yet migrated — entry class still serves these
-        // while sandboxed=false. Once the corresponding Phase 5
-        // sub-phase ships, replace this stub with a real handler.
+        if ($name === 'fortune') {
+            respond(200, [
+                'ok' => true,
+                'result' => ['fortune' => Fortunes::pick()],
+            ], $log);
+        }
         respond(501, [
             'ok' => false,
             'error' => [
-                'code' => 'handler_not_yet_migrated',
-                'message' => "hello-eiou hasn't migrated {$type}:{$name} to sandboxed mode yet",
+                'code' => 'handler_not_found',
+                'message' => "no REST handler for '{$name}'",
+            ],
+        ], $log);
+
+    case 'cli':
+        if ($name === 'hello-eiou') {
+            $fortune = Fortunes::pick();
+            respond(200, [
+                'ok' => true,
+                'result' => [
+                    'exit_code' => 0,
+                    'stdout' => $fortune,
+                    // CliOutputManager::success() will use this as the
+                    // structured-output payload when --json is passed.
+                    'fortune' => $fortune,
+                ],
+            ], $log);
+        }
+        respond(501, [
+            'ok' => false,
+            'error' => [
+                'code' => 'handler_not_found',
+                'message' => "no CLI handler for '{$name}'",
             ],
         ], $log);
 

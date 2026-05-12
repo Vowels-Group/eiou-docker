@@ -5,7 +5,9 @@ use Eiou\Core\AppConfig;
 use Eiou\Events\EventDispatcher;
 use Eiou\Services\Hooks;
 use Eiou\Services\GuiActionRegistry;
+use Eiou\Services\PluginApiRegistry;
 use Eiou\Services\PluginAssetRegistry;
+use Eiou\Services\PluginCliRegistry;
 use Eiou\Services\PluginIpcForwarder;
 use Eiou\Services\PluginLoader;
 use Eiou\Services\TabRegistry;
@@ -213,6 +215,124 @@ class PluginIpcForwarderTest extends TestCase
         // The render hook MUST return a string. Empty is the only safe
         // fallback when the plugin's dispatch fails.
         $this->assertSame('', $out);
+    }
+
+    // ===================================================================
+    // REST IPC (Phase 5f)
+    // ===================================================================
+
+    #[Test]
+    public function apiRouteRegistrationProducesAWorkingIpcHandler(): void
+    {
+        $this->nextResponse = [
+            'ok' => true, 'status' => 200,
+            'body' => ['ok' => true, 'result' => ['fortune' => 'wisdom']],
+        ];
+        $api = new PluginApiRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', [
+                'api_routes' => [['method' => 'GET', 'action' => 'fortune']],
+            ]),
+        ]);
+
+        $report = $this->svc->registerAll($this->hooks, null, null, null, $api);
+
+        $this->assertSame(
+            [['plugin' => 'hello-eiou', 'method' => 'GET', 'action' => 'fortune']],
+            $report['api_routes']
+        );
+        $this->assertTrue($api->has('hello-eiou', 'GET', 'fortune'));
+
+        $result = $api->dispatch('hello-eiou', 'GET', 'fortune', [], '');
+        $this->assertSame(200, $result['status']);
+        $this->assertSame('wisdom', $result['payload']['fortune']);
+        // Forwarder serialized correctly into the envelope.
+        $this->assertSame('rest', $this->httpLog[0]['body']['type']);
+        $this->assertSame('fortune', $this->httpLog[0]['body']['name']);
+        $this->assertSame('GET', $this->httpLog[0]['body']['context']['method']);
+    }
+
+    #[Test]
+    public function apiRoutePluginUnavailableReturnsErrorPayload(): void
+    {
+        $this->nextResponse = ['ok' => false, 'status' => 0, 'body' => null];
+        $api = new PluginApiRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('flaky', [
+                'api_routes' => [['method' => 'GET', 'action' => 'broken']],
+            ]),
+        ]);
+
+        $this->svc->registerAll($this->hooks, null, null, null, $api);
+        $result = $api->dispatch('flaky', 'GET', 'broken', [], '');
+
+        // Dispatch wraps the handler's return as-is when it's an array
+        // — our handler emits {success:false, error:...} on failure.
+        $this->assertSame('plugin_unavailable', $result['payload']['error']);
+    }
+
+    #[Test]
+    public function apiRegistryIsOptional(): void
+    {
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('demo', [
+                'api_routes' => [['method' => 'GET', 'action' => 'noop']],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks);
+        $this->assertSame([], $report['api_routes']);
+    }
+
+    // ===================================================================
+    // CLI IPC (Phase 5g)
+    // ===================================================================
+
+    #[Test]
+    public function cliCommandRegistrationProducesAWorkingIpcHandler(): void
+    {
+        $this->nextResponse = [
+            'ok' => true, 'status' => 200,
+            'body' => ['ok' => true, 'result' => [
+                'exit_code' => 0,
+                'stdout' => 'hello from plugin',
+                'fortune' => 'demo line',
+            ]],
+        ];
+        $cli = new PluginCliRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', [
+                'cli_commands' => [['name' => 'hello-eiou']],
+            ]),
+        ]);
+
+        $report = $this->svc->registerAll($this->hooks, null, null, null, null, $cli);
+
+        $this->assertSame([['plugin' => 'hello-eiou', 'name' => 'hello-eiou']], $report['cli_commands']);
+        $this->assertTrue($cli->has('hello-eiou'));
+
+        // The forwarder built the right envelope shape.
+        $output = $this->createMock(\Eiou\Cli\CliOutputManager::class);
+        $output->expects($this->once())
+            ->method('success')
+            ->with(
+                'hello from plugin',
+                $this->callback(fn($extras) => is_array($extras) && ($extras['fortune'] ?? null) === 'demo line')
+            );
+        $cli->dispatch('hello-eiou', ['hello-eiou', 'arg1'], $output);
+
+        $this->assertSame('cli', $this->httpLog[0]['body']['type']);
+        $this->assertSame('hello-eiou', $this->httpLog[0]['body']['name']);
+        $this->assertSame(['hello-eiou', 'arg1'], $this->httpLog[0]['body']['context']['argv']);
+    }
+
+    #[Test]
+    public function cliRegistryIsOptional(): void
+    {
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('demo', ['cli_commands' => [['name' => 'demo']]]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks);
+        $this->assertSame([], $report['cli_commands']);
     }
 
     // ===================================================================
