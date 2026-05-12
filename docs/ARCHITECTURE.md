@@ -3062,27 +3062,41 @@ even with full filesystem access — which matters because the alt code is user-
 and therefore typically far lower entropy than the seed-derived primary.
 
 **Verification (single chokepoint, two physical callsites).** `Session::authenticate()`
-takes both the plaintext primary and the optional alt-code Argon2id hash; it always
-evaluates both checks (`hash_equals` for primary, `password_verify` for alt) so a
-timing observer cannot infer which credential was presented or whether an alt code
-is configured at all. `ApiKeysController::verify()` (the sensitive-access gate that
-fronts payback methods, plugin management, settings mutations, and api-key CRUD) does
-the same. On success, `SessionKeys::AUTH_VIA_ALT` is set to `true` for alt-only
-authentications so downstream code can distinguish the two.
+takes both the plaintext primary and the optional alt-code Argon2id hash. The primary
+check is `hash_equals` (constant-time string compare); the alt check delegates to
+`AltCodeVerifier::verify()`, which **always** runs `password_verify` — against a
+per-process placeholder hash (random plaintext, default Argon2id cost) when no real
+alt-code hash is configured. The placeholder is lazily initialised on first use and
+cached for the life of the process. This makes the auth path's wall-clock time
+identical regardless of whether an alt code is set, so a network observer cannot
+infer alt-code presence by timing failed logins. `ApiKeysController::verify()` (the
+sensitive-access gate that fronts payback methods, plugin management, settings
+mutations, and api-key CRUD) uses the same verifier. On success,
+`SessionKeys::AUTH_VIA_ALT` is set to `true` for alt-only authentications so
+downstream code can distinguish the two.
 
 **Self-rotation forbidden.** `AltCodeController::altCodeSet` and `altCodeClear`
 both refuse alt-authenticated sessions outright (`alt_session_forbidden`) and require
 the primary to be re-entered in-band — not via the session sensitive-access grant.
 This prevents an attacker who learns the alt code from rotating it and locking the
-legitimate operator out.
+legitimate operator out. The settings GUI mirrors this server-side gate with an
+`alert-warning` callout and `aria-disabled`-styled action buttons when the current
+session is alt-authenticated; clicking a locked button scrolls the callout into view
+and flashes it instead of silently no-op'ing.
 
-**Online resistance.** The `gui_login` rate limiter (10 attempts / 60 s window with a
-5-minute block on excess, defaults from `Constants.php`) caps online brute-force
-attempts at ~876k/year worst case. Combined with the 12-character minimum and forced
-complexity, online cracking is infeasible. Disabling rate limiting via
-`rate_limit_enabled=false` shifts the alt code's online resistance entirely onto
-password strength and Argon2id work factor — viable only with very strong
-passphrases.
+**Online resistance — two rate-limit buckets.** `gui_login` (10 attempts / 60 s
+window, 5-minute block on excess; defaults from `Constants.php`) caps online
+brute-force on the login form at ~876k attempts/year worst case. Combined with the
+12-character minimum and forced complexity, online cracking is infeasible.
+Independently, `gui_altcode_modify` (5 attempts / 5 min, 15-minute block) gates
+`altCodeSet` and `altCodeClear` so an attacker holding a stolen session cookie cannot
+probe primary candidates at unlimited rate on those endpoints. The two buckets are
+deliberately separate so attempts on one surface cannot drain the other. The
+modify-bucket check fires AFTER the `alt_session_forbidden` gate so an alt-code-only
+session can never burn the bucket and lock the legitimate operator out of rotating.
+Disabling rate limiting via `rate_limit_enabled=false` shifts the alt code's online
+resistance entirely onto password strength and Argon2id work factor — viable only
+with very strong passphrases.
 
 ### Remember-Me Login (Rotation Tokens)
 

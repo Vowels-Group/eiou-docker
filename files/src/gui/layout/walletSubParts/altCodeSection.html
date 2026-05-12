@@ -25,10 +25,16 @@ $authViaAlt = $secureSession->authenticatedViaAlt();
     </div>
 
     <?php if ($authViaAlt): ?>
-        <div class="alt-code-restriction-row text-muted" style="font-size: 0.9rem; padding: 0.25rem 0;">
-            <i class="fas fa-info-circle"></i>
-            You logged in using the alternate auth code, so setting / rotating / clearing the alt code is disabled
-            this session. Log out and log in with your primary auth code (from your seed phrase) to manage it.
+        <div class="alert alert-warning" role="alert" style="margin-bottom: 0.75rem;">
+            <strong><i class="fas fa-exclamation-triangle"></i> Locked this session.</strong>
+            You logged in with the alternate auth code, so rotating or removing the alt code is
+            disabled until you re-authenticate with the primary auth code (from your seed phrase).
+            This is intentional: it prevents an attacker who learns the alt code from locking you
+            out by overwriting it.
+            <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                <strong>To manage the alt code:</strong> log out, then log in again using the
+                primary auth code instead.
+            </div>
         </div>
     <?php endif; ?>
 
@@ -36,18 +42,26 @@ $authViaAlt = $secureSession->authenticatedViaAlt();
         <button type="button"
                 id="altCodeSetBtn"
                 class="btn btn-success btn-compact"
-                data-action="openAltCodeSetModal"
-                <?php echo $authViaAlt ? 'disabled aria-disabled="true"' : ''; ?>>
-            <i class="fas fa-key"></i>
+                data-action="<?php echo $authViaAlt ? 'explainAltCodeLocked' : 'openAltCodeSetModal'; ?>"
+                <?php if ($authViaAlt): ?>
+                    aria-disabled="true"
+                    title="Disabled: log in with the primary auth code to manage the alt code."
+                    style="opacity: 0.55; cursor: not-allowed;"
+                <?php endif; ?>>
+            <i class="fas fa-<?php echo $authViaAlt ? 'lock' : 'key'; ?>"></i>
             <?php echo $hasAltCode ? 'Rotate alt code' : 'Set alt code'; ?>
         </button>
         <?php if ($hasAltCode): ?>
             <button type="button"
                     id="altCodeClearBtn"
                     class="btn btn-danger btn-compact"
-                    data-action="openAltCodeClearModal"
-                    <?php echo $authViaAlt ? 'disabled aria-disabled="true"' : ''; ?>>
-                <i class="fas fa-trash"></i>
+                    data-action="<?php echo $authViaAlt ? 'explainAltCodeLocked' : 'openAltCodeClearModal'; ?>"
+                    <?php if ($authViaAlt): ?>
+                        aria-disabled="true"
+                        title="Disabled: log in with the primary auth code to manage the alt code."
+                        style="opacity: 0.55; cursor: not-allowed;"
+                    <?php endif; ?>>
+                <i class="fas fa-<?php echo $authViaAlt ? 'lock' : 'trash'; ?>"></i>
                 Remove alt code
             </button>
         <?php endif; ?>
@@ -255,13 +269,33 @@ echo renderSection([
     // through script.js's central click dispatcher, but that module is
     // already 11k lines — easier to attach our own listeners locally and
     // leave script.js alone for this initial cut.
+    function flashLockedExplanation() {
+        // Find the warning box rendered above the buttons when the
+        // session is alt-authenticated. Scroll it into view and flash
+        // its border so the user can see *why* the button they just
+        // tried to click is disabled.
+        var alertBox = document.querySelector('#alt-code-section .alert-warning');
+        if (!alertBox) return;
+        try {
+            alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) {
+            // Older Tor Browser builds may not have smooth scroll;
+            // fall back to a hard jump.
+            alertBox.scrollIntoView();
+        }
+        // Flash: pulse the background once. Reset any prior flash so
+        // repeated clicks always retrigger.
+        alertBox.style.transition = 'box-shadow 0.4s ease-in-out';
+        alertBox.style.boxShadow = '0 0 0 4px rgba(255, 193, 7, 0.55)';
+        setTimeout(function () { alertBox.style.boxShadow = ''; }, 900);
+    }
+
     document.addEventListener('click', function (ev) {
         var target = ev.target.closest && ev.target.closest('[data-action]');
         if (!target) return;
         var action = target.getAttribute('data-action');
         switch (action) {
             case 'openAltCodeSetModal':
-                if (target.disabled) return;
                 clearError(el('altCodeSetError'));
                 clearForm('altCodeSetForm');
                 renderStrength('');
@@ -273,7 +307,6 @@ echo renderSection([
                 ev.preventDefault();
                 break;
             case 'openAltCodeClearModal':
-                if (target.disabled) return;
                 clearError(el('altCodeClearError'));
                 clearForm('altCodeClearForm');
                 openModal('altCodeClearModal');
@@ -281,6 +314,15 @@ echo renderSection([
                 break;
             case 'closeAltCodeClearModal':
                 closeModal('altCodeClearModal');
+                ev.preventDefault();
+                break;
+            case 'explainAltCodeLocked':
+                // The button is visually disabled but still clickable
+                // (we use aria-disabled instead of the disabled
+                // attribute so clicks fire and we can surface this
+                // explanation). Scroll the warning box into view and
+                // flash it.
+                flashLockedExplanation();
                 ev.preventDefault();
                 break;
         }
