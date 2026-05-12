@@ -52,6 +52,7 @@ class PluginInstallServiceTest extends TestCase
                 'name' => 'my-plugin',
                 'version' => '1.0.0',
                 'entryClass' => 'My\\Plugin\\Entry',
+                'sandboxed' => true,
             ]),
             'my-plugin/src/Entry.php' => "<?php\nclass Entry {}\n",
             'my-plugin/CHANGELOG.md' => "## 1.0.0\n- Initial release\n",
@@ -311,6 +312,79 @@ class PluginInstallServiceTest extends TestCase
     }
 
     #[Test]
+    public function rejectsManifestMissingSandboxedFlag(): void
+    {
+        $zip = $this->buildZip([
+            'no-sandbox/plugin.json' => json_encode([
+                'name' => 'no-sandbox',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                // Note: no "sandboxed" field.
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/"sandboxed": true/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
+    public function rejectsManifestSandboxedFalseExplicitly(): void
+    {
+        $zip = $this->buildZip([
+            'legacy/plugin.json' => json_encode([
+                'name' => 'legacy',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => false,
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/"sandboxed": true/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
+    public function rejectsMalformedDeclarativeFieldShape(): void
+    {
+        $zip = $this->buildZip([
+            'bad-field/plugin.json' => json_encode([
+                'name' => 'bad-field',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                // Each entry should be a string; passing a non-array
+                // here forces the validator's "must be a list" branch.
+                'subscribes_to' => 'not-a-list',
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/subscribes_to.*must be a list/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
+    public function rejectsMalformedDeclarativeFieldEntry(): void
+    {
+        $zip = $this->buildZip([
+            'bad-entry/plugin.json' => json_encode([
+                'name' => 'bad-entry',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                // Wrong format for a core_services entry.
+                'core_services' => ['NotDotSeparated'],
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/core_services.*invalid entry/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
     public function rejectsManifestMissingVersion(): void
     {
         $zip = $this->buildZip([
@@ -453,6 +527,7 @@ class PluginInstallServiceTest extends TestCase
                 'name' => $pluginName,
                 'version' => $version,
                 'entryClass' => 'X\\Y\\Z',
+                'sandboxed' => true,
             ]),
             $pluginName . '/src/Entry.php' => "<?php\n",
         ]);

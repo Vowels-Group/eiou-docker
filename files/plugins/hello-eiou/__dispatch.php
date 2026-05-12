@@ -1,27 +1,23 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# hello-eiou — sandboxed dispatcher (Phase 5 migration).
+# hello-eiou — sandboxed dispatcher.
 #
 # Runs inside the per-plugin FPM pool as eiou-p-<hash>. Cannot read the
 # wallet's master key or seed (kernel EACCES + open_basedir). Reaches
-# core services only through the Phase 4 gateway via core_call().
+# core services only through the gateway via core_call().
 #
 # Surfaces handled here (declared in plugin.json):
-#   subscribes_to:  sync.completed     → log a fortune via Logger.info
-#   render_hooks:   gui.dashboard.after → fortune widget HTML
-#   filter_hooks:   gui.dashboard.widgets → contribute a mini-tip widget
-#   filter_hooks:   gui.contact.actions   → add a Fortune action button
+#   subscribes_to:  sync.completed         → log a fortune via Logger.info
+#   render_hooks:   gui.dashboard.after    → fortune widget HTML
+#   render:         tab:hello-eiou-fortunes → Fortunes tab body
+#   filter_hooks:   gui.dashboard.widgets  → contribute a mini-tip widget
+#   filter_hooks:   gui.contact.actions    → add a Fortune action button
+#   gui_actions:    helloEiouFortune       → return a random fortune as JSON
+#   api_routes:     GET /api/v1/plugins/hello-eiou/fortune
+#   cli_commands:   eiou hello-eiou
 #
-# Surfaces NOT yet migrated to sandboxed mode (still served by the
-# entry class in src/HelloEiouPlugin.php while sandboxed=false):
-#   - Tab register with render → blocked on Phase 5d tab IPC
-#   - GUI action helloEiouFortune → blocked on Phase 5c action routing
-#   - REST endpoint /v1/plugins/hello-eiou/fortune → blocked on Phase 5e
-#   - CLI subcommand → blocked on Phase 5f
-#
-# See docs/PLUGIN_SANDBOXING.md (Phase 5) and the contract spec
-# docs/PLUGIN_SANDBOX_DISPATCH_CONTRACT.md.
+# See docs/PLUGINS.md (Sandboxed Plugin Authoring) for the contract.
 
 declare(strict_types=1);
 
@@ -57,7 +53,7 @@ function respond(int $status, array $body, PluginLog $log): void
 }
 
 // =============================================================================
-// core_call($service, $method, $args, $log) — Phase 4 gateway client.
+// core_call($service, $method, $args, $log) — service gateway client.
 // =============================================================================
 function core_call(string $service, string $method, array $args, PluginLog $log)
 {
@@ -162,7 +158,7 @@ switch ($type) {
             $contactPubkey = $context['data']['contact_pubkey'] ?? null;
             // Log via the central wallet logger so the fortune lands in
             // the same log file as in-process behaviour did. Logger.info
-            // is tagged #[PluginCallable] (Phase 4) and declared in this
+            // is tagged #[PluginCallable] in core and declared in this
             // plugin's core_services manifest entry.
             core_call('Logger', 'info', [
                 "[hello-eiou] {$fortune}",

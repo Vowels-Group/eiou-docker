@@ -1178,15 +1178,22 @@ or any other wallet secret). Set `"sandboxed": true` in the manifest.
 See [`docs/PLUGIN_SANDBOXING.md`](PLUGIN_SANDBOXING.md) for the full
 architecture; what you need to know as an author is below.
 
-### Sandboxing modes
+### Sandboxing is mandatory
 
-| Mode | Manifest | What runs in-process | What plugin can access |
+All plugins must declare `"sandboxed": true` in their manifest. The
+in-process plugin model has been removed — non-sandboxed plugins
+could read the master key and decrypt the seed phrase, so the loader
+refuses to load them. Operator-facing behaviour:
+
+| Manifest | At install | At enable | At boot |
 |---|---|---|---|
-| In-process *(legacy, deprecated)* | `"sandboxed": false` *or* field absent | Plugin's entry class via `register()`/`boot()` in the wallet's PHP-FPM pool | Everything the wallet can — master key, seed phrase, every file `www-data` reads. |
-| Sandboxed | `"sandboxed": true` | Nothing — entry class never loads | Only the plugin's own dir + scratch dir. Wallet secrets are `EACCES`. |
+| `"sandboxed": true` | Accepted | Accepted | Pool spawned, IPC plumbed |
+| Missing flag *or* `"sandboxed": false` | **Rejected** with `sandboxed_required` | **Rejected** — `setEnabled` returns false | `legacy_unsupported` status, auto-flipped to disabled in `plugins.json` |
 
-A future release will deprecate the in-process mode. New plugins should
-set `"sandboxed": true` from day one.
+Plugins run in their own per-plugin PHP-FPM pool as their own Unix
+user (`eiou-p-<hash>`), with `open_basedir` restricted to the
+plugin's dir + scratch, `disable_functions` blocking shell-out and
+eval, and zero filesystem access to wallet secrets.
 
 ### Manifest surfaces a sandboxed plugin declares
 
@@ -2164,32 +2171,37 @@ entry points are called. This is a defensive measure against some
 edge cases in the PHP-FPM request lifecycle where the same worker PID would
 otherwise run the lifecycle twice and double-subscribe event listeners.
 
-### Sandboxing modes
+### Sandboxing is mandatory
 
-Two execution modes, selected per-plugin via `"sandboxed": true` in the
-manifest:
+Every plugin must declare `"sandboxed": true` in its manifest. The
+in-process plugin model has been removed — a non-sandboxed plugin
+could read the master key and decrypt the seed phrase, so the loader
+refuses to load plugins missing the flag.
 
-- **In-process** *(legacy, scheduled for deprecation)* — plugin's entry
-  class loads into the wallet's `www-data` PHP-FPM pool. Same permissions
-  and filesystem access as core PHP. No opcode sandbox, no capability
-  filter, no per-plugin process isolation. A malicious in-process plugin
-  can read the master key + decrypt the seed phrase. **Only install
-  in-process plugins from sources you fully trust.**
+In practice:
 
-- **Sandboxed** *(recommended)* — plugin runs in its own PHP-FPM pool as
-  its own Unix user (`eiou-p-<hash>`) with `open_basedir` restricted to
-  the plugin's dir + scratch, `disable_functions` blocking
-  shell-out/eval paths, and no filesystem access to wallet secrets.
-  Communication with core goes through IPC over a per-plugin bearer
-  token to a whitelisted service gateway. See [Sandboxed Plugin
-  Authoring](#sandboxed-plugin-authoring) for the contract and
-  [`docs/PLUGIN_SANDBOXING.md`](PLUGIN_SANDBOXING.md) for the
-  architecture.
+- **At install** — `PluginInstallService` rejects zip uploads whose
+  manifest lacks `"sandboxed": true`. The plugin's bytes never reach
+  the plugins directory.
+- **At enable** — `PluginLoader::setEnabled(true)` refuses non-
+  sandboxed plugins. The state file is not modified.
+- **At boot** — `discover()` records non-sandboxed plugins with
+  status `legacy_unsupported`, never registers their autoloader,
+  never instantiates their entry class. Any plugin still marked
+  enabled in `plugins.json` after a manifest downgrade gets auto-
+  flipped to disabled and a single notice is written to the wallet
+  log so the operator knows what happened.
 
-The manifest opt-in is the boundary; the disabled-by-default rule
-applies to both modes (a malicious or buggy plugin can't crash the
-node on its first discover, even sandboxed — discover doesn't run any
-plugin code).
+Plugins run in their own per-plugin PHP-FPM pool as their own Unix
+user (`eiou-p-<hash>`), with `open_basedir` restricted to the
+plugin's dir + scratch, `disable_functions` blocking shell-out and
+eval, and zero filesystem access to wallet secrets. Communication
+with core happens over loopback HTTP through a per-plugin bearer
+token to a whitelisted service gateway. See [Sandboxed Plugin
+Authoring](#sandboxed-plugin-authoring) for the contract.
+
+The disabled-by-default rule still applies — a freshly-discovered
+plugin doesn't run until the operator explicitly enables it.
 
 ### URL validation for GUI rendering
 

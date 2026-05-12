@@ -206,27 +206,37 @@ class PluginLoader
             $this->loadPlugin($pluginPath, $state);
         }
 
-        // Phase 6 deprecation surface: at boot, list any enabled
-        // in-process plugins so the wallet log shows operators which
-        // plugins they're trusting with full address-space access.
-        // Once per discover() — re-running discover() (test scenarios
-        // mostly) emits the same warning again, which is fine.
-        $legacy = [];
-        foreach ($this->plugins as $name => $plugin) {
-            // $this->plugins is keyed by loaded in-process plugins
-            // only. Sandboxed plugins skip plugins[] entirely (Phase
-            // 2.5), so anything here is by definition in-process.
-            $legacy[] = $name;
+        // At boot, find every plugin that's enabled in plugins.json
+        // but lacks "sandboxed": true in its manifest. These are inert
+        // (we refused to load them above); leaving them as enabled in
+        // the state file would mean every subsequent boot logs the
+        // same warning forever, and the GUI would keep showing them
+        // as "enabled". Auto-flip them to disabled in the state file
+        // and emit a one-shot notice telling the operator what
+        // happened.
+        $autoDisabled = [];
+        foreach ($this->metadata as $name => $meta) {
+            if (($meta['status'] ?? '') !== 'legacy_unsupported') continue;
+            if (!array_key_exists($name, $state)) continue;
+            if (empty($state[$name]['enabled'])) continue;
+            $state[$name]['enabled'] = false;
+            $autoDisabled[] = $name;
+            // Mirror the metadata flag so listAllPlugins shows
+            // enabled=false from this point on, without waiting for
+            // the next reconcile pass.
+            $this->metadata[$name]['enabled'] = false;
         }
-        if ($legacy !== []) {
+        if ($autoDisabled !== []) {
+            $this->writeState($state);
             $this->logger->warning(
-                'plugin_legacy_in_process_loaded',
+                'plugin_legacy_auto_disabled',
                 [
-                    'plugins' => $legacy,
-                    'note' => 'These plugins run with full wallet privileges (can read master key, '
-                            . 'sign with private key). Phase 6 will deprecate the in-process model. '
-                            . 'Plugin authors should migrate to sandboxed:true — see '
-                            . 'docs/PLUGIN_SANDBOXING.md for the contract.',
+                    'plugins' => $autoDisabled,
+                    'reason' => 'Sandboxing is mandatory. Plugins missing "sandboxed": true in '
+                              . 'their manifest were enabled in plugins.json but inert; this '
+                              . 'boot auto-flipped them to disabled. Operator should either '
+                              . 'wait for the plugin author to ship a sandboxed migration, or '
+                              . 'uninstall the plugin. See docs/PLUGINS.md.',
                 ]
             );
         }
@@ -379,17 +389,16 @@ class PluginLoader
                 'sandboxed' => $sandboxed,
             ];
 
-            // Phase 6 deprecation flag — surface every legacy
-            // (non-sandboxed) plugin so operators see at a glance which
-            // ones need the author to migrate to sandboxed mode.
-            // Empty manifest field for sandboxed plugins keeps the
-            // GUI rendering simple (truthy check works).
+            // Phase 6 hard-deprecation surface — non-sandboxed plugins
+            // are no longer loaded at all. The flag tells the GUI / CLI
+            // to render them as "unsupported until migrated".
             if (!$sandboxed) {
                 $row['legacy_in_process'] = true;
-                $row['legacy_warning']    = 'In-process plugins run with full wallet privileges '
-                                          . '(can read the master key, sign with the private key). '
-                                          . 'Phase 6 will deprecate this mode. Plugin author should '
-                                          . 'migrate to sandboxed:true (see docs/PLUGIN_SANDBOXING.md).';
+                $row['legacy_warning']    = 'In-process plugins are no longer supported. This plugin '
+                                          . 'is enabled in plugins.json but inert — its register() / '
+                                          . 'boot() will not run. The plugin author must ship an '
+                                          . 'updated manifest with "sandboxed": true (see '
+                                          . 'docs/PLUGIN_SANDBOXING.md).';
             }
 
             // Phase 4: core_services allow-list. Each entry is
@@ -573,6 +582,25 @@ class PluginLoader
      */
     public function setEnabled(string $name, bool $enabled): bool
     {
+        // Refuse to enable a plugin whose manifest doesn't opt into
+        // sandboxing. Disabling a non-sandboxed plugin always
+        // succeeds at the state-flip layer (operator wants to mark
+        // it disabled even if it was never going to load anyway).
+        if ($enabled) {
+            $manifest = $this->readManifestFromDisk($name);
+            if ($manifest !== null && empty($manifest['sandboxed'])) {
+                $this->logger->warning(
+                    "Refusing to enable non-sandboxed plugin",
+                    [
+                        'plugin' => $name,
+                        'remediation' => 'Set "sandboxed": true in plugin.json. '
+                                       . 'See docs/PLUGINS.md (Sandboxed Plugin Authoring).',
+                    ]
+                );
+                return false;
+            }
+        }
+
         // Run the DDL side-effects first — if they fail, we don't flip
         // the flag, so the operator can retry without a stale state file.
         try {
@@ -1449,10 +1477,11 @@ class PluginLoader
         // node on its first boot, because it never runs without consent.
         $enabled = (bool) ($state[$name]['enabled'] ?? false);
 
-        // Parse the optional "sandboxed" flag. A truthy value means the
-        // plugin opts into running in its own per-plugin FPM pool as a
-        // dedicated Unix user (see docs/PLUGIN_SANDBOXING.md). Default
-        // is false to keep existing plugins running unchanged.
+        // Parse the "sandboxed" flag. Sandboxing is now MANDATORY —
+        // any plugin without `"sandboxed": true` is refused load. This
+        // is the Phase 6 hard deprecation: a malicious in-process
+        // plugin can read the master key + decrypt the seed phrase, so
+        // we no longer offer the in-process path at all.
         $sandboxed = !empty($manifest['sandboxed']);
 
         if (!$enabled) {
@@ -1468,6 +1497,33 @@ class PluginLoader
             return;
         }
 
+        // Enabled but NOT sandboxed → refuse to load. Plugin's files
+        // stay on disk, listAllPlugins() surfaces a clear status
+        // explaining why, but register()/boot() never run and the
+        // autoloader never registers. Operator has to migrate the
+        // plugin's manifest to "sandboxed": true (see
+        // docs/PLUGIN_SANDBOXING.md) before it does anything.
+        if (!$sandboxed) {
+            $this->logger->warning(
+                'PluginLoader: refusing to load non-sandboxed plugin',
+                [
+                    'name' => $name,
+                    'reason' => 'Sandboxing is mandatory. Set "sandboxed": true in plugin.json.',
+                ]
+            );
+            $this->metadata[$name] = [
+                'version' => $manifest['version'],
+                'description' => $manifest['description'] ?? '',
+                'status' => 'legacy_unsupported',
+                'enabled' => true,
+                'database' => $dbConfig,
+                'signature' => $sigResult,
+                'sandboxed' => false,
+                'error' => 'Plugin must declare "sandboxed": true. In-process plugins are not supported.',
+            ];
+            return;
+        }
+
         // Sandboxed plugins NEVER load in-process. Their code runs only
         // in their own FPM pool, reached over IPC via __dispatch.php.
         // PluginLoader keeps a metadata entry so listAllPlugins() can
@@ -1475,67 +1531,24 @@ class PluginLoader
         // their entry class, or run register()/boot(). This is the whole
         // point of sandboxing — the plugin's code never touches the wallet's
         // address space.
-        if ($sandboxed) {
-            $this->metadata[$name] = [
-                'version' => $manifest['version'],
-                'description' => $manifest['description'] ?? '',
-                'status' => 'sandboxed',
-                'enabled' => true,
-                'database' => $dbConfig,
-                'signature' => $sigResult,
-                'sandboxed' => true,
-            ];
-            return;
-        }
-
-        // Register PSR-4 autoloader for this plugin's namespace(s)
-        $psr4 = $manifest['autoload']['psr-4'] ?? [];
-        if (!is_array($psr4) || empty($psr4)) {
-            $this->logger->warning("PluginLoader: manifest missing autoload.psr-4", [
-                'name' => $name
-            ]);
-            return;
-        }
-        foreach ($psr4 as $prefix => $relativeDir) {
-            $this->registerPsr4($prefix, $pluginPath . '/' . trim($relativeDir, '/'));
-        }
-
-        // Instantiate entry class
-        $entryClass = $manifest['entryClass'];
-        try {
-            if (!class_exists($entryClass)) {
-                $this->logger->warning("PluginLoader: entry class not found", [
-                    'name' => $name,
-                    'class' => $entryClass
-                ]);
-                return;
-            }
-            $instance = new $entryClass();
-            if (!$instance instanceof PluginInterface) {
-                $this->logger->warning("PluginLoader: entry class does not implement PluginInterface", [
-                    'name' => $name,
-                    'class' => $entryClass
-                ]);
-                return;
-            }
-        } catch (Throwable $e) {
-            $this->logger->warning("PluginLoader: failed to instantiate entry class", [
-                'name' => $name,
-                'class' => $entryClass,
-                'error' => $e->getMessage()
-            ]);
-            return;
-        }
-
-        $this->plugins[$name] = $instance;
         $this->metadata[$name] = [
             'version' => $manifest['version'],
             'description' => $manifest['description'] ?? '',
-            'status' => 'discovered',
+            'status' => 'sandboxed',
             'enabled' => true,
             'database' => $dbConfig,
             'signature' => $sigResult,
+            'sandboxed' => true,
         ];
+
+        // The legacy in-process path (autoload registration + entry-class
+        // instantiation + register()/boot() lifecycle) used to live here.
+        // It was removed when sandboxing became mandatory — every load
+        // path now either returns early (disabled / legacy_unsupported)
+        // or stops at the sandboxed-metadata write above. The
+        // registerPsr4() / instantiation helpers stayed in this file for
+        // tests and for the `plugins` property that's still populated by
+        // tests; production never reaches them.
     }
 
     /**

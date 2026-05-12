@@ -525,7 +525,99 @@ class PluginInstallService
         if (!is_string($entryClass) || $entryClass === '') {
             throw new InvalidArgumentException("plugin.json 'entryClass' is missing");
         }
+
+        // Sandboxing is mandatory. The loader refuses to enable any
+        // plugin without "sandboxed": true; rejecting at install time
+        // means the operator learns the plugin can't run BEFORE its
+        // files land on disk, instead of getting a silent failure
+        // later when they try to enable it.
+        if (empty($manifest['sandboxed'])) {
+            throw new InvalidArgumentException(
+                "plugin.json must declare \"sandboxed\": true — in-process plugins "
+                . "are not supported. See docs/PLUGINS.md (Sandboxed Plugin Authoring)."
+            );
+        }
+
+        // Validate the declarative-surface fields at install time so a
+        // malformed manifest fails fast rather than slipping past install
+        // and only erroring at enable. Same shape gates PluginLoader uses
+        // when reading these fields in listAllPlugins().
+        $this->validateDeclarativeFields($manifest);
+
         return $manifest;
+    }
+
+    /**
+     * Shape-validate the optional declarative-surface fields. Anything
+     * that's present must match the expected schema; missing fields are
+     * fine (a plugin can be sandboxed without declaring any surface).
+     */
+    private function validateDeclarativeFields(array $manifest): void
+    {
+        $listOfStrings = static function (string $key, string $regex) use ($manifest): void {
+            $val = $manifest[$key] ?? null;
+            if ($val === null) return;
+            if (!is_array($val)) {
+                throw new InvalidArgumentException(
+                    "plugin.json '{$key}' must be a list of strings"
+                );
+            }
+            foreach ($val as $entry) {
+                if (!is_string($entry) || !preg_match($regex, $entry)) {
+                    throw new InvalidArgumentException(
+                        "plugin.json '{$key}' contains invalid entry: "
+                        . (is_string($entry) ? "'{$entry}'" : gettype($entry))
+                    );
+                }
+            }
+        };
+        $listOfShape = static function (string $key, callable $validate) use ($manifest): void {
+            $val = $manifest[$key] ?? null;
+            if ($val === null) return;
+            if (!is_array($val)) {
+                throw new InvalidArgumentException(
+                    "plugin.json '{$key}' must be a list of objects"
+                );
+            }
+            foreach ($val as $i => $entry) {
+                if (!is_array($entry) || !$validate($entry)) {
+                    throw new InvalidArgumentException(
+                        "plugin.json '{$key}' entry #{$i} is malformed"
+                    );
+                }
+            }
+        };
+
+        $listOfStrings('subscribes_to', '/^[a-z][a-z0-9_.-]*$/');
+        $listOfStrings('filter_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
+        $listOfStrings('render_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
+        $listOfStrings('core_services', '/^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9_]*$/');
+
+        $listOfShape('gui_actions', fn($e): bool =>
+            isset($e['name']) && is_string($e['name'])
+            && preg_match('/^[a-z][a-zA-Z0-9_]*$/', $e['name']) === 1
+        );
+        $listOfShape('tabs', fn($e): bool =>
+            isset($e['id'], $e['label'])
+            && is_string($e['id']) && is_string($e['label'])
+            && preg_match('/^[a-z0-9][a-z0-9_-]*$/', $e['id']) === 1
+        );
+        $listOfShape('gui_assets', fn($e): bool =>
+            isset($e['type'], $e['path'])
+            && in_array($e['type'], ['css', 'js'], true)
+            && is_string($e['path'])
+            && strpos($e['path'], '..') === false
+        );
+        $listOfShape('api_routes', fn($e): bool =>
+            isset($e['method'], $e['action'])
+            && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
+            && is_string($e['action'])
+            && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+        );
+        $listOfShape('cli_commands', fn($e): bool =>
+            isset($e['name']) && is_string($e['name'])
+            && preg_match('/^[a-z][a-z0-9-]*$/', $e['name']) === 1
+        );
     }
 
     /**
