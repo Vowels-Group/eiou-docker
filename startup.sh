@@ -2608,6 +2608,119 @@ restart_poller() {
     done
 }
 
+# =============================================================================
+# plugin_user_poller() — root-side hook for the plugin sandboxing user
+# lifecycle (Phase 1 of docs/PLUGIN_SANDBOXING.md).
+#
+# www-data PHP cannot call useradd/userdel directly, so PluginUserService
+# writes /tmp/eiou-pluser-req-<id>.json with shape:
+#
+#   { "ts": <unix>, "action": "create"|"remove", "system_user": "eiou-p-<hex>" }
+#
+# This loop polls every 100 ms (matching the PHP-side wait granularity),
+# runs the requested useradd/userdel as root, and writes the result to
+# /tmp/eiou-pluser-res-<id>.json with shape:
+#
+#   { "ts": <unix>, "status": "ok"|"failed", "error": "..." }
+#
+# Validation matches the service's PluginUserService::looksLikePluginUsername:
+# only `eiou-p-<8 hex>` usernames are touched. Anything else is rejected
+# even before useradd is invoked — defence-in-depth so a corrupted
+# request file can't be used to drop www-data or root.
+# =============================================================================
+plugin_user_poller() {
+    local POLL_INTERVAL=0.1
+    local REQ_GLOB="/tmp/eiou-pluser-req-*.json"
+    local LOG_PREFIX="[PLUGIN USER POLLER]"
+
+    write_result() {
+        local res_path="$1"
+        local status="$2"
+        local error="${3:-}"
+        local now
+        now=$(date +%s)
+        # Atomic via temp-file + rename so the PHP side never sees a
+        # partial write. Mode 644 (world-readable) so www-data can read
+        # what root wrote.
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$error" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        # `compgen -G` returns 0 only if any path matches the glob, which
+        # avoids the `[ -f "$req" ]` race against an empty for-loop when
+        # nothing matches.
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+
+            # Derive the result path from the request path so they pair
+            # 1:1 regardless of how many concurrent requests exist.
+            local res="${req/-req-/-res-}"
+
+            # Read request body. jq is in the image (used by other parts
+            # of startup.sh already); fall back to a grep-based parse if
+            # jq is missing for some reason.
+            local action system_user
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty'      "$req" 2>/dev/null)
+                system_user=$(jq -r '.system_user // empty' "$req" 2>/dev/null)
+            else
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z]+' "$req" 2>/dev/null | head -1)
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" 2>/dev/null | head -1)
+            fi
+
+            # Delete the request BEFORE acting, so a crash inside
+            # useradd/userdel doesn't loop us forever on the same line.
+            rm -f "$req"
+
+            # Validation pass — refuse anything outside the eiou-p-<hex> shape.
+            if [[ ! "$system_user" =~ ^eiou-p-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected unsafe system_user='$system_user'"
+                write_result "$res" "failed" "invalid system_user shape"
+                continue
+            fi
+
+            case "$action" in
+                create)
+                    if id "$system_user" >/dev/null 2>&1; then
+                        # Already exists — useradd is idempotent at this layer.
+                        write_result "$res" "ok"
+                    elif useradd -M -s /usr/sbin/nologin "$system_user" >/dev/null 2>&1; then
+                        echo "$LOG_PREFIX created user $system_user"
+                        write_result "$res" "ok"
+                    else
+                        echo "$LOG_PREFIX useradd failed for $system_user"
+                        write_result "$res" "failed" "useradd failed"
+                    fi
+                    ;;
+                remove)
+                    if ! id "$system_user" >/dev/null 2>&1; then
+                        write_result "$res" "ok"
+                    elif userdel "$system_user" >/dev/null 2>&1; then
+                        echo "$LOG_PREFIX removed user $system_user"
+                        write_result "$res" "ok"
+                    else
+                        echo "$LOG_PREFIX userdel failed for $system_user"
+                        write_result "$res" "failed" "userdel failed"
+                    fi
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action' for $system_user"
+                    write_result "$res" "failed" "unknown action: $action"
+                    ;;
+            esac
+        done
+    done
+}
+
 # Start watchdog in background
 watchdog &
 WATCHDOG_PID=$!
@@ -2617,6 +2730,15 @@ echo "Watchdog started (PID: $WATCHDOG_PID)"
 restart_poller &
 RESTART_POLLER_PID=$!
 echo "Restart poller started (PID: $RESTART_POLLER_PID)"
+
+# Start plugin-user poller in background. www-data PHP cannot call
+# useradd/userdel directly (root required), so PluginUserService writes
+# /tmp/eiou-pluser-req-<id>.json and this loop turns those into
+# useradd/userdel invocations as the root supervisor. See
+# docs/PLUGIN_SANDBOXING.md (Phase 1).
+plugin_user_poller &
+PLUGIN_USER_POLLER_PID=$!
+echo "Plugin user poller started (PID: $PLUGIN_USER_POLLER_PID)"
 
 echo ""
 echo "=========================================="
