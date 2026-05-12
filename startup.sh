@@ -2841,6 +2841,14 @@ plugin_routing_poller() {
                 apply-pool)
                     apply_file "$pool_path" "$pool_config"
                     apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # Per-plugin writable scratch dir referenced in the
+                    # pool's open_basedir. Must exist + be owned by the
+                    # plugin user, otherwise the plugin can't write
+                    # anywhere. Created idempotently on every apply.
+                    local scratch="/var/lib/eiou/plugin-scratch/${system_user}"
+                    mkdir -p "$scratch"
+                    chown "$system_user:$system_user" "$scratch"
+                    chmod 700 "$scratch"
                     ;;
                 drop-pool)
                     if [ -f "$pool_path" ]; then

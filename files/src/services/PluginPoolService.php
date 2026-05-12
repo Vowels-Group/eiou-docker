@@ -50,6 +50,15 @@ class PluginPoolService
     public const PLUGIN_ROOT = '/etc/eiou/plugins';
 
     /**
+     * Where the canonical __dispatch.php template lives in the image.
+     * Installed into each sandboxed plugin's dir at enable time so the
+     * plugin always has a working dispatcher even before its author
+     * provides a real one. Defaults to the source path used inside the
+     * container; tests override via constructor.
+     */
+    public const DEFAULT_DISPATCHER_TEMPLATE = '/app/eiou/src/templates/plugin-dispatch-template.php';
+
+    /**
      * disable_functions list. Each entry is a function the plugin's
      * worker must NOT have access to. exec/system family blocks shell-
      * out; assert/eval blocks late-binding code execution. pcntl_exec
@@ -65,15 +74,21 @@ class PluginPoolService
     ];
 
     private ?Logger $logger;
+    private string $dispatcherTemplate;
+    private string $pluginRoot;
 
     /** @var callable(string $action, array $payload): array{status:string, error?:string} */
     private $actionExecutor;
 
     public function __construct(
         ?Logger $logger = null,
-        ?callable $actionExecutor = null
+        ?callable $actionExecutor = null,
+        ?string $dispatcherTemplate = null,
+        ?string $pluginRoot = null
     ) {
         $this->logger = $logger;
+        $this->dispatcherTemplate = $dispatcherTemplate ?? self::DEFAULT_DISPATCHER_TEMPLATE;
+        $this->pluginRoot = rtrim($pluginRoot ?? self::PLUGIN_ROOT, '/');
         $this->actionExecutor = $actionExecutor ?? function (string $action, array $payload): array {
             return $this->executeViaRequestFile($action, $payload);
         };
@@ -161,6 +176,20 @@ EOT;
         $this->validatePluginId($pluginId);
         $this->validateSystemUser($systemUser);
 
+        // Install the Phase 3a dispatcher template into the plugin's
+        // dir BEFORE asking the supervisor to bring the pool up. Once
+        // FPM picks up the new pool, requests to it must land on a
+        // valid __dispatch.php or they 404 — installing first means the
+        // very first request after reload finds the file ready.
+        //
+        // www-data owns the plugin dir at this point so a direct PHP
+        // write works without involving the supervisor. The file
+        // becomes world-readable (mode 644) so the eiou-p-<hash> user
+        // can read it via the open_basedir allow-list.
+        if (!$this->installDispatcher($pluginId)) {
+            return false;
+        }
+
         $poolConfig = $this->renderPoolConfig($pluginId, $systemUser);
 
         $result = ($this->actionExecutor)('apply-pool', [
@@ -178,6 +207,64 @@ EOT;
             'result' => $result,
         ]);
         return $ok;
+    }
+
+    /**
+     * Copy the dispatcher template into the plugin's directory. Idempotent:
+     * re-copies on every applyPool() call so an upgrade to the template
+     * file in the image propagates to every enabled sandboxed plugin on
+     * its next reconcile.
+     *
+     * Test seam: pass a custom $dispatcherTemplate to the constructor.
+     * Returns false (and logs) if the template can't be read or the
+     * target write fails — the caller treats this like any other
+     * pool-apply failure.
+     */
+    private function installDispatcher(string $pluginId): bool
+    {
+        $targetDir = $this->pluginRoot . '/' . $pluginId;
+        if (!is_dir($targetDir)) {
+            $this->log('error', 'plugin_pool_dispatcher_install_target_missing', [
+                'plugin' => $pluginId,
+                'target_dir' => $targetDir,
+            ]);
+            return false;
+        }
+        if (!is_file($this->dispatcherTemplate) || !is_readable($this->dispatcherTemplate)) {
+            $this->log('error', 'plugin_pool_dispatcher_install_template_missing', [
+                'plugin' => $pluginId,
+                'template' => $this->dispatcherTemplate,
+            ]);
+            return false;
+        }
+        $content = @file_get_contents($this->dispatcherTemplate);
+        if ($content === false) {
+            $this->log('error', 'plugin_pool_dispatcher_install_read_failed', [
+                'plugin' => $pluginId,
+                'template' => $this->dispatcherTemplate,
+            ]);
+            return false;
+        }
+        // Atomic write — never let a request hit a half-written dispatcher.
+        $target = $targetDir . '/__dispatch.php';
+        $tmp = $target . '.tmp.' . bin2hex(random_bytes(4));
+        if (@file_put_contents($tmp, $content) === false) {
+            $this->log('error', 'plugin_pool_dispatcher_install_write_failed', [
+                'plugin' => $pluginId,
+                'tmp' => $tmp,
+            ]);
+            return false;
+        }
+        @chmod($tmp, 0644);
+        if (!@rename($tmp, $target)) {
+            @unlink($tmp);
+            $this->log('error', 'plugin_pool_dispatcher_install_rename_failed', [
+                'plugin' => $pluginId,
+                'target' => $target,
+            ]);
+            return false;
+        }
+        return true;
     }
 
     /**

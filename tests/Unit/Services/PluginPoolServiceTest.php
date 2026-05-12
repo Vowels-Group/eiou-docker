@@ -24,6 +24,9 @@ class PluginPoolServiceTest extends TestCase
     private array $nextResult = ['status' => 'ok'];
 
     private PluginPoolService $svc;
+    private string $tmpRoot;
+    private string $template;
+    private string $pluginRoot;
 
     protected function setUp(): void
     {
@@ -31,11 +34,47 @@ class PluginPoolServiceTest extends TestCase
         $this->actionLog = [];
         $this->nextResult = ['status' => 'ok'];
 
+        // Tmp dispatcher template + plugin root so installDispatcher()
+        // has somewhere to write into during applyPool() tests. Real
+        // /etc/eiou/plugins/<id>/ doesn't exist in the test environment.
+        $this->tmpRoot = sys_get_temp_dir() . '/eiou-pool-test-' . uniqid('', true);
+        $this->pluginRoot = $this->tmpRoot . '/plugins';
+        @mkdir($this->pluginRoot, 0777, true);
+        $this->template = $this->tmpRoot . '/dispatch.php';
+        file_put_contents($this->template, "<?php /* test dispatcher */");
+
         $executor = function (string $action, array $payload): array {
             $this->actionLog[] = ['action' => $action, 'payload' => $payload];
             return $this->nextResult;
         };
-        $this->svc = new PluginPoolService(null, $executor);
+        $this->svc = new PluginPoolService(
+            null,
+            $executor,
+            $this->template,
+            $this->pluginRoot
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        $this->rrmdir($this->tmpRoot);
+    }
+
+    private function rrmdir(string $dir): void
+    {
+        if (!is_dir($dir)) return;
+        $items = scandir($dir);
+        if ($items === false) return;
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') continue;
+            $p = $dir . '/' . $item;
+            if (is_dir($p) && !is_link($p)) {
+                $this->rrmdir($p);
+            } else {
+                @unlink($p);
+            }
+        }
+        @rmdir($dir);
     }
 
     // ===================================================================
@@ -133,6 +172,7 @@ class PluginPoolServiceTest extends TestCase
     #[Test]
     public function applyPoolSendsRenderedConfigToExecutor(): void
     {
+        @mkdir($this->pluginRoot . '/demo', 0755, true);
         $snippet = "# nginx snippet placeholder\n";
         $ok = $this->svc->applyPool('demo', 'eiou-p-12345678', $snippet);
 
@@ -149,8 +189,31 @@ class PluginPoolServiceTest extends TestCase
     #[Test]
     public function applyPoolReturnsFalseOnExecutorFailure(): void
     {
+        @mkdir($this->pluginRoot . '/demo', 0755, true);
         $this->nextResult = ['status' => 'failed', 'error' => 'nginx -t: bad block'];
         $this->assertFalse($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
+    }
+
+    #[Test]
+    public function applyPoolInstallsDispatcherBeforeSendingToSupervisor(): void
+    {
+        @mkdir($this->pluginRoot . '/demo', 0755, true);
+        $this->assertTrue($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
+        // Dispatcher landed in the plugin's dir as __dispatch.php.
+        $this->assertFileExists($this->pluginRoot . '/demo/__dispatch.php');
+        $this->assertStringContainsString(
+            'test dispatcher',
+            (string) file_get_contents($this->pluginRoot . '/demo/__dispatch.php')
+        );
+    }
+
+    #[Test]
+    public function applyPoolRefusesWhenPluginDirMissing(): void
+    {
+        // /etc/eiou/plugins/ghost/ doesn't exist — installDispatcher
+        // refuses, applyPool returns false, no supervisor call made.
+        $this->assertFalse($this->svc->applyPool('ghost', 'eiou-p-12345678', 'snippet'));
+        $this->assertSame([], $this->actionLog);
     }
 
     #[Test]

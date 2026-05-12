@@ -73,6 +73,12 @@ class PluginLoaderSandboxTest extends TestCase
             fn(string $u) => !empty($this->userTable[$u])
         );
 
+        // PluginPoolService needs a dispatcher template + a writable
+        // plugin root for installDispatcher() to succeed. Both live in
+        // the tmp dir so PHPUnit doesn't try to touch /etc/eiou/plugins.
+        $template = $this->tmpRoot . '/dispatch.php';
+        file_put_contents($template, "<?php /* test dispatcher */");
+
         $this->poolService = new PluginPoolService(
             null,
             function (string $action, array $payload): array {
@@ -80,7 +86,9 @@ class PluginLoaderSandboxTest extends TestCase
                 $r = $this->nextPoolResult;
                 $this->nextPoolResult = ['status' => 'ok'];
                 return $r;
-            }
+            },
+            $template,
+            $this->pluginDir
         );
 
         $this->loader = new PluginLoader($this->pluginDir, null, $this->stateFile);
