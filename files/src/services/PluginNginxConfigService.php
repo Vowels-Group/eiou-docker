@@ -66,9 +66,15 @@ class PluginNginxConfigService
             // in PATH_INFO. Plugin must provide /etc/eiou/plugins/<id>/
             // __dispatch.php; absence yields 404 without breaching the
             // pool's open_basedir.
+            // fastcgi_split_path_info needs EXACTLY two captures by
+            // nginx contract: the first becomes $fastcgi_script_name,
+            // the second becomes $fastcgi_path_info. We pin
+            // SCRIPT_FILENAME explicitly below so the prefix capture is
+            // ornamental, but nginx still requires the second capture
+            // to exist or fails `nginx -t` with "must have 2 captures".
             $lines[] = "location ^~ /gui/plugin/{$pluginId}/ {";
             $lines[] = "    fastcgi_pass unix:/run/php/eiou-plugin-{$systemUser}.sock;";
-            $lines[] = "    fastcgi_split_path_info ^/gui/plugin/{$pluginId}(/.*)$;";
+            $lines[] = "    fastcgi_split_path_info ^(/gui/plugin/{$pluginId})(/.*)$;";
             $lines[] = "    include fastcgi_params;";
             $lines[] = "    fastcgi_param SCRIPT_FILENAME /etc/eiou/plugins/{$pluginId}/__dispatch.php;";
             $lines[] = "    fastcgi_param SCRIPT_NAME     /gui/plugin/{$pluginId}/__dispatch.php;";

@@ -324,11 +324,13 @@ class PluginUserService
         $reqPath = self::REQUEST_DIR . '/' . self::REQUEST_PREFIX . $reqId . '.json';
         $resPath = self::REQUEST_DIR . '/' . self::RESULT_PREFIX . $reqId . '.json';
 
+        // JSON_UNESCAPED_SLASHES so the supervisor's grep-based parser
+        // (fallback when jq is missing) sees the raw values it expects.
         $payload = json_encode([
             'ts'          => time(),
             'action'      => $action,
             'system_user' => $systemUser,
-        ]);
+        ], JSON_UNESCAPED_SLASHES);
         if ($payload === false) {
             return ['status' => 'failed', 'error' => 'failed to encode request'];
         }

@@ -163,7 +163,13 @@ class PluginPoolServiceTest extends TestCase
     public function poolPathIsDeterministicAndInFpmPoolDir(): void
     {
         $path = $this->svc->poolPath('hello-eiou');
-        $this->assertSame('/etc/php/8.3/fpm/pool.d/eiou-plugin-hello-eiou.conf', $path);
+        // The version directory is resolved at runtime via glob() to
+        // match whatever PHP version the image has installed. Test the
+        // shape, not a specific version pin.
+        $this->assertMatchesRegularExpression(
+            '#^/etc/php/[0-9]\.[0-9]+/fpm/pool\.d/eiou-plugin-hello-eiou\.conf$#',
+            $path
+        );
     }
 
     #[Test]

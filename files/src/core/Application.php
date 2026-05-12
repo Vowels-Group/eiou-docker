@@ -186,7 +186,7 @@ class Application {
             // hooks. Done AFTER bootAll() so in-process subscribers
             // register first and sandboxed forwarders register
             // alongside them — both fire when an event dispatches.
-            $this->services->getPluginIpcForwarder()->registerAll(
+            $this->services->getPluginIpcForwarder($this->pluginLoader)->registerAll(
                 $this->services->getHooks()
             );
 

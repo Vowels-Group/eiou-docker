@@ -1089,11 +1089,19 @@ class ServiceContainer implements ContainerInterface {
      * Get PluginIpcForwarder — Phase 5 of plugin sandboxing.
      * Bridges in-process firing of events / filters / render hooks
      * to sandboxed plugins' __dispatch.php endpoints.
+     *
+     * The PluginLoader has to be passed in because this getter is
+     * sometimes called from inside Application::__construct (during
+     * the boot wiring step). At that point `Application::getInstance()`
+     * sees a null singleton and recurses into another `new self()` —
+     * which opens a fresh PDO, leaks it, and infinite-recurses until
+     * MySQL refuses new connections. Passing the loader explicitly
+     * avoids any second visit to Application's bootstrap.
      */
-    public function getPluginIpcForwarder(): \Eiou\Services\PluginIpcForwarder {
+    public function getPluginIpcForwarder(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginIpcForwarder {
         if (!isset($this->services['PluginIpcForwarder'])) {
             $this->services['PluginIpcForwarder'] = new \Eiou\Services\PluginIpcForwarder(
-                \Eiou\Core\Application::getInstance()->pluginLoader,
+                $loader,
                 $this->getLogger()
             );
         }

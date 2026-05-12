@@ -2677,7 +2677,7 @@ plugin_user_poller() {
                 system_user=$(jq -r '.system_user // empty' "$req" 2>/dev/null)
             else
                 action=$(grep -oP '"action"\s*:\s*"\K[a-z]+' "$req" 2>/dev/null | head -1)
-                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" 2>/dev/null | head -1)
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" 2>/dev/null | head -1 | sed 's|\\/|/|g')
             fi
 
             # Delete the request BEFORE acting, so a crash inside
@@ -2811,13 +2811,16 @@ plugin_routing_poller() {
             else
                 # Single-line JSON fields. Multi-line content (pool_config
                 # / nginx_snippet) is JSON-encoded into the request with
-                # \n escapes; we decode after extraction.
+                # \n escapes; we decode after extraction. Slashes can
+                # arrive escaped (`\/`) when an upstream encoder doesn't
+                # set JSON_UNESCAPED_SLASHES; un-escape them so the path
+                # validators below match.
                 action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
-                plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1)
-                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" | head -1)
-                pool_path=$(grep -oP '"pool_path"\s*:\s*"\K[^"]+' "$req" | head -1)
-                pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s/\\\\/\\/g')
-                nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s/\\\\/\\/g')
+                plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                pool_path=$(grep -oP '"pool_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
             fi
 
             rm -f "$req"
@@ -2855,6 +2858,17 @@ plugin_routing_poller() {
                     mkdir -p "$scratch"
                     chown "$system_user:$system_user" "$scratch"
                     chmod 700 "$scratch"
+                    # The Phase 4 .gateway-token file was minted by
+                    # www-data and inherited its ownership. The plugin's
+                    # pool user needs to read it (core_call reads the
+                    # file at request time), so chown it to the plugin
+                    # user. Mode stays 600 so no other plugin user can
+                    # see another plugin's token.
+                    local token_file="/etc/eiou/plugins/${plugin_id}/.gateway-token"
+                    if [ -f "$token_file" ]; then
+                        chown "$system_user:$system_user" "$token_file"
+                        chmod 600 "$token_file"
+                    fi
                     ;;
                 drop-pool)
                     if [ -f "$pool_path" ]; then

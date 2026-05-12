@@ -37,8 +37,19 @@ use InvalidArgumentException;
  */
 class PluginPoolService
 {
-    /** Where FPM looks for pool fragments. */
-    public const POOL_DIR = '/etc/php/8.3/fpm/pool.d';
+    /**
+     * Where FPM looks for pool fragments. The PHP minor-version
+     * directory has to match what's installed in the image, so we
+     * resolve it at runtime via glob() rather than hard-pinning a
+     * version that drifts with the base image. The first matching
+     * `/etc/php/*\/fpm/pool.d/` wins; multiple installed versions
+     * would be the operator's problem to disambiguate.
+     */
+    public static function poolDir(): string
+    {
+        $matches = glob('/etc/php/*/fpm/pool.d', GLOB_ONLYDIR) ?: [];
+        return $matches[0] ?? '/etc/php/8.3/fpm/pool.d';
+    }
 
     /** Where nginx reads the per-plugin location snippet. */
     public const NGINX_SNIPPET_PATH = '/etc/nginx/snippets/eiou-plugins.conf';
@@ -153,7 +164,7 @@ EOT;
     public function poolPath(string $pluginId): string
     {
         $this->validatePluginId($pluginId);
-        return self::POOL_DIR . '/eiou-plugin-' . $pluginId . '.conf';
+        return self::poolDir() . '/eiou-plugin-' . $pluginId . '.conf';
     }
 
     /**
@@ -194,13 +205,21 @@ EOT;
             return false;
         }
 
-        // Phase 4: mint a fresh gateway token. The token is written to
-        // the plugin's dir (mode 600, the only file the plugin pool
-        // reads via __dispatch.php that the wallet pool also knows
-        // about). Rotating on every applyPool means a previously
-        // leaked token is invalidated by the next reconcile / enable.
+        // Phase 4: ensure a gateway token exists. Idempotent: minting
+        // only if the per-plugin file is missing. Rotating on every
+        // applyPool seems appealing but reconcileSandbox calls
+        // applyPool on every Application bootstrap (every FPM worker
+        // spawn), which would re-mint tokens on every request — and
+        // a plugin pool that read the old token loses its credential
+        // mid-flight. Tokens are rotated only on explicit operator
+        // request via PluginGatewayTokenService::rotate() (called
+        // directly from disable→enable cycles in setEnabled).
         try {
-            $this->tokenService->rotate($pluginId);
+            $tokenPath = $this->pluginRoot . '/' . $pluginId
+                       . '/' . \Eiou\Services\PluginGatewayTokenService::PER_PLUGIN_TOKEN_FILENAME;
+            if (!is_file($tokenPath)) {
+                $this->tokenService->rotate($pluginId);
+            }
         } catch (Throwable $e) {
             $this->log('error', 'plugin_pool_token_mint_failed', [
                 'plugin' => $pluginId, 'error' => $e->getMessage(),
@@ -248,6 +267,16 @@ EOT;
             ]);
             return false;
         }
+        // If the plugin already ships its own __dispatch.php (as hello-eiou
+        // does post-Phase-5), don't clobber it with the stub template.
+        // Plugins migrating to sandboxed mode are expected to bundle a real
+        // dispatcher that handles their declared events / filters /
+        // renders. Only install the template when the plugin has nothing —
+        // it gives operators a 501-returning placeholder rather than 404.
+        $target = $targetDir . '/__dispatch.php';
+        if (is_file($target)) {
+            return true;
+        }
         if (!is_file($this->dispatcherTemplate) || !is_readable($this->dispatcherTemplate)) {
             $this->log('error', 'plugin_pool_dispatcher_install_template_missing', [
                 'plugin' => $pluginId,
@@ -264,7 +293,6 @@ EOT;
             return false;
         }
         // Atomic write — never let a request hit a half-written dispatcher.
-        $target = $targetDir . '/__dispatch.php';
         $tmp = $target . '.tmp.' . bin2hex(random_bytes(4));
         if (@file_put_contents($tmp, $content) === false) {
             $this->log('error', 'plugin_pool_dispatcher_install_write_failed', [
@@ -353,10 +381,15 @@ EOT;
         $reqPath = "/tmp/eiou-routing-req-{$reqId}.json";
         $resPath = "/tmp/eiou-routing-res-{$reqId}.json";
 
-        $body = json_encode(array_merge($payload, [
-            'ts' => time(),
-            'action' => $action,
-        ]));
+        // JSON_UNESCAPED_SLASHES so the supervisor's grep-based parser
+        // (fallback when jq is unavailable in the image) doesn't see
+        // backslash-slashed paths it then misinterprets as a path-traversal
+        // attempt. The shape stays valid JSON; jq + json_decode are
+        // indifferent.
+        $body = json_encode(
+            array_merge($payload, ['ts' => time(), 'action' => $action]),
+            JSON_UNESCAPED_SLASHES
+        );
         if ($body === false) {
             return ['status' => 'failed', 'error' => 'encode failed'];
         }
