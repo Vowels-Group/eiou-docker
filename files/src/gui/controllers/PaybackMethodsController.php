@@ -295,7 +295,7 @@ class PaybackMethodsController
         ];
 
         $messageId = 'payback_methods-fetch-' . $requestId;
-        $result = $delivery->sendMessage('payback_methods', $address, $payload, $messageId, false);
+        $result = $delivery->sendMessage('payback_method', $address, $payload, $messageId, false);
 
         if (empty($result['success'])) {
             $this->respondError(
