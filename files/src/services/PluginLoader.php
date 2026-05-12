@@ -206,6 +206,31 @@ class PluginLoader
             $this->loadPlugin($pluginPath, $state);
         }
 
+        // Phase 6 deprecation surface: at boot, list any enabled
+        // in-process plugins so the wallet log shows operators which
+        // plugins they're trusting with full address-space access.
+        // Once per discover() — re-running discover() (test scenarios
+        // mostly) emits the same warning again, which is fine.
+        $legacy = [];
+        foreach ($this->plugins as $name => $plugin) {
+            // $this->plugins is keyed by loaded in-process plugins
+            // only. Sandboxed plugins skip plugins[] entirely (Phase
+            // 2.5), so anything here is by definition in-process.
+            $legacy[] = $name;
+        }
+        if ($legacy !== []) {
+            $this->logger->warning(
+                'plugin_legacy_in_process_loaded',
+                [
+                    'plugins' => $legacy,
+                    'note' => 'These plugins run with full wallet privileges (can read master key, '
+                            . 'sign with private key). Phase 6 will deprecate the in-process model. '
+                            . 'Plugin authors should migrate to sandboxed:true — see '
+                            . 'docs/PLUGIN_SANDBOXING.md for the contract.',
+                ]
+            );
+        }
+
         return $this->plugins;
     }
 
@@ -353,6 +378,19 @@ class PluginLoader
                 'status' => $status,
                 'sandboxed' => $sandboxed,
             ];
+
+            // Phase 6 deprecation flag — surface every legacy
+            // (non-sandboxed) plugin so operators see at a glance which
+            // ones need the author to migrate to sandboxed mode.
+            // Empty manifest field for sandboxed plugins keeps the
+            // GUI rendering simple (truthy check works).
+            if (!$sandboxed) {
+                $row['legacy_in_process'] = true;
+                $row['legacy_warning']    = 'In-process plugins run with full wallet privileges '
+                                          . '(can read the master key, sign with the private key). '
+                                          . 'Phase 6 will deprecate this mode. Plugin author should '
+                                          . 'migrate to sandboxed:true (see docs/PLUGIN_SANDBOXING.md).';
+            }
 
             // Phase 4: core_services allow-list. Each entry is
             // "<Service>.<method>" — the gateway checks every
@@ -558,7 +596,28 @@ class PluginLoader
 
         $state = $this->readState();
         $state[$name] = ['enabled' => $enabled];
-        return $this->writeState($state);
+        if ($this->writeState($state)) {
+            return true;
+        }
+
+        // State write failed AFTER sandbox side effects committed (the
+        // pool is alive but plugins.json doesn't reflect it). Roll back
+        // the sandbox change so the on-disk state stays internally
+        // consistent. If the rollback itself fails (uncommon — only
+        // possible if the supervisor died between steps), log loudly
+        // and let reconcileSandbox heal at next boot.
+        $this->logger->error("writeState failed after sandbox side-effects — rolling back", [
+            'plugin' => $name,
+            'target_enabled' => $enabled,
+        ]);
+        if (!$this->applySandboxSideEffects($name, !$enabled)) {
+            $this->logger->critical(
+                "sandbox rollback failed; plugin pool is in a state divergent from plugins.json. "
+                . "Boot-time reconcileSandbox will attempt cleanup.",
+                ['plugin' => $name, 'target_enabled' => $enabled]
+            );
+        }
+        return false;
     }
 
     /**

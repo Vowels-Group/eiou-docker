@@ -177,6 +177,56 @@ class PluginLoaderSandboxTest extends TestCase
     }
 
     #[Test]
+    public function stateWriteFailureAfterSandboxRollsBack(): void
+    {
+        // Force the rare partial-commit case: applySandboxSideEffects
+        // succeeds but writeState fails. Without rollback the pool
+        // is alive but plugins.json doesn't know about it.
+        //
+        // Setup: move the state file into a subdir we own exclusively,
+        // and pre-create it so readState works. Then chmod the file
+        // itself to 0444 (read-only); writeState's atomic temp-file +
+        // rename will fail because rename() can't overwrite a file
+        // whose write perm doesn't exist... actually rename works as
+        // long as the parent dir is writable. So we lock the file's
+        // parent dir instead, but that dir contains ONLY plugins.json
+        // (not the tokens index — that lives in tmpRoot/).
+        $stateDir = $this->tmpRoot . '/state';
+        @mkdir($stateDir, 0755, true);
+        $stateFile = $stateDir . '/plugins.json';
+        // Re-construct the loader pointed at the new state path so
+        // we can lock it independently of the tokens dir.
+        $loader = new PluginLoader($this->pluginDir, null, $stateFile);
+        $loader->setSandboxServices($this->userService, $this->poolService, new PluginNginxConfigService());
+
+        $this->writeManifest('rollback-test', ['sandboxed' => true]);
+        file_put_contents($stateFile, json_encode(new \stdClass()));
+        chmod($stateDir, 0500);
+
+        $this->userActionLog = [];
+        $this->poolActionLog = [];
+
+        $ok = $loader->setEnabled('rollback-test', true);
+
+        chmod($stateDir, 0755);
+
+        // Rollback should have called dropPool + dropUser to undo
+        // applyPool + ensureUser. Sequence: create → apply → (state
+        // fails) → drop-pool → remove-user.
+        $this->assertFalse($ok, 'setEnabled should report failure');
+        $applyOps = array_values(array_filter(
+            $this->poolActionLog,
+            fn($e): bool => $e['action'] === 'apply-pool'
+        ));
+        $dropOps = array_values(array_filter(
+            $this->poolActionLog,
+            fn($e): bool => $e['action'] === 'drop-pool'
+        ));
+        $this->assertCount(1, $applyOps, 'one apply-pool happened');
+        $this->assertCount(1, $dropOps, 'rollback issued one drop-pool');
+    }
+
+    #[Test]
     public function poolFailureAbortsStateFlipAndKeepsUser(): void
     {
         $this->writeManifest('flaky', ['sandboxed' => true]);

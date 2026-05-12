@@ -16,15 +16,16 @@ default until the operator explicitly enables them.
 7. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
 8. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
 9. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
-10. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
-11. [Writing a Plugin](#writing-a-plugin)
-12. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-13. [Extending the GUI](#extending-the-gui)
-14. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-15. [Testing a Plugin](#testing-a-plugin)
-16. [Safety Model and Limitations](#safety-model-and-limitations)
-17. [Troubleshooting](#troubleshooting)
-18. [Related Documentation](#related-documentation)
+10. [Sandboxed Plugin Authoring](#sandboxed-plugin-authoring)
+11. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
+12. [Writing a Plugin](#writing-a-plugin)
+13. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+14. [Extending the GUI](#extending-the-gui)
+15. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+16. [Testing a Plugin](#testing-a-plugin)
+17. [Safety Model and Limitations](#safety-model-and-limitations)
+18. [Troubleshooting](#troubleshooting)
+19. [Related Documentation](#related-documentation)
 
 ---
 
@@ -1007,6 +1008,215 @@ during boot — usually means the node is in an incomplete state).
 
 ---
 
+## Sandboxed Plugin Authoring
+
+Plugins can opt into running in an isolated PHP-FPM pool as their own
+Unix user, with no access to `/etc/eiou/config/` (and therefore no
+access to the master key, the seed phrase, the encrypted private key,
+or any other wallet secret). Set `"sandboxed": true` in the manifest.
+
+See [`docs/PLUGIN_SANDBOXING.md`](PLUGIN_SANDBOXING.md) for the full
+architecture; what you need to know as an author is below.
+
+### Sandboxing modes
+
+| Mode | Manifest | What runs in-process | What plugin can access |
+|---|---|---|---|
+| In-process *(legacy, deprecated)* | `"sandboxed": false` *or* field absent | Plugin's entry class via `register()`/`boot()` in the wallet's PHP-FPM pool | Everything the wallet can — master key, seed phrase, every file `www-data` reads. |
+| Sandboxed | `"sandboxed": true` | Nothing — entry class never loads | Only the plugin's own dir + scratch dir. Wallet secrets are `EACCES`. |
+
+A future release will deprecate the in-process mode. New plugins should
+set `"sandboxed": true` from day one.
+
+### Manifest surfaces a sandboxed plugin declares
+
+Everything a plugin would have wired in `boot()` becomes manifest
+metadata:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "entryClass": "Vendor\\MyPlugin\\Entry",
+  "autoload": { "psr-4": { "Vendor\\MyPlugin\\": "src/" } },
+
+  "sandboxed": true,
+
+  "subscribes_to":  ["sync.completed", "contact.created"],
+  "render_hooks":   ["gui.dashboard.after"],
+  "filter_hooks":   ["gui.dashboard.widgets"],
+  "tabs":           [{"id": "my-tab", "label": "My Tab", "icon": "fas fa-puzzle-piece", "order": 50}],
+  "gui_actions":    [{"name": "myPluginAction", "tier": "csrf"}],
+  "gui_assets":     [{"type": "css", "path": "assets/styles.css"}],
+  "api_routes":     [{"method": "GET", "action": "fortune"}],
+  "cli_commands":   [{"name": "my-plugin"}],
+
+  "core_services":  ["Logger.info", "Logger.warning"]
+}
+```
+
+Core reads each list at boot and registers IPC forwarders that route
+each surface into the plugin's `__dispatch.php`. The plugin's own
+PHP code never executes in-process.
+
+### The `__dispatch.php` contract
+
+The plugin ships **one** PHP file as its sandboxed entry point:
+`<plugin-dir>/__dispatch.php`. nginx is configured to route
+`/gui/plugin/<plugin-id>/*` to the plugin's FPM socket with
+`SCRIPT_FILENAME` pinned to that file — the plugin never picks its
+own entry.
+
+Wire shape (request):
+
+```http
+POST /gui/plugin/<id>/__dispatch HTTP/1.1
+Content-Type: application/json
+
+{
+  "type":    "event" | "filter" | "render" | "action" | "rest" | "cli",
+  "name":    "<event_name | hook_name | action_name | route_action | command>",
+  "context": <type-specific payload>
+}
+```
+
+Response:
+
+```json
+{
+  "ok":     true,
+  "result": <type-specific>,
+  "_log":   [
+    {"level": "info", "message": "...", "context": {...}},
+    ...
+  ]
+}
+```
+
+The `_log` array is copied into the wallet's central log under the
+plugin's name when the dispatch returns — so log lines emitted by
+the plugin appear next to wallet log lines for the same operation,
+even though the plugin couldn't write `/var/log/` directly.
+
+Use the bundled template at
+`files/src/templates/plugin-dispatch-template.php` as the starting
+point for your dispatcher. The template carries a
+`PLUGIN_DISPATCH_VERSION` constant — bump it in lockstep with
+upstream so the wallet can warn operators if your plugin's
+dispatcher is older than the current contract.
+
+### Calling core services from your handler — `core_call()`
+
+The dispatcher template includes a `core_call($service, $method, $args, $log)`
+helper. It POSTs an authenticated request to the wallet's gateway
+endpoint, which validates:
+
+1. The plugin's bearer token (loaded from `.gateway-token` in the
+   plugin's dir, written there by core at enable time).
+2. The plugin's manifest declares `"<Service>.<method>"` in
+   `core_services` (this manifest gate is *operator-visible* —
+   operators see which APIs the plugin wants to use *before*
+   they enable it).
+3. The target method on the core service carries the
+   `#[\Eiou\Contracts\PluginCallable]` attribute. This is a per-
+   method allow-list in the core codebase, reviewable in
+   `git grep PluginCallable`.
+
+Example:
+
+```php
+core_call('Logger', 'info', [
+    "Sync completed for {$contactPubkey}",
+    ['plugin' => 'my-plugin', 'contact_pubkey' => $contactPubkey],
+], $log);
+```
+
+Returns the method's return value on success, `null` on failure
+(transport error / validation rejection / handler exception).
+Failure cases log to `$log` with structured context.
+
+### What you CAN do as a sandboxed plugin
+
+- Subscribe to events; emit log lines via the `_log` envelope.
+- Render dashboard widgets, register tabs, contribute filter values.
+- Handle GUI actions (CSRF + auth tier validated by core before
+  dispatch).
+- Serve REST endpoints at `/api/v1/plugins/<your-id>/<action>`.
+- Register CLI subcommands; the `eiou` binary dispatches to your
+  plugin via IPC.
+- Read your own files and the scratch dir at
+  `/var/lib/eiou/plugin-scratch/<your-system-user>/`.
+- Open MySQL connections to your own per-plugin database user (your
+  manifest's `database.user: true` flag still works the same way it
+  did pre-sandboxing).
+- Call whitelisted core services via `core_call`.
+
+### What you CANNOT do as a sandboxed plugin
+
+- Read `/etc/eiou/config/.master.key` or any wallet secret. **EACCES
+  at the kernel level.** This is the whole point.
+- Decorate / wrap a core service. Plugin code runs in a different
+  process from core; there's no shared address space to override.
+  Use events to observe core actions instead.
+- Call into another plugin directly. Plugins talk to core only;
+  cross-plugin coordination happens via shared events or
+  database tables that core mediates.
+- Execute shell-out functions (`exec`, `shell_exec`, `passthru`,
+  `proc_open`, `popen`, `system`, `pcntl_exec`, `eval`, `assert`).
+- Open arbitrary file URLs (`allow_url_fopen=0`,
+  `allow_url_include=0`).
+
+### Constraints to design around
+
+- **Handler timeout**: 500ms per IPC call. Long-running work needs to
+  be queued in the plugin's own DB tables and processed
+  asynchronously by the plugin's own processor (if you have one).
+- **Event-mid-transaction**: if core fires an event while inside an
+  uncommitted DB transaction, your handler reads from a separate DB
+  connection and won't see the in-flight rows. (Core's own dispatch
+  call sites commit before firing for this reason.)
+- **Per-render IPC latency**: each render-hook fire adds ~1-5ms.
+  Negligible for a dashboard widget, expensive if your plugin
+  subscribes to a render hook that fires on every page render.
+
+### Migration checklist for an existing in-process plugin
+
+1. Take inventory of every `boot()` / `register()` action: events
+   subscribed, hooks registered, registries called, services added.
+2. For every service registration via `$container->setService(...)`
+   — **stop**. This pattern doesn't work sandboxed. Replace with
+   event-based observation or document the constraint.
+3. Move every declarative surface (event names, hook names, tab
+   metadata, asset paths, route paths, CLI names) into the manifest
+   fields above.
+4. Write `__dispatch.php` from the bundled template. Add a `case`
+   in the switch for each `type` your manifest declared.
+5. Declare every core service method your handler calls in
+   `core_services` (e.g. `"Logger.info"`).
+6. Set `"sandboxed": true`.
+7. Disable, then re-enable the plugin (rotates the gateway token,
+   triggers a fresh FPM pool reload).
+
+### Security note for plugin authors
+
+Even with sandboxing, **a plugin that's installed and enabled has
+real reach inside the operator's wallet** — it can:
+
+- Read every contact (via `ContactService` calls if its manifest
+  declares them).
+- Read every transaction (via `TransactionService` calls if
+  declared).
+- Sign messages on the wallet's behalf (if `MessageDeliveryService`
+  is whitelisted in the manifest *and* the core method is
+  `#[PluginCallable]`).
+
+Sandboxing prevents *seed-phrase exfiltration*. It doesn't make a
+plugin trustworthy. Operators reading your manifest's
+`core_services` list see the surface you're asking for — don't ask
+for more than you need.
+
+---
+
 ## Events a Plugin Can Subscribe To
 
 Events are dispatched through `Eiou\Events\EventDispatcher::getInstance()`.
@@ -1794,14 +2004,32 @@ entry points are called. This is a defensive measure against some
 edge cases in the PHP-FPM request lifecycle where the same worker PID would
 otherwise run the lifecycle twice and double-subscribe event listeners.
 
-### No sandboxing
+### Sandboxing modes
 
-Plugins run with the same permissions and filesystem access as the core PHP
-process (`www-data` inside the container). There is no opcode sandbox, no
-capability filter, no per-plugin process isolation. **Only install plugins
-from sources you trust.** The manifest opt-in model (disabled by default) is
-a safety rail against *accidental* breakage, not a defence against malicious
-code.
+Two execution modes, selected per-plugin via `"sandboxed": true` in the
+manifest:
+
+- **In-process** *(legacy, scheduled for deprecation)* — plugin's entry
+  class loads into the wallet's `www-data` PHP-FPM pool. Same permissions
+  and filesystem access as core PHP. No opcode sandbox, no capability
+  filter, no per-plugin process isolation. A malicious in-process plugin
+  can read the master key + decrypt the seed phrase. **Only install
+  in-process plugins from sources you fully trust.**
+
+- **Sandboxed** *(recommended)* — plugin runs in its own PHP-FPM pool as
+  its own Unix user (`eiou-p-<hash>`) with `open_basedir` restricted to
+  the plugin's dir + scratch, `disable_functions` blocking
+  shell-out/eval paths, and no filesystem access to wallet secrets.
+  Communication with core goes through IPC over a per-plugin bearer
+  token to a whitelisted service gateway. See [Sandboxed Plugin
+  Authoring](#sandboxed-plugin-authoring) for the contract and
+  [`docs/PLUGIN_SANDBOXING.md`](PLUGIN_SANDBOXING.md) for the
+  architecture.
+
+The manifest opt-in is the boundary; the disabled-by-default rule
+applies to both modes (a malicious or buggy plugin can't crash the
+node on its first discover, even sandboxed — discover doesn't run any
+plugin code).
 
 ### URL validation for GUI rendering
 

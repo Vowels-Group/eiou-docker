@@ -2892,6 +2892,20 @@ plugin_routing_poller() {
                 echo "$LOG_PREFIX nginx -t FAILED: $nginx_err"
                 restore_backup "$SNIPPET_PATH"
                 [ "$action" = "apply-pool" ] && restore_backup "$pool_path"
+                # Roll back the per-plugin scratch dir if we just created
+                # it. Without this it lingers as cosmetic cruft (next
+                # retry's mkdir -p is idempotent, but leaving it across
+                # FAILED applies makes /var/lib/eiou/plugin-scratch/ fill
+                # with abandoned dirs over time).
+                if [ "$action" = "apply-pool" ] && [ -n "$system_user" ]; then
+                    local scratch="/var/lib/eiou/plugin-scratch/${system_user}"
+                    # Only remove if EMPTY — preserve any plugin state
+                    # that might already exist from a previous successful
+                    # apply (this same apply could be a retry).
+                    if [ -d "$scratch" ] && [ -z "$(ls -A "$scratch" 2>/dev/null)" ]; then
+                        rmdir "$scratch" 2>/dev/null || true
+                    fi
+                fi
                 # Still verify the restore was clean.
                 if ! nginx -t >/dev/null 2>&1; then
                     echo "$LOG_PREFIX RESTORE ALSO FAILED — manual intervention required"
