@@ -34,11 +34,31 @@ testContainer="eiou-ssl-vol-test"
 testVolume="${testContainer}-ssl-cert"
 image="eiou/eiou"
 
+# Sidecar image used to inspect the ssl-cert volume independently of the
+# container under test. We need an *external* container that mounts the named
+# volume read-only so we can confirm files actually live on the volume rather
+# than in the eiou container's writable layer — `docker exec` into the eiou
+# container can't make that distinction. Any minimal image with sh/ls/test
+# would do; alpine:3 is the conventional ~5 MB choice for throwaway sidecars.
+sidecarImage="alpine:3"
+
+# Record whether sidecarImage was already present so cleanup only removes it
+# if this test pulled it. Avoids deleting an image the operator had for other
+# reasons.
+if docker image inspect "${sidecarImage}" >/dev/null 2>&1; then
+    sidecarImagePreexisted=yes
+else
+    sidecarImagePreexisted=no
+fi
+
 cleanup() {
     docker rm -f "${testContainer}" >/dev/null 2>&1
     docker volume rm "${testContainer}-mysql-data" "${testContainer}-config" \
         "${testContainer}-plugins" "${testContainer}-backups" "${testVolume}" \
         >/dev/null 2>&1
+    if [[ "${sidecarImagePreexisted}" == "no" ]]; then
+        docker rmi "${sidecarImage}" >/dev/null 2>&1
+    fi
 }
 trap cleanup EXIT
 
@@ -131,7 +151,7 @@ echo -e "\n\t-> Checking both subdirs live on ${testVolume}"
 # same backing volume rather than separate stores.
 docker exec "${testContainer}" sh -c 'echo le-canary > /etc/letsencrypt/.canary.le && echo nginx-canary > /etc/nginx/ssl/.canary.nginx' >/dev/null 2>&1
 
-volumeListing=$(docker run --rm -v "${testVolume}:/vol:ro" alpine:3 sh -c 'ls /vol/letsencrypt/.canary.le /vol/nginx/.canary.nginx 2>&1' 2>&1)
+volumeListing=$(docker run --rm -v "${testVolume}:/vol:ro" "${sidecarImage}" sh -c 'ls /vol/letsencrypt/.canary.le /vol/nginx/.canary.nginx 2>&1' 2>&1)
 
 if echo "${volumeListing}" | grep -q "/vol/letsencrypt/.canary.le" && \
    echo "${volumeListing}" | grep -q "/vol/nginx/.canary.nginx"; then
@@ -151,7 +171,7 @@ docker exec "${testContainer}" rm -f /etc/letsencrypt/.canary.le /etc/nginx/ssl/
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Checking self-signed cert was written to ssl/nginx/"
 
-certOnVolume=$(docker run --rm -v "${testVolume}:/vol:ro" alpine:3 sh -c 'test -f /vol/nginx/server.crt && test -f /vol/nginx/server.key && echo OK || echo MISSING' 2>&1)
+certOnVolume=$(docker run --rm -v "${testVolume}:/vol:ro" "${sidecarImage}" sh -c 'test -f /vol/nginx/server.crt && test -f /vol/nginx/server.key && echo OK || echo MISSING' 2>&1)
 
 if [[ "${certOnVolume}" == "OK" ]]; then
     printf "\t   server.crt + server.key in ssl/nginx/ ${GREEN}PASSED${NC}\n"
