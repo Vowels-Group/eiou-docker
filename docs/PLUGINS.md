@@ -13,19 +13,20 @@ default until the operator explicitly enables them.
 4. [Database Isolation](#database-isolation)
 5. [Plugin Signatures](#plugin-signatures)
 6. [Lifecycle](#lifecycle)
-7. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
-8. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
-9. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
-10. [Sandboxed Plugin Authoring](#sandboxed-plugin-authoring)
-11. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
-12. [Writing a Plugin](#writing-a-plugin)
-13. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-14. [Extending the GUI](#extending-the-gui)
-15. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-16. [Testing a Plugin](#testing-a-plugin)
-17. [Safety Model and Limitations](#safety-model-and-limitations)
-18. [Troubleshooting](#troubleshooting)
-19. [Related Documentation](#related-documentation)
+7. [Installing Plugins](#installing-plugins)
+8. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
+9. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
+10. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
+11. [Sandboxed Plugin Authoring](#sandboxed-plugin-authoring)
+12. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
+13. [Writing a Plugin](#writing-a-plugin)
+14. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+15. [Extending the GUI](#extending-the-gui)
+16. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+17. [Testing a Plugin](#testing-a-plugin)
+18. [Safety Model and Limitations](#safety-model-and-limitations)
+19. [Troubleshooting](#troubleshooting)
+20. [Related Documentation](#related-documentation)
 
 ---
 
@@ -821,6 +822,153 @@ this via the request-marker pattern documented in
 
 ---
 
+## Installing Plugins
+
+There are three ways to land a plugin's files in `/etc/eiou/plugins/<name>/`:
+
+1. **Drop the directory in by hand** — log in to the container, copy the
+   plugin's files into `/etc/eiou/plugins/`, then enable it in the GUI / CLI.
+   This is the path operators with shell access have always had. The plugin
+   is disabled by default ([Disabled by default](#disabled-by-default)).
+
+2. **Bundled** — plugins shipped inside the Docker image are seeded into the
+   plugins volume on first boot via `cp -rn` ([Bundled
+   plugins](#bundled-plugins)).
+
+3. **Upload a `.zip` through the GUI** — the operator picks a `.zip` from
+   their machine and the node stages it disabled, after a layered validation
+   pass. The rest of this section documents that path.
+
+### Why a separate code path
+
+A plugin installs at PHP-FPM privilege — once it runs, it can do anything PHP
+can do (see [No sandboxing](#no-sandboxing)). The upload path's job is not to
+make every plugin safe — it can't — but to make the *install decision*
+deliberate and to ensure that a malformed, oversized, or hostile zip cannot
+exploit the node before the operator has even decided whether to enable the
+plugin. Trust comes from the operator (and optionally the signature trust
+chain — see [Plugin Signatures](#plugin-signatures)). Mechanical safety
+comes from the gates below.
+
+### Service
+
+`Eiou\Services\PluginInstallService` owns the validation and extraction
+pipeline. The GUI's `pluginsUpload` action delegates to it. The CLI does
+not yet expose this — operators with shell access can already drop files in
+directly, so a CLI form would just duplicate the existing path.
+
+### Validation pipeline
+
+Validations run in the order listed. The pipeline short-circuits on the
+first failure, and any bytes already written to the staging directory are
+removed before the error returns.
+
+| Gate                          | Limit / Rule                                                                                         | Why                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| File readable, non-empty      | `PluginInstallService::MAX_ZIP_BYTES` (25 MiB)                                                       | First-line DoS guard; rejects before the zip is even opened.                                     |
+| Magic bytes                   | First 4 bytes must be `PK\x03\x04`                                                                   | Client-supplied MIME / extension aren't trusted; the magic header is.                            |
+| Path traversal                | No `..`, no leading `/`, no `\`, no `./`                                                             | Zip-slip — prevents extraction from escaping `/etc/eiou/plugins/`.                               |
+| Single top-level directory    | All entries share one root, matching `^[a-z0-9][a-z0-9_-]{0,63}$`                                    | A plugin is one named directory; multiple roots or capital-letter names break the loader's contract. |
+| Per-file uncompressed size    | `MAX_FILE_BYTES` (10 MiB)                                                                            | No single file can dominate the install.                                                         |
+| Total uncompressed size       | `MAX_UNCOMPRESSED_BYTES` (50 MiB)                                                                    | Disk-space cap.                                                                                  |
+| File count                    | `MAX_FILE_COUNT` (500)                                                                               | Inode-pressure cap.                                                                              |
+| Compression ratio             | `MAX_COMPRESSION_RATIO` (100:1)                                                                      | Zip-bomb sentinel; legitimate plugin zips sit well under 20:1.                                   |
+| File extension allow-list     | `php, json, md, txt, css, js, map, html, htm, svg, png, jpg, jpeg, gif, webp, ico, woff, woff2, ttf, otf, eot` | Refuses `.phar`, `.so`, `.htaccess`, hidden dotfiles, anything outside the plugin asset contract. |
+| Symlink rejection             | No `is_link()` paths in the extracted tree                                                           | Belt-and-suspenders: even if entry walk approved a name, an actual symlink on disk is anomalous. |
+| Extraction stays inside root  | `realpath()` of every extracted path is under the staging dir                                        | Cross-checks the entry walk against the post-extraction filesystem state.                        |
+| Manifest validation           | `plugin.json` parses, `name` matches directory, `version` and `entryClass` present                   | Catches corrupt manifests before the loader has to.                                              |
+| No overwrite                  | Target dir must not already exist                                                                    | Install is not update; refresh through uninstall → upload so the destructive step is explicit.   |
+| Signature (mode dependent)    | In `require` mode, the zip must include a valid `plugin.sig` against a trusted key                   | See [Enforcement modes](#enforcement-modes). `warn` and `off` modes accept the upload but report the verifier's verdict in the response. |
+
+The numeric limits and the allow-list are returned to the GUI by the
+`pluginsUploadLimits` action so the upload form can echo them without
+duplicating constants.
+
+### Staging and atomic publish
+
+Uploaded bytes are not written under their final name. The pipeline:
+
+1. The upload tmp file (provided by PHP under `$_FILES['plugin_zip']['tmp_name']`)
+   is opened read-only via `ZipArchive`.
+2. Every entry is walked with `statIndex()` — no extraction yet — and the
+   gates above run against the metadata.
+3. If the walk passes, extraction targets a sibling directory:
+   `/etc/eiou/plugins/.staging-<16-hex-chars>/`. A failure here leaves the
+   staging directory in place, which the service immediately recursive-deletes
+   inside the catch block.
+4. The extracted tree is walked again for symlinks / realpath escapes, and
+   the manifest is parsed.
+5. If signature mode is `require`, the verifier runs against the staged tree.
+   A bad verdict aborts the install; the staging directory is cleaned up.
+6. `rename()` moves `.staging-…/<plugin_id>/` to
+   `/etc/eiou/plugins/<plugin_id>/`. `rename()` inside the same filesystem is
+   atomic, so `PluginLoader::discover()` never sees a half-written plugin.
+7. The staging parent is removed. The `PLUGIN_INSTALLED` event fires.
+
+If anything between steps 3 and 6 fails, the catch block recursive-deletes
+the staging directory before re-throwing, so failed uploads leave no
+artefacts on the volume.
+
+### What the upload does *not* do
+
+- **Enable.** Installed plugins land disabled. No `register()` or `boot()`
+  runs. The operator must toggle the plugin on and restart the node, exactly
+  like a manually-dropped-in plugin. This matches the
+  [Disabled by default](#disabled-by-default) stance.
+- **Replace an existing plugin.** Re-uploading a plugin that's already on
+  disk returns `409 already_installed`. Updates require an explicit
+  uninstall first, so the operator acknowledges the destructive step.
+- **Bypass signature enforcement.** If `PLUGIN_SIGNATURE_MODE` is set to
+  `require`, the upload path applies the same verifier as the loader.
+
+### Response shape
+
+```json
+{
+  "success": true,
+  "plugin_id": "my-plugin",
+  "version": "1.2.3",
+  "signature": {
+    "status": "ok",
+    "key_fingerprint": "sha256:…",
+    "enforced": true
+  },
+  "enabled": false,
+  "restart_required": false,
+  "message": "Plugin uploaded and staged as disabled. Enable it and restart the node to activate."
+}
+```
+
+`signature.status` mirrors `PluginSignatureVerifier::verify()`: `ok`,
+`unsigned`, `untrusted_key`, `bad_signature`, `malformed_sig`,
+`malformed_manifest`, or `not_checked` when no verifier is wired.
+
+### Errors
+
+| HTTP | Code                 | When                                                                   |
+| ---- | -------------------- | ---------------------------------------------------------------------- |
+| 400  | `invalid_upload`     | No file, partial upload, PHP `UPLOAD_ERR_*`, or forged `tmp_name`      |
+| 400  | `invalid_zip`        | Magic-byte / zip-slip / oversize / bad-extension / manifest failures   |
+| 409  | `already_installed`  | Target directory already exists                                        |
+| 500  | `install_unavailable`| Service not wired (early-boot / no-wallet state)                       |
+| 500  | `install_failed`     | Filesystem failure, signature required but verification failed, etc.   |
+
+### Trust boundary
+
+Every check above is mechanical. None of them can answer "should I trust
+this plugin's code?" — that is a human decision, and a plugin you trust
+enough to enable runs at PHP-FPM privilege ([No
+sandboxing](#no-sandboxing)). Before enabling an uploaded plugin:
+
+- Read the manifest.
+- Read the changelog (the detail modal renders it).
+- Note the signature status — `ok` proves only that the plugin was signed
+  by a key in `trusted-keys/`, not that the code is safe.
+- If you're running with `database.user` declarations, review them —
+  enabling triggers `CREATE USER` / `GRANT`.
+
+---
+
 ## Managing Plugins in the GUI
 
 The Plugins section lives under **Settings → Plugins**.
@@ -859,6 +1007,18 @@ Clicking any row opens a detail modal showing:
   two-step "disable → confirm uninstall" flow; the service refuses to
   uninstall an enabled plugin regardless of how the request arrives. See
   [Database Isolation → Uninstall](#uninstall).
+
+### Uploading a `.zip`
+
+The section header carries an **Upload .zip** button next to **Refresh**.
+Clicking it opens the OS file picker; selecting a `.zip` POSTs it to the
+`pluginsUpload` action. On success the new plugin appears in the table as
+disabled (grey dot); the row's signature status is reflected in the toast
+(`ok`, `unsigned`, etc.). To activate, toggle the plugin on and use the
+restart banner — same flow as a manually-dropped-in plugin.
+
+The full validation contract and threat model is documented in
+[Installing Plugins](#installing-plugins).
 
 ### Restart banner
 

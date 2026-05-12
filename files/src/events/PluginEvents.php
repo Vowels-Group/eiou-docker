@@ -34,6 +34,25 @@ class PluginEvents
     public const PLUGIN_REGISTERED = 'plugin.registered';
 
     /**
+     * Dispatched after a plugin's files have been written to
+     * /etc/eiou/plugins/<name>/ by PluginInstallService. Fires once per
+     * successful install; not fired for plugins seeded from the Docker
+     * image at first boot (those are present before the event dispatcher
+     * is wired anyway).
+     *
+     * The plugin is staged as DISABLED at this point — register() / boot()
+     * have not run, and won't until the operator toggles it on and
+     * restarts. Subscribers that want to observe activation should listen
+     * for PLUGIN_REGISTERED / PLUGIN_BOOTED instead.
+     *
+     * Event data:
+     *   - name: string    - Plugin name (matches manifest + directory)
+     *   - version: string - Plugin version from the manifest
+     *   - source: string  - Where the install came from (e.g. 'zip_upload')
+     */
+    public const PLUGIN_INSTALLED = 'plugin.installed';
+
+    /**
      * Dispatched after a plugin's boot() phase completes successfully.
      *
      * Event data:

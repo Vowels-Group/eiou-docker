@@ -8676,6 +8676,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'openPluginUninstall': function(el) {
             if (window.plugins) window.plugins.openUninstall(el.getAttribute('data-plugin'));
         },
+        'uploadPlugin': function() { if (window.plugins) window.plugins.openUpload(); },
 
         // Payback Methods
         'openPaybackMethodForm': function(el) {
@@ -10362,6 +10363,107 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             toggle(name, enabled);
         }
 
+        // -- Upload flow ----------------------------------------------------
+        // Triggers the hidden #plugins-upload-input file picker. When the
+        // user picks a file we POST it directly via FormData — no fancy
+        // drag-drop, no JS-side magic-byte check (the server has to
+        // validate anyway). Tor Browser ships with FormData and the
+        // basic fetch() body type — no streaming or compression APIs
+        // are touched. See [[feedback_tor_browser_compat]].
+        function openUpload() {
+            var input = document.getElementById('plugins-upload-input');
+            if (!input) {
+                if (typeof showToast === 'function') {
+                    showToast('Error', 'Upload control is not available on this page', 'error');
+                }
+                return;
+            }
+            // The change handler is one-shot per pick. Detaching after each
+            // invocation prevents leftover listeners stacking up if the
+            // user opens the picker, cancels, then opens it again — that
+            // would otherwise fire the handler multiple times on the next
+            // successful pick.
+            var onChange = function() {
+                input.removeEventListener('change', onChange);
+                var file = input.files && input.files[0];
+                input.value = ''; // allow picking the same file again
+                if (!file) return;
+                submitUpload(file);
+            };
+            input.addEventListener('change', onChange);
+            input.click();
+        }
+
+        function submitUpload(file) {
+            // Cheap client-side guard for the obvious cases. The server
+            // re-validates every check — this just gives faster feedback
+            // for a wrong-file mistake without a round-trip.
+            if (!/\.zip$/i.test(file.name)) {
+                if (typeof showToast === 'function') {
+                    showToast('Upload rejected', 'Please pick a .zip file', 'error');
+                }
+                return;
+            }
+            // 25 MiB ceiling mirrored from PluginInstallService::MAX_ZIP_BYTES.
+            // Server is authoritative; this is just a UX shortcut.
+            var hardLimit = 25 * 1024 * 1024;
+            if (file.size > hardLimit) {
+                if (typeof showToast === 'function') {
+                    showToast('Upload rejected', 'Zip exceeds 25 MiB limit', 'error');
+                }
+                return;
+            }
+
+            if (typeof showToast === 'function') {
+                showToast('Uploading…', file.name, 'info');
+            }
+
+            var body = new FormData();
+            body.append('action', 'pluginsUpload');
+            body.append('csrf_token', csrfToken());
+            body.append('plugin_zip', file);
+
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) { return { status: res.status, data: data }; });
+            }).then(function(r) {
+                if (r.data && r.data.success) {
+                    var sig = r.data.signature || {};
+                    var sigLine = '';
+                    if (sig.status && sig.status !== 'not_checked') {
+                        sigLine = ' Signature: ' + sig.status
+                            + (sig.enforced ? ' (required)' : '');
+                    }
+                    if (typeof showToast === 'function') {
+                        showToast(
+                            'Plugin uploaded',
+                            r.data.plugin_id + ' v' + r.data.version
+                                + ' is staged disabled.' + sigLine
+                                + ' Enable it and restart the node to activate.',
+                            'success'
+                        );
+                    }
+                    // Refresh list so the new plugin shows up.
+                    refresh();
+                } else {
+                    var msg = (r.data && r.data.error) ||
+                              (r.data && r.data.message) ||
+                              'Upload failed';
+                    if (typeof showToast === 'function') {
+                        showToast('Upload failed', msg, 'error');
+                    }
+                }
+            }).catch(function() {
+                if (typeof showToast === 'function') {
+                    showToast('Upload failed', 'Network error during upload', 'error');
+                }
+            });
+        }
+
         return {
             reload: function() { loaded = false; return refresh(); },
             toggle: toggle,
@@ -10369,6 +10471,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openModal: openModal,
             openUninstall: openUninstallModal,
             openChangelog: openChangelogModal,
+            openUpload: openUpload,
             requestRestart: requestRestart
         };
     })();

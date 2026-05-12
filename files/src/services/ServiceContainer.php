@@ -1169,6 +1169,30 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginInstallService instance.
+     *
+     * Handles operator-uploaded plugin zips: validates them, extracts to
+     * a staging directory under /etc/eiou/plugins/, atomically renames
+     * into place, and emits the PLUGIN_INSTALLED event. The new plugin
+     * sits DISABLED on disk — discover() picks it up on the next boot
+     * but won't register/boot it until the operator toggles it on.
+     *
+     * Mirrors the signature verifier + mode the PluginLoader uses, so an
+     * operator who has signature mode set to 'require' can't sidestep
+     * verification through the upload path.
+     */
+    public function getPluginInstallService(): \Eiou\Services\PluginInstallService {
+        if (!isset($this->services['PluginInstallService'])) {
+            $this->services['PluginInstallService'] = new \Eiou\Services\PluginInstallService(
+                '/etc/eiou/plugins',
+                $this->getPluginSignatureVerifier(),
+                \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
+            );
+        }
+        return $this->services['PluginInstallService'];
+    }
+
+    /**
      * Convenience wrapper that returns a PDO authenticated as the given
      * plugin's MySQL user. Identical to calling
      * `$container->getPluginPdoFactory()->getFor($pluginId)`. Cached
