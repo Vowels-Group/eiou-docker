@@ -181,6 +181,11 @@ class ApiKeysController
 
     /**
      * Verify the user's auth code and grant sensitive-action access.
+     *
+     * Either the primary BIP39-derived auth code or, when configured, the
+     * user-chosen alternate code is accepted. Both are evaluated even on
+     * primary match so timing observers cannot tell which credential was
+     * presented (or whether an alt code is set at all).
      */
     private function verify(): void
     {
@@ -191,8 +196,14 @@ class ApiKeysController
 
         $user = UserContext::getInstance();
         $expected = $user->getAuthCode();
+        $altHash = $user->getAltCodeHash();
 
-        if ($expected === null || !hash_equals($expected, $authCode)) {
+        $primaryOk = $expected !== null && hash_equals($expected, $authCode);
+        $altOk = ($altHash !== null && $altHash !== '')
+            ? password_verify($authCode, $altHash)
+            : false;
+
+        if (!$primaryOk && !$altOk) {
             // Same generic failure message the login form uses — don't
             // confirm whether the user has an auth code set.
             $this->respondError('invalid_authcode', 'Auth code is invalid', 401);

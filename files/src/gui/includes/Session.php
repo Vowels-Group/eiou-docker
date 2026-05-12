@@ -147,27 +147,63 @@ class Session
     }
 
     /**
-     * Authenticate user with auth code
+     * Authenticate user with the primary auth code or, optionally, the
+     * user-configured alternate auth code.
      *
-     * @param string $authCode
-     * @param string $userAuthCode
-     * @return bool
+     * Both candidates are always evaluated — even when the primary check
+     * matches — so a timing observer cannot tell which credential was
+     * accepted (or whether an alt code is configured at all).
+     *
+     * On success, marks which credential was used in the session so any
+     * follow-up gate that needs the *primary* specifically (e.g. rotating
+     * the alt code itself) can refuse alt-code holders.
+     *
+     * @param string      $submitted    The code the caller submitted.
+     * @param string      $userAuthCode Plaintext primary auth code from
+     *                                  UserContext::getAuthCode().
+     * @param string|null $altCodeHash  Argon2id hash from
+     *                                  UserContext::getAltCodeHash(), or
+     *                                  null when no alt code is set.
      */
-    public function authenticate(string $authCode, string $userAuthCode): bool
+    public function authenticate(string $submitted, string $userAuthCode, ?string $altCodeHash = null): bool
     {
-        // Use constant-time comparison to prevent timing attacks
-        if (hash_equals($userAuthCode, $authCode)) {
+        // Constant-time primary check.
+        $primaryOk = hash_equals($userAuthCode, $submitted);
+
+        // Argon2id is intentionally slow; password_verify() is constant-
+        // time. Always run it when a hash is configured, regardless of
+        // $primaryOk, so the auth path's timing profile doesn't reveal
+        // which credential matched.
+        $altOk = false;
+        if ($altCodeHash !== null && $altCodeHash !== '') {
+            $altOk = password_verify($submitted, $altCodeHash);
+        }
+
+        if ($primaryOk || $altOk) {
             $_SESSION[SessionKeys::AUTHENTICATED] = true;
             $_SESSION[SessionKeys::AUTH_TIME] = time();
             $_SESSION[SessionKeys::LAST_ACTIVITY] = time();
+            // Record which credential was used. Alt-code holders are not
+            // allowed to rotate the alt code (see AltCodeController), so
+            // the rotation handler needs to distinguish the two cases.
+            $_SESSION[SessionKeys::AUTH_VIA_ALT] = ($primaryOk === false) && ($altOk === true);
 
-            // Regenerate session ID on successful authentication
             session_regenerate_id(true);
-
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Whether the current session was authenticated via the alternate
+     * auth code. Returns false for sessions logged in with the primary
+     * code, unauthenticated sessions, or pre-feature sessions that don't
+     * carry the marker.
+     */
+    public function authenticatedViaAlt(): bool
+    {
+        return !empty($_SESSION[SessionKeys::AUTH_VIA_ALT]);
     }
 
     /**

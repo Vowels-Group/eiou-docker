@@ -3032,6 +3032,58 @@ class implements secure session handling:
 - Auth code comparison with timing-safe equality check
 - Session regeneration on login to prevent fixation attacks
 
+### Alternate Auth Code
+
+The primary auth code is 20 hex characters derived deterministically from the BIP39
+seed (HMAC-SHA256 with context `'eiou-auth-code'`). It is strong (~80 bits) but not
+memorable, so operators typically read it from their seed-phrase backup or password
+manager. The **alternate auth code** is an optional user-chosen passphrase that
+authenticates GUI requests interchangeably with the primary at the login form and
+the sensitive-action re-auth gate.
+
+| Aspect | Primary | Alt |
+|---|---|---|
+| Source | Derived from BIP39 seed | User-chosen |
+| Entropy | ~80 bits | Variable; enforced floor via strength rules |
+| Storage | AES-256-GCM in `userconfig.json::authcode_encrypted` | Argon2id one-way hash in `userconfig.json::altcode_hash` |
+| Recoverable | Yes — re-derive from seed | No — primary always rotates it |
+| Recovers primary? | n/a | **No** — no path |
+
+Strength rules (enforced in `Eiou\Utils\AltCodeValidator`): ≥12 characters; at
+least one each of uppercase, lowercase, digit, symbol; no triple-repeated character
+(`aaa`); no monotonic ascending/descending run of length ≥4 (`abcd`, `4321`); not a
+substring match against the bundled common-password tripwire list.
+
+**Why Argon2id and not encryption (symmetric with the primary)?** The master key that
+would encrypt the alt code is derived from the seed and sits next to `userconfig.json`
+on the same volume. Encrypting with that key adds nothing against an attacker who
+reads the file. A slow memory-hard hash (Argon2id) forces real offline-attack cost
+even with full filesystem access — which matters because the alt code is user-chosen
+and therefore typically far lower entropy than the seed-derived primary.
+
+**Verification (single chokepoint, two physical callsites).** `Session::authenticate()`
+takes both the plaintext primary and the optional alt-code Argon2id hash; it always
+evaluates both checks (`hash_equals` for primary, `password_verify` for alt) so a
+timing observer cannot infer which credential was presented or whether an alt code
+is configured at all. `ApiKeysController::verify()` (the sensitive-access gate that
+fronts payback methods, plugin management, settings mutations, and api-key CRUD) does
+the same. On success, `SessionKeys::AUTH_VIA_ALT` is set to `true` for alt-only
+authentications so downstream code can distinguish the two.
+
+**Self-rotation forbidden.** `AltCodeController::altCodeSet` and `altCodeClear`
+both refuse alt-authenticated sessions outright (`alt_session_forbidden`) and require
+the primary to be re-entered in-band — not via the session sensitive-access grant.
+This prevents an attacker who learns the alt code from rotating it and locking the
+legitimate operator out.
+
+**Online resistance.** The `gui_login` rate limiter (10 attempts / 60 s window with a
+5-minute block on excess, defaults from `Constants.php`) caps online brute-force
+attempts at ~876k/year worst case. Combined with the 12-character minimum and forced
+complexity, online cracking is infeasible. Disabling rate limiting via
+`rate_limit_enabled=false` shifts the alt code's online resistance entirely onto
+password strength and Argon2id work factor — viable only with very strong
+passphrases.
+
 ### Remember-Me Login (Rotation Tokens)
 
 The GUI login form offers a "Remember this browser for N days" checkbox. When ticked,
@@ -3234,6 +3286,7 @@ TorKeyDerivation          +---------------------+
 |------|------------|------|
 | Private Key | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
 | Auth Code | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
+| Alt Code | Argon2id one-way hash (`password_hash`) | `/etc/eiou/config/userconfig.json` |
 | Mnemonic | AES-256-GCM | Displayed once, not stored |
 | Database credentials | AES-256-GCM with AAD | `/etc/eiou/config/dbconfig.json` |
 | All database files | MariaDB TDE (file_key_management) | `/var/lib/mysql/` (InnoDB, Aria, redo logs, temp tables, binlog) |

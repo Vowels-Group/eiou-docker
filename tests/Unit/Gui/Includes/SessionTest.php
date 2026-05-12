@@ -245,6 +245,73 @@ class SessionTest extends TestCase
     }
 
     /**
+     * Alt code accepted when primary does not match.
+     */
+    public function testAuthenticateSucceedsWithAltCodeWhenPrimaryDoesNotMatch(): void
+    {
+        $altPlain = 'AltPass1!ne_long';
+        $altHash = password_hash($altPlain, PASSWORD_ARGON2ID);
+
+        $result = $this->session->authenticate($altPlain, 'unrelated_primary', $altHash);
+
+        $this->assertTrue($result);
+        $this->assertTrue($_SESSION['authenticated']);
+        $this->assertTrue($_SESSION['auth_via_alt']);
+        $this->assertTrue($this->session->authenticatedViaAlt());
+    }
+
+    /**
+     * Primary matching does NOT mark the session as alt-authenticated even
+     * when an alt-code hash is configured — the alt-gate must distinguish
+     * primary logins from alt logins.
+     */
+    public function testAuthenticateDoesNotMarkAltWhenPrimaryMatches(): void
+    {
+        $primary = 'primary_code_42abc';
+        $altHash = password_hash('SomeOtherAlt99!ab', PASSWORD_ARGON2ID);
+
+        $result = $this->session->authenticate($primary, $primary, $altHash);
+
+        $this->assertTrue($result);
+        $this->assertArrayHasKey('auth_via_alt', $_SESSION);
+        $this->assertFalse($_SESSION['auth_via_alt']);
+        $this->assertFalse($this->session->authenticatedViaAlt());
+    }
+
+    /**
+     * Both candidates wrong → still rejected even when alt hash is set.
+     */
+    public function testAuthenticateRejectsWhenNeitherPrimaryNorAltMatches(): void
+    {
+        $altHash = password_hash('LegitAlt12#secure', PASSWORD_ARGON2ID);
+
+        $result = $this->session->authenticate('bogus', 'real_primary_xyz', $altHash);
+
+        $this->assertFalse($result);
+        $this->assertArrayNotHasKey('authenticated', $_SESSION);
+    }
+
+    /**
+     * No alt hash configured → falls back to primary-only behavior.
+     */
+    public function testAuthenticateWithoutAltHashStillAllowsPrimary(): void
+    {
+        $result = $this->session->authenticate('match_me', 'match_me', null);
+
+        $this->assertTrue($result);
+        $this->assertFalse($this->session->authenticatedViaAlt());
+    }
+
+    /**
+     * authenticatedViaAlt() returns false when unauthenticated.
+     */
+    public function testAuthenticatedViaAltReturnsFalseWhenUnauthenticated(): void
+    {
+        unset($_SESSION['auth_via_alt']);
+        $this->assertFalse($this->session->authenticatedViaAlt());
+    }
+
+    /**
      * Test logout clears session
      */
     public function testLogoutClearsSession(): void
