@@ -345,7 +345,11 @@ for container in $CONTAINER_LIST; do
                 fi
             fi
 
-            # Then check Tor connectivity (processors won't start until Tor is ready)
+            # Then check Tor SOCKS5 self-test (processors won't start until SOCKS5 is up).
+            # NB: this curl resolves our OWN .onion through OUR OWN SOCKS5 — Tor uses
+            # the local descriptor cache, NOT the HSDir lookup peers do, so success
+            # only proves the daemon is up. For cross-peer reachability use the
+            # opt-in EIOU_TOR_MESH_WAIT helper or run torDescriptorPublishTest.
             if [ "$hostname_ready" == "true" ] && [ "$tor_ready" != "true" ]; then
                 torAddress=$(docker exec "$container" php -r '
                     if (file_exists("/etc/eiou/config/userconfig.json")) {
@@ -355,7 +359,7 @@ for container in $CONTAINER_LIST; do
                         }
                     }')
                 if [[ ! -z ${torAddress} ]]; then
-                    # Verify actual TOR connectivity via SOCKS proxy
+                    # Self-curl through SOCKS5 — see comment block above.
                     if docker exec "$container" curl --socks5-hostname 127.0.0.1:9050 \
                         --connect-timeout 5 \
                         --max-time 10 \
@@ -376,15 +380,15 @@ for container in $CONTAINER_LIST; do
                 if [ "$processors_started" -ge 2 ] 2>/dev/null; then
                     if [ "$tor_ready" == "true" ]; then
                         if [ "$MODE" == 'https' ]; then
-                            printf "${GREEN}Ready (HTTPS + Tor)${NC}\n"
+                            printf "${GREEN}Ready (HTTPS + Tor SOCKS5 self-test)${NC}\n"
                         else
-                            printf "${GREEN}Ready (HTTP + Tor)${NC}\n"
+                            printf "${GREEN}Ready (HTTP + Tor SOCKS5 self-test)${NC}\n"
                         fi
                     else
                         if [ "$MODE" == 'https' ]; then
-                            printf "${YELLOW}Ready (HTTPS, Tor not verified)${NC}\n"
+                            printf "${YELLOW}Ready (HTTPS, Tor SOCKS5 self-test failed)${NC}\n"
                         else
-                            printf "${YELLOW}Ready (HTTP, Tor not verified)${NC}\n"
+                            printf "${YELLOW}Ready (HTTP, Tor SOCKS5 self-test failed)${NC}\n"
                         fi
                     fi
                     break
@@ -399,7 +403,8 @@ for container in $CONTAINER_LIST; do
                     }
                 }')
             if [[ ! -z ${torAddress} ]]; then
-                # Verify actual TOR connectivity, not just presence of torAddress
+                # Self-curl through SOCKS5 — proves daemon up, not cross-peer reachability.
+                # See comment in HTTP/HTTPS branch above.
                 if docker exec "$container" curl --socks5-hostname 127.0.0.1:9050 \
                     --connect-timeout 5 \
                     --max-time 10 \
@@ -407,7 +412,7 @@ for container in $CONTAINER_LIST; do
                     --fail \
                     --output /dev/null \
                     "$torAddress" 2>/dev/null; then
-                    printf "${GREEN}Ready (Tor connected)${NC}\n"
+                    printf "${GREEN}Ready (Tor SOCKS5 self-test passed)${NC}\n"
                     break
                 fi
             fi
@@ -430,6 +435,27 @@ done
 printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
 # Brief buffer time for message processors (using environment variable if set)
 sleep ${TEST_POLL_INTERVAL:-1}
+
+# Wait for full cross-container Tor mesh convergence.
+#
+# The per-container init loop above only verifies SELF-reachability (a
+# container can curl its own .onion through its own SOCKS5). Tests that
+# route over Tor between PEERS — chainDropTestSuite's ping/auto-propose
+# flow, parts of syncTestSuite — also need every other peer's hidden
+# service descriptor to be reachable, which can take 5–15 minutes on
+# fresh Tor v3 services and may never fully converge in a Docker bridge.
+#
+# ON by default since the helper now probes pairs in parallel each
+# iteration (total wall time bounded by EIOU_TOR_MESH_TIMEOUT, default
+# 600s) — happy path completes in ~30–90s, the same range the
+# per-container Tor self-test already takes. Set EIOU_TOR_MESH_WAIT=false
+# (or =0) to skip when running suites that don't route over Tor.
+# See `wait_for_tor_mesh` in tests/baseconfig/config.sh.
+if [ "${EIOU_TOR_MESH_WAIT:-true}" != "false" ] && [ "${EIOU_TOR_MESH_WAIT:-1}" != "0" ]; then
+    if ! wait_for_tor_mesh $CONTAINER_LIST; then
+        printf "${YELLOW}Continuing with partial Tor mesh — Tor-routed tests may have intermittent failures.${NC}\n"
+    fi
+fi
 
 # Disable per-wallet rate limiting on every container so the integration
 # suite doesn't trip CLI/API rate limits on rapid-fire test calls.
@@ -483,6 +509,7 @@ printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 TESTS_ALL="
 sslCertificateTest
 sslVolumeLayoutTest
+torDescriptorPublishTest
 torTestSuite
 mutualContactTest
 addContactsTest
@@ -581,6 +608,7 @@ chainDropTestSuite
 TESTS_CONNECTIONS="
 sslCertificateTest
 sslVolumeLayoutTest
+torDescriptorPublishTest
 torTestSuite
 "
 
