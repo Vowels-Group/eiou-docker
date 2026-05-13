@@ -460,6 +460,26 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get TransactionLookupService instance.
+     *
+     * Read-only facade exposing a curated subset of TransactionRepository
+     * methods to sandboxed plugins via the plugin gateway. The gateway
+     * resolves a service name to `get<ServiceName>()` on this container,
+     * so this getter is what makes "TransactionLookupService.getByTxid"
+     * (and siblings) reachable from a plugin manifest's core_services
+     * allow-list. The repository itself stays undecorated and accessed
+     * only through RepositoryFactory.
+     */
+    public function getTransactionLookupService(): \Eiou\Services\Lookup\TransactionLookupService {
+        if (!isset($this->services['TransactionLookupService'])) {
+            $this->services['TransactionLookupService'] = new \Eiou\Services\Lookup\TransactionLookupService(
+                $this->getRepositoryFactory()->get(TransactionRepository::class)
+            );
+        }
+        return $this->services['TransactionLookupService'];
+    }
+
+    /**
      * Get P2pService instance
      *
      * Integrates MessageDeliveryService for reliable P2P message delivery
