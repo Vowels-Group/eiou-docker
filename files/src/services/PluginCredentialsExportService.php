@@ -79,6 +79,22 @@ class PluginCredentialsExportService
      */
     public const CREDENTIALS_DIR = '/etc/eiou/credentials';
 
+    /** Per-plugin group-name prefix. The full name is the prefix
+     *  followed by an 8-hex hash of the plugin id; same shape as
+     *  PluginUserService::SYSTEM_USER_PREFIX so operators reading
+     *  `getent group` see a stable, predictable scheme. Kept short
+     *  to stay well inside the conservative 32-char group-name
+     *  ceiling (`eiou-pc-<8hex>` = 15 chars).
+     */
+    public const GROUP_NAME_PREFIX = 'eiou-pc-';
+
+    /** Hash length appended to the group prefix. Match PluginUserService
+     *  so the (user, group) pair for a plugin are derived identically
+     *  — operators inspecting `id eiou-p-<hex>` see the matching
+     *  `eiou-pc-<same-hex>` if the file group is correctly applied.
+     */
+    public const GROUP_HASH_LEN = 8;
+
     /** Synchronous-RPC settling time. File writes are fast; if the
      *  supervisor is wedged the operator wants to see that loudly
      *  rather than blocking enable/disable for tens of seconds.
@@ -146,6 +162,26 @@ class PluginCredentialsExportService
     }
 
     /**
+     * Group name that owns this plugin's credentials file. Deterministic
+     * from the plugin id (sha256 → first 8 hex chars), so every node
+     * computes the same name without coordination. Operators add their
+     * sibling-container uid to this group on the host to grant read
+     * access to a specific plugin's credentials — every other plugin's
+     * credentials file stays unreadable by that uid.
+     *
+     * Per-plugin grouping (vs a shared `eiou-plugin-credentials` group)
+     * keeps least-privilege real: a misconfigured sibling that has
+     * group access to plugin A cannot drift into reading plugin B's
+     * credentials by adding more mounts.
+     */
+    public function groupNameFor(string $pluginId): string
+    {
+        $this->validatePluginId($pluginId);
+        $hash = substr(hash('sha256', $pluginId), 0, self::GROUP_HASH_LEN);
+        return self::GROUP_NAME_PREFIX . $hash;
+    }
+
+    /**
      * Write the credentials file for a plugin. Idempotent — re-running
      * with the same plaintext overwrites the file atomically, which is
      * the path the boot reconciler relies on.
@@ -200,6 +236,7 @@ class PluginCredentialsExportService
         $result = ($this->actionExecutor)('apply-credentials', [
             'plugin_id'   => $pluginId,
             'target_path' => $this->credentialsPath($pluginId),
+            'group_name'  => $this->groupNameFor($pluginId),
             'body'        => $encoded,
         ]);
         $ok = ($result['status'] ?? '') === 'ok';
@@ -230,6 +267,7 @@ class PluginCredentialsExportService
         $result = ($this->actionExecutor)('drop-credentials', [
             'plugin_id'   => $pluginId,
             'target_path' => $this->credentialsPath($pluginId),
+            'group_name'  => $this->groupNameFor($pluginId),
         ]);
         $ok = ($result['status'] ?? '') === 'ok';
         $this->log($ok ? 'info' : 'warning', 'plugin_credentials_revoke', [

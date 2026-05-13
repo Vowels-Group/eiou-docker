@@ -58,6 +58,36 @@ class PluginCredentialsExportServiceTest extends TestCase
     }
 
     // =========================================================================
+    // groupNameFor()
+    // =========================================================================
+
+    public function testGroupNameForUsesEiouPcPrefixAndEightHexHash(): void
+    {
+        [$svc] = $this->makeService();
+        $name = $svc->groupNameFor('my-plugin');
+        $this->assertMatchesRegularExpression(
+            '/^eiou-pc-[a-f0-9]{8}$/',
+            $name,
+            'group name must match eiou-pc-<8hex> shape so the supervisor admits it'
+        );
+    }
+
+    public function testGroupNameForIsDeterministic(): void
+    {
+        [$svc] = $this->makeService();
+        $this->assertSame($svc->groupNameFor('my-plugin'), $svc->groupNameFor('my-plugin'));
+    }
+
+    public function testGroupNameForDiffersBetweenPlugins(): void
+    {
+        [$svc] = $this->makeService();
+        $this->assertNotSame(
+            $svc->groupNameFor('plugin-a'),
+            $svc->groupNameFor('plugin-b')
+        );
+    }
+
+    // =========================================================================
     // export()
     // =========================================================================
 
@@ -72,6 +102,10 @@ class PluginCredentialsExportServiceTest extends TestCase
         $this->assertSame(
             '/etc/eiou/credentials/plugin-my-plugin.json',
             $h->calls[0]['payload']['target_path']
+        );
+        $this->assertMatchesRegularExpression(
+            '/^eiou-pc-[a-f0-9]{8}$/',
+            $h->calls[0]['payload']['group_name']
         );
 
         $body = json_decode($h->calls[0]['payload']['body'], true);
@@ -147,6 +181,10 @@ class PluginCredentialsExportServiceTest extends TestCase
         $this->assertSame(
             '/etc/eiou/credentials/plugin-my-plugin.json',
             $h->calls[0]['payload']['target_path']
+        );
+        $this->assertMatchesRegularExpression(
+            '/^eiou-pc-[a-f0-9]{8}$/',
+            $h->calls[0]['payload']['group_name']
         );
     }
 

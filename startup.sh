@@ -3022,12 +3022,15 @@ plugin_routing_poller() {
 #   { "ts": <unix>, "action": "apply-credentials"|"drop-credentials",
 #     "plugin_id": "<id>",
 #     "target_path": "/etc/eiou/credentials/plugin-<id>.json",
+#     "group_name":  "eiou-pc-<8hex>",
 #     "body": "<JSON string with host/port/database/username/password>" }
 #
-# This loop writes the body atomically to the target path with mode 0640
-# and owner root:www-data, then deletes the request. drop-credentials
-# removes the target if present. Result file shape mirrors the other
-# pollers:
+# This loop creates the per-plugin group (groupadd -f), writes the body
+# atomically to the target path with mode 0640 and owner root:<group>,
+# then deletes the request. drop-credentials removes the file AND
+# groupdel's the per-plugin group so a long-running node doesn't
+# accumulate stale groups for uninstalled plugins. Result file shape
+# mirrors the other pollers:
 #
 #   { "ts": <unix>, "status": "ok"|"failed", "error": "..." }
 #
@@ -3040,13 +3043,19 @@ plugin_credentials_poller() {
     local LOG_PREFIX="[PLUGIN CREDENTIALS POLLER]"
     local CRED_DIR="/etc/eiou/credentials"
 
-    # mkdir on first iteration; mode 0750 root:www-data so the wallet
-    # can list/stat its own files for health checks but unprivileged
-    # users on the host can't enumerate which plugins exist.
+    # mkdir on first iteration. Mode 0711 root:root: traverse-only,
+    # no list. A sibling container bind-mounts a specific
+    # plugin-<id>.json by absolute path so it doesn't need to list the
+    # dir; the wallet never reads these files (it has the master key
+    # and decrypts credentials in memory), so it doesn't need access
+    # either. Mode 0711 keeps unprivileged users on the host from
+    # enumerating which plugins exist while still allowing the
+    # per-file group on each plugin's credentials file to govern
+    # actual reads.
     if [ ! -d "$CRED_DIR" ]; then
         mkdir -p "$CRED_DIR"
-        chown root:www-data "$CRED_DIR" 2>/dev/null || true
-        chmod 0750 "$CRED_DIR"
+        chown root:root "$CRED_DIR" 2>/dev/null || true
+        chmod 0711 "$CRED_DIR"
     fi
 
     write_result() {
@@ -3070,11 +3079,12 @@ plugin_credentials_poller() {
             [ -f "$req" ] || continue
             local res="${req/-req-/-res-}"
 
-            local action plugin_id target_path body
+            local action plugin_id target_path group_name body
             if command -v jq >/dev/null 2>&1; then
                 action=$(jq -r '.action // empty' "$req" 2>/dev/null)
                 plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
                 target_path=$(jq -r '.target_path // empty' "$req" 2>/dev/null)
+                group_name=$(jq -r '.group_name // empty' "$req" 2>/dev/null)
                 # `.body` is itself a JSON string (the credentials envelope).
                 # Pull it through jq -r so we get the decoded inner JSON.
                 body=$(jq -r '.body // empty' "$req" 2>/dev/null)
@@ -3082,6 +3092,7 @@ plugin_credentials_poller() {
                 action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
                 plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
                 target_path=$(grep -oP '"target_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                group_name=$(grep -oP '"group_name"\s*:\s*"\K[^"]+' "$req" | head -1)
                 body=$(grep -oP '"body"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
             fi
 
@@ -3106,6 +3117,15 @@ plugin_credentials_poller() {
                 write_result "$res" "failed" "target_path mismatch"
                 continue
             fi
+            # Group-name hard-pin to `eiou-pc-<8hex>` — same defence as
+            # plugin_user_poller's `eiou-p-<8hex>` validator. A corrupted
+            # request file mustn't be a primitive to create / delete
+            # arbitrary system groups.
+            if [[ ! "$group_name" =~ ^eiou-pc-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid group_name='$group_name'"
+                write_result "$res" "failed" "invalid group_name"
+                continue
+            fi
 
             case "$action" in
                 apply-credentials)
@@ -3113,6 +3133,19 @@ plugin_credentials_poller() {
                         write_result "$res" "failed" "missing body"
                         continue
                     fi
+                    # Per-plugin group is created idempotently before the
+                    # file write so chown can target it. -f makes
+                    # groupadd a no-op when the group already exists
+                    # rather than exiting non-zero. -r reserves a
+                    # system-range GID so the group sits below 1000 and
+                    # doesn't collide with regular operator users an
+                    # admin might add later.
+                    if ! groupadd -rf "$group_name" 2>/dev/null; then
+                        echo "$LOG_PREFIX groupadd failed for $group_name"
+                        write_result "$res" "failed" "groupadd failed"
+                        continue
+                    fi
+
                     # Atomic write: create the temp file with 0600 BEFORE
                     # writing the body so the plaintext password is never
                     # readable by other unprivileged processes even briefly.
@@ -3120,15 +3153,28 @@ plugin_credentials_poller() {
                     : > "$tmp"
                     chmod 0600 "$tmp"
                     printf '%s' "$body" > "$tmp"
-                    # Now relax to the production mode and ownership.
-                    chown root:www-data "$tmp" 2>/dev/null || true
+                    # Now relax to the production mode and per-plugin
+                    # group. Only members of `eiou-pc-<hex>` (typically
+                    # the operator's sibling-container uid) can read.
+                    chown "root:${group_name}" "$tmp" 2>/dev/null || true
                     chmod 0640 "$tmp"
                     mv "$tmp" "$target_path"
-                    echo "$LOG_PREFIX wrote credentials for $plugin_id"
+                    echo "$LOG_PREFIX wrote credentials for $plugin_id (group $group_name)"
                     write_result "$res" "ok"
                     ;;
                 drop-credentials)
                     rm -f "$target_path"
+                    # Tear down the group too. `groupdel` exits non-zero
+                    # if the group has live members (operator deliberately
+                    # added a uid to it) — that's a sign the operator's
+                    # sibling container is still mounted, so refuse to
+                    # remove and log; a follow-up uninstall after the
+                    # operator detaches will succeed.
+                    if getent group "$group_name" >/dev/null 2>&1; then
+                        if ! groupdel "$group_name" 2>/dev/null; then
+                            echo "$LOG_PREFIX groupdel refused for $group_name (members present?)"
+                        fi
+                    fi
                     echo "$LOG_PREFIX removed credentials for $plugin_id"
                     write_result "$res" "ok"
                     ;;
