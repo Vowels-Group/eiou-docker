@@ -4,6 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Contracts\PluginCallable;
+use Eiou\Contracts\PluginCallerAware;
 use Eiou\Utils\Logger;
 use ReflectionMethod;
 use Throwable;
@@ -194,10 +195,22 @@ class PluginGatewayController
             return $this->errorResponse(429, 'rate_limited', "rate cap {$cap}/min exceeded");
         }
 
+        // Plugin-caller context — services that implement
+        // PluginCallerAware get the calling plugin id injected for the
+        // duration of the call and cleared after, whether the call
+        // returns or throws. Skipped for services that don't need it.
+        $callerAware = $serviceInstance instanceof PluginCallerAware;
+        if ($callerAware) {
+            $serviceInstance->setCallingPluginId($pluginId);
+        }
+
         // Dispatch.
         try {
             $result = $serviceInstance->{$method}(...$args);
         } catch (Throwable $e) {
+            if ($callerAware) {
+                $serviceInstance->setCallingPluginId(null);
+            }
             $this->log('warning', 'plugin_gateway_call_threw', [
                 'plugin' => $pluginId,
                 'call' => $allowKey,
@@ -207,6 +220,9 @@ class PluginGatewayController
             return $this->errorResponse(500, 'call_threw', $e->getMessage(), [
                 'error_class' => get_class($e),
             ]);
+        }
+        if ($callerAware) {
+            $serviceInstance->setCallingPluginId(null);
         }
         if (!$this->resultIsMarshallable($result)) {
             $this->log('error', 'plugin_gateway_unmarshallable_return', [

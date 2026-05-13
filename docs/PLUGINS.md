@@ -300,6 +300,7 @@ contract](#the-__dispatchphp-contract) for the wire shape.
 | `cli_commands`         | no       | list&lt;object&gt;    | Top-level CLI subcommands. Each entry: `{name}` — operators invoke as `eiou <name> [args...]`. |
 | `public_routes`        | no       | list&lt;object&gt;    | Non-admin HTTP endpoints under `/p/<plugin-id>/<action>`, off by default behind `EIOU_PUBLIC_PLUGIN_ROUTES`. See [Public routes](#public-routes--non-admin-http-under-pplugin-idaction) for the entry shape. |
 | `payback_method_types` | no       | list&lt;object&gt;    | Plugin-provided payback-method rail types (Bitcoin, PayPal, Bizum, etc.). Each entry: `{id, catalog}`. See [Registering Payback-Method Rail Types](#registering-payback-method-rail-types). |
+| `cron`                 | no       | list&lt;object&gt;    | Host-driven scheduled tasks. Each entry: `{interval_minutes, action}` (`interval_minutes` bounded `[1, 1440]`, `action` kebab-case). See [Scheduled Tasks (cron)](#scheduled-tasks-cron). |
 
 ### Validation
 
@@ -1922,10 +1923,14 @@ Failure cases log to `$log` with structured context.
 The set of methods reachable through `core_call()` is intentionally
 small. As of this writing, the callable surface is:
 
-| Service                         | Methods                                                                                   |
-| ------------------------------- | ----------------------------------------------------------------------------------------- |
-| `Logger`                        | `debug`, `info`, `warning`, `error`                                                       |
-| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions` |
+| Service                         | Methods                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `Logger`                        | `debug`, `info`, `warning`, `error`                                                                  |
+| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions`   |
+| `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
+| `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
+| `PluginEventPublisher`          | `publish`                                                                                            |
+| `WalletOutboundService`         | `send`                                                                                               |
 
 That's it. The list grows **on demand**, when a concrete plugin
 needs something — not speculatively. The reasoning is straightforward:
@@ -1960,6 +1965,93 @@ The maintainer adds it as a thin `Lookup/` service if the use case
 holds up. Decoration on the repository itself is *not* the path —
 those classes stay pure data-access.
 
+### Where plugin-owned state and code lives
+
+Sandboxed plugins are full PHP applications inside their own FPM pool.
+Anything beyond the dispatcher is **plugin-owned and plugin-managed** —
+core doesn't load it, doesn't audit it, doesn't migrate it. A
+typical layout for a non-trivial plugin:
+
+    /etc/eiou/plugins/payback-btc/
+      plugin.json                       ← manifest (declares autoload, surfaces, etc.)
+      __dispatch.php                    ← entry; routes envelope types
+      src/
+        PaybackBtcPlugin.php            ← entry class (PluginInterface)
+        CustomerRepository.php          ← plugin-owned, queries the plugin's own MySQL schema
+        RefundPolicyService.php         ← plugin-owned, enforces the plugin's own caps
+        OutboundAuditRepository.php     ← plugin-owned, writes to the plugin's own audit table
+        ...
+
+Your `__dispatch.php` is responsible for loading these classes
+itself. The manifest's `autoload.psr-4` field is metadata that
+tooling (and the pre-sandbox in-process load path) read, but the
+sandboxed FPM pool **does not register an autoloader on your behalf**
+— the dispatcher template ships without one. Two practical paths:
+
+**`require_once` from the top of `__dispatch.php`:**
+
+    require_once __DIR__ . '/src/CustomerRepository.php';
+    require_once __DIR__ . '/src/RefundPolicyService.php';
+    require_once __DIR__ . '/src/OutboundAuditRepository.php';
+
+Simple and explicit. Fine for small plugins. The plugin's
+`open_basedir` includes its own dir, so the includes succeed; the
+disabled-functions list does not block `require_once`.
+
+**Register a PSR-4 autoloader from the top of `__dispatch.php`:**
+
+    spl_autoload_register(function (string $class): void {
+        $prefix = 'Eiou\\Plugins\\PaybackBtc\\';
+        if (strncmp($class, $prefix, strlen($prefix)) !== 0) return;
+        $relative = substr($class, strlen($prefix));
+        $file = __DIR__ . '/src/' . str_replace('\\', '/', $relative) . '.php';
+        if (is_file($file)) require_once $file;
+    });
+
+Cleaner for plugins with many classes — instantiate by FQCN and the
+file gets loaded on demand. Mirrors the autoloader core used to run
+on the in-process load path; nothing stops you from porting that
+exact closure into your dispatcher.
+
+Your handler then instantiates the classes as plain PHP, and they
+talk to your per-plugin MySQL user via the connection your handler
+opens itself.
+
+Core doesn't have a "factory that auto-loads plugin services" — and
+deliberately so:
+
+- **It would defeat the sandbox.** Loading plugin code into the
+  wallet's FPM pool would give that code the wallet's master key,
+  full DB access, and no `open_basedir` restriction. That's the
+  in-process model the mandatory-sandboxing change deliberately
+  removed.
+- **The plugin's pool is the right home anyway.** Plugin state
+  belongs in the plugin's own DB schema (isolated MySQL user, can't
+  reach wallet tables); plugin business logic runs as the plugin's
+  Unix user under restricted `open_basedir`. There's no reason for
+  the wallet pool to know about either.
+
+What core DOES provide for plugin-owned tables: per-plugin database
+isolation (see [Database Isolation](#database-isolation)). Your
+plugin gets a MySQL user, a credential entry, optional
+sibling-container credential export, and grants on tables your
+manifest declares via `owned_tables` (or unrestricted DDL if you
+prefer to `CREATE TABLE IF NOT EXISTS` from your own boot path).
+What core does NOT provide is a class loader for your services —
+load them yourself from `__dispatch.php` using one of the two
+patterns above.
+
+The trade-off this design accepts: plugin-managed state is opaque to
+the operator. If a plugin maintains its own audit log of, say,
+outbound spending, the operator's view of that log is whatever the
+plugin chooses to show. The honest framing is that this matches the
+trust model — if you trust a plugin enough to allow-list a
+mutating core service like `WalletOutboundService.send`, you trust
+it enough to keep its own honest audit. If you don't, the right
+path is the event-publish + operator-approval flow, where the
+operator is the one clicking through the existing wallet send GUI
+and the canonical record is the wallet's own `transactions` table.
+
 ### What you CAN do as a sandboxed plugin
 
 - Subscribe to events; emit log lines via the `_log` envelope.
@@ -1974,6 +2066,9 @@ those classes stay pure data-access.
 - Open MySQL connections to your own per-plugin database user (your
   manifest's `database.user: true` flag still works the same way it
   did pre-sandboxing).
+- Ship your own PHP classes (repositories, services, value objects,
+  whatever) — `require_once` them or register your own autoloader
+  from `__dispatch.php`. Core doesn't load them.
 - Call whitelisted core services via `core_call`.
 
 ### What you CANNOT do as a sandboxed plugin
@@ -2144,6 +2239,145 @@ subscribe in `boot()` (or via the manifest's `subscribes_to` for
 sandboxed plugins, which always sees all of them) to catch the full
 registration pass.
 
+### Plugin-published events
+
+Beyond subscribing to core events, a sandboxed plugin can **emit** its
+own events for other plugins or in-process subscribers to react to. The
+host namespaces every plugin-emitted event so subscribers can identify
+the origin and one plugin cannot spoof another:
+
+    plugin.<source-plugin-id>.<event-name>
+
+Where `<source-plugin-id>` is the trusted plugin id resolved by the
+plugin gateway from the bearer token (not a value the plugin passes —
+attempts to do so are ignored), and `<event-name>` is the local event
+name supplied by the publisher, constrained to `^[a-z][a-z0-9_-]{0,63}$`.
+
+A plugin opts into the publish surface by allow-listing
+`PluginEventPublisher.publish` in its manifest `core_services` list and
+calling it through `core_call()`:
+
+    $envelope = [
+      'service' => 'PluginEventPublisher',
+      'method'  => 'publish',
+      'args'    => ['refund-issued', ['txid' => $txid, 'amount' => $amount]],
+    ];
+    core_call($envelope);
+
+The host dispatches `plugin.<your-plugin-id>.refund-issued` with the
+payload, augmented with `_source_plugin` for trace-ability. Subscribers
+declare the full namespaced name in their manifest `subscribes_to` list
+(the existing regex already admits the dotted form):
+
+    "subscribes_to": ["plugin.payback-btc.refund-issued"]
+
+Constraints applied by the host:
+
+- Event name pattern: `^[a-z][a-z0-9_-]{0,63}$`.
+- JSON-encoded payload size cap: 16 KiB (after `_source_plugin` is
+  added).
+- Per-plugin rate cap: 600 publishes per minute (via the
+  `#[PluginCallable]` `ratePerMinute`).
+- The publishing plugin's id is host-injected via `PluginCallerAware`
+  on the gateway path; plugins cannot publish under another plugin's
+  id by passing it as an argument.
+
+Subscribers see plugin-emitted events through the same EventDispatcher
+that fans out core events — in-process subscribers receive them
+synchronously; sandboxed plugins receive them as `event`-typed envelopes
+via `PluginIpcForwarder`, same as for core events. The dispatch path is
+asymmetric (publish is plugin → wallet via gateway; receive is wallet →
+plugin via IPC) because sandboxed plugins run in their own FPM pool and
+cannot share an EventDispatcher instance with the wallet pool.
+
+---
+
+## Scheduled Tasks (cron)
+
+Sandboxed plugins can declare manifest-driven scheduled tasks that the
+host fires on a regular interval. Use cases: batched usage flushes,
+key-TTL sweeps, daily summary rollups, periodic cache refreshes —
+anything the plugin would otherwise need to ship a separate cron
+container for.
+
+### Manifest field
+
+    "cron": [
+      {"interval_minutes": 60,   "action": "flush-usage"},
+      {"interval_minutes": 1440, "action": "daily-summary"}
+    ]
+
+`interval_minutes` is bounded `[1, 1440]` (one minute to one day).
+`action` matches the same kebab-case shape as `public_routes`
+(`^[a-z][a-z0-9-]{0,63}$`) and is the discriminator the plugin's
+`__dispatch.php` switches on to route the work.
+
+### Why `interval_minutes` instead of a full cron expression
+
+The host scheduler ticks once per minute (driven by `startup.sh`'s
+`plugin_cron_poller`), so sub-minute precision is impossible regardless
+of expression syntax. Cron expressions also bring timezone and DST
+traps that don't pay off for the use cases this is designed for. A
+plugin that needs "daily at 03:00 UTC" can fold the hour-of-day check
+into its handler — the dispatch envelope carries `scheduled_at` (Unix
+timestamp), so the handler knows the exact moment the host invoked it.
+
+### Dispatch envelope
+
+When an entry's interval has elapsed since its last fire, the host
+POSTs to the plugin's `__dispatch.php` with:
+
+    {
+      "type":    "cron",
+      "name":    "flush-usage",
+      "context": {
+        "scheduled_at":     1715635200,
+        "interval_minutes": 60
+      }
+    }
+
+The plugin handles it in the same dispatch switch as other envelope
+types:
+
+    if ($type === 'cron') {
+      if ($name === 'flush-usage') {
+        // ... do the work, return ok ...
+      }
+    }
+
+### State and locking
+
+The host persists last-fire timestamps in
+`/var/lib/eiou/plugin-cron-state.json` (mode `0640 root:www-data` —
+same multi-writer permissions as `plugins.json`). Each
+`(plugin-id, action)` pair has its own entry. State entries for actions
+that are no longer declared (plugin uninstalled or entry removed from
+manifest) are pruned automatically on each tick, so the file doesn't
+grow without bound.
+
+Each `(plugin-id, action)` also takes a non-blocking `flock` on a
+lockfile under `/tmp` before dispatch. If a previous tick's invocation
+is still running — a slow plugin handler, a stalled IPC connection —
+the new tick skips with `reason=lock_held` and relies on the next
+minute's tick to retry once the lock is free. This prevents pile-up
+under a hanging handler.
+
+### Failure handling
+
+A transport failure (plugin pool down, FPM unreachable) records
+`reason=dispatch_failed` and **does not advance the last-fire window** —
+the next tick retries. A handler that throws records `reason=threw:<msg>`
+and likewise does not advance — same retry semantics. A handler that
+returns `{"ok": true}` advances the window normally.
+
+### CLI
+
+    eiou plugin cron-tick
+
+Runs one tick manually. Useful for diagnostics, forced fires during
+development, and `--json` output for scripting. The startup poller
+invokes this same command — there is no separate code path for
+operator-triggered vs automated ticks.
 
 ---
 

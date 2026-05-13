@@ -480,6 +480,111 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get IdentityLookupService instance.
+     *
+     * Read-only facade exposing a narrow slice of UserContext (public key,
+     * public-key hash, display name) to sandboxed plugins via the gateway.
+     * Secrets and the mnemonic stay unreachable. Same wrapper rationale as
+     * TransactionLookupService: a curated service-layer surface keeps the
+     * gateway's `get<Name>()` resolution working without exposing the full
+     * UserContext API to plugins.
+     */
+    public function getIdentityLookupService(): \Eiou\Services\Lookup\IdentityLookupService {
+        if (!isset($this->services['IdentityLookupService'])) {
+            $this->services['IdentityLookupService'] = new \Eiou\Services\Lookup\IdentityLookupService(
+                \Eiou\Core\UserContext::getInstance()
+            );
+        }
+        return $this->services['IdentityLookupService'];
+    }
+
+    /**
+     * Get NodeInfoLookupService instance.
+     *
+     * Read-only facade exposing the small slice of AppConfig + UserContext
+     * network identifiers that sandboxed plugins are allowed to inspect.
+     * Plugin pools can't reach `/etc/eiou/config/` directly (open_basedir
+     * restriction), and reaching into env vars from inside a plugin's
+     * runtime is brittle — this service is the supported path for plugins
+     * that need to know the runtime environment and the operator's
+     * customer-facing addresses.
+     */
+    public function getNodeInfoLookupService(): \Eiou\Services\Lookup\NodeInfoLookupService {
+        if (!isset($this->services['NodeInfoLookupService'])) {
+            $this->services['NodeInfoLookupService'] = new \Eiou\Services\Lookup\NodeInfoLookupService(
+                $this->getAppConfig(),
+                \Eiou\Core\UserContext::getInstance()
+            );
+        }
+        return $this->services['NodeInfoLookupService'];
+    }
+
+    /**
+     * Get PluginEventPublisher instance.
+     *
+     * Lets a sandboxed plugin publish a namespaced event that other
+     * plugins or in-process subscribers can react to. The gateway
+     * injects the calling plugin's id (via PluginCallerAware) so the
+     * dispatched event name is host-controlled: subscribers can rely on
+     * `plugin.<source>.<event>` to identify the origin and a plugin
+     * cannot spoof another plugin's id.
+     */
+    public function getPluginEventPublisher(): \Eiou\Services\PluginEventPublisher {
+        if (!isset($this->services['PluginEventPublisher'])) {
+            $this->services['PluginEventPublisher'] = new \Eiou\Services\PluginEventPublisher(
+                \Eiou\Events\EventDispatcher::getInstance(),
+                Logger::getInstance()
+            );
+        }
+        return $this->services['PluginEventPublisher'];
+    }
+
+    /**
+     * Get PluginCronService instance.
+     *
+     * Host-driven scheduler for sandboxed plugins' manifest-declared
+     * cron entries. Constructed lazily because it depends on PluginLoader
+     * + PluginIpcForwarder (both already lazy on this container) and is
+     * only invoked from the CLI tick command (`eiou plugin cron-tick`)
+     * driven by startup.sh's plugin_cron_poller — no HTTP request path
+     * needs it.
+     */
+    public function getPluginCronService(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginCronService {
+        if (!isset($this->services['PluginCronService'])) {
+            $this->services['PluginCronService'] = new \Eiou\Services\PluginCronService(
+                $loader,
+                $this->getPluginIpcForwarder($loader),
+                Logger::getInstance()
+            );
+        }
+        return $this->services['PluginCronService'];
+    }
+
+    /**
+     * Get WalletOutboundService instance.
+     *
+     * Sandbox bridge: lets a plugin reach `TransactionService::sendEiou()`
+     * from inside its FPM pool, where direct access is blocked by
+     * `open_basedir`. The plugin gateway resolves this service from
+     * a plugin manifest's `core_services` allow-list and injects the
+     * calling plugin's id via PluginCallerAware. The service itself
+     * does NOT enforce spending caps or write an audit table — that's
+     * the plugin's responsibility, in the plugin's own DB schema.
+     * Operators who don't trust a plugin to honour its own caps
+     * shouldn't allow-list it at all (the safer path is the
+     * event-publish + operator-approval flow).
+     */
+    public function getWalletOutboundService(): \Eiou\Services\WalletOutboundService {
+        if (!isset($this->services['WalletOutboundService'])) {
+            $this->services['WalletOutboundService'] = new \Eiou\Services\WalletOutboundService(
+                $this->getTransactionService(),
+                Logger::getInstance()
+            );
+        }
+        return $this->services['WalletOutboundService'];
+    }
+
+    /**
      * Get P2pService instance
      *
      * Integrates MessageDeliveryService for reliable P2P message delivery

@@ -25,15 +25,18 @@ class CliPluginService
     private PluginLoader $loader;
     private ?PluginUninstallService $uninstallService;
     private ?PluginUpgradeService $upgradeService;
+    private ?PluginCronService $cronService;
 
     public function __construct(
         PluginLoader $loader,
         ?PluginUninstallService $uninstallService = null,
-        ?PluginUpgradeService $upgradeService = null
+        ?PluginUpgradeService $upgradeService = null,
+        ?PluginCronService $cronService = null
     ) {
         $this->loader = $loader;
         $this->uninstallService = $uninstallService;
         $this->upgradeService = $upgradeService;
+        $this->cronService = $cronService;
     }
 
     /**
@@ -306,5 +309,51 @@ class CliPluginService
             "Plugin upgraded: {$name} ({$result['old_version']} → {$result['new_version']})",
             $result
         );
+    }
+
+    /**
+     * eiou plugin cron-tick
+     *
+     * One pass of the cron scheduler. Iterates enabled + sandboxed
+     * plugins, fires any cron entries whose interval has elapsed since
+     * their last fire, returns a per-tick report. Driven externally by
+     * startup.sh's plugin_cron_poller at one-minute cadence; operators
+     * can also invoke it manually for diagnostics or forced-fire
+     * scenarios. Idempotent on the no-work path.
+     */
+    public function cronTick(array $argv, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+        if ($this->cronService === null) {
+            $output->error(
+                'Plugin cron service not initialized',
+                ErrorCodes::GENERAL_ERROR
+            );
+            return;
+        }
+        $report = $this->cronService->tick();
+
+        if ($output->isJsonMode()) {
+            $output->success('Plugin cron tick complete', $report);
+            return;
+        }
+
+        $firedCount   = count($report['fired']);
+        $skippedCount = count($report['skipped']);
+        $errorCount   = count($report['errors']);
+        if ($firedCount === 0 && $skippedCount === 0 && $errorCount === 0) {
+            $output->info('No cron entries to evaluate.');
+            return;
+        }
+        $output->info(sprintf(
+            'Plugin cron tick: fired=%d skipped=%d errors=%d',
+            $firedCount, $skippedCount, $errorCount
+        ));
+        foreach ($report['fired'] as $f) {
+            $output->info(sprintf('  fired   %s.%s (every %dm)', $f['plugin'], $f['action'], $f['interval']));
+        }
+        foreach ($report['errors'] as $e) {
+            $output->info(sprintf('  error   %s.%s: %s', $e['plugin'], $e['action'], $e['reason']));
+        }
     }
 }

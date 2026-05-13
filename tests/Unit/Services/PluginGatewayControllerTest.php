@@ -2,6 +2,7 @@
 namespace Eiou\Tests\Services;
 
 use Eiou\Contracts\PluginCallable;
+use Eiou\Contracts\PluginCallerAware;
 use Eiou\Services\PluginGatewayController;
 use Eiou\Services\PluginGatewayTokenService;
 use Eiou\Services\PluginLoader;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 class FixtureContainer
 {
     private TestableGatewayService $svc;
+    public ?CallerAwareGatewayService $callerAware = null;
     public function __construct(TestableGatewayService $svc)
     {
         $this->svc = $svc;
@@ -25,6 +27,45 @@ class FixtureContainer
     public function getTestableGatewayService(): TestableGatewayService
     {
         return $this->svc;
+    }
+    public function getCallerAwareGatewayService(): CallerAwareGatewayService
+    {
+        if ($this->callerAware === null) {
+            $this->callerAware = new CallerAwareGatewayService();
+        }
+        return $this->callerAware;
+    }
+}
+
+/**
+ * PluginCallerAware fixture — exercises the gateway's caller-id
+ * injection. Records the caller id at the moment of the method
+ * invocation, and exposes the cleared-after value via a separate flag
+ * so tests can assert the gateway clears the field after the call
+ * returns or throws.
+ */
+class CallerAwareGatewayService implements PluginCallerAware
+{
+    public ?string $observedCallerDuringCall = null;
+    public ?string $current = null;
+
+    public function setCallingPluginId(?string $pluginId): void
+    {
+        $this->current = $pluginId;
+    }
+
+    #[PluginCallable(description: 'Capture the current caller id during the call.')]
+    public function captureCaller(): ?string
+    {
+        $this->observedCallerDuringCall = $this->current;
+        return $this->current;
+    }
+
+    #[PluginCallable(description: 'Capture then throw, so tests can verify the gateway still clears the field on the error path.')]
+    public function captureThenThrow(): void
+    {
+        $this->observedCallerDuringCall = $this->current;
+        throw new \RuntimeException('intentional');
     }
 }
 
@@ -96,6 +137,8 @@ class PluginGatewayControllerTest extends TestCase
                     'TestableGatewayService.alwaysThrows',
                     'TestableGatewayService.returnsAnObject',
                     'TestableGatewayService.forbiddenSecret',
+                    'CallerAwareGatewayService.captureCaller',
+                    'CallerAwareGatewayService.captureThenThrow',
                 ],
             ],
         ]);
@@ -356,5 +399,62 @@ class PluginGatewayControllerTest extends TestCase
         // PHP type check on the return value.
         $this->assertSame(200, $r['status']);
         $this->assertTrue($r['body']['ok']);
+    }
+
+    // ===================================================================
+    // PluginCallerAware injection
+    // ===================================================================
+
+    #[Test]
+    public function injectsCallingPluginIdForCallerAwareServices(): void
+    {
+        $r = $this->svc->handle(
+            json_encode([
+                'service' => 'CallerAwareGatewayService',
+                'method' => 'captureCaller',
+                'args' => [],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('demo', $r['body']['result']);
+        $this->assertSame('demo', $this->container->callerAware->observedCallerDuringCall);
+    }
+
+    #[Test]
+    public function clearsCallingPluginIdAfterSuccessfulCall(): void
+    {
+        $this->svc->handle(
+            json_encode([
+                'service' => 'CallerAwareGatewayService',
+                'method' => 'captureCaller',
+                'args' => [],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertNull(
+            $this->container->callerAware->current,
+            'caller-id field must be cleared after the call returns so it does not leak to a subsequent unrelated call'
+        );
+    }
+
+    #[Test]
+    public function clearsCallingPluginIdAfterThrowingCall(): void
+    {
+        $r = $this->svc->handle(
+            json_encode([
+                'service' => 'CallerAwareGatewayService',
+                'method' => 'captureThenThrow',
+                'args' => [],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertSame(500, $r['status']);
+        $this->assertSame('demo', $this->container->callerAware->observedCallerDuringCall,
+            'caller-id was visible during the throwing call');
+        $this->assertNull(
+            $this->container->callerAware->current,
+            'caller-id field must be cleared even when the call threw'
+        );
     }
 }
