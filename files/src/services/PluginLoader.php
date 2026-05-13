@@ -871,6 +871,56 @@ class PluginLoader
             return $report;
         }
 
+        // Cold-boot race guard. Application::__construct runs in every
+        // PHP entrypoint — GUI workers, CLI calls, AND each of the 4
+        // message processors as they spawn. On a fresh container boot
+        // the processors all bootstrap roughly simultaneously, each
+        // calls reconcileSandbox, and each sees "pool not yet on disk"
+        // (because the first one's apply-pool hasn't completed the
+        // supervisor round-trip yet). Result: 4 apply-pool requests
+        // for the same plugin, all firing before the first one settled.
+        //
+        // A non-blocking flock serialises this. The first caller
+        // acquires the lock and does the work; the rest immediately
+        // skip with skipped=[lock_held]. Their isPoolUpToDate check
+        // would have short-circuited a moment later anyway once the
+        // first finished, so functionally nothing is lost.
+        $lockPath = '/tmp/eiou-sandbox-reconcile.lock';
+        $lockFp = @fopen($lockPath, 'c');
+        if ($lockFp === false) {
+            // Can't open the lock — fall back to the unlocked path.
+            // Rare; the lock is just an optimization, the actual
+            // safety properties (idempotent apply, isPoolUpToDate)
+            // are unchanged whether or not we serialize.
+        } elseif (!@flock($lockFp, LOCK_EX | LOCK_NB)) {
+            // Another process holds the reconcile lock right now.
+            // Skip silently; the winner will get the plugins into
+            // the correct state.
+            fclose($lockFp);
+            $report['skipped'][] = '__lock_held';
+            return $report;
+        }
+
+        try {
+            $result = $this->doReconcileSandbox($report);
+        } finally {
+            if (is_resource($lockFp)) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * The actual reconcile body, factored out of reconcileSandbox so the
+     * flock wrapper above can guard a single execution per boot. Don't
+     * call this directly — go through reconcileSandbox().
+     *
+     * @param array{applied:list<string>, dropped:list<string>, skipped:list<string>, errors:list<array{plugin_id:string, message:string}>} $report
+     */
+    private function doReconcileSandbox(array $report): array
+    {
         $entries = $this->collectSandboxedRouteEntries();
         $snippet = $this->nginxConfigService->renderSnippet($entries);
 

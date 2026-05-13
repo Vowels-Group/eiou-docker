@@ -209,15 +209,20 @@ EOT;
         $this->validatePluginId($pluginId);
         $this->validateSystemUser($systemUser);
 
-        // Pool config file must exist and match exactly. Mismatch
-        // means either the supervisor never wrote it, or a manual
-        // edit drifted from the rendered output — either way, apply.
+        // Pool config file must exist and match. Mismatch means
+        // either the supervisor never wrote it, or a manual edit
+        // drifted from the rendered output — either way, apply.
+        // We rtrim trailing newlines on both sides because bash
+        // command substitution in the supervisor (`$(jq …)`) strips
+        // the trailing \n before write, so the on-disk file is
+        // always one byte shorter than the rendered string.
         $poolPath = $this->poolPath($pluginId);
         if (!is_file($poolPath) || !is_readable($poolPath)) {
             return false;
         }
-        $expected = $this->renderPoolConfig($pluginId, $systemUser);
-        if ((string) @file_get_contents($poolPath) !== $expected) {
+        $expected = rtrim($this->renderPoolConfig($pluginId, $systemUser), "\n");
+        $actual = rtrim((string) @file_get_contents($poolPath), "\n");
+        if ($actual !== $expected) {
             return false;
         }
 
