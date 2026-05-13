@@ -219,27 +219,34 @@ class PluginPoolServiceTest extends TestCase
     public function applyPoolRotatesTokenWhenForced(): void
     {
         @mkdir($this->pluginRoot . '/demo', 0755, true);
-        // First apply mints the token (file didn't exist).
+        // First apply mints a token and ships it through the
+        // supervisor (which writes the per-plugin file as root). The
+        // mock executor here just records the payload — the on-disk
+        // file is asserted on the integration side.
         $this->assertTrue($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
-        $first = trim((string) @file_get_contents(
-            $this->pluginRoot . '/demo/.gateway-token'
-        ));
+        $this->assertArrayHasKey('gateway_token', $this->actionLog[0]['payload']);
+        $first = $this->actionLog[0]['payload']['gateway_token'];
         $this->assertNotEmpty($first);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $first);
 
-        // Idempotent applyPool — same token.
+        // Simulate the supervisor having written the per-plugin file
+        // so the second apply's "mint-if-missing" branch sees it on
+        // disk and skips the rotation.
+        file_put_contents($this->pluginRoot . '/demo/.gateway-token', $first);
+
+        // Idempotent applyPool — no new token shipped (file exists
+        // and rotation wasn't forced).
         $this->assertTrue($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
-        $this->assertSame($first, trim((string) @file_get_contents(
-            $this->pluginRoot . '/demo/.gateway-token'
-        )));
+        $this->assertArrayNotHasKey('gateway_token', $this->actionLog[1]['payload']);
 
-        // Force-rotate — token changes.
+        // Force-rotate — new token shipped, distinct from the first.
         $this->assertTrue($this->svc->applyPool(
             'demo', 'eiou-p-12345678', 'snippet', true
         ));
-        $rotated = trim((string) @file_get_contents(
-            $this->pluginRoot . '/demo/.gateway-token'
-        ));
+        $this->assertArrayHasKey('gateway_token', $this->actionLog[2]['payload']);
+        $rotated = $this->actionLog[2]['payload']['gateway_token'];
         $this->assertNotSame($first, $rotated);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $rotated);
     }
 
     #[Test]

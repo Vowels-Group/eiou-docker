@@ -289,10 +289,10 @@ class ServiceContainer implements ContainerInterface {
      * to gui.head.styles / gui.head.scripts / gui.footer.scripts. See
      * docs/PLUGINS.md "Extending the GUI".
      */
-    public function getAssetRegistry(): PluginAssetRegistry
+    public function getAssetRegistry(): \Eiou\Services\Plugins\PluginAssetRegistry
     {
         if (!isset($this->services['PluginAssetRegistry'])) {
-            $this->services['PluginAssetRegistry'] = new PluginAssetRegistry();
+            $this->services['PluginAssetRegistry'] = new \Eiou\Services\Plugins\PluginAssetRegistry();
         }
         return $this->services['PluginAssetRegistry'];
     }
@@ -325,11 +325,11 @@ class ServiceContainer implements ContainerInterface {
      * @param string $pluginId Plugin id (kebab-case, must match
      *                         plugin.json's name field).
      */
-    public function getPluginSessionStore(string $pluginId): PluginSessionStore
+    public function getPluginSessionStore(string $pluginId): \Eiou\Services\Plugins\PluginSessionStore
     {
         $cacheKey = 'PluginSessionStore.' . $pluginId;
         if (!isset($this->services[$cacheKey])) {
-            $this->services[$cacheKey] = new PluginSessionStore($pluginId);
+            $this->services[$cacheKey] = new \Eiou\Services\Plugins\PluginSessionStore($pluginId);
         }
         return $this->services[$cacheKey];
     }
@@ -886,9 +886,9 @@ class ServiceContainer implements ContainerInterface {
      * Registry for plugin-owned CLI subcommands. Plugins grab this in
      * boot() and call ->register() to expose `eiou <plugin> ...` verbs.
      */
-    public function getPluginCliRegistry(): PluginCliRegistry {
+    public function getPluginCliRegistry(): \Eiou\Services\Plugins\PluginCliRegistry {
         if (!isset($this->services['PluginCliRegistry'])) {
-            $this->services['PluginCliRegistry'] = new PluginCliRegistry();
+            $this->services['PluginCliRegistry'] = new \Eiou\Services\Plugins\PluginCliRegistry();
         }
         return $this->services['PluginCliRegistry'];
     }
@@ -897,9 +897,9 @@ class ServiceContainer implements ContainerInterface {
      * Registry for plugin-owned REST endpoints under
      * /api/v1/plugins/{plugin}/{action}. Plugins register in boot().
      */
-    public function getPluginApiRegistry(): PluginApiRegistry {
+    public function getPluginApiRegistry(): \Eiou\Services\Plugins\PluginApiRegistry {
         if (!isset($this->services['PluginApiRegistry'])) {
-            $this->services['PluginApiRegistry'] = new PluginApiRegistry();
+            $this->services['PluginApiRegistry'] = new \Eiou\Services\Plugins\PluginApiRegistry();
         }
         return $this->services['PluginApiRegistry'];
     }

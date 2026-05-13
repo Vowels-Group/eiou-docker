@@ -330,11 +330,33 @@ EOT;
         //     Operator-driven disable→enable cycle rotates the token
         //     so a previously-leaked token is invalidated. This is
         //     the security property the original design wanted.
+        // Token handling — generate the new token here and update the
+        // central index (both happen under www-data which has write
+        // access to /etc/eiou/config/), then ship the token through to
+        // the supervisor inside the apply-pool payload. The supervisor
+        // writes the per-plugin `.gateway-token` file as root, so the
+        // plugin dir's ownership (especially under dev bind-mount,
+        // where it's `eiou-p-<hash>` rather than `www-data`) doesn't
+        // matter — root writes anywhere.
+        //
+        // Two callers, two behaviours:
+        //
+        //   reconcileSandbox → $forceRotateToken=false. Idempotent
+        //     mint-if-missing. Reconcile fires on every Application
+        //     bootstrap (every FPM worker spawn), so unconditional
+        //     rotation would re-mint constantly and any plugin pool
+        //     that cached the old token would lose its credential.
+        //
+        //   setEnabled(true) explicit toggle → $forceRotateToken=true.
+        //     Operator-driven disable→enable cycle rotates the token
+        //     so a previously-leaked token is invalidated. This is
+        //     the security property the original design wanted.
+        $gatewayToken = '';
         try {
             $tokenPath = $this->pluginRoot . '/' . $pluginId
                        . '/' . \Eiou\Services\Plugins\PluginGatewayTokenService::PER_PLUGIN_TOKEN_FILENAME;
             if ($forceRotateToken || !is_file($tokenPath)) {
-                $this->tokenService->rotate($pluginId);
+                $gatewayToken = $this->tokenService->mintAndIndex($pluginId);
             }
         } catch (Throwable $e) {
             $this->log('error', 'plugin_pool_token_mint_failed', [
@@ -345,14 +367,24 @@ EOT;
 
         $poolConfig = $this->renderPoolConfig($pluginId, $systemUser);
 
-        $result = ($this->actionExecutor)('apply-pool', [
+        $payload = [
             'plugin_id'     => $pluginId,
             'system_user'   => $systemUser,
             'pool_path'     => $this->poolPath($pluginId),
             'pool_config'   => $poolConfig,
             'nginx_snippet' => $nginxSnippet,
             'zones_config'  => $zonesConfig,
-        ]);
+        ];
+        if ($gatewayToken !== '') {
+            // Supervisor writes /etc/eiou/plugins/<id>/.gateway-token
+            // as root with chown to the pool user. Skipped when no
+            // rotation happened this round (file already on disk from
+            // a prior apply); reconcile's no-rotate case keeps the
+            // existing token instead of re-issuing.
+            $payload['gateway_token'] = $gatewayToken;
+        }
+
+        $result = ($this->actionExecutor)('apply-pool', $payload);
 
         $ok = ($result['status'] ?? '') === 'ok';
         $this->log($ok ? 'info' : 'warning', 'plugin_pool_apply', [
@@ -579,10 +611,26 @@ EOT;
             return ['status' => 'failed', 'error' => 'encode failed'];
         }
 
+        // Create the request file with mode 0600 BEFORE writing the
+        // body — the body carries the gateway_token (and the pool
+        // config / nginx snippet), which is sensitive enough to keep
+        // out of every other plugin pool's reach. Every pool has
+        // /tmp/ in its open_basedir, so a world-readable request
+        // file at /tmp/eiou-routing-req-*.json would let a
+        // concurrent plugin grep /tmp for another plugin's token
+        // during the supervisor's ~1s poll window. touch + chmod +
+        // write order means the body never lives on disk under a
+        // wider mode even momentarily. Same defence-in-depth
+        // pattern PluginCredentialsExportService uses for the
+        // plaintext MySQL password it ships through /tmp.
+        if (@touch($reqPath) === false) {
+            return ['status' => 'failed', 'error' => "could not create request file"];
+        }
+        @chmod($reqPath, 0600);
         if (@file_put_contents($reqPath, $body) === false) {
+            @unlink($reqPath);
             return ['status' => 'failed', 'error' => "could not write request"];
         }
-        @chmod($reqPath, 0644);
 
         // Generous timeout — `nginx -t` plus two reloads can take a
         // few seconds under load. The supervisor's own internal

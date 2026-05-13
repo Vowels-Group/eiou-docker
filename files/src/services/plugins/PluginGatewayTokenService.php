@@ -67,21 +67,54 @@ class PluginGatewayTokenService
      *
      * Returns the new token hex string. Throws on filesystem failure
      * (caller treats it like any pool-apply failure).
+     *
+     * NOTE: under dev bind-mount layouts the plugin dir is often owned
+     * by the host operator's uid (which collides with `eiou-p-<hash>`
+     * inside the container) and the wallet pool (`www-data`) can't
+     * write to it directly. The supervisor-mediated path through
+     * `mintAndIndex()` + the apply-pool request handles that case;
+     * `rotate()` is retained for in-container CLI and test paths where
+     * www-data owns the plugin dir.
      */
     public function rotate(string $pluginId): string
     {
         $this->validatePluginId($pluginId);
 
-        $token = bin2hex(random_bytes(self::TOKEN_BYTES));
+        $token = $this->mintAndIndex($pluginId);
 
-        // Persist the per-plugin file first. If the central index
-        // write fails, the plugin will get an "unauthorized" response
-        // on its first gateway call — operator sees the failure
-        // immediately. The other order (central first) could leave
-        // the central index pointing at a token no plugin file
-        // contains, which silently fails.
+        // Persist the per-plugin file in the plugin's dir. The
+        // central index was updated first (inside mintAndIndex), so
+        // if this throws the operator sees a clean error — the index
+        // entry points at a token no plugin file contains yet, which
+        // surfaces as "unauthorized" on the plugin's first gateway
+        // call rather than as a silently-broken auth state.
         $perPluginPath = $this->pluginRoot . '/' . $pluginId . '/' . self::PER_PLUGIN_TOKEN_FILENAME;
         $this->writeAtomic($perPluginPath, $token, 0600);
+
+        return $token;
+    }
+
+    /**
+     * Mint a fresh token, update the central index, and return the
+     * token WITHOUT writing the per-plugin `.gateway-token` file. The
+     * caller is responsible for getting the token onto disk by some
+     * other means — typically by piping it through the supervisor's
+     * apply-pool request, which writes it as root and chowns it to
+     * the pool user.
+     *
+     * This separation matters in dev bind-mount layouts where the
+     * plugin dir is owned by `eiou-p-<hash>` (the host operator's uid
+     * inside the container) and the wallet pool can't write into it.
+     * The supervisor (running as root) always can.
+     *
+     * Returns the new token hex string. Throws on central-index
+     * filesystem failure.
+     */
+    public function mintAndIndex(string $pluginId): string
+    {
+        $this->validatePluginId($pluginId);
+
+        $token = bin2hex(random_bytes(self::TOKEN_BYTES));
 
         // Update the central index. Read-modify-write under a flock
         // guard so concurrent rotates don't lose entries — both
