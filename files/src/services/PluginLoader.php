@@ -1664,6 +1664,17 @@ class PluginLoader
             return false;
         }
         @chmod($tmp, 0640);
+        // PluginLoader is consumed by both the operator CLI (typically
+        // root via `docker exec`) and the www-data FPM pool. Without an
+        // explicit chgrp, a root-written file ends up root:root 0640 —
+        // the wallet pool then can't read its own state, and every
+        // plugin enabled via CLI looks disabled until something
+        // www-data-owned re-writes the file. @ swallows EPERM in the
+        // www-data writer case (where the file is already
+        // www-data-owned and no chown is needed). Same shape as
+        // PluginGatewayTokenService::writeIndex.
+        @chown($tmp, 'root');
+        @chgrp($tmp, 'www-data');
         if (!@rename($tmp, $this->stateFile)) {
             @unlink($tmp);
             return false;

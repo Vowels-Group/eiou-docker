@@ -244,6 +244,43 @@ class PluginLoaderTest extends TestCase
         $this->assertTrue($state['whatever']['enabled']);
     }
 
+    public function testSetEnabledStateFileIsReadableByWwwData(): void
+    {
+        // Operator CLI runs as root, wallet pool runs as www-data, and
+        // both writers and readers share `/etc/eiou/config/plugins.json`.
+        // Without an explicit chgrp the root-written file is
+        // root:root 0640 and the pool can't read it — every CLI-enabled
+        // plugin then looks disabled to the wallet.
+        if (!function_exists('posix_getgrnam') || !function_exists('posix_getgrgid')) {
+            $this->markTestSkipped('posix functions unavailable');
+        }
+        $wwwData = posix_getgrnam('www-data');
+        if ($wwwData === false) {
+            $this->markTestSkipped('www-data group not present on this host');
+        }
+        // chgrp(www-data) only succeeds if the current user is root or
+        // a member of www-data. Otherwise we'd be testing the @-swallow
+        // path, not the fix. Skip in that case — the docker image runs
+        // as root, which is the case this protects.
+        $canChgrp = (function_exists('posix_geteuid') && posix_geteuid() === 0)
+            || in_array('www-data', posix_getgroups()
+                ? array_map(fn($g) => posix_getgrgid($g)['name'] ?? '', posix_getgroups())
+                : [], true);
+        if (!$canChgrp) {
+            $this->markTestSkipped('current user cannot chgrp to www-data (test runs as root in the container)');
+        }
+
+        $loader = $this->loader();
+        $this->assertTrue($loader->setEnabled('group-check', true));
+        $this->assertFileExists($this->stateFile);
+
+        clearstatcache(true, $this->stateFile);
+        $gid = filegroup($this->stateFile);
+        $info = posix_getgrgid($gid);
+        $this->assertSame('www-data', $info['name'] ?? null,
+            'state file must be group www-data so the wallet pool can read it');
+    }
+
     public function testListAllPluginsIncludesDisabledOnes(): void
     {
         $this->writePlugin('on', 'Eiou\\Tests\\Plugins\\On\\OnPlugin', $this->validPluginSource('On'));
