@@ -227,6 +227,15 @@ services:
       # Default: true (guard enabled)
       # - EIOU_AUTO_CHAIN_DROP_ACCEPT_GUARD=true
 
+      # EIOU_PUBLIC_PLUGIN_ROUTES (optional)
+      # Allows sandboxed plugins that declare `public_routes` in their
+      # manifest to expose non-admin HTTP endpoints under
+      # /p/<plugin-id>/<action>. Off by default — operators opt in once
+      # they're comfortable with their plugins' bearer auth + rate-limit
+      # posture. See docs/PLUGINS.md (Sandboxing → Public routes).
+      # Default: off
+      # - EIOU_PUBLIC_PLUGIN_ROUTES=on
+
       # -----------------------------------------------------------------------
       # SERVICE TUNING (advanced)
       # -----------------------------------------------------------------------
