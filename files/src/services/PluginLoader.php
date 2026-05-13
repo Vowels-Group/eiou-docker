@@ -563,6 +563,28 @@ class PluginLoader
                     && !in_array($e['id'], ['bank_wire', 'custom'], true)
                     && isset($e['catalog']) && is_array($e['catalog'])
             );
+            // cron entries declare host-driven scheduled tasks for the
+            // plugin. The host's PluginCronService ticks every minute
+            // and POSTs a `cron`-typed envelope to the plugin's
+            // __dispatch.php whenever an entry's interval has elapsed
+            // since its last fire. interval_minutes is bounded
+            // [1, 1440] (one minute to one day) — finer granularity is
+            // out of scope (the tick is per-minute), and longer-than-
+            // daily entries should fold the day-of check into the
+            // plugin handler. Action is the same kebab-case shape as
+            // public_routes; the plugin's __dispatch.php switch routes
+            // on it.
+            $row['cron'] = $this->shapedListField(
+                $manifest,
+                'cron',
+                fn($e): bool => is_array($e)
+                    && isset($e['interval_minutes'], $e['action'])
+                    && is_int($e['interval_minutes'])
+                    && $e['interval_minutes'] >= 1
+                    && $e['interval_minutes'] <= 1440
+                    && is_string($e['action'])
+                    && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+            );
             if (isset($live[$name]['error'])) {
                 $row['error'] = (string) $live[$name]['error'];
             }

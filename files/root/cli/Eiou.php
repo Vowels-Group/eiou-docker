@@ -343,7 +343,8 @@ elseif($request === "plugin"){
   $pluginCliService = new \Eiou\Services\CliPluginService(
     $app->pluginLoader,
     $app->services->getPluginUninstallService(),
-    $app->services->getPluginUpgradeService($app->pluginLoader)
+    $app->services->getPluginUpgradeService($app->pluginLoader),
+    $app->services->getPluginCronService($app->pluginLoader)
   );
   $subcommand = strtolower($cleanArgv[2] ?? 'list');
   if ($subcommand === 'enable') {
@@ -354,6 +355,8 @@ elseif($request === "plugin"){
     $pluginCliService->uninstallPlugin($cleanArgv, $output);
   } elseif ($subcommand === 'upgrade') {
     $pluginCliService->upgradePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'cron-tick') {
+    $pluginCliService->cronTick($cleanArgv, $output);
   } else {
     $pluginCliService->listPlugins($cleanArgv, $output);
   }

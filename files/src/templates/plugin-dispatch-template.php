@@ -35,7 +35,7 @@ declare(strict_types=1);
  * minimum version every bundled plugin author needs, (c) documenting
  * the contract delta in CHANGELOG.md.
  */
-const PLUGIN_DISPATCH_VERSION = 3;
+const PLUGIN_DISPATCH_VERSION = 4;
 
 header('Content-Type: application/json');
 
@@ -241,7 +241,7 @@ if ($type === '' || $name === '') {
     ], $log);
 }
 
-$allowedTypes = ['event', 'filter', 'render', 'action', 'rest', 'cli', 'public', 'payback_method'];
+$allowedTypes = ['event', 'filter', 'render', 'action', 'rest', 'cli', 'public', 'payback_method', 'cron'];
 if (!in_array($type, $allowedTypes, true)) {
     respond(400, [
         'ok' => false,

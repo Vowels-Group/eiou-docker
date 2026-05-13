@@ -535,6 +535,34 @@ class PluginIpcForwarder
      * @param array{type:string, name:string, context:array} $envelope
      * @return array<string, mixed>|null
      */
+    /**
+     * Fire a cron-typed envelope at a plugin's __dispatch.php.
+     *
+     * Mirrors the event/action dispatch path but is invoked on a
+     * timer by PluginCronService rather than off an EventDispatcher
+     * subscription. Exposed as a public entrypoint so the cron service
+     * can reuse this forwarder's loopback HTTP plumbing (timeouts,
+     * log forwarding, error logging) without duplicating it.
+     *
+     * The envelope shape:
+     *     {type: "cron", name: <action>, context: {scheduled_at, interval_minutes}}
+     *
+     * Returns the decoded plugin response or null on any transport or
+     * handler failure. Caller decides whether a null result advances
+     * the next-fire window or retries on the next tick.
+     */
+    public function dispatchCron(string $pluginId, string $action, int $scheduledAt, int $intervalMinutes): ?array
+    {
+        return $this->dispatch($pluginId, [
+            'type' => 'cron',
+            'name' => $action,
+            'context' => [
+                'scheduled_at'     => $scheduledAt,
+                'interval_minutes' => $intervalMinutes,
+            ],
+        ]);
+    }
+
     private function dispatch(string $pluginId, array $envelope): ?array
     {
         $url = $this->dispatchBase . '/gui/plugin/' . $pluginId . '/__dispatch';

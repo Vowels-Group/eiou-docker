@@ -349,6 +349,7 @@ graceful_shutdown() {
     rm -f /tmp/eiou_plugin_user_poller.pid 2>/dev/null
     rm -f /tmp/eiou_plugin_routing_poller.pid 2>/dev/null
     rm -f /tmp/eiou_plugin_credentials_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_cron_poller.pid 2>/dev/null
     rm -f "$SHUTDOWN_FLAG" 2>/dev/null
     rm -f "$MAINTENANCE_LOCKFILE" 2>/dev/null
 
@@ -3214,6 +3215,51 @@ plugin_credentials_poller() {
     done
 }
 
+# =============================================================================
+# plugin_cron_poller() — once-per-minute scheduler tick for sandboxed plugins.
+#
+# Calls `eiou plugin cron-tick` which evaluates each enabled plugin's
+# manifest cron entries against the persisted last-fire state file and
+# fires due entries by POSTing a cron-typed envelope to the plugin's
+# __dispatch.php via the IPC forwarder. No-op if no enabled plugin has
+# cron entries; idempotent if no entry is due.
+#
+# The CLI invocation runs as root (the supervisor's uid). Inside, the
+# PluginIpcForwarder makes a loopback HTTP request to the plugin's FPM
+# pool which executes as the plugin's own eiou-p-<hash> user — so the
+# cron handler still runs sandboxed even though the tick itself
+# originates from root.
+#
+# Sleep granularity is one minute; the tick is cheap when nothing is
+# due (one PluginLoader::listAllPlugins + a state file read). A stalled
+# previous tick is detected by `pgrep -f` and skipped this round to
+# prevent overlap.
+# =============================================================================
+plugin_cron_poller() {
+    local POLL_INTERVAL=60
+    local LOG_PREFIX="[PLUGIN CRON POLLER]"
+
+    while true; do
+        sleep "$POLL_INTERVAL"
+
+        # Skip this round if the previous tick is still running.
+        # `eiou plugin cron-tick` should take well under 60s; if it's
+        # still going, something inside (a slow plugin handler, a stuck
+        # IPC connection) is hanging and stacking more invocations on
+        # top would just make it worse.
+        if pgrep -f "eiou plugin cron-tick" >/dev/null 2>&1; then
+            echo "$LOG_PREFIX previous tick still running, skipping this round"
+            continue
+        fi
+
+        # CLI output is discarded; activity surfaces in /var/log/app.log
+        # via the cron service's Logger calls. Stderr captured so a
+        # parse error or autoload failure shows up.
+        eiou plugin cron-tick >/dev/null 2>&1 || \
+            echo "$LOG_PREFIX tick exit code $?"
+    done
+}
+
 # Start watchdog in background. PID lockfile mirrors the pattern the
 # message processors use so the GUI's Debug → Processes panel can
 # discover supervisor pollers via the same lockfile-and-posix_kill
@@ -3256,6 +3302,14 @@ plugin_credentials_poller &
 PLUGIN_CREDENTIALS_POLLER_PID=$!
 echo "$PLUGIN_CREDENTIALS_POLLER_PID" > /tmp/eiou_plugin_credentials_poller.pid
 echo "Plugin credentials poller started (PID: $PLUGIN_CREDENTIALS_POLLER_PID)"
+
+# Start plugin-cron poller in background. Per-minute tick that fires
+# sandboxed plugins' manifest cron entries when their interval has
+# elapsed. Idempotent and cheap when no entries are due.
+plugin_cron_poller &
+PLUGIN_CRON_POLLER_PID=$!
+echo "$PLUGIN_CRON_POLLER_PID" > /tmp/eiou_plugin_cron_poller.pid
+echo "Plugin cron poller started (PID: $PLUGIN_CRON_POLLER_PID)"
 
 echo ""
 echo "=========================================="
