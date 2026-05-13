@@ -298,10 +298,33 @@ graceful_shutdown() {
     echo "[Shutdown] Stopping MariaDB..."
     timeout 5 service mariadb stop 2>/dev/null || true
 
-    # Tor's init script may report "failed" with a PID mismatch warning —
-    # this is a known quirk of the Tor service script and is harmless.
+    # Stop Tor by SIGTERM'ing its PID directly. The Debian init.d
+    # script's identity check reads /proc/<pid>/exe — which Tor blocks
+    # for anyone other than the process owner (debian-tor) by setting
+    # itself non-dumpable. Inside this container the init.d script
+    # runs as root but still can't readlink the exe symlink, so it
+    # fails with "Is <pid> not tor?  Is /usr/bin/tor a different
+    # binary now?" and refuses to stop. Bypassing the broken identity
+    # check and signalling the PID directly avoids the noise + the
+    # 3-second wasted timeout.
     echo "[Shutdown] Stopping Tor..."
-    timeout 3 service tor stop 2>/dev/null || true
+    if [ -f /run/tor/tor.pid ]; then
+        tor_pid=$(cat /run/tor/tor.pid 2>/dev/null)
+        if [ -n "$tor_pid" ] && kill -0 "$tor_pid" 2>/dev/null; then
+            kill -TERM "$tor_pid" 2>/dev/null
+            # Tor's graceful shutdown advertises the descriptor as
+            # going away first; capped at 2s so the container stop
+            # doesn't drag.
+            for _ in 1 2 3 4; do
+                kill -0 "$tor_pid" 2>/dev/null || break
+                sleep 0.5
+            done
+            # SIGKILL anything that's still around — Docker will
+            # do the same when the container stops; we just want
+            # the log line to say we asked nicely first.
+            kill -KILL "$tor_pid" 2>/dev/null || true
+        fi
+    fi
 
     echo "[Shutdown] Stopping Cron..."
     timeout 2 service cron stop 2>/dev/null || true
