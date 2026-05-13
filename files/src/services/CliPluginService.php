@@ -24,13 +24,16 @@ class CliPluginService
 {
     private PluginLoader $loader;
     private ?PluginUninstallService $uninstallService;
+    private ?PluginUpgradeService $upgradeService;
 
     public function __construct(
         PluginLoader $loader,
-        ?PluginUninstallService $uninstallService = null
+        ?PluginUninstallService $uninstallService = null,
+        ?PluginUpgradeService $upgradeService = null
     ) {
         $this->loader = $loader;
         $this->uninstallService = $uninstallService;
+        $this->upgradeService = $upgradeService;
     }
 
     /**
@@ -209,5 +212,99 @@ class CliPluginService
                 $result
             );
         }
+    }
+
+    /**
+     * eiou plugin upgrade <name>
+     *
+     * Replaces an installed plugin's on-disk code with the version baked
+     * into the current image (`/app/plugins/<name>/`). Preserves the
+     * plugin's MySQL tables, user, credentials, and gateway token —
+     * uninstall + install would lose all of that, which is the whole
+     * reason this command exists.
+     *
+     * Flow at a glance:
+     *
+     *   1. The image's bundled version must be strictly newer than what's
+     *      installed; same version is "nothing to do" (refused), downgrade
+     *      is refused outright (the operator would have to uninstall to
+     *      acknowledge the destructive intent).
+     *   2. The new manifest's `min_upgradable_from` field is honoured —
+     *      if the installed version is below that floor, the operator
+     *      gets a clear error telling them to install an intermediate
+     *      version first.
+     *   3. Old directory is renamed to `<name>.backup-<oldver>-<ts>/`
+     *      next to the live plugin dir, kept for 30 days for rollback.
+     *   4. If the plugin's entry class implements `UpgradablePlugin`, its
+     *      `onUpgrade()` hook runs with old grants still active.
+     *   5. MySQL grants are reconciled against the new manifest's
+     *      `owned_tables` — REVOKE ALL then GRANT per-table.
+     *   6. If the plugin is currently enabled, the FPM pool is reloaded
+     *      so workers pick up the new code. Disabled plugins reload
+     *      on their next enable.
+     *
+     * For uploading a new version from a zip (the GUI flow), see
+     * `PluginUpgradeService::upgradeFromZip()`.
+     */
+    public function upgradePlugin(array $argv, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+        $name = $argv[3] ?? '';
+
+        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $output->error(
+                "Usage: eiou plugin upgrade <name>",
+                ErrorCodes::VALIDATION_ERROR
+            );
+            return;
+        }
+
+        if ($this->upgradeService === null) {
+            $output->error(
+                'Plugin upgrade service is not available in this context',
+                ErrorCodes::GENERAL_ERROR
+            );
+            return;
+        }
+
+        try {
+            $result = $this->upgradeService->upgradeFromBundle($name);
+        } catch (\InvalidArgumentException $e) {
+            // 400-class — refused upgrade attempts (no bundle, same
+            // version, downgrade, min_upgradable_from violation, etc.).
+            $output->error($e->getMessage(), ErrorCodes::VALIDATION_ERROR);
+            return;
+        } catch (\RuntimeException $e) {
+            // 500-class — supervisor / filesystem / hook failures.
+            $output->error($e->getMessage(), ErrorCodes::GENERAL_ERROR);
+            return;
+        }
+
+        // Check whether any step downgraded to error:<msg>. The directory
+        // swap is the load-bearing step; if it failed the whole upgrade
+        // would have thrown above. Anything below that (grant reconcile,
+        // pool reload, credentials re-export) might surface a partial
+        // error — surface it but don't fail-loud because the new code is
+        // already on disk.
+        $stepErrors = [];
+        foreach ($result['steps'] ?? [] as $stepName => $status) {
+            if (strpos((string) $status, 'error:') === 0) {
+                $stepErrors[$stepName] = $status;
+            }
+        }
+        if ($stepErrors !== []) {
+            $output->error(
+                "Plugin upgraded but post-swap steps had errors — see 'steps' for details",
+                ErrorCodes::GENERAL_ERROR,
+                500,
+                $result
+            );
+            return;
+        }
+
+        $output->success(
+            "Plugin upgraded: {$name} ({$result['old_version']} → {$result['new_version']})",
+            $result
+        );
     }
 }

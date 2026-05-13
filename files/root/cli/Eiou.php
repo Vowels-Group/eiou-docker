@@ -29,7 +29,7 @@
  *   backup <action> [args]                     - Manage encrypted database backups
  *   apikey <action> [args]                     - Manage REST API keys
  *   payback <action> [args]                    - Manage your payback methods
- *   plugin [list|enable|disable|uninstall]     - Manage plugins (requires `restart` to apply)
+ *   plugin [list|enable|disable|uninstall|upgrade] - Manage plugins (requires `restart` to apply)
  *   viewsettings / changesettings [k v]        - View / change wallet settings
  *   report <type> [--full] [--send]            - Generate troubleshooting reports
  *   updatecheck                                - Check Docker Hub / GitHub for newer images
@@ -342,7 +342,8 @@ elseif($request === "plugin"){
   }
   $pluginCliService = new \Eiou\Services\CliPluginService(
     $app->pluginLoader,
-    $app->services->getPluginUninstallService()
+    $app->services->getPluginUninstallService(),
+    $app->services->getPluginUpgradeService()
   );
   $subcommand = strtolower($cleanArgv[2] ?? 'list');
   if ($subcommand === 'enable') {
@@ -351,6 +352,8 @@ elseif($request === "plugin"){
     $pluginCliService->disablePlugin($cleanArgv, $output);
   } elseif ($subcommand === 'uninstall') {
     $pluginCliService->uninstallPlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'upgrade') {
+    $pluginCliService->upgradePlugin($cleanArgv, $output);
   } else {
     $pluginCliService->listPlugins($cleanArgv, $output);
   }

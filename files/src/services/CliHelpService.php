@@ -337,11 +337,11 @@ class CliHelpService
                 'note' => 'SIGTERMs the processors (the watchdog respawns them within ~30s) and sends SIGUSR2 to the PHP-FPM master to gracefully recycle all worker processes. In-flight HTTP requests finish before workers exit. Required when toggling plugins, since event subscriptions bind during boot. Must run as root inside the container — the CLI does, calling from a PHP-FPM worker (GUI) does not.'
             ],
             'plugin' => [
-                'description' => 'Manage plugins: list installed ones and toggle their enabled flag',
-                'usage' => 'plugin [list|enable|disable] [name]',
+                'description' => 'Manage plugins: list installed ones, toggle enabled flag, uninstall, or upgrade to a newer bundled version',
+                'usage' => 'plugin [list|enable|disable|uninstall|upgrade] [name]',
                 'arguments' => [
-                    'subcommand' => ['type' => 'optional', 'description' => 'Subcommand: list (default), enable, disable'],
-                    'name' => ['type' => 'conditional', 'description' => 'Plugin name — required for enable/disable']
+                    'subcommand' => ['type' => 'optional', 'description' => 'Subcommand: list (default), enable, disable, uninstall, upgrade'],
+                    'name' => ['type' => 'conditional', 'description' => 'Plugin name — required for enable/disable/uninstall/upgrade']
                 ],
                 'actions' => [
                     'list' => [
@@ -356,14 +356,24 @@ class CliHelpService
                         'usage' => 'plugin disable <name>',
                         'description' => 'Persist the enabled flag as false for the named plugin',
                     ],
+                    'uninstall' => [
+                        'usage' => 'plugin uninstall <name>',
+                        'description' => 'Full uninstall: drop owned_tables, drop MySQL user, remove plugin dir, remove credentials. Plugin must be disabled first. Destructive — operator state is lost.',
+                    ],
+                    'upgrade' => [
+                        'usage' => 'plugin upgrade <name>',
+                        'description' => 'Replace the installed plugin code with the bundled version from /app/plugins/<name>/. Preserves the plugin\'s DB tables, user, credentials, and gateway token. Refuses same-version, downgrades, and floors below min_upgradable_from. Old dir kept at <name>.backup-<oldver>-<ts>/ for 30 days.',
+                    ],
                 ],
                 'examples' => [
                     'plugin' => 'List all plugins (table)',
                     'plugin list --json' => 'List all plugins (JSON with full metadata)',
                     'plugin enable hello-eiou' => 'Enable hello-eiou',
                     'plugin disable hello-eiou' => 'Disable hello-eiou',
+                    'plugin uninstall hello-eiou' => 'Permanently uninstall hello-eiou (destructive)',
+                    'plugin upgrade hello-eiou' => 'Upgrade hello-eiou to the image\'s bundled version (preserves state)',
                 ],
-                'note' => 'Enable/disable persists to /etc/eiou/config/plugins.json immediately but does NOT take effect until the next restart — event subscriptions bind during boot. Run `eiou restart` (or hit POST /api/v1/system/restart, or use the GUI restart button) once you are done toggling.'
+                'note' => 'Enable/disable persists to /etc/eiou/config/plugins.json immediately but does NOT take effect until the next restart — event subscriptions bind during boot. Run `eiou restart` (or hit POST /api/v1/system/restart, or use the GUI restart button) once you are done toggling. Upgrade applies the new code immediately for enabled plugins (FPM workers recycle) but disabled plugins pick it up on next enable.'
             ],
             // Namespaced verb. `eiou help chaindrop` is intercepted in
             // Eiou.php and routed straight to ChainDropService::showHelp().
