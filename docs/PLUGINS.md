@@ -1520,6 +1520,49 @@ Returns the method's return value on success, `null` on failure
 (transport error / validation rejection / handler exception).
 Failure cases log to `$log` with structured context.
 
+### Plugin-callable surface — policy
+
+The set of methods reachable through `core_call()` is intentionally
+small. As of this writing, the callable surface is:
+
+| Service                         | Methods                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Logger`                        | `debug`, `info`, `warning`, `error`                                                       |
+| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions` |
+
+That's it. The list grows **on demand**, when a concrete plugin
+needs something — not speculatively. The reasoning is straightforward:
+every `#[PluginCallable]` method is operator-visible attack surface.
+Operators reading a plugin's manifest see the list of methods that
+plugin will call; the wider the underlying surface, the harder that
+review becomes. A small, deliberately-curated surface keeps the
+review meaningful.
+
+Two principles guide what gets added:
+
+1. **Default-deny, expand for a concrete need.** A repository method
+   is exposed only when a real plugin (in this repo's plugin
+   directory, or a downstream plugin whose author has filed an
+   issue) has a use case that can't be satisfied any other way. We
+   don't preemptively expose "this looks useful" — useful is
+   measured by an actual handler that would call it.
+
+2. **Prefer narrow single-row lookups over bulk listings.** When a
+   plugin needs to enrich one event payload's identifier, a
+   `lookupBy<X>(id): ?array` method is strictly additive to what
+   the event already told the plugin. A `getAllX(): array` method
+   is a different shape of trust — it's a one-call exfiltration
+   primitive for the underlying table. The first kind is easy to
+   justify case-by-case; the second kind needs a concrete export
+   plugin (or similar) and a deliberate decision.
+
+If a plugin needs a method that isn't exposed, the path is: file an
+issue describing the use case, propose the method signature, and
+include the smallest read-only repository method that satisfies it.
+The maintainer adds it as a thin `Lookup/` service if the use case
+holds up. Decoration on the repository itself is *not* the path —
+those classes stay pure data-access.
+
 ### What you CAN do as a sandboxed plugin
 
 - Subscribe to events; emit log lines via the `_log` envelope.
