@@ -2936,31 +2936,38 @@ plugin_routing_poller() {
     done
 }
 
-# Start watchdog in background
+# Start watchdog in background. PID lockfile mirrors the pattern the
+# message processors use so the GUI's Debug → Processes panel can
+# discover supervisor pollers via the same lockfile-and-posix_kill
+# detection as the long-running PHP daemons.
 watchdog &
 WATCHDOG_PID=$!
+echo "$WATCHDOG_PID" > /tmp/eiou_watchdog.pid
 echo "Watchdog started (PID: $WATCHDOG_PID)"
 
 # Start restart-request poller in background
 restart_poller &
 RESTART_POLLER_PID=$!
+echo "$RESTART_POLLER_PID" > /tmp/eiou_restart_poller.pid
 echo "Restart poller started (PID: $RESTART_POLLER_PID)"
 
 # Start plugin-user poller in background. www-data PHP cannot call
 # useradd/userdel directly (root required), so PluginUserService writes
 # /tmp/eiou-pluser-req-<id>.json and this loop turns those into
 # useradd/userdel invocations as the root supervisor. See
-# docs/PLUGIN_SANDBOXING.md (Phase 1).
+# docs/PLUGIN_SANDBOXING.md.
 plugin_user_poller &
 PLUGIN_USER_POLLER_PID=$!
+echo "$PLUGIN_USER_POLLER_PID" > /tmp/eiou_plugin_user_poller.pid
 echo "Plugin user poller started (PID: $PLUGIN_USER_POLLER_PID)"
 
-# Start plugin-routing poller in background. Phase 2 of plugin
-# sandboxing — applies per-plugin FPM pool config + nginx routing snippet
-# atomically, with nginx -t validation before reload so a malformed
-# entry cannot take down the wallet's routes.
+# Start plugin-routing poller in background. Applies per-plugin FPM
+# pool config + nginx routing snippet atomically, with nginx -t
+# validation before reload so a malformed entry cannot take down the
+# wallet's routes.
 plugin_routing_poller &
 PLUGIN_ROUTING_POLLER_PID=$!
+echo "$PLUGIN_ROUTING_POLLER_PID" > /tmp/eiou_plugin_routing_poller.pid
 echo "Plugin routing poller started (PID: $PLUGIN_ROUTING_POLLER_PID)"
 
 echo ""

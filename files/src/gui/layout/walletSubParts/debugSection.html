@@ -212,6 +212,33 @@ ob_start();
                     'role'     => 'Pings contacts to refresh their per-currency available-credit + chain heads.',
                     'lockfile' => '/tmp/contact_status.pid',
                 ],
+                // Bash subshells of startup.sh — supervisor pollers
+                // running as root. PHP daemons above can't reach root
+                // operations (useradd, FPM pool reload, eiou restart),
+                // so these pollers pick up request files in /tmp and
+                // execute the privileged side. Each writes a lockfile
+                // at startup so this panel can detect them with the
+                // same posix_kill probe used above.
+                [
+                    'name'     => 'Watchdog',
+                    'role'     => 'Supervises the four message processors; respawns crashed children; tracks Tor health for the GUI banner.',
+                    'lockfile' => '/tmp/eiou_watchdog.pid',
+                ],
+                [
+                    'name'     => 'Restart Poller',
+                    'role'     => 'Picks up GUI "Restart node" requests written to /tmp/eiou_restart_requested and runs `eiou restart` as root.',
+                    'lockfile' => '/tmp/eiou_restart_poller.pid',
+                ],
+                [
+                    'name'     => 'Plugin User Poller',
+                    'role'     => 'Creates / removes per-plugin Unix users (eiou-p-<hash>) when a sandboxed plugin enables or disables.',
+                    'lockfile' => '/tmp/eiou_plugin_user_poller.pid',
+                ],
+                [
+                    'name'     => 'Plugin Routing Poller',
+                    'role'     => 'Writes per-plugin FPM pool config + the nginx routing snippet, runs `nginx -t`, gracefully reloads both.',
+                    'lockfile' => '/tmp/eiou_plugin_routing_poller.pid',
+                ],
             ];
 
             // For each processor: read the lockfile (if present), check
