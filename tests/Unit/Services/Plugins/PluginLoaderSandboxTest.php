@@ -245,6 +245,108 @@ class PluginLoaderSandboxTest extends TestCase
         $this->assertSame('create', $this->userActionLog[0]['action']);
     }
 
+    // ===================================================================
+    // setEnabled failure-reason surfacing
+    //
+    // The legacy "Failed to persist plugin state" string covered three
+    // distinct failure modes; operators couldn't tell which step
+    // actually failed. getLastSetEnabledFailure() now exposes the
+    // specific stage so callers can print a real diagnosis.
+    // ===================================================================
+
+    #[Test]
+    public function refusedNonSandboxedReportsRefusedStage(): void
+    {
+        $this->writeManifest('legacy-nonsandbox', []); // no sandboxed:true
+
+        $ok = $this->loader->setEnabled('legacy-nonsandbox', true);
+
+        $this->assertFalse($ok);
+        $failure = $this->loader->getLastSetEnabledFailure();
+        $this->assertNotNull($failure);
+        $this->assertSame('refused', $failure['stage']);
+        $this->assertStringContainsString('not sandboxed', $failure['message']);
+    }
+
+    #[Test]
+    public function sandboxFailureReportsSandboxStage(): void
+    {
+        $this->writeManifest('apply-fails', ['sandboxed' => true]);
+        $this->nextPoolResult = ['status' => 'failed', 'error' => 'nginx -t bad'];
+
+        $ok = $this->loader->setEnabled('apply-fails', true);
+
+        $this->assertFalse($ok);
+        $failure = $this->loader->getLastSetEnabledFailure();
+        $this->assertNotNull($failure);
+        $this->assertSame('sandbox', $failure['stage']);
+        $this->assertStringContainsString('FPM pool', $failure['message']);
+    }
+
+    #[Test]
+    public function successClearsLastFailure(): void
+    {
+        // First call fails — failure should be populated.
+        $this->writeManifest('first-fails', ['sandboxed' => true]);
+        $this->nextPoolResult = ['status' => 'failed', 'error' => 'nginx -t bad'];
+        $this->loader->setEnabled('first-fails', true);
+        $this->assertNotNull($this->loader->getLastSetEnabledFailure());
+
+        // Second call succeeds — failure should clear.
+        $this->writeManifest('then-ok', ['sandboxed' => true]);
+        // Default $nextPoolResult is success per setUp.
+        $this->nextPoolResult = ['status' => 'ok'];
+        $ok = $this->loader->setEnabled('then-ok', true);
+        $this->assertTrue($ok);
+        $this->assertNull($this->loader->getLastSetEnabledFailure());
+    }
+
+    #[Test]
+    public function writeStateTransientFalsePositiveIsRecoveredViaVerifyRead(): void
+    {
+        // Symptom we're guarding against: writeState reports failure but
+        // the on-disk state matches the target anyway (filesystem quirks
+        // on WSL2/overlayfs have produced this — rename succeeds but
+        // returns false). Without the verify-read, setEnabled would
+        // needlessly roll back a pool that's already configured
+        // correctly, and the CLI would print a misleading "state
+        // didn't persist" message.
+        //
+        // Setup: pre-populate the state file with the target state, then
+        // chmod the parent dir 0500 so writeState's tmp+rename fails.
+        // setEnabled's verify-read sees the on-disk state matches target
+        // and returns true without rolling back.
+        $stateDir = $this->tmpRoot . '/state-verify';
+        @mkdir($stateDir, 0755, true);
+        $stateFile = $stateDir . '/plugins.json';
+        file_put_contents($stateFile, json_encode(['verify-test' => ['enabled' => true]]));
+
+        $loader = new PluginLoader($this->pluginDir, null, $stateFile);
+        $loader->setSandboxServices($this->userService, $this->poolService, new PluginNginxConfigService());
+
+        $this->writeManifest('verify-test', ['sandboxed' => true]);
+        // Lock the dir AFTER the state file is in place — writeState's
+        // tmp+rename can't run because the dir's not writable.
+        chmod($stateDir, 0500);
+
+        $this->userActionLog = [];
+        $this->poolActionLog = [];
+
+        $ok = $loader->setEnabled('verify-test', true);
+
+        chmod($stateDir, 0755);
+
+        $this->assertTrue($ok, 'setEnabled treats matching on-disk state as success');
+        $this->assertNull($loader->getLastSetEnabledFailure(), 'no failure recorded on success');
+
+        // Rollback should NOT have fired — the pool stays up.
+        $dropOps = array_values(array_filter(
+            $this->poolActionLog,
+            fn($e): bool => $e['action'] === 'drop-pool'
+        ));
+        $this->assertCount(0, $dropOps, 'no rollback drop-pool when on-disk state matches target');
+    }
+
     #[Test]
     public function listAllPluginsSurfacesSandboxedFlag(): void
     {

@@ -301,7 +301,10 @@ class PluginController
         }
 
         if (!$this->loader->setEnabled($name, $enabled)) {
-            $this->respondError('persist_failed', 'Could not persist the new state', 500);
+            $failure = $this->loader->getLastSetEnabledFailure();
+            $message = $failure['message'] ?? 'Could not persist the new state';
+            $code = isset($failure['stage']) ? ('plugin_' . $failure['stage'] . '_failed') : 'persist_failed';
+            $this->respondError($code, $message, 500);
         }
 
         // Sandboxed plugins took effect immediately (applyPool reloaded

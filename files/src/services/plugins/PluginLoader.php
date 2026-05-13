@@ -58,6 +58,22 @@ class PluginLoader
     private string $stateFile;
     private Logger $logger;
 
+    /**
+     * Last failure context from setEnabled(), or null after success. Holds
+     * a [stage, message] pair so callers can surface a specific reason
+     * instead of the legacy generic "Failed to persist plugin state"
+     * string. Cleared at the top of each setEnabled() call.
+     *
+     * Stage values:
+     *   - 'refused'   : manifest refused (e.g. non-sandboxed)
+     *   - 'isolation' : MySQL credentials / user / grant step threw
+     *   - 'sandbox'   : FPM pool / system-user / nginx apply returned false
+     *   - 'state'     : writeState failed after side-effects committed
+     *
+     * @var array{stage:string, message:string}|null
+     */
+    private ?array $lastSetEnabledFailure = null;
+
     /** @var array<string, PluginInterface> Indexed by plugin name */
     private array $plugins = [];
 
@@ -695,6 +711,8 @@ class PluginLoader
      */
     public function setEnabled(string $name, bool $enabled): bool
     {
+        $this->lastSetEnabledFailure = null;
+
         // Refuse to enable a plugin whose manifest doesn't opt into
         // sandboxing. Disabling a non-sandboxed plugin always
         // succeeds at the state-flip layer (operator wants to mark
@@ -710,6 +728,11 @@ class PluginLoader
                                        . 'See docs/PLUGINS.md (Sandboxed Plugin Authoring).',
                     ]
                 );
+                $this->lastSetEnabledFailure = [
+                    'stage' => 'refused',
+                    'message' => "Plugin '{$name}' is not sandboxed. "
+                               . 'Add "sandboxed": true to its plugin.json.',
+                ];
                 return false;
             }
         }
@@ -724,6 +747,10 @@ class PluginLoader
                 'target_enabled' => $enabled,
                 'error' => $e->getMessage(),
             ]);
+            $this->lastSetEnabledFailure = [
+                'stage' => 'isolation',
+                'message' => "MySQL isolation step failed for '{$name}': " . $e->getMessage(),
+            ];
             return false;
         }
 
@@ -732,6 +759,13 @@ class PluginLoader
         // state flip the same way isolation failures do — operator
         // can retry; boot-time reconcile self-heals partial states.
         if (!$this->applySandboxSideEffects($name, $enabled)) {
+            $this->lastSetEnabledFailure = [
+                'stage' => 'sandbox',
+                'message' => "FPM pool / system-user / nginx step failed for '{$name}'. "
+                           . 'Check /var/log/app.log for the supervisor response — '
+                           . 'common causes: apply-pool timeout, nginx -t failure, '
+                           . 'or system-user creation refused.',
+            ];
             return false;
         }
 
@@ -742,11 +776,22 @@ class PluginLoader
         }
 
         // State write failed AFTER sandbox side effects committed (the
-        // pool is alive but plugins.json doesn't reflect it). Roll back
-        // the sandbox change so the on-disk state stays internally
-        // consistent. If the rollback itself fails (uncommon — only
-        // possible if the supervisor died between steps), log loudly
-        // and let reconcileSandbox heal at next boot.
+        // pool is alive but plugins.json doesn't reflect it). Before
+        // rolling back, re-read the state file: if the rename actually
+        // landed despite writeState reporting failure (transient
+        // filesystem quirks have produced this on WSL2 / overlayfs in
+        // the past — the rename succeeds but rename()'s return value
+        // surfaces a stale errno), treat that as success rather than
+        // tearing down a pool that's already configured correctly.
+        $verify = $this->readState();
+        if (($verify[$name]['enabled'] ?? null) === $enabled) {
+            $this->logger->warning(
+                "writeState reported failure but on-disk state matches target; treating as success",
+                ['plugin' => $name, 'target_enabled' => $enabled]
+            );
+            return true;
+        }
+
         $this->logger->error("writeState failed after sandbox side-effects — rolling back", [
             'plugin' => $name,
             'target_enabled' => $enabled,
@@ -758,7 +803,27 @@ class PluginLoader
                 ['plugin' => $name, 'target_enabled' => $enabled]
             );
         }
+        $this->lastSetEnabledFailure = [
+            'stage' => 'state',
+            'message' => "Could not persist plugins.json for '{$name}'. "
+                       . 'Sandbox side-effects were rolled back; '
+                       . 'check filesystem permissions on /etc/eiou/config/.',
+        ];
         return false;
+    }
+
+    /**
+     * Return the failure context from the last setEnabled() call, or
+     * null after a successful call (or before any call). The returned
+     * array has 'stage' (refused | isolation | sandbox | state) and
+     * 'message' (operator-facing description) keys. Callers use this
+     * to print a specific error instead of the generic legacy string.
+     *
+     * @return array{stage:string, message:string}|null
+     */
+    public function getLastSetEnabledFailure(): ?array
+    {
+        return $this->lastSetEnabledFailure;
     }
 
     /**
