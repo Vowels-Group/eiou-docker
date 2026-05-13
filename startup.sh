@@ -3018,9 +3018,15 @@ plugin_routing_poller() {
                 continue
             fi
             # Find the FPM master and signal SIGUSR2 (graceful pool reload).
-            # pgrep -o = oldest match = master process.
+            # -f matches the full command line — `php-fpm: master` only
+            # appears in argv[0]'s descriptor, not in comm (which is
+            # truncated to `php-fpm8.2`), so omitting -f silently returns
+            # no match and FPM never reloads to pick up the new pool.
+            # -o = oldest match = master process; pgrep with -f returns
+            # both the master and any per-pool processes that have already
+            # spawned, but the master is always the oldest.
             local fpm_master
-            fpm_master=$(pgrep -o "php-fpm: master" 2>/dev/null)
+            fpm_master=$(pgrep -fo "php-fpm: master" 2>/dev/null)
             if [ -n "$fpm_master" ]; then
                 kill -USR2 "$fpm_master" 2>/dev/null || true
             fi
