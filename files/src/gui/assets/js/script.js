@@ -10370,6 +10370,29 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         // validate anyway). Tor Browser ships with FormData and the
         // basic fetch() body type — no streaming or compression APIs
         // are touched. See [[feedback_tor_browser_compat]].
+        // openUpload() shows a pre-flight modal explaining the rules and
+        // trust posture before the OS file picker opens. Continue triggers
+        // the hidden #plugins-upload-input click; the change handler then
+        // POSTs the file via FormData. Tor Browser-safe (FormData + fetch
+        // only, no streaming APIs).
+        //
+        // Limits are fetched once per session from pluginsUploadLimits so
+        // the modal copy stays in sync with PHP constants without
+        // duplicating them client-side. A network failure on the limits
+        // call falls back to hardcoded copy — the modal must always
+        // render so the operator can't accidentally bypass the warning.
+        var cachedLimits = null;
+
+        function fetchLimits() {
+            if (cachedLimits) return Promise.resolve(cachedLimits);
+            return post({ action: 'pluginsUploadLimits' }).then(function(r) {
+                if (r.data && r.data.success && r.data.limits) {
+                    cachedLimits = r.data.limits;
+                }
+                return cachedLimits;
+            }).catch(function() { return null; });
+        }
+
         function openUpload() {
             var input = document.getElementById('plugins-upload-input');
             if (!input) {
@@ -10378,6 +10401,103 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 }
                 return;
             }
+            fetchLimits().then(function(limits) {
+                showUploadPreflight(limits, function() {
+                    triggerFilePicker(input);
+                });
+            });
+        }
+
+        function showUploadPreflight(limits, onContinue) {
+            var fmt = function(n) {
+                if (typeof n !== 'number') return '—';
+                if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(0) + ' MiB';
+                if (n >= 1024) return (n / 1024).toFixed(0) + ' KiB';
+                return n + ' B';
+            };
+            // Server is authoritative; fall back to copy that matches
+            // PluginInstallService constants if the limits fetch failed.
+            var zipMax  = limits ? limits.max_zip_bytes          : 25 * 1024 * 1024;
+            var fileMax = limits ? limits.max_file_bytes         : 15 * 1024 * 1024;
+            var totMax  = limits ? limits.max_uncompressed_bytes : 50 * 1024 * 1024;
+            var fileCnt = limits ? limits.max_file_count         : 500;
+            var ratio   = limits ? limits.max_compression_ratio  : 100;
+            var exts    = limits && limits.allowed_extensions
+                ? limits.allowed_extensions.join(', ')
+                : 'php, json, md, txt, css, js, map, html, htm, svg, png, jpg, jpeg, gif, webp, ico, woff, woff2, ttf, otf, eot';
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal modal-stack-top';
+            overlay.setAttribute('role', 'dialog');
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width: 580px;">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-upload"></i> Upload plugin (.zip)</h3>' +
+                        '<span class="close" data-plugin-upload-close="1" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding: 1rem 1.5rem; font-size: 0.9rem;">' +
+                        '<div class="alert alert-info" style="margin-bottom: 1rem;">' +
+                            '<strong><i class="fas fa-shield-alt"></i> Plugins run sandboxed.</strong> ' +
+                            'A sandboxed plugin runs as its own Unix user in its own PHP-FPM pool — it ' +
+                            '<strong>cannot</strong> read this node\'s master key, decrypt the seed phrase, ' +
+                            'or read <code>/etc/eiou/config/</code>. It <strong>can</strong> call core services ' +
+                            'declared in its <code>core_services</code> manifest field; review that list ' +
+                            'before you enable the plugin.' +
+                        '</div>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Layout</strong></p>' +
+                        '<ul style="margin: 0 0 1rem 1.25rem; padding: 0;">' +
+                            '<li>One <strong>top-level folder</strong> matching <code>^[a-z0-9][a-z0-9_-]{0,63}$</code></li>' +
+                            '<li>That folder is the plugin name, must match <code>plugin.json</code> &rarr; <code>name</code></li>' +
+                            '<li><code>plugin.json</code> with <code>name</code>, <code>version</code>, <code>entryClass</code>, <code>"sandboxed": true</code> all required</li>' +
+                        '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Limits</strong></p>' +
+                        '<ul style="margin: 0 0 1rem 1.25rem; padding: 0;">' +
+                            '<li>Archive &le; <strong>' + escapeHtml(fmt(zipMax)) + '</strong> compressed, &le; <strong>' + escapeHtml(fmt(totMax)) + '</strong> uncompressed</li>' +
+                            '<li>Single file &le; <strong>' + escapeHtml(fmt(fileMax)) + '</strong> uncompressed</li>' +
+                            '<li>&le; <strong>' + escapeHtml(String(fileCnt)) + '</strong> files; compression ratio &le; <strong>' + escapeHtml(String(ratio)) + ':1</strong> (zip-bomb sentinel)</li>' +
+                        '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Allowed file extensions</strong></p>' +
+                        '<p style="margin: 0 0 1rem 0; color: #495057; font-family: monospace; font-size: 0.85rem; word-break: break-word;">' +
+                            escapeHtml(exts) +
+                        '</p>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Rejected automatically</strong></p>' +
+                        '<ul style="margin: 0 0 0.25rem 1.25rem; padding: 0;">' +
+                            '<li>Manifests without <code>"sandboxed": true</code> (in-process plugins are no longer supported)</li>' +
+                            '<li>Path traversal (<code>..</code>, leading <code>/</code>, backslashes)</li>' +
+                            '<li>Symlinks, hidden dotfiles, <code>.phar</code>, <code>.htaccess</code>, anything outside the allow-list</li>' +
+                            '<li>Plugins already installed (uninstall first to replace)</li>' +
+                        '</ul>' +
+                    '</div>' +
+                    '<div class="modal-footer" style="gap: 0.5rem;">' +
+                        '<button type="button" class="btn btn-secondary" data-plugin-upload-cancel="1">Cancel</button>' +
+                        '<button type="button" class="btn btn-primary" data-plugin-upload-continue="1">' +
+                            '<i class="fas fa-folder-open"></i> Choose .zip&hellip;' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+            function cleanup() {
+                document.removeEventListener('keydown', keyHandler);
+                if (document.body.contains(overlay)) {
+                    document.body.removeChild(overlay);
+                }
+            }
+            function keyHandler(e) {
+                if (e.key === 'Escape' || e.keyCode === 27) { cleanup(); }
+            }
+            overlay.querySelector('[data-plugin-upload-continue]').onclick = function() {
+                cleanup();
+                onContinue();
+            };
+            overlay.querySelector('[data-plugin-upload-cancel]').onclick = cleanup;
+            overlay.querySelector('[data-plugin-upload-close]').onclick = cleanup;
+            overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); } };
+            document.addEventListener('keydown', keyHandler);
+            document.body.appendChild(overlay);
+            try { overlay.querySelector('[data-plugin-upload-continue]').focus(); } catch (e) {}
+        }
+
+        function triggerFilePicker(input) {
             // The change handler is one-shot per pick. Detaching after each
             // invocation prevents leftover listeners stacking up if the
             // user opens the picker, cancels, then opens it again — that
