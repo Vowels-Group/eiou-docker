@@ -94,7 +94,10 @@ LABEL org.opencontainers.image.title="eiou-node" \
 #   VERSION UPGRADE DETECTION" in startup.sh.
 # - certbot: Let's Encrypt ACME client for automatic SSL certificates
 # - openssl: SSL certificate generation and cryptography
-# - php-bcmath, php-curl, php-mbstring, php-mysql, php-xml: PHP extensions
+# - php-bcmath, php-curl, php-mbstring, php-mysql, php-xml, php-zip: PHP extensions
+#   - php-zip is required by PluginInstallService::installFromZip() and
+#     PluginUpgradeService::upgradeFromZip() (ZipArchive class). Without
+#     it, both endpoints fail at runtime with "Class ZipArchive not found".
 # - tini: Minimal init system for proper signal forwarding and zombie reaping
 # - tor: Anonymous network for .onion addresses
 RUN apt-get update && apt-get install -y \
@@ -112,6 +115,7 @@ RUN apt-get update && apt-get install -y \
     php-mbstring \
     php-mysql \
     php-xml \
+    php-zip \
     tini \
     tor \
     && rm -rf /var/lib/apt/lists/*

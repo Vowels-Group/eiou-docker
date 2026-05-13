@@ -182,6 +182,20 @@ class Application {
             // (e.g. supervisor restart mid-transition, or a manual edit of
             // plugins.json). Idempotent. See docs/PLUGINS.md (Sandboxing).
             $this->pluginLoader->reconcileSandbox();
+            // Sweep .backup-<oldver>-<ts> dirs older than the retention
+            // window so a long-running node doesn't accumulate stale
+            // upgrade backups on the plugins volume. Idempotent; absent
+            // dirs / no aged-out entries are a no-op. Best-effort: a
+            // failure here logs but never aborts boot.
+            try {
+                $this->services
+                    ->getPluginUpgradeService($this->pluginLoader)
+                    ->pruneOldBackups();
+            } catch (Throwable $e) {
+                Logger::getInstance()->warning('plugin_backup_prune_failed', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
             $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services
             $this->services->wireAllServices();

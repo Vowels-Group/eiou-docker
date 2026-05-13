@@ -223,6 +223,14 @@ class PluginLoader
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
+            if (self::isUpgradeBackupDir($entry)) {
+                // Upgrade backup snapshots ("<id>.backup-<ver>-<ts>")
+                // live alongside live plugins so operators can ls the
+                // dir and find both. They carry a copy of the old
+                // manifest with the same plugin name, which would
+                // otherwise collide with the live plugin on discover.
+                continue;
+            }
             $pluginPath = $this->pluginDir . '/' . $entry;
             if (!is_dir($pluginPath)) {
                 continue;
@@ -379,6 +387,12 @@ class PluginLoader
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
+            if (self::isUpgradeBackupDir($entry)) {
+                // See discover() for the rationale — backup snapshots
+                // co-located with live plugins must be filtered out so
+                // they don't surface as duplicate-named plugins.
+                continue;
+            }
             $manifestPath = $this->pluginDir . '/' . $entry . '/plugin.json';
             if (!is_file($manifestPath)) {
                 continue;
@@ -412,6 +426,20 @@ class PluginLoader
                 'status' => $status,
                 'sandboxed' => $sandboxed,
             ];
+
+            // Optional upgrade-compatibility floor. When the upgrade
+            // service runs, it refuses to apply this manifest if the
+            // currently-installed version is below this floor — the
+            // plugin author declares "I cannot migrate state from
+            // below version X." Validated as a non-empty string here;
+            // PluginUpgradeService hands it to version_compare() at
+            // upgrade time so the comparison semantics are deferred
+            // (we don't try to parse semver up front).
+            if (isset($manifest['min_upgradable_from'])
+                && is_string($manifest['min_upgradable_from'])
+                && $manifest['min_upgradable_from'] !== '') {
+                $row['min_upgradable_from'] = $manifest['min_upgradable_from'];
+            }
 
             // Hard-deprecation surface — non-sandboxed plugins are no
             // longer loaded at all. The flag tells the GUI / CLI to
@@ -828,6 +856,26 @@ class PluginLoader
     }
 
     /**
+     * Render the nginx snippet + zones for the current sandboxed-and-enabled
+     * plugin set as it appears in on-disk state right now — no delta
+     * applied. Used by PluginUpgradeService when re-applying a pool
+     * after replacing a plugin's code: the route shape hasn't changed,
+     * but the re-apply is what triggers the supervisor's SIGUSR2 to
+     * FPM so the new code is picked up by fresh workers.
+     *
+     * @return array{0:string, 1:string} [snippet, zones]
+     */
+    public function renderActiveSandboxArtifacts(): array
+    {
+        $entries = $this->collectSandboxedRouteEntries();
+        usort($entries, fn(array $a, array $b): int => strcmp($a['plugin_id'], $b['plugin_id']));
+        return [
+            $this->nginxConfigService->renderSnippet($entries),
+            $this->nginxConfigService->renderZones($entries),
+        ];
+    }
+
+    /**
      * Collect the (plugin_id, system_user, public_routes) entries for every
      * sandboxed-enabled plugin currently on disk. Reads from the state file
      * + on-disk manifests so it works before / after / during loadPlugin().
@@ -867,6 +915,22 @@ class PluginLoader
             }
         }
         return $result;
+    }
+
+    /**
+     * Detect directory names that PluginUpgradeService creates when
+     * snapshotting an old plugin during upgrade ("<id>.backup-<ver>-
+     * <YYYYMMDD-HHMMSS>"). The scan loops skip these so a backup of
+     * `hello-eiou` doesn't surface as a duplicate "hello-eiou" plugin
+     * (its manifest carries the same `name` field). Anchored on the
+     * exact shape PluginUpgradeService produces; renaming a backup
+     * out of this pattern (e.g. for long-term retention) re-exposes
+     * it to the loader, which is fine because such a rename was an
+     * operator decision.
+     */
+    public static function isUpgradeBackupDir(string $entry): bool
+    {
+        return (bool) preg_match('/\.backup-[A-Za-z0-9._-]+-\d{8}-\d{6}$/', $entry);
     }
 
     /**

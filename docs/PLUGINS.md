@@ -14,19 +14,20 @@ default until the operator explicitly enables them.
 5. [Plugin Signatures](#plugin-signatures)
 6. [Lifecycle](#lifecycle)
 7. [Installing Plugins](#installing-plugins)
-8. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
-9. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
-10. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
-11. [Sandboxed Plugin Authoring](#sandboxed-plugin-authoring)
-12. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
-13. [Writing a Plugin](#writing-a-plugin)
-14. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-15. [Extending the GUI](#extending-the-gui)
-16. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-17. [Testing a Plugin](#testing-a-plugin)
-18. [Safety Model and Limitations](#safety-model-and-limitations)
-19. [Troubleshooting](#troubleshooting)
-20. [Related Documentation](#related-documentation)
+8. [Upgrading Plugins](#upgrading-plugins)
+9. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
+10. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
+11. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
+12. [Sandboxed Plugin Authoring](#sandboxed-plugin-authoring)
+13. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
+14. [Writing a Plugin](#writing-a-plugin)
+15. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+16. [Extending the GUI](#extending-the-gui)
+17. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+18. [Testing a Plugin](#testing-a-plugin)
+19. [Safety Model and Limitations](#safety-model-and-limitations)
+20. [Troubleshooting](#troubleshooting)
+21. [Related Documentation](#related-documentation)
 
 ---
 
@@ -1099,6 +1100,184 @@ sandboxing](#no-sandboxing)). Before enabling an uploaded plugin:
   by a key in `trusted-keys/`, not that the code is safe.
 - If you're running with `database.user` declarations, review them —
   enabling triggers `CREATE USER` / `GRANT`.
+
+---
+
+## Upgrading Plugins
+
+Replacing a plugin's on-disk code with a newer version preserves the
+operator's state — MySQL tables, plugin user, credentials, the gateway
+bearer token. Doing this through uninstall-then-install would lose all
+of that (DROP TABLE for every owned table, DROP USER, delete credential
+row), which is why upgrade is a separate flow with its own service and
+its own end-to-end test coverage.
+
+Two paths feed into the same engine:
+
+| Path                       | When it fires                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Zip upload (`pluginsUploadAsUpgrade` / GUI)** | Operator uploads a newer-version `.zip` of an already-installed plugin and confirms the replace.       |
+| **Bundled (`eiou plugin upgrade <name>` / `pluginsUpgrade`)** | The image (`/app/plugins/<name>/`) ships a newer version than the operator's plugins volume holds.    |
+
+Both routes call the same `PluginUpgradeService` and produce the same
+step-status envelope.
+
+### What the upgrade flow does
+
+1. **Validate the new bundle.** Zip path runs the same magic-bytes /
+   size cap / entry walk / manifest / signature checks that
+   `pluginsUpload` runs. Bundled path validates the on-disk
+   `/app/plugins/<name>/plugin.json` shape but skips zip ceremony.
+2. **Read the old manifest.** Refuses if the plugin isn't installed
+   (this is upgrade, not install).
+3. **Version compare** via `version_compare()`. Refuses:
+   - Equal versions — nothing to do.
+   - Downgrades — the operator would have to uninstall + install
+     explicitly to acknowledge the destructive intent.
+4. **Honour `min_upgradable_from`** in the new manifest. If the
+   installed version is below that floor, the operator gets a clear
+   error telling them to install an intermediate version first (or
+   to uninstall + reinstall and accept the data loss).
+5. **Snapshot old → backup.** The current plugin dir is renamed to
+   `<pluginDir>/<name>.backup-<oldver>-<YYYYMMDD-HHMMSS>/` next to
+   the live plugin. Kept for 30 days by default
+   (`BACKUP_RETENTION_DAYS`); the boot reconcile prunes anything older.
+6. **Swap new in.** Staged dir renamed into the canonical location.
+   On rename failure, step 5's snapshot is restored — the operator's
+   plugin doesn't disappear.
+7. **`onUpgrade()` hook.** If the new entry class implements
+   `Eiou\Contracts\UpgradablePlugin`, its `onUpgrade(ServiceContainer,
+   $oldVersion, $newVersion)` runs with the **old MySQL grants still
+   active** (so the plugin can read/transform its existing data via
+   the unchanged plugin user) and the **new code loaded** (`$this`
+   resolves to the new entry class). A thrown exception triggers full
+   rollback to the backup snapshot; the failed bundle is preserved at
+   `<name>.failed-<ts>/` for post-mortem.
+8. **Reconcile MySQL grants.** REVOKE ALL clears the old set in one
+   statement; GRANT per-table from the new manifest's `owned_tables`
+   rebuilds the new set. Handles both growth and shrinkage. The
+   plugin's MySQL user itself is unchanged.
+9. **Re-export the sibling-mountable credentials file** if the plugin
+   is currently enabled. Picks up any manifest-driven changes to the
+   file shape across versions.
+10. **Reload the FPM pool** if the plugin is currently enabled —
+    triggers the supervisor's SIGUSR2 to FPM so workers pick up the
+    new on-disk code rather than continuing to hold stale class
+    definitions. Disabled plugins skip this step; their next enable
+    runs through the normal enable path which loads the new code.
+11. **Fire `PluginEvents::PLUGIN_UPGRADED`** with `{name, old_version,
+    new_version, source}`. Only fires on full success; subscribers
+    never observe a "half upgraded" state because partial failures
+    throw before reaching the dispatch site.
+
+### `UpgradablePlugin` hook
+
+Plugins that need cross-version data migration implement
+`Eiou\Contracts\UpgradablePlugin`:
+
+```php
+use Eiou\Contracts\UpgradablePlugin;
+use Eiou\Services\ServiceContainer;
+
+class MyPlugin implements UpgradablePlugin
+{
+    public function getName(): string    { return 'my-plugin'; }
+    public function getVersion(): string { return '1.1.0'; }
+
+    public function register(ServiceContainer $c): void { /* ... */ }
+    public function boot(ServiceContainer $c): void     { /* ... */ }
+
+    public function onUpgrade(
+        ServiceContainer $container,
+        string $oldVersion,
+        string $newVersion
+    ): void {
+        if (version_compare($oldVersion, '1.1.0', '<')) {
+            $pdo = $container->getPluginPdo($this->getName());
+            $pdo->exec('ALTER TABLE plugin_my_plugin_keys ADD COLUMN expires_at INT NULL');
+        }
+    }
+}
+```
+
+Plugins that don't need migration simply don't implement the
+interface — the upgrade flow handles the directory swap, grant
+reconcile, and pool reload automatically.
+
+### `min_upgradable_from` manifest field
+
+An optional declaration in the new manifest that refuses upgrades
+from a version below the declared floor:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "2.0.0",
+  "min_upgradable_from": "1.0.0",
+  ...
+}
+```
+
+When set, the upgrade service refuses transitions whose
+`$installedVersion < $minUpgradableFrom` per `version_compare()`. Use
+this when v2.0 ships a schema migration that assumes the v1.0 schema
+shape — operators on v0.x must install v1.x first (so v1's
+`onUpgrade` runs the intermediate migration) before stepping to v2.0.
+
+### Backup retention
+
+Upgrade backups live at `<pluginDir>/<name>.backup-<oldver>-<ts>/`.
+The boot reconcile prunes anything older than
+`PluginUpgradeService::BACKUP_RETENTION_DAYS` (30 days). Operators who
+want to preserve a specific backup past the window can rename it out
+of the `.backup-<ver>-<ts>` shape (the prune regex is anchored on
+exactly that pattern).
+
+To roll back manually within the retention window:
+
+```bash
+# Stop the plugin pool so it doesn't see the swap mid-request.
+eiou plugin disable my-plugin
+sudo rm -rf /etc/eiou/plugins/my-plugin
+sudo mv /etc/eiou/plugins/my-plugin.backup-1.0.0-20260513-140000 \
+        /etc/eiou/plugins/my-plugin
+eiou plugin enable my-plugin
+```
+
+(`onUpgrade` was already idempotent per the contract, so the rollback
+side doesn't need a reverse hook — the old code expects its own
+schema shape and operates against it.)
+
+### What's NOT preserved across upgrade
+
+The upgrade flow preserves the plugin user, its credentials, its
+owned tables, and its gateway token. It does **not** preserve:
+
+- The plugin's PSR-4-autoloaded class instances inside the FPM
+  workers. The supervisor reload recycles workers so the new code
+  takes effect; any in-memory state in the old workers is lost.
+- The plugin's on-disk scratch space if the new manifest's
+  open_basedir paths differ from the old (rare; scratch is keyed on
+  `eiou-p-<system_user>` which is plugin-id-derived, not version-
+  derived).
+- Custom additions a plugin made to its own directory at runtime
+  that weren't in the new bundle. The swap is wholesale — anything
+  in the old dir that isn't in the new bundle ends up only in the
+  backup snapshot.
+
+If your plugin writes runtime state into its own directory (rare;
+DB-backed state is the supported pattern), include a stub in the
+new bundle that triggers regeneration on first request, or stage
+the migration via `onUpgrade`.
+
+### Surface summary
+
+| Surface                              | Drives                                      | Notes                                                                              |
+| ------------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| GUI: "Upgrade available" badge       | `pluginsUpgrade` → `upgradeFromBundle()`    | Row on a plugin appears with badge when image's bundled version > installed.       |
+| GUI: Zip upload of installed plugin  | `pluginsUploadAsUpgrade` → `upgradeFromZip()` | After `pluginsUpload` returns 409 already_installed, operator confirms the replace. |
+| CLI: `eiou plugin upgrade <name>`    | `upgradeFromBundle()`                       | Same logic as the GUI badge, accessible without the wallet's web pool.             |
+| Direct PHP: `PluginUpgradeService`   | both methods                                | For test-harness and bundled scripts that don't go through CLI/GUI.                |
 
 ---
 

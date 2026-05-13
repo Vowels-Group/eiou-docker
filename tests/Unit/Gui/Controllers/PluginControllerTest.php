@@ -503,11 +503,138 @@ class PluginControllerTest extends TestCase
         foreach ([
             'pluginsList', 'pluginsToggle', 'pluginsRequestRestart',
             'pluginChangelog', 'pluginsUninstall',
-            'pluginsUpload', 'pluginsUploadLimits',
+            'pluginsUpload', 'pluginsUploadAsUpgrade', 'pluginsUpgrade',
+            'pluginsUploadLimits',
         ] as $a) {
             $this->assertSame(\Eiou\Services\GuiActionRegistry::TIER_AUTH, $registry->getTier($a), "{$a} should register at TIER_AUTH");
             $this->assertSame('core', $registry->getPluginId($a), "{$a} should be owned by 'core'");
             $this->assertNotNull($registry->getHandler($a), "{$a} should have a registered handler");
         }
+    }
+
+    // =========================================================================
+    // pluginsUpgrade (bundled-source upgrade)
+    // =========================================================================
+
+    #[Test]
+    public function pluginsUpgrade500WhenServiceNotWired(): void
+    {
+        // Default controller in setUp() has no upgrade service.
+        $this->withCsrf();
+        $_POST = ['action' => 'pluginsUpgrade', 'csrf_token' => 'x', 'plugin' => 'hello-eiou'];
+
+        $r = $this->dispatch();
+        $this->assertSame(500, $r['status']);
+        $this->assertSame('upgrade_unavailable', $r['payload']['code']);
+    }
+
+    #[Test]
+    public function pluginsUpgradeRejectsInvalidPluginName(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $this->controller = $this->makeControllerWithUpgrade($upgrade);
+        $this->withCsrf();
+        $_POST = ['action' => 'pluginsUpgrade', 'csrf_token' => 'x', 'plugin' => '../etc/passwd'];
+
+        $r = $this->dispatch();
+        $this->assertSame(400, $r['status']);
+        $this->assertSame('invalid_plugin_name', $r['payload']['code']);
+    }
+
+    #[Test]
+    public function pluginsUpgradeMapsRefusalMessagesToCodes(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('upgradeFromBundle')
+            ->willThrowException(new \InvalidArgumentException(
+                "Plugin 'demo' is already at version 1.0.0"
+            ));
+        $this->controller = $this->makeControllerWithUpgrade($upgrade);
+        $this->withCsrf();
+        $_POST = ['action' => 'pluginsUpgrade', 'csrf_token' => 'x', 'plugin' => 'demo'];
+
+        $r = $this->dispatch();
+        $this->assertSame(400, $r['status']);
+        $this->assertSame('same_version', $r['payload']['code']);
+    }
+
+    #[Test]
+    public function pluginsUpgradeMapsDowngradeMessage(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('upgradeFromBundle')
+            ->willThrowException(new \InvalidArgumentException(
+                "Refusing downgrade of 'demo' from 2.0.0 to 1.0.0"
+            ));
+        $this->controller = $this->makeControllerWithUpgrade($upgrade);
+        $this->withCsrf();
+        $_POST = ['action' => 'pluginsUpgrade', 'csrf_token' => 'x', 'plugin' => 'demo'];
+
+        $r = $this->dispatch();
+        $this->assertSame(400, $r['status']);
+        $this->assertSame('downgrade_refused', $r['payload']['code']);
+    }
+
+    #[Test]
+    public function pluginsUpgradeReportsSuccessWithVersionDelta(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('upgradeFromBundle')->willReturn([
+            'plugin_id' => 'demo',
+            'old_version' => '1.0.0',
+            'new_version' => '1.1.0',
+            'backup_dir' => '/etc/eiou/plugins/demo.backup-1.0.0-20260513-140000',
+            'steps' => ['swap' => 'ok'],
+        ]);
+        $this->controller = $this->makeControllerWithUpgrade($upgrade);
+        $this->withCsrf();
+        $_POST = ['action' => 'pluginsUpgrade', 'csrf_token' => 'x', 'plugin' => 'demo'];
+
+        $r = $this->dispatch();
+        $this->assertSame(200, $r['status']);
+        $this->assertTrue($r['payload']['success']);
+        $this->assertSame('1.0.0', $r['payload']['old_version']);
+        $this->assertSame('1.1.0', $r['payload']['new_version']);
+        $this->assertTrue($r['payload']['restart_required']);
+    }
+
+    // =========================================================================
+    // listPlugins enrichment with bundled-upgrade availability
+    // =========================================================================
+
+    #[Test]
+    public function pluginsListMergesBundledUpgradeAvailability(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('availableBundledUpgrades')->willReturn([
+            'demo' => ['installed_version' => '1.0.0', 'bundled_version' => '1.1.0'],
+        ]);
+        $this->loader->method('listAllPlugins')->willReturn([
+            ['name' => 'demo', 'enabled' => true,  'version' => '1.0.0', 'status' => 'booted'],
+            ['name' => 'other', 'enabled' => false, 'version' => '2.0.0', 'status' => 'disabled'],
+        ]);
+        $this->controller = $this->makeControllerWithUpgrade($upgrade);
+        $this->withCsrf();
+        $_POST = ['action' => 'pluginsList', 'csrf_token' => 'x'];
+
+        $r = $this->dispatch();
+        $this->assertSame(200, $r['status']);
+        $rows = array_column($r['payload']['plugins'], null, 'name');
+        $this->assertArrayHasKey('upgrade_available', $rows['demo']);
+        $this->assertSame('1.0.0', $rows['demo']['upgrade_available']['installed_version']);
+        $this->assertSame('1.1.0', $rows['demo']['upgrade_available']['bundled_version']);
+        $this->assertArrayNotHasKey('upgrade_available', $rows['other']);
+    }
+
+    private function makeControllerWithUpgrade(\Eiou\Services\PluginUpgradeService $upgrade): CapturingPluginController
+    {
+        return new CapturingPluginController(
+            $this->session,
+            $this->loader,
+            $this->restartRequester,
+            null,
+            $this->installService,
+            $upgrade
+        );
     }
 }

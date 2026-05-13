@@ -158,6 +158,87 @@ class PluginInstallService
      */
     public function installFromZip(string $zipPath, ?string $originalFilename = null): array
     {
+        $staged = $this->stageAndValidate($zipPath);
+        $pluginId      = $staged['plugin_id'];
+        $stagedDir     = $staged['staged_dir'];
+        $stagingParent = $staged['staging_parent'];
+        $manifest      = $staged['manifest'];
+        $sigResult     = $staged['signature'];
+        $targetDir     = $this->pluginDir . '/' . $pluginId;
+
+        try {
+            // Install (not upgrade): refuse if the plugin is already
+            // present. Updates go through PluginUpgradeService so the
+            // operator's existing plugin state (DB tables, credentials,
+            // gateway token) is preserved across the version change.
+            if (is_dir($targetDir)) {
+                throw new InvalidArgumentException(
+                    "Plugin '{$pluginId}' is already installed. Use the upgrade flow to replace."
+                );
+            }
+            if (!@rename($stagedDir, $targetDir)) {
+                throw new RuntimeException("Could not move staged plugin into {$targetDir}");
+            }
+
+            $this->cleanupStaging($stagingParent);
+
+            $logger = $this->logger ?? Logger::getInstance();
+            $logger->info('plugin_installed_from_zip', [
+                'plugin' => $pluginId,
+                'version' => $manifest['version'] ?? '',
+                'signature_status' => $sigResult['status'],
+                'signature_enforced' => $this->sigMode === PluginSignatureVerifier::MODE_REQUIRE,
+                'original_filename' => $originalFilename,
+            ]);
+
+            EventDispatcher::getInstance()->dispatch(PluginEvents::PLUGIN_INSTALLED, [
+                'name' => $pluginId,
+                'version' => $manifest['version'] ?? '',
+                'source' => 'zip_upload',
+            ]);
+
+            return [
+                'plugin_id' => $pluginId,
+                'version' => (string) ($manifest['version'] ?? ''),
+                'signature' => [
+                    'status' => $sigResult['status'],
+                    'key_fingerprint' => $sigResult['key_fingerprint'] ?? null,
+                    'enforced' => $this->sigMode === PluginSignatureVerifier::MODE_REQUIRE,
+                ],
+            ];
+        } catch (Throwable $e) {
+            $this->cleanupStaging($stagingParent);
+            throw $e;
+        }
+    }
+
+    /**
+     * Validate a plugin zip and stage its contents under a `.staging-<rand>/`
+     * directory next to (not inside) the plugins root. Public so
+     * PluginUpgradeService can reuse the entire validation pipeline
+     * without duplicating it — the upgrade flow then performs its own
+     * version-compare + backup + atomic swap, where installFromZip
+     * performs its own existence-collision check + rename.
+     *
+     * On any failure, the staging directory is cleaned up before the
+     * exception bubbles. On success, the caller is responsible for
+     * either consuming the `staged_dir` (rename it into its final
+     * canonical location) or calling `cleanupStaging($staging_parent)`
+     * to discard it.
+     *
+     * @return array{
+     *     plugin_id: string,
+     *     staged_dir: string,
+     *     staging_parent: string,
+     *     manifest: array<string, mixed>,
+     *     signature: array{status: string, key_fingerprint: ?string}
+     * }
+     *
+     * @throws InvalidArgumentException For malformed/hostile inputs (400-class).
+     * @throws RuntimeException For filesystem / required-signature failures (500-class).
+     */
+    public function stageAndValidate(string $zipPath): array
+    {
         $this->ensureUploadIsReadable($zipPath);
         $this->ensureZipMagic($zipPath);
 
@@ -172,14 +253,6 @@ class PluginInstallService
         } catch (Throwable $e) {
             $zip->close();
             throw $e;
-        }
-
-        $targetDir = $this->pluginDir . '/' . $pluginId;
-        if (is_dir($targetDir)) {
-            $zip->close();
-            throw new InvalidArgumentException(
-                "Plugin '{$pluginId}' is already installed. Uninstall it first to replace."
-            );
         }
 
         if (!is_dir($this->pluginDir)) {
@@ -215,52 +288,30 @@ class PluginInstallService
             // anomalous and not worth processing further.
             $this->rejectSymlinksUnder($stagedPluginDir);
 
-            $manifest = $this->readAndValidateManifest($stagedPluginDir, $pluginId);
-
+            $manifest  = $this->readAndValidateManifest($stagedPluginDir, $pluginId);
             $sigResult = $this->verifySignatureIfWired($stagedPluginDir);
 
-            // Atomic publish: rename staging into the canonical location.
-            // If something else won the race for the same name (extremely
-            // unlikely — staging dirs are random — but checked), surface a
-            // clear error so the operator can retry rather than silently
-            // overwriting.
-            if (is_dir($targetDir)) {
-                throw new RuntimeException("Plugin '{$pluginId}' appeared during install — aborted");
-            }
-            if (!@rename($stagedPluginDir, $targetDir)) {
-                throw new RuntimeException("Could not move staged plugin into {$targetDir}");
-            }
-
-            $this->cleanupStaging($stagingParent);
-
-            $logger = $this->logger ?? Logger::getInstance();
-            $logger->info('plugin_installed_from_zip', [
-                'plugin' => $pluginId,
-                'version' => $manifest['version'] ?? '',
-                'signature_status' => $sigResult['status'],
-                'signature_enforced' => $this->sigMode === PluginSignatureVerifier::MODE_REQUIRE,
-                'original_filename' => $originalFilename,
-            ]);
-
-            EventDispatcher::getInstance()->dispatch(PluginEvents::PLUGIN_INSTALLED, [
-                'name' => $pluginId,
-                'version' => $manifest['version'] ?? '',
-                'source' => 'zip_upload',
-            ]);
-
             return [
-                'plugin_id' => $pluginId,
-                'version' => (string) ($manifest['version'] ?? ''),
-                'signature' => [
-                    'status' => $sigResult['status'],
-                    'key_fingerprint' => $sigResult['key_fingerprint'] ?? null,
-                    'enforced' => $this->sigMode === PluginSignatureVerifier::MODE_REQUIRE,
-                ],
+                'plugin_id'      => $pluginId,
+                'staged_dir'     => $stagedPluginDir,
+                'staging_parent' => $stagingParent,
+                'manifest'       => $manifest,
+                'signature'      => $sigResult,
             ];
         } catch (Throwable $e) {
             $this->cleanupStaging($stagingParent);
             throw $e;
         }
+    }
+
+    /**
+     * Public alias for the private staging-dir cleanup helper so
+     * PluginUpgradeService can discard a staged bundle after a
+     * successful swap without reaching into protected internals.
+     */
+    public function discardStaging(string $stagingParent): void
+    {
+        $this->cleanupStaging($stagingParent);
     }
 
     /**

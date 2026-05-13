@@ -163,4 +163,126 @@ class CliPluginServiceTest extends TestCase
 
         (new CliPluginService($this->loader))->listPlugins(['eiou','plugin'], $this->output);
     }
+
+    // =========================================================================
+    // upgrade subcommand
+    // =========================================================================
+
+    public function testUpgradeRejectsInvalidName(): void
+    {
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('Usage: eiou plugin upgrade <name>'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        $svc = new CliPluginService(
+            $this->loader,
+            null,
+            $this->createMock(\Eiou\Services\PluginUpgradeService::class)
+        );
+        $svc->upgradePlugin(['eiou','plugin','upgrade','../etc/passwd'], $this->output);
+    }
+
+    public function testUpgradeRefusedWhenServiceNotAvailable(): void
+    {
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('not available'),
+                ErrorCodes::GENERAL_ERROR
+            );
+
+        // No upgrade service wired (e.g. early-boot context) — refuse
+        // cleanly rather than fatal.
+        (new CliPluginService($this->loader))
+            ->upgradePlugin(['eiou','plugin','upgrade','alpha'], $this->output);
+    }
+
+    public function testUpgradeSurfacesInvalidArgumentAs400(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('upgradeFromBundle')
+            ->willThrowException(new \InvalidArgumentException('already at version 1.0.0'));
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('already at version'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade','alpha'], $this->output);
+    }
+
+    public function testUpgradeSurfacesRuntimeExceptionAs500(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('upgradeFromBundle')
+            ->willThrowException(new \RuntimeException('supervisor failed'));
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('supervisor failed'),
+                ErrorCodes::GENERAL_ERROR
+            );
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade','alpha'], $this->output);
+    }
+
+    public function testUpgradeSuccessIncludesVersionDeltaInMessage(): void
+    {
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('upgradeFromBundle')->willReturn([
+            'plugin_id' => 'alpha',
+            'old_version' => '1.0.0',
+            'new_version' => '1.1.0',
+            'backup_dir' => '/etc/eiou/plugins/alpha.backup-1.0.0-20260513-140000',
+            'steps' => [
+                'swap' => 'ok',
+                'on_upgrade' => 'skipped',
+                'reconcile_grants' => 'skipped',
+                're_export_credentials' => 'skipped',
+                'reload_pool' => 'skipped',
+            ],
+        ]);
+
+        $this->output->expects($this->once())->method('success')
+            ->with($this->stringContains('1.0.0 → 1.1.0'));
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade','alpha'], $this->output);
+    }
+
+    public function testUpgradeReportsPartialFailureWhenStepHasError(): void
+    {
+        // Directory swap succeeded but the pool reload failed. The
+        // upgrade is committed (new code on disk) but the operator
+        // needs to know one step didn't complete cleanly.
+        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade->method('upgradeFromBundle')->willReturn([
+            'plugin_id' => 'alpha',
+            'old_version' => '1.0.0',
+            'new_version' => '1.1.0',
+            'backup_dir' => '/etc/eiou/plugins/alpha.backup-1.0.0-20260513-140000',
+            'steps' => [
+                'swap' => 'ok',
+                'on_upgrade' => 'skipped',
+                'reconcile_grants' => 'ok',
+                're_export_credentials' => 'ok',
+                'reload_pool' => 'error:apply_pool_failed',
+            ],
+        ]);
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('post-swap steps had errors'),
+                ErrorCodes::GENERAL_ERROR,
+                500,
+                $this->anything()
+            );
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade','alpha'], $this->output);
+    }
 }

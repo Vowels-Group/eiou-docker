@@ -1235,6 +1235,44 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginUpgradeService instance.
+     *
+     * Drives the upgrade flow for an already-installed plugin: validates
+     * the new bundle (zip or image-baked), atomically swaps the on-disk
+     * directory, runs the plugin's onUpgrade hook if implemented,
+     * reconciles MySQL grants against the new manifest, re-exports
+     * credentials, and reloads the FPM pool. The plugin's existing DB
+     * tables, user, credentials, and gateway token are preserved
+     * across the upgrade — install-then-uninstall would lose all of
+     * them, which is why this is a separate service.
+     *
+     * The PluginLoader is passed in explicitly rather than fetched via
+     * `Application::getInstance()->pluginLoader` because this getter is
+     * called from inside `Application::__construct` (during boot's
+     * pruneOldBackups step). At that point the static Application
+     * instance is still null — fetching via getInstance() would recurse
+     * into another `new self()`, open a fresh PDO, and infinite-loop
+     * until MariaDB rejects further connections. Same pattern (and
+     * same reasoning) as `getPluginIpcForwarder`.
+     */
+    public function getPluginUpgradeService(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginUpgradeService {
+        if (!isset($this->services['PluginUpgradeService'])) {
+            $this->services['PluginUpgradeService'] = new \Eiou\Services\PluginUpgradeService(
+                $this->getPluginInstallService(),
+                $loader,
+                $this->getPluginPoolService(),
+                $this->getPluginUserService(),
+                $this->getPluginDbUserService(),
+                $this->getPluginCredentialService(),
+                $this->getPluginCredentialsExportService(),
+                $this,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginUpgradeService'];
+    }
+
+    /**
      * Convenience wrapper that returns a PDO authenticated as the given
      * plugin's MySQL user. Identical to calling
      * `$container->getPluginPdoFactory()->getFor($pluginId)`. Cached
