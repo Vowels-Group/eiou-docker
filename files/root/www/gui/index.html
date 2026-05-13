@@ -133,9 +133,12 @@ $pluginController = $app->pluginLoader !== null
             : null,
         // Upgrade service drives pluginsUploadAsUpgrade and pluginsUpgrade
         // (the bundled-version upgrade). Same gating as the install
-        // service — null in the no-wallet bootstrap path.
+        // service — null in the no-wallet bootstrap path. Pass the
+        // already-constructed PluginLoader explicitly to avoid recursion
+        // through Application::getInstance(); see getPluginUpgradeService's
+        // docblock for the rationale.
         $app->services !== null
-            ? $app->services->getPluginUpgradeService()
+            ? $app->services->getPluginUpgradeService($app->pluginLoader)
             : null
     )
     : null;

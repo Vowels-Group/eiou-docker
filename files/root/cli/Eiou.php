@@ -343,7 +343,7 @@ elseif($request === "plugin"){
   $pluginCliService = new \Eiou\Services\CliPluginService(
     $app->pluginLoader,
     $app->services->getPluginUninstallService(),
-    $app->services->getPluginUpgradeService()
+    $app->services->getPluginUpgradeService($app->pluginLoader)
   );
   $subcommand = strtolower($cleanArgv[2] ?? 'list');
   if ($subcommand === 'enable') {

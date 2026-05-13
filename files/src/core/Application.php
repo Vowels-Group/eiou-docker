@@ -188,7 +188,9 @@ class Application {
             // dirs / no aged-out entries are a no-op. Best-effort: a
             // failure here logs but never aborts boot.
             try {
-                $this->services->getPluginUpgradeService()->pruneOldBackups();
+                $this->services
+                    ->getPluginUpgradeService($this->pluginLoader)
+                    ->pruneOldBackups();
             } catch (Throwable $e) {
                 Logger::getInstance()->warning('plugin_backup_prune_failed', [
                     'error' => $e->getMessage(),

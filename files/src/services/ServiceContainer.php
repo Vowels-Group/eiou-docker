@@ -1245,13 +1245,21 @@ class ServiceContainer implements ContainerInterface {
      * tables, user, credentials, and gateway token are preserved
      * across the upgrade — install-then-uninstall would lose all of
      * them, which is why this is a separate service.
+     *
+     * The PluginLoader is passed in explicitly rather than fetched via
+     * `Application::getInstance()->pluginLoader` because this getter is
+     * called from inside `Application::__construct` (during boot's
+     * pruneOldBackups step). At that point the static Application
+     * instance is still null — fetching via getInstance() would recurse
+     * into another `new self()`, open a fresh PDO, and infinite-loop
+     * until MariaDB rejects further connections. Same pattern (and
+     * same reasoning) as `getPluginIpcForwarder`.
      */
-    public function getPluginUpgradeService(): \Eiou\Services\PluginUpgradeService {
+    public function getPluginUpgradeService(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginUpgradeService {
         if (!isset($this->services['PluginUpgradeService'])) {
-            $app = \Eiou\Core\Application::getInstance();
             $this->services['PluginUpgradeService'] = new \Eiou\Services\PluginUpgradeService(
                 $this->getPluginInstallService(),
-                $app->pluginLoader,
+                $loader,
                 $this->getPluginPoolService(),
                 $this->getPluginUserService(),
                 $this->getPluginDbUserService(),
