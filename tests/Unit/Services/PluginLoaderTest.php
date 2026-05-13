@@ -504,6 +504,75 @@ class PluginLoaderTest extends TestCase
         $this->assertSame([], $row['public_routes']);
     }
 
+    // -- payback_method_types manifest field -------------------------------
+
+    public function testListAllPluginsAcceptsValidPaybackMethodType(): void
+    {
+        $this->writePluginWithExtras('pmt-good', [
+            'payback_method_types' => [
+                [
+                    'id' => 'btc',
+                    'catalog' => [
+                        'id' => 'btc',
+                        'label' => 'Bitcoin',
+                        'group' => 'crypto',
+                        'icon' => 'fab fa-bitcoin',
+                        'description' => 'On-chain Bitcoin',
+                        'currencies' => ['BTC'],
+                        'fields' => [
+                            ['name' => 'address', 'label' => 'Address', 'type' => 'text', 'required' => true],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertCount(1, $row['payback_method_types']);
+        $this->assertSame('btc', $row['payback_method_types'][0]['id']);
+        $this->assertSame('Bitcoin', $row['payback_method_types'][0]['catalog']['label']);
+    }
+
+    public function testListAllPluginsRejectsPaybackMethodTypeWithBadId(): void
+    {
+        $this->writePluginWithExtras('pmt-badid', [
+            'payback_method_types' => [
+                ['id' => 'BadCase', 'catalog' => ['id' => 'BadCase', 'label' => 'X']],
+            ],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['payback_method_types']);
+    }
+
+    public function testListAllPluginsRejectsPaybackMethodTypeShadowingCore(): void
+    {
+        $this->writePluginWithExtras('pmt-shadow', [
+            'payback_method_types' => [
+                ['id' => 'bank_wire', 'catalog' => ['id' => 'bank_wire', 'label' => 'My Bank']],
+                ['id' => 'custom',    'catalog' => ['id' => 'custom',    'label' => 'My Custom']],
+            ],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['payback_method_types']);
+    }
+
+    public function testListAllPluginsRejectsPaybackMethodTypeMissingCatalog(): void
+    {
+        $this->writePluginWithExtras('pmt-no-cat', [
+            'payback_method_types' => [
+                ['id' => 'btc'], // no catalog → drop
+            ],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['payback_method_types']);
+    }
+
+    public function testListAllPluginsDefaultsPaybackMethodTypesToEmptyList(): void
+    {
+        $this->writePluginWithExtras('pmt-none', []);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['payback_method_types']);
+    }
+
     // -- Lifecycle event dispatch ------------------------------------------
 
     // [removed] testRegisterAllDispatchesPluginRegistered: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the

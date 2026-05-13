@@ -97,12 +97,14 @@ class PluginIpcForwarder
         ?\Eiou\Services\TabRegistry $tabRegistry = null,
         ?\Eiou\Services\GuiActionRegistry $actionRegistry = null,
         ?\Eiou\Services\PluginApiRegistry $apiRegistry = null,
-        ?\Eiou\Services\PluginCliRegistry $cliRegistry = null
+        ?\Eiou\Services\PluginCliRegistry $cliRegistry = null,
+        ?\Eiou\Services\PaybackMethodTypeRegistry $paybackTypeRegistry = null
     ): array {
         $report = [
             'events' => [], 'filters' => [], 'renders' => [],
             'assets' => [], 'tabs' => [], 'actions' => [],
             'api_routes' => [], 'cli_commands' => [],
+            'payback_method_types' => [],
         ];
         foreach ($this->loader->listAllPlugins() as $row) {
             if (empty($row['enabled']) || empty($row['sandboxed'])) {
@@ -181,6 +183,23 @@ class PluginIpcForwarder
                         $report['cli_commands'][] = [
                             'plugin' => $pluginId,
                             'name'   => (string) $cmd['name'],
+                        ];
+                    }
+                }
+            }
+
+            // Payback-method rail types — manifest declares the static
+            // catalog row, we instantiate an IpcPaybackMethodTypeProxy
+            // and hand it to PaybackMethodTypeRegistry. The proxy's
+            // dynamic methods (validate/mask/defaultPrecision) IPC into
+            // the plugin's dispatcher on each call.
+            if ($paybackTypeRegistry !== null) {
+                foreach (($row['payback_method_types'] ?? []) as $entry) {
+                    if (!is_array($entry)) continue;
+                    if ($this->registerPaybackMethodType($paybackTypeRegistry, $pluginId, $entry)) {
+                        $report['payback_method_types'][] = [
+                            'plugin' => $pluginId,
+                            'id'     => (string) $entry['id'],
                         ];
                     }
                 }
@@ -465,6 +484,47 @@ class PluginIpcForwarder
             $entry['mobileLabel'] = $tab['mobileLabel'];
         }
         return $tabRegistry->register($entry);
+    }
+
+    /**
+     * Register an IpcPaybackMethodTypeProxy for a plugin's manifest
+     * payback_method_types entry. The proxy is stateless past
+     * construction — every dynamic method call IPCs into the plugin's
+     * pool — so two plugins each registering their own rail type
+     * incur no coordination cost.
+     */
+    private function registerPaybackMethodType(
+        \Eiou\Services\PaybackMethodTypeRegistry $registry,
+        string $pluginId,
+        array $entry
+    ): bool {
+        $typeId  = (string) ($entry['id'] ?? '');
+        $catalog = $entry['catalog'] ?? null;
+        if ($typeId === '' || !is_array($catalog)) return false;
+
+        $proxy = new \Eiou\Services\IpcPaybackMethodTypeProxy(
+            $pluginId,
+            $typeId,
+            $catalog,
+            fn(string $p, array $e): ?array => $this->dispatch($p, $e)
+        );
+
+        try {
+            $registry->register($proxy);
+            return true;
+        } catch (Throwable $e) {
+            // Collision with a core id, malformed id (despite the
+            // loader's filter — defence in depth), or duplicate
+            // registration with another plugin's type. Log + skip
+            // this entry; sibling registrations on the same plugin
+            // continue.
+            $this->log('warning', 'plugin_ipc_payback_method_register_failed', [
+                'plugin'  => $pluginId,
+                'type_id' => $typeId,
+                'error'   => $e->getMessage(),
+            ]);
+            return false;
+        }
     }
 
     /**

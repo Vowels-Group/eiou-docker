@@ -580,4 +580,120 @@ class PluginIpcForwarderTest extends TestCase
 
         EventDispatcher::getInstance()->dispatch('sync.completed', []);
     }
+
+    // ===================================================================
+    // Payback-method type bridging
+    // ===================================================================
+
+    #[Test]
+    public function registersPaybackMethodTypeProxyAgainstTheRegistry(): void
+    {
+        $registry = new \Eiou\Services\PaybackMethodTypeRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('payback-btc', [
+                'payback_method_types' => [[
+                    'id' => 'btc',
+                    'catalog' => [
+                        'id' => 'btc',
+                        'label' => 'Bitcoin',
+                        'group' => 'crypto',
+                    ],
+                ]],
+            ]),
+        ]);
+
+        $report = $this->svc->registerAll(
+            $this->hooks,
+            null, null, null, null, null,
+            $registry
+        );
+
+        $this->assertCount(1, $report['payback_method_types']);
+        $this->assertSame('payback-btc', $report['payback_method_types'][0]['plugin']);
+        $this->assertSame('btc', $report['payback_method_types'][0]['id']);
+
+        // Registry now contains the proxy under id 'btc'.
+        $this->assertTrue($registry->has('btc'));
+        $type = $registry->get('btc');
+        $this->assertNotNull($type);
+        $this->assertSame('btc', $type->getId());
+        $this->assertSame('Bitcoin', $type->getCatalogEntry()['label']);
+    }
+
+    #[Test]
+    public function proxyValidateForwardsThroughIpcDispatch(): void
+    {
+        $registry = new \Eiou\Services\PaybackMethodTypeRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('payback-btc', [
+                'payback_method_types' => [[
+                    'id' => 'btc',
+                    'catalog' => ['id' => 'btc', 'label' => 'Bitcoin'],
+                ]],
+            ]),
+        ]);
+        // Override the canned response for this test.
+        $this->nextResponse = [
+            'ok' => true, 'status' => 200,
+            'body' => [
+                'ok' => true,
+                'result' => [
+                    ['field' => 'address', 'code' => 'invalid_format', 'message' => 'Bad address'],
+                ],
+            ],
+        ];
+
+        $this->svc->registerAll($this->hooks, null, null, null, null, null, $registry);
+
+        $errors = $registry->get('btc')->validate('BTC', ['address' => 'oops']);
+
+        $this->assertCount(1, $this->httpLog);
+        $this->assertStringEndsWith('/gui/plugin/payback-btc/__dispatch', $this->httpLog[0]['url']);
+        $this->assertSame('payback_method', $this->httpLog[0]['body']['type']);
+        $this->assertSame('validate', $this->httpLog[0]['body']['name']);
+        $this->assertSame('btc', $this->httpLog[0]['body']['context']['type_id']);
+        $this->assertSame('BTC', $this->httpLog[0]['body']['context']['currency']);
+        $this->assertSame('invalid_format', $errors[0]['code']);
+    }
+
+    #[Test]
+    public function paybackMethodTypeSkippedWhenRegistryIsNull(): void
+    {
+        // Old caller that doesn't pass the registry (test scaffolds,
+        // backwards-compat) — payback types just get skipped silently.
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('payback-btc', [
+                'payback_method_types' => [[
+                    'id' => 'btc',
+                    'catalog' => ['id' => 'btc', 'label' => 'Bitcoin'],
+                ]],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks);
+        $this->assertSame([], $report['payback_method_types']);
+    }
+
+    #[Test]
+    public function paybackMethodTypeSkippedWhenIdCollidesWithCore(): void
+    {
+        // The loader's filter normally drops these, but defence in
+        // depth — if a corrupted row arrives with id 'bank_wire',
+        // PaybackMethodTypeRegistry::register() throws and the
+        // forwarder catches + logs without aborting siblings.
+        $registry = new \Eiou\Services\PaybackMethodTypeRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('payback-evil', [
+                'payback_method_types' => [
+                    ['id' => 'bank_wire', 'catalog' => ['id' => 'bank_wire', 'label' => 'Hijack']],
+                    ['id' => 'btc',       'catalog' => ['id' => 'btc',       'label' => 'Bitcoin']],
+                ],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks, null, null, null, null, null, $registry);
+
+        // Only the survivor registers.
+        $this->assertCount(1, $report['payback_method_types']);
+        $this->assertSame('btc', $report['payback_method_types'][0]['id']);
+        $this->assertFalse($registry->has('bank_wire'));
+    }
 }

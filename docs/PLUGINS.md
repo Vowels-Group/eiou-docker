@@ -233,6 +233,22 @@ Isolation](#database-isolation)):
     }
   ],
 
+  "payback_method_types": [
+    {
+      "id": "btc",
+      "catalog": {
+        "id": "btc",
+        "label": "Bitcoin",
+        "group": "crypto",
+        "icon": "fab fa-bitcoin",
+        "currencies": ["BTC"],
+        "fields": [
+          {"name": "address", "label": "Bitcoin address", "type": "text", "required": true}
+        ]
+      }
+    }
+  ],
+
   "database": {
     "user": true,
     "owned_tables": [
@@ -283,6 +299,7 @@ contract](#the-__dispatchphp-contract) for the wire shape.
 | `api_routes`           | no       | list&lt;object&gt;    | Admin-scoped REST endpoints under `/api/v1/plugins/<id>/<action>`. Each entry: `{method, action}`. |
 | `cli_commands`         | no       | list&lt;object&gt;    | Top-level CLI subcommands. Each entry: `{name}` — operators invoke as `eiou <name> [args...]`. |
 | `public_routes`        | no       | list&lt;object&gt;    | Non-admin HTTP endpoints under `/p/<plugin-id>/<action>`, off by default behind `EIOU_PUBLIC_PLUGIN_ROUTES`. See [Public routes](#public-routes--non-admin-http-under-pplugin-idaction) for the entry shape. |
+| `payback_method_types` | no       | list&lt;object&gt;    | Plugin-provided payback-method rail types (Bitcoin, PayPal, Bizum, etc.). Each entry: `{id, catalog}`. See [Registering Payback-Method Rail Types](#registering-payback-method-rail-types). |
 
 ### Validation
 
@@ -2784,93 +2801,144 @@ for a sandboxed plugin's GUI surface.
 Core ships two payback-method rail types — `bank_wire` (with SEPA /
 Faster Payments / ACH / FedNow / SWIFT) and `custom` (free-text
 instructions). Every other rail — Bitcoin, PayPal, Bizum, Lightning,
-EVM, Pix, UPI, etc. — is a plugin opportunity in principle.
+EVM, Pix, UPI, etc. — is a plugin opportunity.
 
-> **Status: not yet available to sandboxed plugins.**
->
-> `PaybackMethodTypeRegistry` expects an instance of the rail-type
-> class to be registered in the wallet pool's process at boot. With
-> sandboxing mandatory, plugin code doesn't run in the wallet pool,
-> and the IPC forwarder has no bridge for this surface yet (there's
-> no manifest field to declare a rail type, and the registry's API
-> takes a PHP object that can't cross the IPC boundary).
->
-> The shape below describes the in-process model the registry was
-> built for, and the contract a future sandbox-aware version would
-> still target. If your plugin needs a new rail type today, file
-> an issue describing the type and we'll either add a bundled
-> first-party type or design the bridge.
+Sandboxed plugins declare rail types in the manifest's
+`payback_method_types` list and handle the dynamic contract methods
+(`validate`, `mask`, `defaultPrecision`) in `__dispatch.php` under a
+new `case 'payback_method':` arm. The wallet pool's
+`PaybackMethodTypeRegistry` is populated at boot with an
+`IpcPaybackMethodTypeProxy` per declared type — proxies hold the
+static catalog row in memory and IPC into the plugin's dispatcher for
+each dynamic method call.
 
-In the original in-process model (still how core's own types
-register), a plugin implements `Eiou\Contracts\PaybackMethodTypeContract`
-and calls `PaybackMethodTypeRegistry::register()` from its `register()`
-phase:
+**Manifest:**
+
+```json
+{
+  "name": "payback-btc",
+  "version": "0.1.0",
+  "entryClass": "Eiou\\Plugins\\PaybackBtc\\PaybackBtcPlugin",
+  "autoload": { "psr-4": { "Eiou\\Plugins\\PaybackBtc\\": "src/" } },
+  "sandboxed": true,
+
+  "payback_method_types": [
+    {
+      "id": "btc",
+      "catalog": {
+        "id": "btc",
+        "label": "Bitcoin",
+        "group": "crypto",
+        "icon": "fab fa-bitcoin",
+        "description": "Settle in BTC. Accepts a mainnet address.",
+        "currencies": ["BTC"],
+        "fields": [
+          {
+            "name": "address",
+            "label": "Bitcoin address",
+            "type": "text",
+            "required": true,
+            "placeholder": "bc1q…"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Multiple types per plugin are supported — declare each one as a
+separate `payback_method_types` entry. `id` must match
+`^[a-z][a-z0-9_]{0,31}$` and must not be one of the reserved core ids
+(`bank_wire`, `custom`); the manifest validator drops bad entries
+before they reach the registry. `catalog` is the static GUI row
+documented under [What the contract plugs
+into](#what-the-contract-plugs-into).
+
+**Dispatcher handler:**
 
 ```php
-namespace Eiou\Plugins\PaybackBtc;
+// inside __dispatch.php's switch ($type)
+case 'payback_method':
+    $typeId   = $context['type_id'] ?? '';
+    $currency = $context['currency'] ?? '';
+    $fields   = $context['fields'] ?? [];
 
-use Eiou\Contracts\PluginInterface;
-use Eiou\Contracts\PaybackMethodTypeContract;
-use Eiou\Services\ServiceContainer;
-
-class PaybackBtcPlugin implements PluginInterface
-{
-    public function getName(): string    { return 'payback-btc'; }
-    public function getVersion(): string { return '0.1.0'; }
-
-    public function register(ServiceContainer $container): void
-    {
-        $container->getPaybackMethodTypeRegistry()->register(new BtcType());
+    if ($typeId !== 'btc') {
+        respond(404, [
+            'ok' => false,
+            'error' => ['code' => 'unknown_type', 'message' => "no handler for type '{$typeId}'"],
+        ], $log);
     }
 
-    public function boot(ServiceContainer $container): void { /* no-op */ }
-}
+    if ($name === 'validate') {
+        // Return a list of {field, code, message} records. [] = success.
+        if ($currency !== 'BTC') {
+            respond(200, ['result' => [[
+                'field' => 'currency', 'code' => 'invalid_currency_for_type',
+                'message' => 'Bitcoin settles in BTC',
+            ]]], $log);
+        }
+        if (empty($fields['address'])) {
+            respond(200, ['result' => [[
+                'field' => 'address', 'code' => 'required',
+                'message' => 'address is required',
+            ]]], $log);
+        }
+        respond(200, ['result' => []], $log);
+    }
 
+    if ($name === 'mask') {
+        $a = (string) ($fields['address'] ?? '');
+        $masked = $a === '' ? '•••' : substr($a, 0, 6) . '…' . substr($a, -4);
+        respond(200, ['result' => $masked], $log);
+    }
+
+    if ($name === 'defaultPrecision') {
+        // [min_unit, exponent] — satoshi precision when currency is BTC,
+        // null otherwise so SettlementPrecisionService falls back to the
+        // generic crypto / fiat default.
+        respond(200, [
+            'result' => $currency === 'BTC' ? [1, -8] : null,
+        ], $log);
+    }
+
+    respond(404, [
+        'ok' => false,
+        'error' => ['code' => 'unknown_method', 'message' => "no handler for {$name}"],
+    ], $log);
+```
+
+The proxy's IPC-failure behaviour is operator-friendly: a transport
+failure on `validate` surfaces as a top-level `plugin_ipc_failed`
+error record (the operator sees "could not check" rather than the
+form silently passing); `mask` falls back to `'•••'` (list-view
+shouldn't break a row over a transient plugin blip); `defaultPrecision`
+falls back to null (`SettlementPrecisionService`'s generic default
+applies). Authors don't need to worry about transport — the proxy
+handles every failure mode with a sensible degradation.
+
+### In-process equivalent (core types only)
+
+Core's own rail types (`bank_wire`, `custom`) register the in-process
+way because they live in the wallet pool by design. The interface they
+implement is `Eiou\Contracts\PaybackMethodTypeContract`:
+
+```php
 class BtcType implements PaybackMethodTypeContract
 {
     public function getId(): string { return 'btc'; }
-
-    public function getCatalogEntry(): array
-    {
-        return [
-            'id'          => 'btc',
-            'label'       => 'Bitcoin',
-            'group'       => 'crypto',
-            'icon'        => 'fab fa-bitcoin',
-            'description' => 'Settle in BTC. Accepts a mainnet address.',
-            'currencies'  => ['BTC'],          // null = any ISO-4217
-            'fields'      => [
-                ['name' => 'address', 'label' => 'Bitcoin address', 'type' => 'text',
-                 'required' => true, 'placeholder' => 'bc1q…'],
-            ],
-        ];
-    }
-
-    public function validate(string $currency, array $fields): array
-    {
-        if ($currency !== 'BTC') {
-            return [['field' => 'currency', 'code' => 'invalid_currency_for_type',
-                     'message' => 'Bitcoin settles in BTC']];
-        }
-        if (empty($fields['address'])) {
-            return [['field' => 'address', 'code' => 'required',
-                     'message' => 'address is required']];
-        }
-        return [];
-    }
-
-    public function mask(array $fields): string
-    {
-        $a = (string) ($fields['address'] ?? '');
-        return $a === '' ? '•••' : substr($a, 0, 6) . '…' . substr($a, -4);
-    }
-
-    public function defaultPrecision(string $currency): ?array
-    {
-        return $currency === 'BTC' ? [1, -8] : null;   // satoshi
-    }
+    public function getCatalogEntry(): array { /* the catalog block above */ }
+    public function validate(string $currency, array $fields): array { /* … */ }
+    public function mask(array $fields): string { /* … */ }
+    public function defaultPrecision(string $currency): ?array { /* … */ }
 }
 ```
+
+The contract is documented for anyone porting an existing in-process
+implementation to the sandboxed model — the method bodies translate
+1:1 into the dispatcher case shown above. Sandboxed plugins don't
+implement this contract directly; the proxy does it on their behalf.
 
 ### What the contract plugs into
 
@@ -2885,16 +2953,19 @@ The registry is consulted from four places in core:
 
 ### Registration rules
 
-- `getId()` must match `^[a-z][a-z0-9_]{0,31}$`
-- `bank_wire` and `custom` are reserved — a plugin can't shadow them
-- Each id can only be registered once per process; registering a
-  duplicate raises `InvalidArgumentException`, which the plugin loader
-  catches and marks the offending plugin `failed` without taking the
-  node down
-- Register in `register()`, not `boot()` — the validator is
-  instantiated as part of `ServiceContainer::getPaybackMethodService()`
-  which is wired during `ServiceContainer::wireAllServices()`, right
-  after the `register()` phase
+- `id` must match `^[a-z][a-z0-9_]{0,31}$`
+- `bank_wire` and `custom` are reserved — a plugin can't shadow them.
+  The manifest validator drops entries with reserved ids before they
+  reach the registry; the registry's own collision check is the
+  defence-in-depth net.
+- Each id can only be registered once across all enabled plugins;
+  the second-arriving plugin's entry is skipped with a logged warning
+  and the first plugin keeps the slot.
+- For sandboxed plugins, registration happens at wallet boot through
+  the IPC forwarder — no in-process call from the plugin's PHP. A
+  wallet restart is required after enabling a plugin that declares
+  `payback_method_types` (same as any other manifest-declared
+  surface), so the forwarder picks the new entries up.
 
 ### Field schema — what the GUI renders
 

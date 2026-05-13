@@ -35,7 +35,7 @@ declare(strict_types=1);
  * minimum version every bundled plugin author needs, (c) documenting
  * the contract delta in CHANGELOG.md.
  */
-const PLUGIN_DISPATCH_VERSION = 2;
+const PLUGIN_DISPATCH_VERSION = 3;
 
 header('Content-Type: application/json');
 
@@ -241,7 +241,7 @@ if ($type === '' || $name === '') {
     ], $log);
 }
 
-$allowedTypes = ['event', 'filter', 'render', 'action', 'rest', 'cli', 'public'];
+$allowedTypes = ['event', 'filter', 'render', 'action', 'rest', 'cli', 'public', 'payback_method'];
 if (!in_array($type, $allowedTypes, true)) {
     respond(400, [
         'ok' => false,
@@ -259,6 +259,7 @@ switch ($type) {
     case 'rest':
     case 'cli':
     case 'public':
+    case 'payback_method':
         $log->debug(
             "Dispatch stub fired",
             ['type' => $type, 'name' => $name, 'request_id' => $_SERVER['HTTP_X_EIOU_REQUEST_ID'] ?? null]

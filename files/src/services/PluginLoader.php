@@ -542,6 +542,27 @@ class PluginLoader
                     && isset($e['name']) && is_string($e['name'])
                     && preg_match('/^[a-z][a-z0-9-]*$/', $e['name']) === 1
             );
+            // payback_method_types entries declare plugin-provided rail
+            // types (BTC, PayPal, etc.) that bridge into the wallet's
+            // PaybackMethodTypeRegistry. Each entry carries the static
+            // catalog row (id, label, group, icon, description,
+            // currencies, fields); the dynamic methods (validate, mask,
+            // defaultPrecision) are forwarded into the plugin's
+            // __dispatch.php with type "payback_method". `id` must match
+            // ^[a-z][a-z0-9_]{0,31}$ (the same shape the registry
+            // enforces) and not collide with the reserved core ids
+            // bank_wire / custom — the registry would refuse those at
+            // registration time, but filtering here keeps malformed
+            // manifests off the row entirely.
+            $row['payback_method_types'] = $this->shapedListField(
+                $manifest,
+                'payback_method_types',
+                fn($e): bool => is_array($e)
+                    && isset($e['id']) && is_string($e['id'])
+                    && preg_match('/^[a-z][a-z0-9_]{0,31}$/', $e['id']) === 1
+                    && !in_array($e['id'], ['bank_wire', 'custom'], true)
+                    && isset($e['catalog']) && is_array($e['catalog'])
+            );
             if (isset($live[$name]['error'])) {
                 $row['error'] = (string) $live[$name]['error'];
             }
