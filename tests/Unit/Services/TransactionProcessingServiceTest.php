@@ -357,6 +357,91 @@ class TransactionProcessingServiceTest extends TestCase
         $this->assertSame(['received', 'completed'], $eventsFired);
     }
 
+    /**
+     * End-recipient P2P path must also fire TRANSACTION_RECEIVED so plugins
+     * subscribed to that event get a routing-agnostic "money arrived" signal
+     * regardless of whether the tx arrived via the direct route or as the
+     * P2P final hop. Both paths insert with status='received', so the event
+     * name semantics should match.
+     */
+    public function testProcessTransactionWithP2pMemoEndRecipientAlsoFiresTransactionReceived(): void
+    {
+        $salt = 'deterministic-salt';
+        $time = '99999';
+        $myAddress = 'http://me.example.com';
+        $memo = hash('sha256', $myAddress . $salt . $time);
+
+        $request = [
+            'memo' => $memo,
+            'senderAddress' => 'http://upstream.example.com',
+            'txid' => 'final-txid-xyz',
+            'amount' => '25.00',
+            'currency' => 'USD',
+            'senderPublicKey' => 'originator-pk',
+        ];
+
+        $this->mockRp2pRepo->method('getByHash')->with($memo)->willReturn(null);
+        $this->mockP2pRepo->method('getByHash')->with($memo)->willReturn([
+            'hash' => $memo,
+            'salt' => $salt,
+            'time' => $time,
+        ]);
+        $this->mockTransportUtility->method('resolveUserAddressForTransport')->willReturn($myAddress);
+        $this->mockTransactionPayload->method('generateRecipientSignature')->willReturn('sig');
+        $this->mockTransactionRepo->method('insertTransaction')->willReturn('{"ok":true}');
+
+        $firedTxReceived = null;
+        EventDispatcher::getInstance()->subscribe(
+            TransactionEvents::TRANSACTION_RECEIVED,
+            function (array $data) use (&$firedTxReceived) { $firedTxReceived = $data; }
+        );
+
+        $this->service->processTransaction($request);
+
+        $this->assertNotNull($firedTxReceived, 'TRANSACTION_RECEIVED must fire for the P2P end-recipient path');
+        $this->assertSame('final-txid-xyz', $firedTxReceived['txid']);
+        $this->assertSame('25.00', $firedTxReceived['amount']);
+        $this->assertSame('USD', $firedTxReceived['currency']);
+        $this->assertSame('originator-pk', $firedTxReceived['sender_pubkey']);
+        $this->assertSame('http://upstream.example.com', $firedTxReceived['sender_address']);
+    }
+
+    /**
+     * The relay leg of a P2P chain (this node is a hop, not the final
+     * destination) must NOT fire TRANSACTION_RECEIVED — only the end
+     * recipient gets the "money arrived" signal. The relay leg fires
+     * P2P_RECEIVED for plugins doing hop-tracing or relay-fee analytics,
+     * but those plugins are not the "incoming wallet credit" subscribers.
+     */
+    public function testProcessTransactionWithP2pMemoRelayLegDoesNotFireTransactionReceived(): void
+    {
+        $request = [
+            'memo' => 'p2p-hash-relay',
+            'senderAddress' => 'http://sender.example.com',
+            'txid' => 'relay-txid',
+            'amount' => '5.00',
+            'currency' => 'USD',
+            'senderPublicKey' => 'upstream-pk',
+        ];
+
+        $this->mockRp2pRepo->method('getByHash')
+            ->with('p2p-hash-relay')
+            ->willReturn(['hash' => 'p2p-hash-relay']);
+        $this->mockTransactionRepo->method('insertTransaction')
+            ->with($request, 'relay')
+            ->willReturn('{"status":"success"}');
+
+        $firedTxReceived = false;
+        EventDispatcher::getInstance()->subscribe(
+            TransactionEvents::TRANSACTION_RECEIVED,
+            function () use (&$firedTxReceived) { $firedTxReceived = true; }
+        );
+
+        $this->service->processTransaction($request);
+
+        $this->assertFalse($firedTxReceived, 'Relay leg must NOT fire TRANSACTION_RECEIVED — this node is not the destination');
+    }
+
     // =========================================================================
     // processPendingTransactions Tests
     // =========================================================================

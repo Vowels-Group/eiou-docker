@@ -2882,7 +2882,7 @@ plugin_routing_poller() {
 
             # Parse — grep fallback like plugin_user_poller, since jq
             # isn't in the base image.
-            local action plugin_id system_user pool_path pool_config nginx_snippet zones_config
+            local action plugin_id system_user pool_path pool_config nginx_snippet zones_config gateway_token
             if command -v jq >/dev/null 2>&1; then
                 action=$(jq -r '.action // empty' "$req" 2>/dev/null)
                 plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
@@ -2891,6 +2891,7 @@ plugin_routing_poller() {
                 pool_config=$(jq -r '.pool_config // empty' "$req" 2>/dev/null)
                 nginx_snippet=$(jq -r '.nginx_snippet // empty' "$req" 2>/dev/null)
                 zones_config=$(jq -r '.zones_config // empty' "$req" 2>/dev/null)
+                gateway_token=$(jq -r '.gateway_token // empty' "$req" 2>/dev/null)
             else
                 # Single-line JSON fields. Multi-line content (pool_config
                 # / nginx_snippet / zones_config) is JSON-encoded into the
@@ -2905,6 +2906,7 @@ plugin_routing_poller() {
                 pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
                 nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
                 zones_config=$(grep -oP '"zones_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                gateway_token=$(grep -oP '"gateway_token"\s*:\s*"\K[a-f0-9]+' "$req" | head -1)
             fi
 
             rm -f "$req"
@@ -2948,14 +2950,42 @@ plugin_routing_poller() {
                     mkdir -p "$scratch"
                     chown "$system_user:$system_user" "$scratch"
                     chmod 700 "$scratch"
-                    # The .gateway-token file was minted by www-data
-                    # and inherited its ownership. The plugin's
-                    # pool user needs to read it (core_call reads the
-                    # file at request time), so chown it to the plugin
-                    # user. Mode stays 600 so no other plugin user can
-                    # see another plugin's token.
+                    # The .gateway-token file is written by THIS poller
+                    # (as root) so the dir's ownership doesn't matter —
+                    # in production the dir is www-data-owned, in dev
+                    # bind-mount it's typically the host operator's uid
+                    # (which collides with eiou-p-<hash> inside the
+                    # container, leaving www-data unable to write).
+                    # Routing through the supervisor avoids that whole
+                    # class of perm issues.
+                    #
+                    # gateway_token is empty on reconcile-mint-if-missing
+                    # paths where the existing file is still valid; in
+                    # that case we leave the file alone (chown + chmod
+                    # to normalise ownership in case it drifted).
                     local token_file="/etc/eiou/plugins/${plugin_id}/.gateway-token"
-                    if [ -f "$token_file" ]; then
+                    if [ -n "$gateway_token" ]; then
+                        # Validate token shape — defence in depth so a
+                        # corrupted request file can't be used to write
+                        # arbitrary content into a plugin's token file.
+                        # The minter (PluginGatewayTokenService) generates
+                        # bin2hex(random_bytes(32)) → 64 lowercase hex chars.
+                        if [[ "$gateway_token" =~ ^[a-f0-9]{64}$ ]]; then
+                            local token_tmp="${token_file}.tmp"
+                            : > "$token_tmp"
+                            chmod 0600 "$token_tmp"
+                            printf '%s' "$gateway_token" > "$token_tmp"
+                            chown "$system_user:$system_user" "$token_tmp" 2>/dev/null || true
+                            mv "$token_tmp" "$token_file"
+                            echo "$LOG_PREFIX wrote gateway-token for $plugin_id"
+                        else
+                            echo "$LOG_PREFIX rejected malformed gateway_token for $plugin_id"
+                        fi
+                    elif [ -f "$token_file" ]; then
+                        # No rotation requested but file exists — keep
+                        # ownership/mode in sync (handles a prior write
+                        # that didn't reach the chown, or an operator
+                        # who manually edited the file).
                         chown "$system_user:$system_user" "$token_file"
                         chmod 600 "$token_file"
                     fi
