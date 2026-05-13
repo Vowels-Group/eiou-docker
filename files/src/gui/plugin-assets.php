@@ -1,7 +1,7 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-use Eiou\Services\PluginAssetServer;
+use Eiou\Services\Plugins\PluginAssetServer;
 
 /**
  * Plugin asset entry point.

@@ -3155,6 +3155,15 @@ plugin_credentials_poller() {
                 continue
             fi
 
+            # Derive the plugin's pool user from its id, identical to
+            # PluginUserService::systemUserFor(): sha256(pluginId) →
+            # first 8 hex chars, prefixed with `eiou-p-`. Deriving
+            # rather than trusting a request field means a corrupted
+            # request can't direct gpasswd at an arbitrary system user.
+            local sys_user_hash sys_user
+            sys_user_hash=$(printf '%s' "$plugin_id" | sha256sum | cut -c1-8)
+            sys_user="eiou-p-${sys_user_hash}"
+
             case "$action" in
                 apply-credentials)
                     if [ -z "$body" ]; then
@@ -3182,16 +3191,51 @@ plugin_credentials_poller() {
                     chmod 0600 "$tmp"
                     printf '%s' "$body" > "$tmp"
                     # Now relax to the production mode and per-plugin
-                    # group. Only members of `eiou-pc-<hex>` (typically
-                    # the operator's sibling-container uid) can read.
+                    # group. The pool user (`eiou-p-<hash>`) gets added
+                    # to the group right after so the plugin can open
+                    # its own MySQL connection directly from inside its
+                    # FPM pool without bouncing through the wallet pool.
+                    # Operator-deployed sibling containers also opt into
+                    # this group with their own uid; one group, two
+                    # consumers, same file.
                     chown "root:${group_name}" "$tmp" 2>/dev/null || true
                     chmod 0640 "$tmp"
                     mv "$tmp" "$target_path"
+
+                    # Add the pool user to the credentials group. The
+                    # user is created by plugin_user_poller from a
+                    # separate request file; PluginLoader serialises
+                    # those calls so the user exists by the time we
+                    # arrive here. If it somehow doesn't (race during
+                    # boot reconcile, manual operator intervention),
+                    # log and continue — the next reconcile pass will
+                    # rerun apply-credentials and pick it up. We don't
+                    # fail the apply because the file is already written
+                    # and is still useful to operator sibling containers
+                    # that join the group manually.
+                    if id "$sys_user" >/dev/null 2>&1; then
+                        if ! gpasswd -a "$sys_user" "$group_name" >/dev/null 2>&1; then
+                            echo "$LOG_PREFIX gpasswd -a failed for $sys_user → $group_name"
+                        fi
+                    else
+                        echo "$LOG_PREFIX pool user $sys_user not yet created; group-join deferred to next reconcile"
+                    fi
+
                     echo "$LOG_PREFIX wrote credentials for $plugin_id (group $group_name)"
                     write_result "$res" "ok"
                     ;;
                 drop-credentials)
                     rm -f "$target_path"
+                    # Remove the pool user from the group BEFORE groupdel
+                    # so groupdel doesn't refuse with "members present"
+                    # purely because of us. `gpasswd -d` is idempotent at
+                    # the "not a member" level — error is silent. Operator
+                    # sibling-container uids the operator added themselves
+                    # stay in the group, and groupdel correctly refuses
+                    # if any of those remain.
+                    if id "$sys_user" >/dev/null 2>&1 && getent group "$group_name" >/dev/null 2>&1; then
+                        gpasswd -d "$sys_user" "$group_name" >/dev/null 2>&1 || true
+                    fi
                     # Tear down the group too. `groupdel` exits non-zero
                     # if the group has live members (operator deliberately
                     # added a uid to it) — that's a sign the operator's

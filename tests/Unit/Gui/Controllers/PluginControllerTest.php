@@ -7,9 +7,9 @@ namespace Tests\Unit\Gui\Controllers;
 use Eiou\Gui\Controllers\PluginController;
 use Eiou\Gui\Controllers\PluginControllerResponseSent;
 use Eiou\Gui\Includes\Session;
-use Eiou\Services\PluginInstallService;
-use Eiou\Services\PluginLoader;
-use Eiou\Services\PluginUninstallService;
+use Eiou\Services\Plugins\PluginInstallService;
+use Eiou\Services\Plugins\PluginLoader;
+use Eiou\Services\Plugins\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -481,7 +481,7 @@ class PluginControllerTest extends TestCase
         $this->assertTrue($result['payload']['success']);
         $this->assertArrayHasKey('limits', $result['payload']);
         $this->assertSame(
-            \Eiou\Services\PluginInstallService::MAX_ZIP_BYTES,
+            \Eiou\Services\Plugins\PluginInstallService::MAX_ZIP_BYTES,
             $result['payload']['limits']['max_zip_bytes']
         );
         $this->assertTrue($result['payload']['install_available']);
@@ -531,7 +531,7 @@ class PluginControllerTest extends TestCase
     #[Test]
     public function pluginsUpgradeRejectsInvalidPluginName(): void
     {
-        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
         $this->controller = $this->makeControllerWithUpgrade($upgrade);
         $this->withCsrf();
         $_POST = ['action' => 'pluginsUpgrade', 'csrf_token' => 'x', 'plugin' => '../etc/passwd'];
@@ -544,7 +544,7 @@ class PluginControllerTest extends TestCase
     #[Test]
     public function pluginsUpgradeMapsRefusalMessagesToCodes(): void
     {
-        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
         $upgrade->method('upgradeFromBundle')
             ->willThrowException(new \InvalidArgumentException(
                 "Plugin 'demo' is already at version 1.0.0"
@@ -561,7 +561,7 @@ class PluginControllerTest extends TestCase
     #[Test]
     public function pluginsUpgradeMapsDowngradeMessage(): void
     {
-        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
         $upgrade->method('upgradeFromBundle')
             ->willThrowException(new \InvalidArgumentException(
                 "Refusing downgrade of 'demo' from 2.0.0 to 1.0.0"
@@ -578,7 +578,7 @@ class PluginControllerTest extends TestCase
     #[Test]
     public function pluginsUpgradeReportsSuccessWithVersionDelta(): void
     {
-        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
         $upgrade->method('upgradeFromBundle')->willReturn([
             'plugin_id' => 'demo',
             'old_version' => '1.0.0',
@@ -605,7 +605,7 @@ class PluginControllerTest extends TestCase
     #[Test]
     public function pluginsListMergesBundledUpgradeAvailability(): void
     {
-        $upgrade = $this->createMock(\Eiou\Services\PluginUpgradeService::class);
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
         $upgrade->method('availableBundledUpgrades')->willReturn([
             'demo' => ['installed_version' => '1.0.0', 'bundled_version' => '1.1.0'],
         ]);
@@ -626,7 +626,7 @@ class PluginControllerTest extends TestCase
         $this->assertArrayNotHasKey('upgrade_available', $rows['other']);
     }
 
-    private function makeControllerWithUpgrade(\Eiou\Services\PluginUpgradeService $upgrade): CapturingPluginController
+    private function makeControllerWithUpgrade(\Eiou\Services\Plugins\PluginUpgradeService $upgrade): CapturingPluginController
     {
         return new CapturingPluginController(
             $this->session,
