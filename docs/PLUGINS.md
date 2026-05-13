@@ -2023,7 +2023,8 @@ deliberately so:
 - **It would defeat the sandbox.** Loading plugin code into the
   wallet's FPM pool would give that code the wallet's master key,
   full DB access, and no `open_basedir` restriction. That's the
-  pre-#929 model that was deliberately removed.
+  in-process model the mandatory-sandboxing change deliberately
+  removed.
 - **The plugin's pool is the right home anyway.** Plugin state
   belongs in the plugin's own DB schema (isolated MySQL user, can't
   reach wallet tables); plugin business logic runs as the plugin's
@@ -2037,8 +2038,8 @@ sibling-container credential export, and grants on tables your
 manifest declares via `owned_tables` (or unrestricted DDL if you
 prefer to `CREATE TABLE IF NOT EXISTS` from your own boot path).
 What core does NOT provide is a class loader for your services —
-that's PSR-4 autoload, configured in your manifest's `autoload`
-field, exactly as it would be in any other PHP application.
+load them yourself from `__dispatch.php` using one of the two
+patterns above.
 
 The trade-off this design accepts: plugin-managed state is opaque to
 the operator. If a plugin maintains its own audit log of, say,
