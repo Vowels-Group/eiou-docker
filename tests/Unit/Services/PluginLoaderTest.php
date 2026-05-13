@@ -439,6 +439,71 @@ class PluginLoaderTest extends TestCase
         $this->assertSame([], $row['public_routes']);
     }
 
+    public function testListAllPluginsAcceptsValidCorsAllowedOrigins(): void
+    {
+        $this->writePluginWithExtras('pub-cors', [
+            'public_routes' => [
+                [
+                    'method' => 'POST',
+                    'action' => 'chat',
+                    'cors_allowed_origins' => [
+                        'https://example.com',
+                        'https://app.example.com',
+                        'http://localhost:3000',
+                    ],
+                ],
+            ],
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertCount(1, $row['public_routes']);
+        $this->assertSame(
+            ['https://example.com', 'https://app.example.com', 'http://localhost:3000'],
+            $row['public_routes'][0]['cors_allowed_origins']
+        );
+    }
+
+    public function testListAllPluginsRejectsWildcardCorsOrigin(): void
+    {
+        $this->writePluginWithExtras('pub-wild', [
+            'public_routes' => [
+                ['method' => 'POST', 'action' => 'chat', 'cors_allowed_origins' => ['*']],
+            ],
+        ]);
+        // Whole entry is dropped — an entry with a malformed CORS list
+        // is not silently CORS-stripped, because shipping the route
+        // sans CORS could surprise a plugin author who thought they'd
+        // declared CORS protection.
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['public_routes']);
+    }
+
+    public function testListAllPluginsRejectsCorsOriginWithPath(): void
+    {
+        $this->writePluginWithExtras('pub-path', [
+            'public_routes' => [
+                ['method' => 'POST', 'action' => 'chat', 'cors_allowed_origins' => ['https://example.com/api']],
+            ],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['public_routes']);
+    }
+
+    public function testListAllPluginsRejectsOversizedCorsList(): void
+    {
+        $tooMany = [];
+        for ($i = 0; $i < 11; $i++) {
+            $tooMany[] = "https://origin{$i}.example.com";
+        }
+        $this->writePluginWithExtras('pub-many', [
+            'public_routes' => [
+                ['method' => 'POST', 'action' => 'chat', 'cors_allowed_origins' => $tooMany],
+            ],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['public_routes']);
+    }
+
     // -- Lifecycle event dispatch ------------------------------------------
 
     // [removed] testRegisterAllDispatchesPluginRegistered: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the

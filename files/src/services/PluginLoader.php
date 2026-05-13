@@ -492,23 +492,20 @@ class PluginLoader
             // public_routes entries expose a non-admin surface to
             // unauthenticated-to-eIOU customers, routed at /p/<plugin-id>/
             // <action>. Each entry: {method, action, auth, rate_per_minute,
-            // max_body_bytes}. auth is restricted to "bearer" today —
-            // the plugin validates the bearer against its own state;
-            // the host only shape-validates and rate-limits. Bounded
-            // rate cap so a misconfigured manifest can't disable rate
-            // limiting; bounded max body so a misconfigured manifest
-            // can't accept arbitrarily large payloads.
+            // max_body_bytes, cors_allowed_origins}. auth is restricted
+            // to "bearer" today — the plugin validates the bearer
+            // against its own state; the host only shape-validates
+            // and rate-limits. Bounded rate cap so a misconfigured
+            // manifest can't disable rate limiting; bounded max body
+            // so a misconfigured manifest can't accept arbitrarily
+            // large payloads. cors_allowed_origins, when present, must
+            // be a list of explicit origin strings (no wildcard `*` —
+            // that defeats the whole point of allow-listing) capped
+            // at 10 entries to keep the generated nginx block sane.
             $row['public_routes'] = $this->shapedListField(
                 $manifest,
                 'public_routes',
-                fn($e): bool => is_array($e)
-                    && isset($e['method'], $e['action'])
-                    && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
-                    && is_string($e['action'])
-                    && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
-                    && (!isset($e['auth']) || $e['auth'] === 'bearer')
-                    && (!isset($e['rate_per_minute']) || (is_int($e['rate_per_minute']) && $e['rate_per_minute'] > 0 && $e['rate_per_minute'] <= 6000))
-                    && (!isset($e['max_body_bytes']) || (is_int($e['max_body_bytes']) && $e['max_body_bytes'] > 0 && $e['max_body_bytes'] <= 1048576))
+                $this->publicRouteEntryValidator()
             );
             $row['cli_commands'] = $this->shapedListField(
                 $manifest,
@@ -797,11 +794,7 @@ class PluginLoader
                     $publicRoutes = $this->shapedListField(
                         $manifest,
                         'public_routes',
-                        fn($e): bool => is_array($e)
-                            && isset($e['method'], $e['action'])
-                            && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
-                            && is_string($e['action'])
-                            && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+                        $this->publicRouteEntryValidator()
                     );
                 }
                 $entries[] = [
@@ -848,11 +841,7 @@ class PluginLoader
                 $publicRoutes = $this->shapedListField(
                     $manifest,
                     'public_routes',
-                    fn($e): bool => is_array($e)
-                        && isset($e['method'], $e['action'])
-                        && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
-                        && is_string($e['action'])
-                        && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+                    $this->publicRouteEntryValidator()
                 );
                 $result[] = [
                     'plugin_id'     => (string) $pluginId,
@@ -904,6 +893,46 @@ class PluginLoader
             }
         }
         return $out;
+    }
+
+    /**
+     * Validator closure for one public_routes entry. Centralized so the
+     * three call sites (discover / renderNginxSnippetWithDelta /
+     * collectSandboxedRouteEntries) can't drift apart and pass a
+     * manifest entry the others would reject.
+     */
+    private function publicRouteEntryValidator(): callable
+    {
+        return fn($e): bool => is_array($e)
+            && isset($e['method'], $e['action'])
+            && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
+            && is_string($e['action'])
+            && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+            && (!isset($e['auth']) || $e['auth'] === 'bearer')
+            && (!isset($e['rate_per_minute']) || (is_int($e['rate_per_minute']) && $e['rate_per_minute'] > 0 && $e['rate_per_minute'] <= 6000))
+            && (!isset($e['max_body_bytes']) || (is_int($e['max_body_bytes']) && $e['max_body_bytes'] > 0 && $e['max_body_bytes'] <= 1048576))
+            && (!isset($e['cors_allowed_origins']) || $this->isValidCorsOriginsList($e['cors_allowed_origins']));
+    }
+
+    /**
+     * Validate a `cors_allowed_origins` value for a public_routes entry.
+     * Must be a list of explicit origin strings: `scheme://host[:port]`,
+     * scheme limited to http/https, host limited to RFC-1123 LDH +
+     * dots. No wildcard `*` (allow-list with a wildcard is not an
+     * allow-list); no path component. Capped at 10 entries so a
+     * misconfigured manifest can't generate a runaway nginx config.
+     */
+    private function isValidCorsOriginsList(mixed $value): bool
+    {
+        if (!is_array($value)) return false;
+        if (count($value) === 0 || count($value) > 10) return false;
+        foreach ($value as $origin) {
+            if (!is_string($origin)) return false;
+            if (preg_match('#^https?://[a-zA-Z0-9.-]+(:\d{1,5})?$#', $origin) !== 1) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

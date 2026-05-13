@@ -180,4 +180,132 @@ class PluginNginxConfigServiceTest extends TestCase
         $this->assertStringContainsString('client_max_body_size 65536', $snippet);
         $this->assertStringNotContainsString('9999999', $snippet);
     }
+
+    // =========================================================================
+    // CORS — cors_allowed_origins per route. No wildcard, explicit list only.
+    // =========================================================================
+
+    #[Test]
+    public function publicRouteWithoutCorsOmitsCorsBlock(): void
+    {
+        $onSvc = new PluginNginxConfigService(true);
+        $snippet = $onSvc->renderSnippet([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [['method' => 'POST', 'action' => 'chat']],
+            ],
+        ]);
+        $this->assertStringNotContainsString('Access-Control-Allow-Origin', $snippet);
+        $this->assertStringNotContainsString('cors_origin', $snippet);
+        $this->assertStringNotContainsString('OPTIONS', $snippet);
+    }
+
+    #[Test]
+    public function publicRouteWithSingleOriginEmitsCorsBlock(): void
+    {
+        $onSvc = new PluginNginxConfigService(true);
+        $snippet = $onSvc->renderSnippet([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [
+                    [
+                        'method' => 'POST',
+                        'action' => 'chat',
+                        'cors_allowed_origins' => ['https://example.com'],
+                    ],
+                ],
+            ],
+        ]);
+        $this->assertStringContainsString('set $cors_origin "";', $snippet);
+        $this->assertStringContainsString('if ($http_origin = "https://example.com")', $snippet);
+        $this->assertStringContainsString('Access-Control-Allow-Origin  $cors_origin always', $snippet);
+        $this->assertStringContainsString('Access-Control-Allow-Methods "POST, OPTIONS" always', $snippet);
+        // Preflight short-circuits without invoking the plugin pool.
+        $this->assertStringContainsString('if ($request_method = OPTIONS) { return 204; }', $snippet);
+        // Vary header so caches don't reuse the wrong CORS response.
+        $this->assertStringContainsString('Vary                          "Origin"', $snippet);
+    }
+
+    #[Test]
+    public function publicRouteWithMultipleOriginsEmitsOneCheckPerOrigin(): void
+    {
+        $onSvc = new PluginNginxConfigService(true);
+        $snippet = $onSvc->renderSnippet([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [
+                    [
+                        'method' => 'POST',
+                        'action' => 'chat',
+                        'cors_allowed_origins' => [
+                            'https://example.com',
+                            'https://app.example.com',
+                            'http://localhost:3000',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $this->assertStringContainsString('"https://example.com"', $snippet);
+        $this->assertStringContainsString('"https://app.example.com"', $snippet);
+        $this->assertStringContainsString('"http://localhost:3000"', $snippet);
+    }
+
+    #[Test]
+    public function publicRouteCorsRendererDropsMalformedOrigin(): void
+    {
+        // Manifest validator should already drop these, but the renderer
+        // double-checks before they land in the nginx config verbatim.
+        $onSvc = new PluginNginxConfigService(true);
+        $snippet = $onSvc->renderSnippet([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [
+                    [
+                        'method' => 'POST',
+                        'action' => 'chat',
+                        'cors_allowed_origins' => [
+                            '*',                                  // wildcard rejected
+                            'javascript:alert(1)',                // hostile scheme
+                            'https://example.com/path',           // path component
+                            'https://"; rm -rf /; #.example.com', // injection attempt
+                            'https://ok.example.com',             // good
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $this->assertStringContainsString('"https://ok.example.com"', $snippet);
+        $this->assertStringNotContainsString('"*"', $snippet);
+        $this->assertStringNotContainsString('javascript:', $snippet);
+        $this->assertStringNotContainsString('rm -rf', $snippet);
+        $this->assertStringNotContainsString('/path"', $snippet);
+    }
+
+    #[Test]
+    public function publicRouteCorsBlockOnlyAddsOnceWhenFlagOff(): void
+    {
+        // Even when the manifest has CORS configured, with the feature
+        // flag off the whole /p/ block doesn't render — so CORS lines
+        // don't either.
+        $offSvc = new PluginNginxConfigService(false);
+        $snippet = $offSvc->renderSnippet([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [
+                    [
+                        'method' => 'POST',
+                        'action' => 'chat',
+                        'cors_allowed_origins' => ['https://example.com'],
+                    ],
+                ],
+            ],
+        ]);
+        $this->assertStringNotContainsString('Access-Control-Allow-Origin', $snippet);
+    }
 }

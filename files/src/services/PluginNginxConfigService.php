@@ -137,6 +137,12 @@ class PluginNginxConfigService
      * invocations by reading `$_SERVER['EIOU_PLUGIN_PUBLIC_ROUTE']`,
      * which nginx sets here. Same __dispatch.php entry script, two
      * envelope-building paths.
+     *
+     * When `cors_allowed_origins` is present, the block emits CORS
+     * response headers, short-circuits OPTIONS preflight to 204, and
+     * gates `Access-Control-Allow-Origin` on origin matching. No
+     * wildcard support — every origin must appear literally in the
+     * manifest list.
      */
     private function renderPublicRouteBlock(
         string $pluginId,
@@ -156,9 +162,33 @@ class PluginNginxConfigService
             $maxBody = 65536;
         }
 
+        $corsOrigins = $this->validatedCorsOrigins($route['cors_allowed_origins'] ?? null);
+
         $bearerRegex = self::PUBLIC_BEARER_REGEX;
         $out = [];
         $out[] = "location = /p/{$pluginId}/{$action} {";
+
+        if ($corsOrigins !== []) {
+            // Match the request's Origin against the allow-list. Each
+            // match sets $cors_origin to the origin verbatim; an
+            // unmatched cross-origin request leaves $cors_origin empty
+            // and the browser's same-origin check rejects the response.
+            $out[] = "    # CORS allow-list. \$cors_origin stays empty for unmatched";
+            $out[] = "    # origins; the browser then refuses to surface the response";
+            $out[] = "    # to the calling page.";
+            $out[] = "    set \$cors_origin \"\";";
+            foreach ($corsOrigins as $origin) {
+                $out[] = "    if (\$http_origin = \"{$origin}\") { set \$cors_origin \$http_origin; }";
+            }
+            $out[] = "    add_header Access-Control-Allow-Origin  \$cors_origin always;";
+            $out[] = "    add_header Access-Control-Allow-Methods \"{$method}, OPTIONS\" always;";
+            $out[] = "    add_header Access-Control-Allow-Headers \"Authorization, Content-Type\" always;";
+            $out[] = "    add_header Access-Control-Max-Age       600 always;";
+            $out[] = "    add_header Vary                          \"Origin\" always;";
+            $out[] = "    # Preflight: short-circuit without invoking the plugin pool.";
+            $out[] = "    if (\$request_method = OPTIONS) { return 204; }";
+        }
+
         $out[] = "    # Method gate — the manifest pinned exactly one verb per route.";
         $out[] = "    if (\$request_method != {$method}) { return 405; }";
         $out[] = "    # Bearer shape preflight. The plugin does the real auth check;";
@@ -174,6 +204,31 @@ class PluginNginxConfigService
         $out[] = "    fastcgi_read_timeout 30s;";
         $out[] = "}";
         return implode("\n", $out);
+    }
+
+    /**
+     * Defence-in-depth filter on cors_allowed_origins before it lands
+     * verbatim in an nginx config. The manifest validator already
+     * pruned bad entries; this drops anything that smells off
+     * (non-string, wildcard, embedded quotes, control chars) so even
+     * a corrupted code path can't write an `if (...)` clause with
+     * escaped quotes.
+     *
+     * @return list<string>
+     */
+    private function validatedCorsOrigins(mixed $value): array
+    {
+        if (!is_array($value)) return [];
+        $out = [];
+        foreach ($value as $origin) {
+            if (!is_string($origin)) continue;
+            if (preg_match('#^https?://[a-zA-Z0-9.-]+(:\d{1,5})?$#', $origin) !== 1) continue;
+            $out[] = $origin;
+        }
+        // Cap the list length again at the renderer in case a future
+        // caller skips the manifest validator. Keeps the nginx block
+        // bounded regardless of who pre-filtered.
+        return array_slice($out, 0, 10);
     }
 
     private function validatePluginId(string $pluginId): void
