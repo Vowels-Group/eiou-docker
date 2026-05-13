@@ -10,7 +10,7 @@ use RuntimeException;
 /**
  * PluginGatewayTokenService
  *
- * Per-plugin bearer tokens that the Phase 4 service gateway uses to
+ * Per-plugin bearer tokens that the service gateway uses to
  * authenticate inbound HTTP requests from a sandboxed plugin's
  * __dispatch.php. Each enabled sandboxed plugin gets a fresh
  * 256-bit random token at applyPool() time. The token is:
@@ -34,7 +34,7 @@ use RuntimeException;
  * would prevent online lookup, breaking the O(1) authentication
  * path on every gateway call.
  *
- * Phase 4 of plugin sandboxing — see docs/PLUGIN_SANDBOXING.md.
+ * See docs/PLUGINS.md (Sandboxing) for the broader trust model.
  */
 class PluginGatewayTokenService
 {
@@ -171,7 +171,23 @@ class PluginGatewayTokenService
         if ($json === false) {
             throw new RuntimeException('Could not serialize plugin gateway token index');
         }
-        $this->writeAtomic($this->tokensPath, $json, 0600);
+        // Mode 0640 — owner read/write, group read, none other.
+        // PluginGatewayController (www-data FPM pool) must be able to
+        // read this file to validate inbound bearers. Two writers in
+        // play and they need to produce a file www-data can read in
+        // both cases:
+        //   - GUI/REST/processor paths run AS www-data → file ends up
+        //     www-data:www-data 0640, www-data is the owner, can read.
+        //   - CLI path runs as whoever invoked it, typically root via
+        //     `docker exec` → file ends up root:root 0640 by default;
+        //     the @chown below lifts the group to www-data so the
+        //     www-data pool can still read. @ swallows EPERM if the
+        //     writer doesn't have CAP_CHOWN (the www-data path) — no
+        //     change needed in that case because the file already
+        //     ends up www-data-owned by default.
+        $this->writeAtomic($this->tokensPath, $json, 0640);
+        @chown($this->tokensPath, 'root');
+        @chgrp($this->tokensPath, 'www-data');
     }
 
     private function writeAtomic(string $path, string $contents, int $mode): void

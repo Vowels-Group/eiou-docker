@@ -460,6 +460,26 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get TransactionLookupService instance.
+     *
+     * Read-only facade exposing a curated subset of TransactionRepository
+     * methods to sandboxed plugins via the plugin gateway. The gateway
+     * resolves a service name to `get<ServiceName>()` on this container,
+     * so this getter is what makes "TransactionLookupService.getByTxid"
+     * (and siblings) reachable from a plugin manifest's core_services
+     * allow-list. The repository itself stays undecorated and accessed
+     * only through RepositoryFactory.
+     */
+    public function getTransactionLookupService(): \Eiou\Services\Lookup\TransactionLookupService {
+        if (!isset($this->services['TransactionLookupService'])) {
+            $this->services['TransactionLookupService'] = new \Eiou\Services\Lookup\TransactionLookupService(
+                $this->getRepositoryFactory()->get(TransactionRepository::class)
+            );
+        }
+        return $this->services['TransactionLookupService'];
+    }
+
+    /**
      * Get P2pService instance
      *
      * Integrates MessageDeliveryService for reliable P2P message delivery
@@ -1031,6 +1051,25 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginCredentialsExportService instance.
+     *
+     * Writes per-plugin MySQL credentials to /etc/eiou/credentials/
+     * plugin-<id>.json so operator-deployed sibling containers can
+     * mount the file and authenticate as the plugin's isolated DB
+     * user. Called by PluginLoader on enable/reconcile and by
+     * PluginUninstallService on uninstall. See the class docblock
+     * for the full trust model.
+     */
+    public function getPluginCredentialsExportService(): \Eiou\Services\PluginCredentialsExportService {
+        if (!isset($this->services['PluginCredentialsExportService'])) {
+            $this->services['PluginCredentialsExportService'] = new \Eiou\Services\PluginCredentialsExportService(
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginCredentialsExportService'];
+    }
+
+    /**
      * Get PluginSignatureVerifier instance.
      *
      * Verifies Ed25519 signatures on plugins against trusted public keys
@@ -1086,9 +1125,9 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
-     * Get PluginIpcForwarder — Phase 5 of plugin sandboxing.
-     * Bridges in-process firing of events / filters / render hooks
-     * to sandboxed plugins' __dispatch.php endpoints.
+     * Get PluginIpcForwarder. Bridges in-process firing of events /
+     * filters / render hooks to sandboxed plugins' __dispatch.php
+     * endpoints.
      *
      * The PluginLoader has to be passed in because this getter is
      * sometimes called from inside Application::__construct (during
@@ -1109,10 +1148,9 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
-     * Get PluginUserService — Phase 1 of plugin sandboxing.
-     * Manages the per-plugin Unix-user lifecycle (eiou-p-<hash>) that
-     * a sandboxed plugin's FPM pool runs as. See
-     * docs/PLUGIN_SANDBOXING.md.
+     * Get PluginUserService. Manages the per-plugin Unix-user
+     * lifecycle (eiou-p-<hash>) that a sandboxed plugin's FPM pool
+     * runs as. See docs/PLUGINS.md (Sandboxing).
      */
     public function getPluginUserService(): \Eiou\Services\PluginUserService {
         if (!isset($this->services['PluginUserService'])) {
@@ -1122,10 +1160,9 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
-     * Get PluginPoolService — Phase 2 of plugin sandboxing. Renders
-     * + applies per-plugin PHP-FPM pool config so a sandboxed plugin
-     * runs in its own pool, as its own UID, with open_basedir and
-     * disable_functions restricted.
+     * Get PluginPoolService. Renders + applies per-plugin PHP-FPM
+     * pool config so a sandboxed plugin runs in its own pool, as its
+     * own UID, with open_basedir and disable_functions restricted.
      */
     public function getPluginPoolService(): \Eiou\Services\PluginPoolService {
         if (!isset($this->services['PluginPoolService'])) {
@@ -1135,13 +1172,15 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
-     * Get PluginNginxConfigService — Phase 2 of plugin sandboxing.
-     * Renders the per-plugin nginx location-block snippet that
-     * PluginPoolService bundles into its supervisor request.
+     * Get PluginNginxConfigService. Renders the per-plugin nginx
+     * location-block snippet that PluginPoolService bundles into its
+     * supervisor request.
      */
     public function getPluginNginxConfigService(): \Eiou\Services\PluginNginxConfigService {
         if (!isset($this->services['PluginNginxConfigService'])) {
-            $this->services['PluginNginxConfigService'] = new \Eiou\Services\PluginNginxConfigService();
+            $this->services['PluginNginxConfigService'] = new \Eiou\Services\PluginNginxConfigService(
+                $this->getAppConfig()->publicPluginRoutes
+            );
         }
         return $this->services['PluginNginxConfigService'];
     }
@@ -1162,7 +1201,10 @@ class ServiceContainer implements ContainerInterface {
                 $this->getPluginCredentialService(),
                 $this->getPluginDbUserService(),
                 $this->getPluginPdoFactory(),
-                $this->getPdo()
+                $this->getPdo(),
+                $this->getLogger(),
+                '/etc/eiou/plugins',
+                $this->getPluginCredentialsExportService()
             );
         }
         return $this->services['PluginUninstallService'];
@@ -1483,7 +1525,7 @@ class ServiceContainer implements ContainerInterface {
      *
      * Used by the `eiou verify-chain` CLI command to audit bilateral chains
      * end-to-end (live + archive) and compare each pair's archive hash
-     * against the stored checkpoint — Phase 2's safety net against archive
+     * against the stored checkpoint — a safety net against archive
      * tampering. Distinct from ChainVerificationService above which runs
      * pre-send chain-integrity checks.
      */

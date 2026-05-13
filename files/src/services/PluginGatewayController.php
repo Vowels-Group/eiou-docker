@@ -42,7 +42,7 @@ use Throwable;
  * method returning anything that doesn't survive json_encode (objects,
  * resources) becomes a 500 — the attribute author broke the contract.
  *
- * Phase 4 of plugin sandboxing — see docs/PLUGIN_SANDBOXING.md.
+ * See docs/PLUGINS.md (Sandboxing) for the broader trust model.
  */
 class PluginGatewayController
 {

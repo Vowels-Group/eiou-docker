@@ -29,7 +29,7 @@
     <noscript><style>.tab-panel{display:block!important}.tab-bar,.tab-bar-mobile{display:none!important}</style></noscript>
     <!-- Plugin GUI hook: gui.head.styles. Plugins enqueue extra CSS
          tags here. Empty string when no plugin subscribes — costs an
-         array_key_exists call. See docs/PLUGIN_GUI_HOOKS.md. -->
+         array_key_exists call. See docs/PLUGINS.md (Extending the GUI). -->
     <?= $hooks->doRender('gui.head.styles', ['user' => $user]) ?>
     <!-- Plugin GUI hook: gui.head.scripts. Plugins enqueue head-mode
          JS here (enqueueScript with opts['head']=true). Most plugin
@@ -58,7 +58,7 @@
         // without registering a fresh entry. The filter receives the
         // already-sorted list; listeners that re-sort should respect
         // the contract (return an array of tab entries). See
-        // docs/PLUGIN_GUI_HOOKS.md.
+        // docs/PLUGINS.md (Extending the GUI).
         $tabsList = $hooks->applyFilter('gui.tabs', $tabsList, ['user' => $user]);
         $firstTabId = !empty($tabsList) ? $tabsList[0]['id'] : null;
         ?>

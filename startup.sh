@@ -144,6 +144,11 @@ graceful_shutdown() {
         kill "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null
         wait "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null || true
     fi
+    if [ -n "$PLUGIN_CREDENTIALS_POLLER_PID" ] && kill -0 "$PLUGIN_CREDENTIALS_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin credentials poller (PID: $PLUGIN_CREDENTIALS_POLLER_PID)"
+        kill "$PLUGIN_CREDENTIALS_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_CREDENTIALS_POLLER_PID" 2>/dev/null || true
+    fi
 
     echo ""
     echo "=========================================="
@@ -343,6 +348,7 @@ graceful_shutdown() {
     rm -f /tmp/eiou_restart_poller.pid 2>/dev/null
     rm -f /tmp/eiou_plugin_user_poller.pid 2>/dev/null
     rm -f /tmp/eiou_plugin_routing_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_credentials_poller.pid 2>/dev/null
     rm -f "$SHUTDOWN_FLAG" 2>/dev/null
     rm -f "$MAINTENANCE_LOCKFILE" 2>/dev/null
 
@@ -2679,7 +2685,7 @@ restart_poller() {
 
 # =============================================================================
 # plugin_user_poller() — root-side hook for the plugin sandboxing user
-# lifecycle (Phase 1 of docs/PLUGIN_SANDBOXING.md).
+# lifecycle. See docs/PLUGINS.md (Sandboxing) for the broader trust model.
 #
 # www-data PHP cannot call useradd/userdel directly, so PluginUserService
 # writes /tmp/eiou-pluser-req-<id>.json with shape:
@@ -2794,7 +2800,8 @@ plugin_user_poller() {
 }
 
 # =============================================================================
-# plugin_routing_poller() — Phase 2 of plugin sandboxing.
+# plugin_routing_poller() — applies per-plugin FPM pool config + the
+# shared nginx snippet that routes plugin traffic.
 #
 # Applies per-plugin FPM pool config + the shared nginx snippet that
 # routes /gui/plugin/<id>/* to each plugin's socket. www-data PHP cannot
@@ -2821,6 +2828,11 @@ plugin_routing_poller() {
     local REQ_GLOB="/tmp/eiou-routing-req-*.json"
     local LOG_PREFIX="[PLUGIN ROUTING POLLER]"
     local SNIPPET_PATH="/etc/nginx/snippets/eiou-plugins.conf"
+    # http{}-scope file holding limit_req_zone declarations for
+    # public-route rate limiting. Lives in conf.d so nginx picks
+    # it up at http{} level; the snippet above lives in snippets/
+    # and is included from inside server{}.
+    local ZONES_PATH="/etc/nginx/conf.d/eiou-plugin-zones.conf"
 
     write_result() {
         local res_path="$1"; local status="$2"; local error="${3:-}"
@@ -2869,7 +2881,7 @@ plugin_routing_poller() {
 
             # Parse — grep fallback like plugin_user_poller, since jq
             # isn't in the base image.
-            local action plugin_id system_user pool_path pool_config nginx_snippet
+            local action plugin_id system_user pool_path pool_config nginx_snippet zones_config
             if command -v jq >/dev/null 2>&1; then
                 action=$(jq -r '.action // empty' "$req" 2>/dev/null)
                 plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
@@ -2877,19 +2889,21 @@ plugin_routing_poller() {
                 pool_path=$(jq -r '.pool_path // empty' "$req" 2>/dev/null)
                 pool_config=$(jq -r '.pool_config // empty' "$req" 2>/dev/null)
                 nginx_snippet=$(jq -r '.nginx_snippet // empty' "$req" 2>/dev/null)
+                zones_config=$(jq -r '.zones_config // empty' "$req" 2>/dev/null)
             else
                 # Single-line JSON fields. Multi-line content (pool_config
-                # / nginx_snippet) is JSON-encoded into the request with
-                # \n escapes; we decode after extraction. Slashes can
-                # arrive escaped (`\/`) when an upstream encoder doesn't
-                # set JSON_UNESCAPED_SLASHES; un-escape them so the path
-                # validators below match.
+                # / nginx_snippet / zones_config) is JSON-encoded into the
+                # request with \n escapes; we decode after extraction.
+                # Slashes can arrive escaped (`\/`) when an upstream encoder
+                # doesn't set JSON_UNESCAPED_SLASHES; un-escape them so the
+                # path validators below match.
                 action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
                 plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
                 system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
                 pool_path=$(grep -oP '"pool_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
                 pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
                 nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                zones_config=$(grep -oP '"zones_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
             fi
 
             rm -f "$req"
@@ -2919,6 +2933,12 @@ plugin_routing_poller() {
                 apply-pool)
                     apply_file "$pool_path" "$pool_config"
                     apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # zones_config is empty when the public-routes feature
+                    # flag is off OR no plugin declared any public_routes;
+                    # write an empty placeholder anyway so a stale zones
+                    # file from a previous boot doesn't continue declaring
+                    # references the snippet no longer makes.
+                    apply_file "$ZONES_PATH" "$zones_config"
                     # Per-plugin writable scratch dir referenced in the
                     # pool's open_basedir. Must exist + be owned by the
                     # plugin user, otherwise the plugin can't write
@@ -2927,8 +2947,8 @@ plugin_routing_poller() {
                     mkdir -p "$scratch"
                     chown "$system_user:$system_user" "$scratch"
                     chmod 700 "$scratch"
-                    # The Phase 4 .gateway-token file was minted by
-                    # www-data and inherited its ownership. The plugin's
+                    # The .gateway-token file was minted by www-data
+                    # and inherited its ownership. The plugin's
                     # pool user needs to read it (core_call reads the
                     # file at request time), so chown it to the plugin
                     # user. Mode stays 600 so no other plugin user can
@@ -2945,6 +2965,12 @@ plugin_routing_poller() {
                         rm -f "$pool_path"
                     fi
                     apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # Rewrite zones to reflect the post-drop state — a
+                    # plugin being dropped means its routes (and zone
+                    # declarations) disappear, so refresh the file to
+                    # avoid stale `limit_req_zone` entries referring to
+                    # zone names no `limit_req` line uses anymore.
+                    apply_file "$ZONES_PATH" "$zones_config"
                     ;;
                 *)
                     echo "$LOG_PREFIX unknown action '$action'"
@@ -2954,12 +2980,14 @@ plugin_routing_poller() {
             esac
 
             # Verify nginx config — REFUSE to reload if -t fails. Restore
-            # the previous snippet + pool file so the wallet keeps serving.
+            # the previous snippet + zones + pool file so the wallet keeps
+            # serving.
             if ! nginx -t >/dev/null 2>&1; then
                 local nginx_err
                 nginx_err=$(nginx -t 2>&1 | tr '\n' ' ' | tr -d '\r')
                 echo "$LOG_PREFIX nginx -t FAILED: $nginx_err"
                 restore_backup "$SNIPPET_PATH"
+                restore_backup "$ZONES_PATH"
                 [ "$action" = "apply-pool" ] && restore_backup "$pool_path"
                 # Roll back the per-plugin scratch dir if we just created
                 # it. Without this it lingers as cosmetic cruft (next
@@ -2990,17 +3018,198 @@ plugin_routing_poller() {
                 continue
             fi
             # Find the FPM master and signal SIGUSR2 (graceful pool reload).
-            # pgrep -o = oldest match = master process.
+            # -f matches the full command line — `php-fpm: master` only
+            # appears in argv[0]'s descriptor, not in comm (which is
+            # truncated to `php-fpm8.2`), so omitting -f silently returns
+            # no match and FPM never reloads to pick up the new pool.
+            # -o = oldest match = master process; pgrep with -f returns
+            # both the master and any per-pool processes that have already
+            # spawned, but the master is always the oldest.
             local fpm_master
-            fpm_master=$(pgrep -o "php-fpm: master" 2>/dev/null)
+            fpm_master=$(pgrep -fo "php-fpm: master" 2>/dev/null)
             if [ -n "$fpm_master" ]; then
                 kill -USR2 "$fpm_master" 2>/dev/null || true
             fi
 
             # Drop the backup files now that the new state is verified.
-            rm -f "${SNIPPET_PATH}.bak" "${pool_path}.bak" 2>/dev/null
+            rm -f "${SNIPPET_PATH}.bak" "${ZONES_PATH}.bak" "${pool_path}.bak" 2>/dev/null
             echo "$LOG_PREFIX $action complete for $plugin_id"
             write_result "$res" "ok"
+        done
+    done
+}
+
+# =============================================================================
+# plugin_credentials_poller() — root-side hook for writing per-plugin MySQL
+# credential files that operator-deployed sibling containers can mount.
+#
+# PluginCredentialsExportService writes
+# /tmp/eiou-creds-req-<id>.json with shape:
+#
+#   { "ts": <unix>, "action": "apply-credentials"|"drop-credentials",
+#     "plugin_id": "<id>",
+#     "target_path": "/etc/eiou/credentials/plugin-<id>.json",
+#     "group_name":  "eiou-pc-<8hex>",
+#     "body": "<JSON string with host/port/database/username/password>" }
+#
+# This loop creates the per-plugin group (groupadd -f), writes the body
+# atomically to the target path with mode 0640 and owner root:<group>,
+# then deletes the request. drop-credentials removes the file AND
+# groupdel's the per-plugin group so a long-running node doesn't
+# accumulate stale groups for uninstalled plugins. Result file shape
+# mirrors the other pollers:
+#
+#   { "ts": <unix>, "status": "ok"|"failed", "error": "..." }
+#
+# Target path is hard-pinned to /etc/eiou/credentials/plugin-<id>.json so
+# a malformed request can't be used to write outside the credentials dir.
+# =============================================================================
+plugin_credentials_poller() {
+    local POLL_INTERVAL=1
+    local REQ_GLOB="/tmp/eiou-creds-req-*.json"
+    local LOG_PREFIX="[PLUGIN CREDENTIALS POLLER]"
+    local CRED_DIR="/etc/eiou/credentials"
+
+    # mkdir on first iteration. Mode 0711 root:root: traverse-only,
+    # no list. A sibling container bind-mounts a specific
+    # plugin-<id>.json by absolute path so it doesn't need to list the
+    # dir; the wallet never reads these files (it has the master key
+    # and decrypts credentials in memory), so it doesn't need access
+    # either. Mode 0711 keeps unprivileged users on the host from
+    # enumerating which plugins exist while still allowing the
+    # per-file group on each plugin's credentials file to govern
+    # actual reads.
+    if [ ! -d "$CRED_DIR" ]; then
+        mkdir -p "$CRED_DIR"
+        chown root:root "$CRED_DIR" 2>/dev/null || true
+        chmod 0711 "$CRED_DIR"
+    fi
+
+    write_result() {
+        local res_path="$1"; local status="$2"; local error="${3:-}"
+        local now; now=$(date +%s)
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            local esc; esc=${error//\"/\\\"}
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$esc" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+            local res="${req/-req-/-res-}"
+
+            local action plugin_id target_path group_name body
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty' "$req" 2>/dev/null)
+                plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
+                target_path=$(jq -r '.target_path // empty' "$req" 2>/dev/null)
+                group_name=$(jq -r '.group_name // empty' "$req" 2>/dev/null)
+                # `.body` is itself a JSON string (the credentials envelope).
+                # Pull it through jq -r so we get the decoded inner JSON.
+                body=$(jq -r '.body // empty' "$req" 2>/dev/null)
+            else
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
+                plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                target_path=$(grep -oP '"target_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                group_name=$(grep -oP '"group_name"\s*:\s*"\K[^"]+' "$req" | head -1)
+                body=$(grep -oP '"body"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+            fi
+
+            # Delete request BEFORE acting — same defence as the other
+            # pollers, so a crash inside the write doesn't replay forever.
+            # The request body carries a plaintext password; remove it from
+            # /tmp as soon as we've read it.
+            rm -f "$req"
+
+            # Defence in depth: plugin_id shape + target path hard-pin to
+            # /etc/eiou/credentials/plugin-<id>.json. Both must hold or
+            # we refuse — a corrupted request file mustn't be a write
+            # primitive against arbitrary paths.
+            if [[ ! "$plugin_id" =~ ^[a-z][a-z0-9-]{0,63}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid plugin_id='$plugin_id'"
+                write_result "$res" "failed" "invalid plugin_id"
+                continue
+            fi
+            local expected_path="${CRED_DIR}/plugin-${plugin_id}.json"
+            if [ "$target_path" != "$expected_path" ]; then
+                echo "$LOG_PREFIX rejected target_path='$target_path' (expected '$expected_path')"
+                write_result "$res" "failed" "target_path mismatch"
+                continue
+            fi
+            # Group-name hard-pin to `eiou-pc-<8hex>` — same defence as
+            # plugin_user_poller's `eiou-p-<8hex>` validator. A corrupted
+            # request file mustn't be a primitive to create / delete
+            # arbitrary system groups.
+            if [[ ! "$group_name" =~ ^eiou-pc-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid group_name='$group_name'"
+                write_result "$res" "failed" "invalid group_name"
+                continue
+            fi
+
+            case "$action" in
+                apply-credentials)
+                    if [ -z "$body" ]; then
+                        write_result "$res" "failed" "missing body"
+                        continue
+                    fi
+                    # Per-plugin group is created idempotently before the
+                    # file write so chown can target it. -f makes
+                    # groupadd a no-op when the group already exists
+                    # rather than exiting non-zero. -r reserves a
+                    # system-range GID so the group sits below 1000 and
+                    # doesn't collide with regular operator users an
+                    # admin might add later.
+                    if ! groupadd -rf "$group_name" 2>/dev/null; then
+                        echo "$LOG_PREFIX groupadd failed for $group_name"
+                        write_result "$res" "failed" "groupadd failed"
+                        continue
+                    fi
+
+                    # Atomic write: create the temp file with 0600 BEFORE
+                    # writing the body so the plaintext password is never
+                    # readable by other unprivileged processes even briefly.
+                    local tmp="${target_path}.tmp"
+                    : > "$tmp"
+                    chmod 0600 "$tmp"
+                    printf '%s' "$body" > "$tmp"
+                    # Now relax to the production mode and per-plugin
+                    # group. Only members of `eiou-pc-<hex>` (typically
+                    # the operator's sibling-container uid) can read.
+                    chown "root:${group_name}" "$tmp" 2>/dev/null || true
+                    chmod 0640 "$tmp"
+                    mv "$tmp" "$target_path"
+                    echo "$LOG_PREFIX wrote credentials for $plugin_id (group $group_name)"
+                    write_result "$res" "ok"
+                    ;;
+                drop-credentials)
+                    rm -f "$target_path"
+                    # Tear down the group too. `groupdel` exits non-zero
+                    # if the group has live members (operator deliberately
+                    # added a uid to it) — that's a sign the operator's
+                    # sibling container is still mounted, so refuse to
+                    # remove and log; a follow-up uninstall after the
+                    # operator detaches will succeed.
+                    if getent group "$group_name" >/dev/null 2>&1; then
+                        if ! groupdel "$group_name" 2>/dev/null; then
+                            echo "$LOG_PREFIX groupdel refused for $group_name (members present?)"
+                        fi
+                    fi
+                    echo "$LOG_PREFIX removed credentials for $plugin_id"
+                    write_result "$res" "ok"
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action'"
+                    write_result "$res" "failed" "unknown action: $action"
+                    ;;
+            esac
         done
     done
 }
@@ -3024,7 +3233,7 @@ echo "Restart poller started (PID: $RESTART_POLLER_PID)"
 # useradd/userdel directly (root required), so PluginUserService writes
 # /tmp/eiou-pluser-req-<id>.json and this loop turns those into
 # useradd/userdel invocations as the root supervisor. See
-# docs/PLUGIN_SANDBOXING.md.
+# docs/PLUGINS.md (Sandboxing).
 plugin_user_poller &
 PLUGIN_USER_POLLER_PID=$!
 echo "$PLUGIN_USER_POLLER_PID" > /tmp/eiou_plugin_user_poller.pid
@@ -3038,6 +3247,15 @@ plugin_routing_poller &
 PLUGIN_ROUTING_POLLER_PID=$!
 echo "$PLUGIN_ROUTING_POLLER_PID" > /tmp/eiou_plugin_routing_poller.pid
 echo "Plugin routing poller started (PID: $PLUGIN_ROUTING_POLLER_PID)"
+
+# Start plugin-credentials poller in background. Writes per-plugin
+# MySQL credential files at /etc/eiou/credentials/plugin-<id>.json
+# (mode 0640 root:www-data) so operator-deployed sibling containers
+# can mount the file and authenticate as the plugin's MySQL user.
+plugin_credentials_poller &
+PLUGIN_CREDENTIALS_POLLER_PID=$!
+echo "$PLUGIN_CREDENTIALS_POLLER_PID" > /tmp/eiou_plugin_credentials_poller.pid
+echo "Plugin credentials poller started (PID: $PLUGIN_CREDENTIALS_POLLER_PID)"
 
 echo ""
 echo "=========================================="

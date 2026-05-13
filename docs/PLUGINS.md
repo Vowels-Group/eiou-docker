@@ -451,6 +451,139 @@ It is never shown to the operator or logged; rotation replaces the
 ciphertext in-place and runs `ALTER USER ... IDENTIFIED BY NEW` in the
 same transaction.
 
+### Sibling-container credentials
+
+Some plugins are easier to ship as the eIOU plugin **plus a sibling
+Docker container** the operator deploys separately — e.g. a heavy
+provider-client library that doesn't fit cleanly into a per-request
+PHP-FPM pool, or a long-running daemon that needs to live somewhere
+the FPM lifecycle doesn't reach. To let the sibling share state with
+the plugin's MySQL user, the host writes a credentials JSON file at
+plugin-enable time that the operator can mount read-only into the
+sibling.
+
+**Path and contents:**
+
+```
+/etc/eiou/credentials/plugin-<plugin-id>.json
+```
+
+```json
+{
+  "host":      "127.0.0.1",
+  "port":      3306,
+  "database":  "eiou",
+  "username":  "plugin_my_plugin",
+  "password":  "<plaintext>",
+  "issued_at": "2026-05-13T11:56:00Z"
+}
+```
+
+`host` is what the wallet sees inside its own container (typically
+`127.0.0.1`). The operator's sibling will almost certainly need to
+override this in its own configuration to point at the eIOU
+container's address on the docker network — the wallet has no way
+to know the operator's network topology, so it writes what's
+locally true and leaves the override to the deployer.
+
+**File permissions and per-plugin group:**
+
+The file is mode `0640` owned by `root:eiou-pc-<8hex>` where the
+hex is `sha256(pluginId)[0:8]` — the same shape used elsewhere
+in plugin sandboxing (the per-plugin system user is
+`eiou-p-<same-8hex>`, so operators can recognize the user/group
+pair belongs to the same plugin). The supervisor creates the
+group at first apply (`groupadd -rf`, system-range GID,
+idempotent) and removes it on plugin disable / uninstall
+(`groupdel`, refused while members exist so a sibling deployment
+that's still attached doesn't get its group pulled out from
+under it).
+
+The credentials directory itself is mode `0711 root:root`:
+traverse-only, no list. Unprivileged host users can't enumerate
+which plugins exist; the per-file group on each `plugin-<id>.json`
+governs actual reads.
+
+**Operator workflow on the sibling-container side:**
+
+Pick a host-side uid for the sibling container's process and add
+it to the specific plugin's group. The plugin id whose
+credentials the sibling needs determines which group:
+
+```bash
+# On the docker host, AFTER the plugin has been enabled in the wallet
+# (the group only exists once apply-credentials has run).
+sudo usermod -a -G eiou-pc-$(printf '%s' my-plugin | sha256sum | cut -c1-8) <sibling-uid-name>
+```
+
+Then bind-mount the specific credentials file into the sibling:
+
+```yaml
+# docker-compose.yml for the sibling container
+services:
+  my-plugin-companion:
+    image: vendor/my-plugin-companion:1.0.0
+    user: "1500:1500"   # uid added to eiou-pc-<hex> above
+    volumes:
+      - /etc/eiou/credentials/plugin-my-plugin.json:/run/credentials.json:ro
+```
+
+Inside the sibling, read `/run/credentials.json`, override `host`
+to the eIOU container's network address, and use the values to
+open a MariaDB connection.
+
+**Trust model:**
+
+- Each plugin's credentials file lives in its own group; no
+  cross-plugin read access on the host. A sibling configured for
+  plugin A can't drift into reading plugin B's credentials by
+  mistake (it doesn't have the group).
+- The wallet pool (`www-data`) is **not** in any of these groups.
+  It doesn't need to read the credential files — it has the master
+  key and decrypts credentials in memory whenever it needs to act
+  on them. So a wallet pool compromise doesn't grant access to the
+  on-disk credential files beyond what it already has via the DB
+  directly.
+- Plugin FPM pools run as `eiou-p-<hex>` users and their
+  `open_basedir` doesn't admit `/etc/eiou/credentials/` anyway, so
+  one plugin can't read another plugin's credentials via the
+  plugin layer either.
+- The file holds **plaintext**, not encrypted — sibling containers
+  can't decrypt the wrapped form (they don't have the master key,
+  by design) so the protection is purely filesystem-level.
+  Operators with full host root can read every credentials file;
+  this is unchanged from any other secret on disk and is
+  intentional.
+
+The file is rewritten on every plugin enable and on every boot
+reconcile (so a `/etc/eiou` volume recreation or manual file
+deletion self-heals on the next boot). It is removed on plugin
+disable and on uninstall.
+
+**Operator obligation when retiring a plugin with a sibling:**
+
+`groupdel` refuses to remove a group with live members. If the
+operator added a sibling-container uid to `eiou-pc-<hex>` and then
+uninstalls the plugin without first removing that uid from the
+group, the supervisor's `groupdel` is rejected, the group persists,
+and the sibling uid retains its group membership. If the same
+plugin id is later reinstalled, the group already exists with the
+sibling still attached — meaning the sibling would inherit access
+to the new plugin's credentials without the operator opting in
+again. Two ways to avoid this:
+
+- **Recommended.** Detach the sibling before uninstall: stop the
+  sibling container, then `gpasswd -d <sibling-uid-name>
+  eiou-pc-<hex>` to remove it from the group, then `eiou plugin
+  uninstall <name>`. The supervisor's `groupdel` succeeds and the
+  group is fully torn down.
+
+- **Defensive.** If you only operate one set of plugins on a
+  host, reusing a plugin id with a new author / new database
+  schema is uncommon — but if you do reuse ids, also run
+  `getent group eiou-pc-<hex>` after uninstall to spot any
+  lingering members and clean them up before reinstalling.
+
 ### Boot-time reconciliation
 
 On every node boot, after the master key is loaded and before plugins'
@@ -1175,8 +1308,8 @@ Unix user, with no access to `/etc/eiou/config/` (and therefore no
 access to the master key, the seed phrase, the encrypted private key,
 or any other wallet secret). Set `"sandboxed": true` in the manifest.
 
-See [`docs/PLUGIN_SANDBOXING.md`](PLUGIN_SANDBOXING.md) for the full
-architecture; what you need to know as an author is below.
+The full architecture lives in this document; the subsections below
+walk through what you need to know as a plugin author.
 
 ### Sandboxing is mandatory
 
@@ -1272,6 +1405,115 @@ point for your dispatcher. The template carries a
 upstream so the wallet can warn operators if your plugin's
 dispatcher is older than the current contract.
 
+### Public routes — non-admin HTTP under `/p/<plugin-id>/<action>`
+
+The IPC contract above only carries internal core→plugin traffic
+(events, filters, REST routes from authenticated admin callers). A
+plugin that wants to serve **non-admin** customers — anything where
+the caller holds a per-customer bearer token rather than the wallet's
+admin session — declares `public_routes` in its manifest. Each
+declared route is routed by nginx directly to the plugin's FPM pool
+under a separate URL prefix `/p/<plugin-id>/<action>` that lives
+outside the admin gate.
+
+The feature is **off by default**. Operators opt in at the node level
+by setting `EIOU_PUBLIC_PLUGIN_ROUTES=on` in the container's
+environment. With the flag off, the nginx renderer skips
+public-route blocks entirely — the manifest field still validates,
+but no requests reach the plugin until the operator flips the flag.
+
+Manifest shape:
+
+```json
+{
+  "sandboxed": true,
+  "public_routes": [
+    {
+      "method": "POST",
+      "action": "chat",
+      "auth": "bearer",
+      "rate_per_minute": 60,
+      "max_body_bytes": 65536,
+      "cors_allowed_origins": [
+        "https://example.com",
+        "https://app.example.com"
+      ]
+    }
+  ]
+}
+```
+
+Per-entry fields:
+
+| Field                  | Required | Default | Notes                                                                                                                     |
+| ---------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `method`               | yes      | —       | One of `GET` / `POST` / `PUT` / `PATCH` / `DELETE`. Pinned — wrong verb returns `405` without invoking the plugin.        |
+| `action`               | yes      | —       | Kebab-case, `^[a-z][a-z0-9-]{0,63}$`. Becomes the final URL segment.                                                       |
+| `auth`                 | no       | `"bearer"` | Only `"bearer"` is supported today. Host validates the `Authorization` header *shape*; the plugin does the real auth check. |
+| `rate_per_minute`      | no       | `60`    | Per-bearer-per-route rate cap. Bounded `[1, 6000]`. Enforced server-side via nginx `limit_req_zone`.                       |
+| `max_body_bytes`       | no       | `65536` | Body size cap; bounded `[1, 1048576]`.                                                                                     |
+| `cors_allowed_origins` | no       | —       | List of explicit origin strings. No wildcard `*`. Max 10 entries. When present, the host emits CORS headers and short-circuits `OPTIONS` preflight. |
+
+What the host does, before any plugin code runs:
+
+1. **Method gate** — wrong verb → 405.
+2. **Bearer shape preflight** — `Authorization: Bearer [A-Za-z0-9._~+/=-]{8,256}` is the only shape accepted. Anything else → 401. The plugin still does the real credential check against its own state; this just refuses values that obviously can't be a token.
+3. **Rate limit** — one `limit_req_zone` per route at http{} scope, keyed on `$http_authorization` (so the window is per-bearer-per-route, not per-IP — a single misbehaving customer can't starve well-behaved ones sharing the same plugin). Excess requests → 429.
+4. **Body size cap** — `client_max_body_size` per route. Excess → 413.
+5. **CORS** (only when `cors_allowed_origins` is declared) — `OPTIONS` preflight returns `204` with the appropriate `Access-Control-*` headers without invoking the plugin; cross-origin requests from non-allow-listed origins get an empty `Access-Control-Allow-Origin` value, which the browser's same-origin check then refuses to surface to the calling page.
+
+What the plugin sees in `__dispatch.php`:
+
+The dispatcher template detects public-route invocations via the
+`EIOU_PLUGIN_PUBLIC_ROUTE=1` fastcgi param and synthesizes an
+envelope from the raw HTTP request. From the handler's point of
+view, the wire shape is the same uniform envelope as IPC:
+
+```json
+{
+  "type": "public",
+  "name": "<action>",
+  "context": {
+    "method":    "POST",
+    "bearer":    "<the raw bearer token, prefix stripped>",
+    "body":      "<raw request body>",
+    "remote_ip": "1.2.3.4"
+  }
+}
+```
+
+The same `respond($status, $body, $log)` helper from the template
+sends the response back. Returning JSON works as you'd expect; the
+plugin is free to set its own content type via PHP's `header()` if
+it needs to.
+
+A minimal public-route handler:
+
+```php
+// inside the dispatch switch
+case 'public':
+    if ($name !== 'chat') {
+        respond(404, ['ok' => false, 'error' => ['code' => 'unknown_action']], $log);
+    }
+    $bearer = $context['bearer'] ?? '';
+    $customer = $myKeysTable->lookupByBearer($bearer); // your own state
+    if ($customer === null) {
+        respond(401, ['ok' => false, 'error' => ['code' => 'invalid_token']], $log);
+    }
+    $body = json_decode($context['body'] ?? '', true);
+    // … do the work, charge the customer …
+    respond(200, ['ok' => true, 'result' => $result], $log);
+    break;
+```
+
+**Authoring constraints to keep in mind:**
+
+- **Bearer storage.** The host doesn't know what a valid bearer is — that's plugin state. Store bearer hashes (bcrypt / argon2id) in your plugin DB, not plaintext. Match incoming tokens by constant-time compare against the hash.
+- **Rate limit semantics.** `burst=rate_per_minute` lets one minute of capacity absorb a small retry storm without 429'ing every retry; `nodelay` means excess requests are rejected immediately rather than queued (so a misbehaving client sees 429 fast instead of latency-bombed responses).
+- **No cookies.** The customer-bearer auth flow is intentionally stateless — sessions belong to the admin GUI, not customer-facing services. If your plugin needs per-customer state across requests, store it keyed on the bearer (or a customer id derived from it) in your plugin DB.
+- **CORS is allow-list only.** Don't try to accept arbitrary origins via wildcard — the manifest validator refuses `*` and the renderer's defence-in-depth filter would drop it anyway. Add explicit origin strings; if your plugin's web frontend moves to a new origin, update the manifest and re-enable.
+- **Companion-container deployment.** Some plugins are easier to ship as the eIOU plugin + a sibling Docker container the operator deploys separately (e.g. a heavy provider-client library that doesn't belong in a PHP-FPM pool). The sibling can authenticate to the plugin's MySQL user via the on-disk credentials file — see [Sibling-container credentials](#sibling-container-credentials) under Database Isolation.
+
 ### Calling core services from your handler — `core_call()`
 
 The dispatcher template includes a `core_call($service, $method, $args, $log)`
@@ -1301,6 +1543,49 @@ core_call('Logger', 'info', [
 Returns the method's return value on success, `null` on failure
 (transport error / validation rejection / handler exception).
 Failure cases log to `$log` with structured context.
+
+### Plugin-callable surface — policy
+
+The set of methods reachable through `core_call()` is intentionally
+small. As of this writing, the callable surface is:
+
+| Service                         | Methods                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Logger`                        | `debug`, `info`, `warning`, `error`                                                       |
+| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions` |
+
+That's it. The list grows **on demand**, when a concrete plugin
+needs something — not speculatively. The reasoning is straightforward:
+every `#[PluginCallable]` method is operator-visible attack surface.
+Operators reading a plugin's manifest see the list of methods that
+plugin will call; the wider the underlying surface, the harder that
+review becomes. A small, deliberately-curated surface keeps the
+review meaningful.
+
+Two principles guide what gets added:
+
+1. **Default-deny, expand for a concrete need.** A repository method
+   is exposed only when a real plugin (in this repo's plugin
+   directory, or a downstream plugin whose author has filed an
+   issue) has a use case that can't be satisfied any other way. We
+   don't preemptively expose "this looks useful" — useful is
+   measured by an actual handler that would call it.
+
+2. **Prefer narrow single-row lookups over bulk listings.** When a
+   plugin needs to enrich one event payload's identifier, a
+   `lookupBy<X>(id): ?array` method is strictly additive to what
+   the event already told the plugin. A `getAllX(): array` method
+   is a different shape of trust — it's a one-call exfiltration
+   primitive for the underlying table. The first kind is easy to
+   justify case-by-case; the second kind needs a concrete export
+   plugin (or similar) and a deliberate decision.
+
+If a plugin needs a method that isn't exposed, the path is: file an
+issue describing the use case, propose the method signature, and
+include the smallest read-only repository method that satisfies it.
+The maintainer adds it as a thin `Lookup/` service if the use case
+holds up. Decoration on the repository itself is *not* the path —
+those classes stay pure data-access.
 
 ### What you CAN do as a sandboxed plugin
 

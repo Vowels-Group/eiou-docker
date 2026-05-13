@@ -206,7 +206,7 @@ echo renderSection([
             // modal-tab buttons. The corresponding tab content is
             // emitted via gui.contact_modal.body below; pairing the
             // two on a shared id is the plugin author's contract.
-            // See docs/PLUGIN_GUI_HOOKS.md.
+            // See docs/PLUGINS.md (Extending the GUI).
             $contactModalTabs = $hooks->applyFilter('gui.contact_modal.tabs', [], ['user' => $user]);
             if (is_array($contactModalTabs)) {
                 foreach ($contactModalTabs as $mt) {
@@ -654,8 +654,8 @@ echo renderSection([
                     // additional buttons in the contact settings tab.
                     // The `action` value is posted as the form's
                     // action= field, so it must be a name that the
-                    // GuiActionRegistry has registered (Phase 4).
-                    // See docs/PLUGIN_GUI_HOOKS.md.
+                    // GuiActionRegistry has registered.
+                    // See docs/PLUGINS.md (Extending the GUI).
                     $contactActions = $hooks->applyFilter('gui.contact.actions', [], ['user' => $user]);
                     if (is_array($contactActions)) {
                         foreach ($contactActions as $a) {
