@@ -489,6 +489,27 @@ class PluginLoader
                     && is_string($e['action'])
                     && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
             );
+            // public_routes entries expose a non-admin surface to
+            // unauthenticated-to-eIOU customers, routed at /p/<plugin-id>/
+            // <action>. Each entry: {method, action, auth, rate_per_minute,
+            // max_body_bytes}. auth is restricted to "bearer" today —
+            // the plugin validates the bearer against its own state;
+            // the host only shape-validates and rate-limits. Bounded
+            // rate cap so a misconfigured manifest can't disable rate
+            // limiting; bounded max body so a misconfigured manifest
+            // can't accept arbitrarily large payloads.
+            $row['public_routes'] = $this->shapedListField(
+                $manifest,
+                'public_routes',
+                fn($e): bool => is_array($e)
+                    && isset($e['method'], $e['action'])
+                    && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
+                    && is_string($e['action'])
+                    && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+                    && (!isset($e['auth']) || $e['auth'] === 'bearer')
+                    && (!isset($e['rate_per_minute']) || (is_int($e['rate_per_minute']) && $e['rate_per_minute'] > 0 && $e['rate_per_minute'] <= 6000))
+                    && (!isset($e['max_body_bytes']) || (is_int($e['max_body_bytes']) && $e['max_body_bytes'] > 0 && $e['max_body_bytes'] <= 1048576))
+            );
             $row['cli_commands'] = $this->shapedListField(
                 $manifest,
                 'cli_commands',
@@ -766,7 +787,28 @@ class PluginLoader
                 if ($e['plugin_id'] === $name) { $alreadyPresent = true; break; }
             }
             if (!$alreadyPresent && $systemUserOnEnable !== null) {
-                $entries[] = ['plugin_id' => $name, 'system_user' => $systemUserOnEnable];
+                // The in-flight plugin isn't in state yet, so pull its
+                // public_routes directly from its on-disk manifest so
+                // the about-to-be-applied snippet already routes its
+                // public endpoints (if any) when the supervisor reloads.
+                $manifest = $this->readManifestFromDisk($name);
+                $publicRoutes = [];
+                if (is_array($manifest)) {
+                    $publicRoutes = $this->shapedListField(
+                        $manifest,
+                        'public_routes',
+                        fn($e): bool => is_array($e)
+                            && isset($e['method'], $e['action'])
+                            && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
+                            && is_string($e['action'])
+                            && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+                    );
+                }
+                $entries[] = [
+                    'plugin_id'     => $name,
+                    'system_user'   => $systemUserOnEnable,
+                    'public_routes' => $publicRoutes,
+                ];
             }
         } else {
             $entries = array_values(array_filter(
@@ -782,11 +824,11 @@ class PluginLoader
     }
 
     /**
-     * Collect the (plugin_id, system_user) pairs for every sandboxed-enabled
-     * plugin currently on disk. Reads from the state file + on-disk manifests
-     * so it works before / after / during loadPlugin().
+     * Collect the (plugin_id, system_user, public_routes) entries for every
+     * sandboxed-enabled plugin currently on disk. Reads from the state file
+     * + on-disk manifests so it works before / after / during loadPlugin().
      *
-     * @return list<array{plugin_id:string, system_user:string}>
+     * @return list<array{plugin_id:string, system_user:string, public_routes:list<array<string,mixed>>}>
      */
     private function collectSandboxedRouteEntries(): array
     {
@@ -798,9 +840,24 @@ class PluginLoader
             $manifest = $this->readManifestFromDisk((string) $pluginId);
             if ($manifest === null || empty($manifest['sandboxed'])) continue;
             try {
+                // Run the same shaped-list filter the discover() row uses
+                // so the route data the renderer sees is already
+                // validated. Without this the renderer would do its own
+                // shape check anyway, but here we drop bad entries
+                // earlier and they don't pollute the snippet at all.
+                $publicRoutes = $this->shapedListField(
+                    $manifest,
+                    'public_routes',
+                    fn($e): bool => is_array($e)
+                        && isset($e['method'], $e['action'])
+                        && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
+                        && is_string($e['action'])
+                        && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+                );
                 $result[] = [
-                    'plugin_id'   => (string) $pluginId,
-                    'system_user' => $this->userService->systemUsername((string) $pluginId),
+                    'plugin_id'     => (string) $pluginId,
+                    'system_user'   => $this->userService->systemUsername((string) $pluginId),
+                    'public_routes' => $publicRoutes,
                 ];
             } catch (\InvalidArgumentException $e) {
                 $this->logger->warning("Skipping malformed plugin id in state", [

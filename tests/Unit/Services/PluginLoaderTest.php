@@ -397,6 +397,48 @@ class PluginLoaderTest extends TestCase
         $this->assertNull($this->loader()->readChangelog('huge-log'));
     }
 
+    // -- public_routes manifest field --------------------------------------
+
+    public function testListAllPluginsCarriesValidPublicRoutes(): void
+    {
+        $this->writePluginWithExtras('pub-good', [
+            'public_routes' => [
+                ['method' => 'POST', 'action' => 'chat', 'rate_per_minute' => 60, 'max_body_bytes' => 65536],
+                ['method' => 'GET',  'action' => 'status'],
+            ],
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertCount(2, $row['public_routes']);
+        $this->assertSame('chat', $row['public_routes'][0]['action']);
+        $this->assertSame('status', $row['public_routes'][1]['action']);
+    }
+
+    public function testListAllPluginsRejectsBadPublicRouteEntries(): void
+    {
+        $this->writePluginWithExtras('pub-bad', [
+            'public_routes' => [
+                ['method' => 'TEAPOT', 'action' => 'chat'],          // bad verb
+                ['method' => 'POST',   'action' => 'Bad-Caps'],      // bad action
+                ['method' => 'POST',   'action' => 'chat', 'auth' => 'oauth'], // bad auth
+                ['method' => 'POST',   'action' => 'chat', 'rate_per_minute' => 100000], // out of bounds
+                ['method' => 'POST',   'action' => 'chat', 'max_body_bytes' => 99999999], // out of bounds
+                ['method' => 'POST',   'action' => 'survivor'],      // good
+            ],
+        ]);
+
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertCount(1, $row['public_routes']);
+        $this->assertSame('survivor', $row['public_routes'][0]['action']);
+    }
+
+    public function testListAllPluginsDefaultsPublicRoutesToEmptyList(): void
+    {
+        $this->writePluginWithExtras('pub-none', []);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['public_routes']);
+    }
+
     // -- Lifecycle event dispatch ------------------------------------------
 
     // [removed] testRegisterAllDispatchesPluginRegistered: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the

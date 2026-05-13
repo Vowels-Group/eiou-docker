@@ -1178,7 +1178,9 @@ class ServiceContainer implements ContainerInterface {
      */
     public function getPluginNginxConfigService(): \Eiou\Services\PluginNginxConfigService {
         if (!isset($this->services['PluginNginxConfigService'])) {
-            $this->services['PluginNginxConfigService'] = new \Eiou\Services\PluginNginxConfigService();
+            $this->services['PluginNginxConfigService'] = new \Eiou\Services\PluginNginxConfigService(
+                $this->getAppConfig()->publicPluginRoutes
+            );
         }
         return $this->services['PluginNginxConfigService'];
     }

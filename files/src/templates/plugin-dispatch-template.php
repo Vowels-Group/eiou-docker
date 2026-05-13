@@ -35,7 +35,7 @@ declare(strict_types=1);
  * minimum version every bundled plugin author needs, (c) documenting
  * the contract delta in CHANGELOG.md.
  */
-const PLUGIN_DISPATCH_VERSION = 1;
+const PLUGIN_DISPATCH_VERSION = 2;
 
 header('Content-Type: application/json');
 
@@ -175,22 +175,59 @@ function respond(int $status, array $body, PluginLog $log): void
     exit;
 }
 
-// Parse the request envelope. Everything from this point is recoverable
-// — malformed envelopes return a structured error, not a 500.
-$rawBody = (string) @file_get_contents('php://input');
-if ($rawBody === '') {
-    respond(400, [
-        'ok' => false,
-        'error' => ['code' => 'bad_envelope', 'message' => 'empty request body'],
-    ], $log);
-}
-
-$envelope = json_decode($rawBody, true);
-if (!is_array($envelope)) {
-    respond(400, [
-        'ok' => false,
-        'error' => ['code' => 'bad_envelope', 'message' => 'request body is not JSON'],
-    ], $log);
+// Two entry paths share this script:
+//
+//   IPC path  (/gui/plugin/<id>/…)  — core POSTs a structured envelope
+//                                     to php://input. Parse it directly.
+//   Public path (/p/<id>/<action>) — nginx forwards a raw HTTP request
+//                                     from the customer. Set
+//                                     EIOU_PLUGIN_PUBLIC_ROUTE=1 in the
+//                                     fastcgi params. Synthesize a
+//                                     "public"-typed envelope from the
+//                                     raw HTTP context.
+//
+// The dispatch switch downstream sees a uniform $envelope shape either
+// way, so plugin handler code doesn't care which path served it.
+if (!empty($_SERVER['EIOU_PLUGIN_PUBLIC_ROUTE'])) {
+    $action = (string) ($_SERVER['EIOU_PLUGIN_PUBLIC_ACTION'] ?? '');
+    if ($action === '' || preg_match('/^[a-z][a-z0-9-]{0,63}$/', $action) !== 1) {
+        respond(400, [
+            'ok' => false,
+            'error' => ['code' => 'bad_public_envelope', 'message' => 'invalid public action'],
+        ], $log);
+    }
+    $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+    // nginx already pre-validated the Bearer shape and 401'd anything
+    // malformed before reaching here — strip the prefix without
+    // re-validating. The plugin handler does the real auth check.
+    $bearer = preg_replace('/^Bearer\s+/i', '', $auth);
+    $envelope = [
+        'type'    => 'public',
+        'name'    => $action,
+        'context' => [
+            'method'    => (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+            'bearer'    => (string) $bearer,
+            'body'      => (string) @file_get_contents('php://input'),
+            'remote_ip' => (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+        ],
+    ];
+} else {
+    // Parse the IPC envelope. Everything from this point is recoverable
+    // — malformed envelopes return a structured error, not a 500.
+    $rawBody = (string) @file_get_contents('php://input');
+    if ($rawBody === '') {
+        respond(400, [
+            'ok' => false,
+            'error' => ['code' => 'bad_envelope', 'message' => 'empty request body'],
+        ], $log);
+    }
+    $envelope = json_decode($rawBody, true);
+    if (!is_array($envelope)) {
+        respond(400, [
+            'ok' => false,
+            'error' => ['code' => 'bad_envelope', 'message' => 'request body is not JSON'],
+        ], $log);
+    }
 }
 
 $type    = (string) ($envelope['type']    ?? '');
@@ -204,7 +241,7 @@ if ($type === '' || $name === '') {
     ], $log);
 }
 
-$allowedTypes = ['event', 'filter', 'render', 'action', 'rest', 'cli'];
+$allowedTypes = ['event', 'filter', 'render', 'action', 'rest', 'cli', 'public'];
 if (!in_array($type, $allowedTypes, true)) {
     respond(400, [
         'ok' => false,
@@ -221,6 +258,7 @@ switch ($type) {
     case 'action':
     case 'rest':
     case 'cli':
+    case 'public':
         $log->debug(
             "Dispatch stub fired",
             ['type' => $type, 'name' => $name, 'request_id' => $_SERVER['HTTP_X_EIOU_REQUEST_ID'] ?? null]

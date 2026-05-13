@@ -27,12 +27,37 @@ use InvalidArgumentException;
  */
 class PluginNginxConfigService
 {
+    /** Bearer shape accepted by the public-route preflight. Wide
+     *  enough for opaque tokens encoded as hex, base64url, or
+     *  ULID-style. Plugins do the actual credential check; the host
+     *  only refuses values that obviously can't be a token at all.
+     */
+    public const PUBLIC_BEARER_REGEX = '^Bearer [A-Za-z0-9._~+/=-]{8,256}$';
+
+    private bool $publicRoutesEnabled;
+
+    public function __construct(bool $publicRoutesEnabled = false)
+    {
+        $this->publicRoutesEnabled = $publicRoutesEnabled;
+    }
+
     /**
      * Render the complete nginx snippet from a list of sandboxed
      * plugins. The list MUST be authoritative — anything not in the
      * list ends up with no route after the next reload.
      *
-     * @param list<array{plugin_id:string, system_user:string}> $sandboxedPlugins
+     * Each entry may carry an optional `public_routes` list. When the
+     * service is constructed with $publicRoutesEnabled=true, every
+     * such entry produces an additional `location = /p/<id>/<action>`
+     * block alongside the IPC `/gui/plugin/<id>/` block. When the
+     * flag is off, public_routes are silently dropped — operators
+     * opt in via EIOU_PUBLIC_PLUGIN_ROUTES.
+     *
+     * @param list<array{
+     *     plugin_id:string,
+     *     system_user:string,
+     *     public_routes?:list<array{method:string,action:string,max_body_bytes?:int,rate_per_minute?:int}>
+     * }> $sandboxedPlugins
      */
     public function renderSnippet(array $sandboxedPlugins): string
     {
@@ -82,9 +107,73 @@ class PluginNginxConfigService
             $lines[] = "    fastcgi_read_timeout 30s;";
             $lines[] = "}";
             $lines[] = "";
+
+            // Public-route blocks live alongside the IPC block. One
+            // location per declared public route — keeps method
+            // matching, body size, and (future) rate-limit zones
+            // expressible per route without runtime branching in
+            // nginx.
+            $publicRoutes = $entry['public_routes'] ?? [];
+            if ($this->publicRoutesEnabled && is_array($publicRoutes) && $publicRoutes !== []) {
+                foreach ($publicRoutes as $route) {
+                    $line = $this->renderPublicRouteBlock($pluginId, $systemUser, $route);
+                    if ($line !== null) {
+                        $lines[] = $line;
+                        $lines[] = "";
+                    }
+                }
+            }
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Render one `location = /p/<id>/<action>` block. Returns null
+     * (skipping the route) if the entry doesn't satisfy the shape
+     * the manifest validator already enforced — defence in depth.
+     *
+     * The dispatcher distinguishes public-route invocations from IPC
+     * invocations by reading `$_SERVER['EIOU_PLUGIN_PUBLIC_ROUTE']`,
+     * which nginx sets here. Same __dispatch.php entry script, two
+     * envelope-building paths.
+     */
+    private function renderPublicRouteBlock(
+        string $pluginId,
+        string $systemUser,
+        array $route
+    ): ?string {
+        $method = (string) ($route['method'] ?? '');
+        $action = (string) ($route['action'] ?? '');
+        if (!in_array($method, ['GET','POST','PUT','PATCH','DELETE'], true)) {
+            return null;
+        }
+        if (preg_match('/^[a-z][a-z0-9-]{0,63}$/', $action) !== 1) {
+            return null;
+        }
+        $maxBody = (int) ($route['max_body_bytes'] ?? 65536);
+        if ($maxBody <= 0 || $maxBody > 1048576) {
+            $maxBody = 65536;
+        }
+
+        $bearerRegex = self::PUBLIC_BEARER_REGEX;
+        $out = [];
+        $out[] = "location = /p/{$pluginId}/{$action} {";
+        $out[] = "    # Method gate — the manifest pinned exactly one verb per route.";
+        $out[] = "    if (\$request_method != {$method}) { return 405; }";
+        $out[] = "    # Bearer shape preflight. The plugin does the real auth check;";
+        $out[] = "    # this just refuses values that obviously can't be a token.";
+        $out[] = "    if (\$http_authorization !~ '{$bearerRegex}') { return 401; }";
+        $out[] = "    client_max_body_size {$maxBody};";
+        $out[] = "    fastcgi_pass unix:/run/php/eiou-plugin-{$systemUser}.sock;";
+        $out[] = "    include fastcgi_params;";
+        $out[] = "    fastcgi_param SCRIPT_FILENAME /etc/eiou/plugins/{$pluginId}/__dispatch.php;";
+        $out[] = "    fastcgi_param SCRIPT_NAME     /p/{$pluginId}/{$action};";
+        $out[] = "    fastcgi_param EIOU_PLUGIN_PUBLIC_ROUTE 1;";
+        $out[] = "    fastcgi_param EIOU_PLUGIN_PUBLIC_ACTION {$action};";
+        $out[] = "    fastcgi_read_timeout 30s;";
+        $out[] = "}";
+        return implode("\n", $out);
     }
 
     private function validatePluginId(string $pluginId): void
