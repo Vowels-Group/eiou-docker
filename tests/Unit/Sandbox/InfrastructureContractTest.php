@@ -124,7 +124,7 @@ class InfrastructureContractTest extends TestCase
         // supervisor refuses the routing-apply, so the plugin's pool
         // never goes live. Test by rendering a snippet and asserting
         // shape.
-        $svc = new \Eiou\Services\PluginNginxConfigService();
+        $svc = new \Eiou\Services\Plugins\PluginNginxConfigService();
         $snippet = $svc->renderSnippet([
             ['plugin_id' => 'test-plugin', 'system_user' => 'eiou-p-deadbeef'],
         ]);

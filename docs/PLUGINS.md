@@ -431,43 +431,54 @@ network-layer compromise cannot reach it via remote MySQL auth.
 ### How plugins interact with core data
 
 The MySQL grants above describe what the plugin's *own database connection*
-can touch. They are not the whole picture — plugins can still interact with
-core data, but they have to go through a curated, in-process API. Two
-distinct layers:
+can touch. They are not the whole picture — plugins also interact with
+core data, but the two paths run through different mechanisms:
 
-**Layer 1 — Raw SQL via the plugin's PDO (`$container->getPluginPdo($id)`)**
+**Route 1 — Plugin-owned tables via direct PDO**
 
-What it sees: only the tables listed in this plugin's `owned_tables`. Core
-tables (`contacts`, `transactions`, `api_keys`, `payback_methods`,
-`balances`, …) and other plugins' tables are not just hidden — they are
-denied at the MySQL privilege check. A `SELECT * FROM contacts` from a
-plugin's PDO returns MySQL error 1142.
+Each enabled plugin gets a credentials file at
+`/etc/eiou/credentials/plugin-<id>.json` (mode `0640`, owned by
+`root:eiou-pc-<hash>`). The supervisor adds the plugin's pool user
+(`eiou-p-<same-hash>`) to that group on every apply, and the FPM pool's
+`open_basedir` is extended to admit the file's exact path. The plugin
+reads the file from inside `__dispatch.php` and constructs its own PDO,
+authenticated as `plugin_<snake_id>` — the same user whose MySQL grants
+are scoped to `owned_tables`. No gateway round-trip, no allow-list
+entry, no JSON-encoded query body. The master key never enters the pool
+process; the plaintext password does, but that password is bound to
+`@'localhost'` and useless without already being inside the pool
+(MySQL's grants are what gate the surface, not the password's secrecy).
 
-This is the path you use for anything the plugin *owns*: storing its own
-state, building its own indexes, running its own analytics on its own
-rows.
+What it sees: only the tables listed in this plugin's `owned_tables`.
+Core tables (`contacts`, `transactions`, `api_keys`, `payback_methods`,
+`balances`, …) and other plugins' tables are not just hidden — they
+are denied at the MySQL privilege check. `SELECT * FROM contacts` from
+this PDO returns MySQL error 1142.
 
-**Layer 2 — Host services via the `ServiceContainer` (`$container->getXxxService()`)**
+This is the route you use for anything the plugin *owns*: storing its
+own state, building its own indexes, running its own analytics on its
+own rows. See *Running queries* below for the dispatch-side code.
 
-What it sees: whatever each host service chooses to expose. Plugins
-receive `ServiceContainer` in `register()` and `boot()` and can call into
-any registered core service — `ContactService`, `TransactionService`,
-`BalanceService`, etc. Those services run inside the host process with
-full app-user database privileges and return whatever shape they
-normally return.
+**Route 2 — Host-curated services via `core_call($service, $method, …)`**
 
-This is the path you use for anything the plugin needs to *read* or
+What it sees: whatever each host service chooses to expose through methods
+marked `#[PluginCallable]`. Those methods run inside the wallet process
+with full app-user database privileges and return whatever shape they
+normally return. The plugin's manifest must allow-list each
+`<Service>.<method>` it intends to call in `core_services`.
+
+This is the route you use for anything the plugin needs to *read* or
 *react to* in core data. A notifications plugin doesn't query
-`transactions` directly — it subscribes to `TransactionEvents` and/or
-calls `TransactionService::getRecent()`. A custom payback-method type
-doesn't query `payback_methods` directly — it registers via
-`PaybackMethodTypeRegistry` and gets called by the host with the rows
-already loaded.
+`transactions` directly — it subscribes via `subscribes_to` and/or calls
+`TransactionLookupService::getRecent()`. A custom payback-method type
+doesn't query `payback_methods` directly — it registers via the
+manifest's `payback_method_types` and gets invoked with the rows already
+loaded.
 
 Why the split: the host services act as a typed, business-rule-aware
 boundary. They redact what shouldn't leave the core, gate sensitive
 operations behind sensitive-access, and stay stable across schema
-changes. A direct `SELECT * FROM api_keys` by a plugin would be a
+changes. A direct `SELECT * FROM api_keys` from a plugin would be a
 disaster on multiple axes (schema coupling, no redaction, no
 authorization, no audit) — `ApiKeyService::list()` returns hashed
 identifiers and never plaintext, regardless of caller.
@@ -476,22 +487,23 @@ What this means in practice:
 
 | Goal | Right path |
 | ---- | ---------- |
-| Read recent transactions | `TransactionService::getRecent()` |
-| Look up a contact by pubkey | `ContactService::getByPublicKey()` |
-| React to a sync event | subscribe to `SyncEvents::SYNC_COMPLETED` |
-| Store the plugin's own state | `getPluginPdo()` + own table |
+| Read recent transactions | `core_call('TransactionLookupService', 'getRecent', …)` |
+| Look up a contact by pubkey | `core_call('ContactService', 'getByPublicKey', …)` |
+| React to a sync event | declare `subscribes_to: ["sync.completed"]` in the manifest |
+| Store the plugin's own state | direct PDO against an `owned_tables` entry (see *Running queries*) |
 
 Common asks that are deliberately unreachable:
 
 - Reading all wallet keys — no service exposes plaintext private keys; the
-  PDO can't read the wallet table either.
+  per-plugin user can't read the wallet table either.
 - Reading API key plaintext — `ApiKeyService` returns only hashed
-  identifiers; the PDO can't read `api_keys` either.
+  identifiers; the per-plugin user can't read `api_keys` either.
 - `SELECT * FROM contacts` — privilege denied at MySQL.
 - Modifying another plugin's tables — privilege denied at MySQL.
 
 If a host service doesn't yet expose the data your plugin needs, the
-right move is to add or extend a service — not to widen MySQL grants.
+right move is to add or extend a `#[PluginCallable]` method — not to
+widen MySQL grants.
 
 ### Resource limits
 
@@ -507,40 +519,95 @@ The four `db_limits` keys map directly to MySQL's per-user resource caps:
 Defaults cap a runaway loop at roughly 3 queries per second sustained —
 non-restrictive for honest plugins, visible enough to halt a bug.
 
-### Getting a PDO
+### Running queries
 
-Use `ServiceContainer::getPluginPdo($pluginId)` from your `boot()` or
-runtime code:
+The plugin reads its credentials file from inside `__dispatch.php` and
+opens a PDO directly. Schema setup happens lazily the first time the
+plugin sees a relevant envelope (or once on `type: "cli"` from an
+install-time command) rather than at boot — there is no `boot()`
+callback running inside the sandbox.
 
 ```php
-class MyPlugin implements PluginInterface
-{
-    public function getName(): string    { return 'my-plugin'; }
-    public function getVersion(): string { return '1.0.0'; }
+// Inside __dispatch.php (runs as eiou-p-<hash> in the plugin's pool):
 
-    public function register(ServiceContainer $c): void {}
+function pluginPdo(PluginLog $log): ?PDO {
+    static $pdo = null;
+    if ($pdo !== null) return $pdo;
 
-    public function boot(ServiceContainer $container): void
-    {
-        $pdo = $container->getPluginPdo($this->getName());
-
-        // Create your tables (idempotent — called on every boot).
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS plugin_my_plugin_subscriptions (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                topic VARCHAR(64) NOT NULL,
-                created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6)
-            ) ENGINE=InnoDB
-        ");
+    $pluginId  = basename(__DIR__);
+    $credsPath = '/etc/eiou/credentials/plugin-' . $pluginId . '.json';
+    $raw       = @file_get_contents($credsPath);
+    if ($raw === false) {
+        $log->error('credentials file unreadable', ['path' => $credsPath]);
+        return null;
     }
+    $cfg = json_decode($raw, true);
+    if (!is_array($cfg) || !isset($cfg['host'], $cfg['database'], $cfg['username'], $cfg['password'])) {
+        $log->error('credentials file malformed');
+        return null;
+    }
+
+    try {
+        $dsn = "mysql:host={$cfg['host']};dbname={$cfg['database']};charset=utf8mb4";
+        $pdo = new PDO($dsn, $cfg['username'], $cfg['password'], [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
+    } catch (PDOException $e) {
+        $log->error('plugin PDO connect failed', ['error' => $e->getMessage()]);
+        return null;
+    }
+    return $pdo;
 }
+
+function ensureSchema(PluginLog $log): bool {
+    static $applied = false;
+    if ($applied) return true;
+    $pdo = pluginPdo($log);
+    if ($pdo === null) return false;
+    $pdo->exec(<<<SQL
+CREATE TABLE IF NOT EXISTS plugin_my_plugin_subscriptions (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    topic       VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+    UNIQUE KEY ux_topic (topic)
+) ENGINE=InnoDB
+SQL);
+    $applied = true;
+    return true;
+}
+
+// SELECT
+$stmt = pluginPdo($log)->prepare(
+    'SELECT id, topic FROM plugin_my_plugin_subscriptions WHERE topic = ?'
+);
+$stmt->execute([$topic]);
+$rows = $stmt->fetchAll();
+
+// INSERT / UPDATE / DELETE
+$stmt = pluginPdo($log)->prepare(
+    'INSERT IGNORE INTO plugin_my_plugin_subscriptions (topic) VALUES (?)'
+);
+$stmt->execute([$topic]);
+$insertedId = $pdo->lastInsertId();
+$affected   = $stmt->rowCount();
 ```
 
-The PDO is cached per-plugin for the lifetime of the request; repeated
-`getPluginPdo()` calls from the same request return the same connection.
+The PDO is local to the FPM worker, so transactions, prepared-statement
+caching, and `lastInsertId()` work the way they normally do —
+`BEGIN`/`COMMIT` around a multi-step write is fine when the plugin
+needs cross-statement atomicity.
 
-**Do not call `$container->getPdo()`.** That returns the root/app PDO —
-the credentials plugin users are specifically sandboxed away from.
+No `core_services` allow-list entry is needed for owned-table access —
+the path is filesystem + MySQL privileges. The credentials file is
+readable only to the plugin's own pool user (via `eiou-pc-<hash>` group
+membership) and only at one exact path under `/etc/eiou/credentials/`
+(the rest of the directory is outside the pool's `open_basedir`).
+Privileges are enforced at the MySQL layer — the per-plugin user can
+only touch the manifest's `owned_tables`, so `SELECT * FROM contacts`
+(or any other core table) is denied with MySQL error 1142 even though
+the PDO connection itself is unrestricted.
 
 ### Credential storage
 
@@ -649,10 +716,13 @@ open a MariaDB connection.
   on them. So a wallet pool compromise doesn't grant access to the
   on-disk credential files beyond what it already has via the DB
   directly.
-- Plugin FPM pools run as `eiou-p-<hex>` users and their
-  `open_basedir` doesn't admit `/etc/eiou/credentials/` anyway, so
-  one plugin can't read another plugin's credentials via the
-  plugin layer either.
+- Plugin FPM pools run as `eiou-p-<hex>` users. Each pool user is
+  added to its **own** `eiou-pc-<same-hex>` group on apply, and the
+  pool's `open_basedir` admits **its own** credentials file as an
+  exact path (no trailing slash, so the rest of
+  `/etc/eiou/credentials/` is outside basedir). A plugin can read its
+  own credentials file; reading a sibling plugin's is denied at both
+  the group layer and the basedir layer.
 - The file holds **plaintext**, not encrypted — sibling containers
   can't decrypt the wrapped form (they don't have the master key,
   by design) so the protection is purely filesystem-level.
@@ -790,8 +860,15 @@ class MyPlugin implements UninstallablePlugin
 
     public function onUninstall(ServiceContainer $container): void
     {
-        // Runs BEFORE MySQL revoke — full grants still available.
-        // Plugin's getPluginPdo() still returns a working connection.
+        // Runs BEFORE MySQL revoke — full grants still available, so
+        // the plugin's own PDO (constructed from
+        // `/etc/eiou/credentials/plugin-<id>.json` inside the pool,
+        // see *Running queries*) still works against `owned_tables`.
+        // Sandboxed plugins reach this hook through an
+        // `__dispatch.php` envelope with `type: "uninstall"`; the
+        // `$container` argument is retained on the interface for
+        // signature compatibility but the in-pool ServiceContainer
+        // cannot reach the master key or `dbconfig.json`.
         //
         // Typical uses: ping an external service to revoke a
         // subscription, purge a remote cache, write a final audit row.
@@ -1113,7 +1190,7 @@ comes from the gates below.
 
 ### Service
 
-`Eiou\Services\PluginInstallService` owns the validation and extraction
+`Eiou\Services\Plugins\PluginInstallService` owns the validation and extraction
 pipeline. The GUI's `pluginsUpload` action delegates to it. The CLI does
 not yet expose this — operators with shell access can already drop files in
 directly, so a CLI form would just duplicate the existing path.
@@ -1325,9 +1402,21 @@ class MyPlugin implements UpgradablePlugin
         string $oldVersion,
         string $newVersion
     ): void {
+        // Sandboxed plugins receive this hook through an
+        // `__dispatch.php` envelope with `type: "upgrade"`. Run schema
+        // migrations against the plugin's own PDO (constructed inside
+        // the pool from `/etc/eiou/credentials/plugin-<id>.json`, see
+        // *Running queries*); the `$container` argument is retained
+        // on the interface for signature compatibility but the in-pool
+        // ServiceContainer cannot reach the master key or
+        // `dbconfig.json`.
         if (version_compare($oldVersion, '1.1.0', '<')) {
-            $pdo = $container->getPluginPdo($this->getName());
-            $pdo->exec('ALTER TABLE plugin_my_plugin_keys ADD COLUMN expires_at INT NULL');
+            // From __dispatch.php on a "type: upgrade" envelope:
+            //
+            //   pluginPdo($log)->exec(
+            //     'ALTER TABLE plugin_my_plugin_keys '
+            //     . 'ADD COLUMN expires_at INT NULL'
+            //   );
         }
     }
 }

@@ -15,8 +15,8 @@ declare(strict_types=1);
 require_once '/app/eiou/Functions.php';
 
 use Eiou\Core\Application;
-use Eiou\Services\PluginGatewayController;
-use Eiou\Services\PluginGatewayTokenService;
+use Eiou\Services\Plugins\PluginGatewayController;
+use Eiou\Services\Plugins\PluginGatewayTokenService;
 use Eiou\Utils\Logger;
 
 header('Content-Type: application/json');

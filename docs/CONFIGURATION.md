@@ -61,7 +61,7 @@ Live under `/etc/eiou/config/` inside the container:
 
 `files/src/core/UserContext.php`. Per-session view of the merged config. Service-layer reads should always go through `UserContext::getX()` rather than re-parsing the JSON files; the getter handles the layer-3 → layer-2 → layer-1 fallback for fields the user hasn't overridden.
 
-Plugins MAY read `UserContext` but must NOT mutate it. Plugin per-plugin state goes through `Eiou\Services\PluginSessionStore` (session-scoped) or `PluginPdoFactory` (DB-scoped) — never into the JSON config files.
+Plugins MAY read `UserContext` but must NOT mutate it. Plugin per-plugin state goes through `Eiou\Services\Plugins\PluginSessionStore` (session-scoped) or `PluginPdoFactory` (DB-scoped) — never into the JSON config files.
 
 ---
 

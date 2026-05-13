@@ -340,7 +340,7 @@ elseif($request === "plugin"){
     $output->error('Plugin system not initialized', ErrorCodes::GENERAL_ERROR);
     exit(1);
   }
-  $pluginCliService = new \Eiou\Services\CliPluginService(
+  $pluginCliService = new \Eiou\Services\Plugins\CliPluginService(
     $app->pluginLoader,
     $app->services->getPluginUninstallService(),
     $app->services->getPluginUpgradeService($app->pluginLoader),

@@ -9,7 +9,7 @@ use Eiou\Utils\Security;
 use Eiou\Security\KeyEncryption;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
-use Eiou\Services\PluginLoader;
+use Eiou\Services\Plugins\PluginLoader;
 use Eiou\Services\NodeRestartService;
 use Eiou\Services\RateLimiterService;
 use Eiou\Processors\CleanupMessageProcessor;

@@ -316,7 +316,7 @@ class ServiceContainer implements ContainerInterface {
      * under `plugin_<id>_*` so plugins can't accidentally (or
      * deliberately) write to core session fields like
      * SessionKeys::AUTHENTICATED or SessionKeys::CSRF_TOKEN. See
-     * `Eiou\Services\PluginSessionStore` for the supported API and
+     * `Eiou\Services\Plugins\PluginSessionStore` for the supported API and
      * the trust-boundary discussion.
      *
      * Stores are memoised per plugin id — repeat calls with the same
@@ -529,9 +529,9 @@ class ServiceContainer implements ContainerInterface {
      * `plugin.<source>.<event>` to identify the origin and a plugin
      * cannot spoof another plugin's id.
      */
-    public function getPluginEventPublisher(): \Eiou\Services\PluginEventPublisher {
+    public function getPluginEventPublisher(): \Eiou\Services\Plugins\PluginEventPublisher {
         if (!isset($this->services['PluginEventPublisher'])) {
-            $this->services['PluginEventPublisher'] = new \Eiou\Services\PluginEventPublisher(
+            $this->services['PluginEventPublisher'] = new \Eiou\Services\Plugins\PluginEventPublisher(
                 \Eiou\Events\EventDispatcher::getInstance(),
                 Logger::getInstance()
             );
@@ -549,9 +549,9 @@ class ServiceContainer implements ContainerInterface {
      * driven by startup.sh's plugin_cron_poller — no HTTP request path
      * needs it.
      */
-    public function getPluginCronService(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginCronService {
+    public function getPluginCronService(\Eiou\Services\Plugins\PluginLoader $loader): \Eiou\Services\Plugins\PluginCronService {
         if (!isset($this->services['PluginCronService'])) {
-            $this->services['PluginCronService'] = new \Eiou\Services\PluginCronService(
+            $this->services['PluginCronService'] = new \Eiou\Services\Plugins\PluginCronService(
                 $loader,
                 $this->getPluginIpcForwarder($loader),
                 Logger::getInstance()
@@ -1146,9 +1146,9 @@ class ServiceContainer implements ContainerInterface {
      * Generates and stores the encrypted MySQL password for each plugin's
      * isolated DB user. See docs/PLUGINS.md (Database Isolation).
      */
-    public function getPluginCredentialService(): \Eiou\Services\PluginCredentialService {
+    public function getPluginCredentialService(): \Eiou\Services\Plugins\PluginCredentialService {
         if (!isset($this->services['PluginCredentialService'])) {
-            $this->services['PluginCredentialService'] = new \Eiou\Services\PluginCredentialService(
+            $this->services['PluginCredentialService'] = new \Eiou\Services\Plugins\PluginCredentialService(
                 $this->getRepositoryFactory()->get(\Eiou\Database\PluginCredentialRepository::class)
             );
         }
@@ -1165,9 +1165,9 @@ class ServiceContainer implements ContainerInterface {
      * PluginUninstallService on uninstall. See the class docblock
      * for the full trust model.
      */
-    public function getPluginCredentialsExportService(): \Eiou\Services\PluginCredentialsExportService {
+    public function getPluginCredentialsExportService(): \Eiou\Services\Plugins\PluginCredentialsExportService {
         if (!isset($this->services['PluginCredentialsExportService'])) {
-            $this->services['PluginCredentialsExportService'] = new \Eiou\Services\PluginCredentialsExportService(
+            $this->services['PluginCredentialsExportService'] = new \Eiou\Services\Plugins\PluginCredentialsExportService(
                 $this->getLogger()
             );
         }
@@ -1182,9 +1182,9 @@ class ServiceContainer implements ContainerInterface {
      * /etc/eiou/plugins/trusted-keys/ (operator-added). See
      * docs/PLUGINS.md (Plugin Signatures) for the trust model.
      */
-    public function getPluginSignatureVerifier(): \Eiou\Services\PluginSignatureVerifier {
+    public function getPluginSignatureVerifier(): \Eiou\Services\Plugins\PluginSignatureVerifier {
         if (!isset($this->services['PluginSignatureVerifier'])) {
-            $this->services['PluginSignatureVerifier'] = new \Eiou\Services\PluginSignatureVerifier();
+            $this->services['PluginSignatureVerifier'] = new \Eiou\Services\Plugins\PluginSignatureVerifier();
         }
         return $this->services['PluginSignatureVerifier'];
     }
@@ -1199,9 +1199,9 @@ class ServiceContainer implements ContainerInterface {
      *
      * See docs/PLUGINS.md (Database Isolation).
      */
-    public function getPluginDbUserService(): \Eiou\Services\PluginDbUserService {
+    public function getPluginDbUserService(): \Eiou\Services\Plugins\PluginDbUserService {
         if (!isset($this->services['PluginDbUserService'])) {
-            $this->services['PluginDbUserService'] = new \Eiou\Services\PluginDbUserService(
+            $this->services['PluginDbUserService'] = new \Eiou\Services\Plugins\PluginDbUserService(
                 $this->getPdo()
             );
         }
@@ -1220,9 +1220,9 @@ class ServiceContainer implements ContainerInterface {
      *
      * See docs/PLUGINS.md (Database Isolation).
      */
-    public function getPluginPdoFactory(): \Eiou\Services\PluginPdoFactory {
+    public function getPluginPdoFactory(): \Eiou\Services\Plugins\PluginPdoFactory {
         if (!isset($this->services['PluginPdoFactory'])) {
-            $this->services['PluginPdoFactory'] = new \Eiou\Services\PluginPdoFactory(
+            $this->services['PluginPdoFactory'] = new \Eiou\Services\Plugins\PluginPdoFactory(
                 $this->getPluginCredentialService()
             );
         }
@@ -1242,9 +1242,9 @@ class ServiceContainer implements ContainerInterface {
      * MySQL refuses new connections. Passing the loader explicitly
      * avoids any second visit to Application's bootstrap.
      */
-    public function getPluginIpcForwarder(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginIpcForwarder {
+    public function getPluginIpcForwarder(\Eiou\Services\Plugins\PluginLoader $loader): \Eiou\Services\Plugins\PluginIpcForwarder {
         if (!isset($this->services['PluginIpcForwarder'])) {
-            $this->services['PluginIpcForwarder'] = new \Eiou\Services\PluginIpcForwarder(
+            $this->services['PluginIpcForwarder'] = new \Eiou\Services\Plugins\PluginIpcForwarder(
                 $loader,
                 $this->getLogger()
             );
@@ -1257,9 +1257,9 @@ class ServiceContainer implements ContainerInterface {
      * lifecycle (eiou-p-<hash>) that a sandboxed plugin's FPM pool
      * runs as. See docs/PLUGINS.md (Sandboxing).
      */
-    public function getPluginUserService(): \Eiou\Services\PluginUserService {
+    public function getPluginUserService(): \Eiou\Services\Plugins\PluginUserService {
         if (!isset($this->services['PluginUserService'])) {
-            $this->services['PluginUserService'] = new \Eiou\Services\PluginUserService();
+            $this->services['PluginUserService'] = new \Eiou\Services\Plugins\PluginUserService();
         }
         return $this->services['PluginUserService'];
     }
@@ -1269,9 +1269,9 @@ class ServiceContainer implements ContainerInterface {
      * pool config so a sandboxed plugin runs in its own pool, as its
      * own UID, with open_basedir and disable_functions restricted.
      */
-    public function getPluginPoolService(): \Eiou\Services\PluginPoolService {
+    public function getPluginPoolService(): \Eiou\Services\Plugins\PluginPoolService {
         if (!isset($this->services['PluginPoolService'])) {
-            $this->services['PluginPoolService'] = new \Eiou\Services\PluginPoolService();
+            $this->services['PluginPoolService'] = new \Eiou\Services\Plugins\PluginPoolService();
         }
         return $this->services['PluginPoolService'];
     }
@@ -1281,9 +1281,9 @@ class ServiceContainer implements ContainerInterface {
      * location-block snippet that PluginPoolService bundles into its
      * supervisor request.
      */
-    public function getPluginNginxConfigService(): \Eiou\Services\PluginNginxConfigService {
+    public function getPluginNginxConfigService(): \Eiou\Services\Plugins\PluginNginxConfigService {
         if (!isset($this->services['PluginNginxConfigService'])) {
-            $this->services['PluginNginxConfigService'] = new \Eiou\Services\PluginNginxConfigService(
+            $this->services['PluginNginxConfigService'] = new \Eiou\Services\Plugins\PluginNginxConfigService(
                 $this->getAppConfig()->publicPluginRoutes
             );
         }
@@ -1298,10 +1298,10 @@ class ServiceContainer implements ContainerInterface {
      * The plugin must be disabled first — the service refuses to uninstall
      * an enabled plugin.
      */
-    public function getPluginUninstallService(): \Eiou\Services\PluginUninstallService {
+    public function getPluginUninstallService(): \Eiou\Services\Plugins\PluginUninstallService {
         if (!isset($this->services['PluginUninstallService'])) {
             $app = \Eiou\Core\Application::getInstance();
-            $this->services['PluginUninstallService'] = new \Eiou\Services\PluginUninstallService(
+            $this->services['PluginUninstallService'] = new \Eiou\Services\Plugins\PluginUninstallService(
                 $app->pluginLoader,
                 $this->getPluginCredentialService(),
                 $this->getPluginDbUserService(),
@@ -1328,9 +1328,9 @@ class ServiceContainer implements ContainerInterface {
      * operator who has signature mode set to 'require' can't sidestep
      * verification through the upload path.
      */
-    public function getPluginInstallService(): \Eiou\Services\PluginInstallService {
+    public function getPluginInstallService(): \Eiou\Services\Plugins\PluginInstallService {
         if (!isset($this->services['PluginInstallService'])) {
-            $this->services['PluginInstallService'] = new \Eiou\Services\PluginInstallService(
+            $this->services['PluginInstallService'] = new \Eiou\Services\Plugins\PluginInstallService(
                 '/etc/eiou/plugins',
                 $this->getPluginSignatureVerifier(),
                 \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
@@ -1360,9 +1360,9 @@ class ServiceContainer implements ContainerInterface {
      * until MariaDB rejects further connections. Same pattern (and
      * same reasoning) as `getPluginIpcForwarder`.
      */
-    public function getPluginUpgradeService(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginUpgradeService {
+    public function getPluginUpgradeService(\Eiou\Services\Plugins\PluginLoader $loader): \Eiou\Services\Plugins\PluginUpgradeService {
         if (!isset($this->services['PluginUpgradeService'])) {
-            $this->services['PluginUpgradeService'] = new \Eiou\Services\PluginUpgradeService(
+            $this->services['PluginUpgradeService'] = new \Eiou\Services\Plugins\PluginUpgradeService(
                 $this->getPluginInstallService(),
                 $loader,
                 $this->getPluginPoolService(),
