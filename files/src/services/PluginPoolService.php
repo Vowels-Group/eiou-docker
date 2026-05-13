@@ -533,14 +533,18 @@ EOT;
         $reqPath = "/tmp/eiou-routing-req-{$reqId}.json";
         $resPath = "/tmp/eiou-routing-res-{$reqId}.json";
 
-        // JSON_UNESCAPED_SLASHES so the supervisor's grep-based parser
-        // (fallback when jq is unavailable in the image) doesn't see
-        // backslash-slashed paths it then misinterprets as a path-traversal
-        // attempt. The shape stays valid JSON; jq + json_decode are
-        // indifferent.
+        // JSON_UNESCAPED_SLASHES + JSON_UNESCAPED_UNICODE so the
+        // supervisor's grep-based parser (fallback when jq is missing
+        // from the image) lands the raw bytes on disk. Without UNICODE,
+        // every non-ASCII char in the rendered pool config (em-dash,
+        // smart quotes, anything that lives in the template comments)
+        // gets escaped to \uXXXX and the supervisor's sed un-escape
+        // doesn't decode those — so the on-disk file has literal
+        // "—" text where the rendered config has "—", and
+        // isPoolUpToDate forever sees the file as drifted.
         $body = json_encode(
             array_merge($payload, ['ts' => time(), 'action' => $action]),
-            JSON_UNESCAPED_SLASHES
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
         );
         if ($body === false) {
             return ['status' => 'failed', 'error' => 'encode failed'];

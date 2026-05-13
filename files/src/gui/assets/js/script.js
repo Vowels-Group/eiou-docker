@@ -9808,9 +9808,20 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function statusBadge(status) {
             var label = status || 'unknown';
             var cls = 'status-badge status-unknown';
-            if (status === 'booted')        { cls = 'status-badge status-online';  label = 'Running'; }
+            if (status === 'booted' || status === 'sandboxed') {
+                // 'sandboxed' = running in its own FPM pool; from the
+                // operator's perspective it's the same "actively
+                // serving requests" state as 'booted', just for a
+                // sandboxed plugin instead of an in-process one.
+                cls = 'status-badge status-online';
+                label = 'Running';
+            }
             else if (status === 'failed')   { cls = 'badge-danger';                 label = 'Failed'; }
             else if (status === 'disabled') { cls = 'status-badge status-offline'; label = 'Disabled'; }
+            else if (status === 'legacy_unsupported') {
+                cls = 'badge-danger';
+                label = 'Unsupported (legacy)';
+            }
             else if (status === 'registered' || status === 'discovered') {
                 cls = 'status-badge status-partial'; label = 'Loaded';
             }
@@ -10048,11 +10059,42 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     // follow-up toggle decisions see the current desired state.
                     var p = findByName(name);
                     if (p) p.enabled = enabled;
+                    // Also reflect the new status so the dot / badge
+                    // update locally without waiting for a full reload.
+                    // Sandboxed plugins toggle directly between
+                    // 'sandboxed' and 'disabled'; in-process plugins
+                    // keep their old behaviour until next restart.
+                    if (p && p.sandboxed) {
+                        p.status = enabled ? 'sandboxed' : 'disabled';
+                    }
                     updateRestartBanner();
+                    // Force the checkbox visual to match the desired
+                    // state (the user already flipped it, but this
+                    // protects against any double-click / race where
+                    // the visual drifts from intent).
+                    var cbSync = document.querySelector(
+                        'input[data-plugin="' + name.replace(/"/g, '') + '"]'
+                    );
+                    if (cbSync) cbSync.checked = enabled;
+                    // Refresh the row so the status dot / version /
+                    // description re-render against the new state.
+                    renderList(lastList);
                     if (typeof showToast === 'function') {
-                        var msg = (p && isDivergent(p))
-                            ? name + ' — restart the node for the change to take effect.'
-                            : name + ' — matches the current runtime, no restart needed.';
+                        var msg;
+                        if (p && p.sandboxed) {
+                            // Sandboxed plugins take effect immediately
+                            // via the supervisor's graceful FPM + nginx
+                            // reload. Wording emphasises the new state
+                            // rather than the absence of further action.
+                            msg = enabled
+                                ? name + ' is now active. Sandboxed FPM pool started.'
+                                : name + ' is now inactive. Sandboxed FPM pool stopped.';
+                        } else {
+                            // Legacy in-process plugin — needs node restart.
+                            msg = (p && isDivergent(p))
+                                ? name + ' — restart the node for the change to take effect.'
+                                : name + ' — matches the current runtime, no restart needed.';
+                        }
                         showToast(
                             enabled ? 'Plugin enabled' : 'Plugin disabled',
                             msg,
@@ -10230,7 +10272,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             '</label>' +
                         '</div>' +
                         '<div class="text-muted text-sm" style="margin-top:0.75rem">' +
-                            'Toggles persist immediately but take effect after a node restart.' +
+                            (p.sandboxed
+                                ? 'Toggles take effect immediately — the plugin\'s FPM pool starts or stops gracefully via the supervisor.'
+                                : 'Toggles persist immediately but take effect after a node restart.') +
                         '</div>' +
                         errBlock +
                         // Uninstall is a permanent action — only offered when
