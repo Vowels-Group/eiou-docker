@@ -366,7 +366,7 @@ class PluginIpcForwarder
             if ($response === null) {
                 $output->error(
                     "Plugin '{$pluginId}' did not respond to the CLI dispatch",
-                    \Eiou\Cli\ErrorCodes::GENERAL_ERROR ?? 'plugin_unavailable',
+                    \Eiou\Core\ErrorCodes::GENERAL_ERROR,
                     502
                 );
                 return;

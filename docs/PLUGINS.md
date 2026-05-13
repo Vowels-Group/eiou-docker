@@ -2141,6 +2141,40 @@ path is the event-publish + operator-approval flow, where the
 operator is the one clicking through the existing wallet send GUI
 and the canonical record is the wallet's own `transactions` table.
 
+### Where plugin runtime files (caches, locks, state files) live
+
+**Not your own plugin folder.** `/etc/eiou/plugins/<your-id>/` is
+owned by `www-data` (the wallet pool extracted the zip and chowned
+it that way during install). Your pool runs as `eiou-p-<hash>`, a
+different uid that has *read* access to those files (via the
+filesystem's other-permission bits) but no *write* access. A naïve
+`file_put_contents(__DIR__ . '/cache/foo.json', …)` from your
+dispatcher returns false with EACCES.
+
+**Use the scratch dir instead.** Each sandboxed pool gets a
+private writable directory at
+`/var/lib/eiou/plugin-scratch/<your-system-user>/`, created by the
+supervisor on every `apply-pool` and chowned `<your-system-user>:<your-system-user>`
+with mode `0700`. It's the only path under `/var/` your `open_basedir`
+admits — perfect home for SQLite databases, decoded caches, lock
+files, last-tick timestamps, anything the pool itself produces.
+Derive the directory from the plugin id without trusting any
+external input:
+
+    $systemUser = 'eiou-p-' . substr(hash('sha256', basename(__DIR__)), 0, 8);
+    $scratch    = '/var/lib/eiou/plugin-scratch/' . $systemUser;
+
+The scratch dir survives container restarts (it's on the
+`/var/lib/eiou` volume) and survives plugin upgrades, but is torn
+down on uninstall.
+
+If you need durable, queryable state — schedule rows, customer
+records, an audit log the operator can inspect via MySQL CLI — use
+your per-plugin MySQL user (see [Database Isolation](#database-isolation))
+rather than scratch. SQLite-in-scratch is the right tool for
+plugin-private caches that don't need to outlive the pool's idle
+recycle; MySQL is the right tool for everything else.
+
 ### What you CAN do as a sandboxed plugin
 
 - Subscribe to events; emit log lines via the `_log` envelope.

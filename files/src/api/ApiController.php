@@ -2396,7 +2396,10 @@ class ApiController {
         }
 
         if (!$loader->setEnabled($name, $enabled)) {
-            return $this->errorResponse('Failed to persist plugin state', 500, 'persist_failed');
+            $failure = $loader->getLastSetEnabledFailure();
+            $message = $failure['message'] ?? 'Plugin state change failed';
+            $code = isset($failure['stage']) ? ('plugin_' . $failure['stage'] . '_failed') : 'persist_failed';
+            return $this->errorResponse($message, 500, $code);
         }
 
         \Eiou\Utils\Logger::getInstance()->info('plugin_toggled_via_api', [

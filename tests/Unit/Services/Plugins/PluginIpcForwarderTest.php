@@ -326,6 +326,36 @@ class PluginIpcForwarderTest extends TestCase
     }
 
     #[Test]
+    public function cliDispatchFailureReportsViaOutputError(): void
+    {
+        // The CLI handler's dispatch-null branch references
+        // \Eiou\Core\ErrorCodes::GENERAL_ERROR. A typo there (e.g.
+        // \Eiou\Cli\ErrorCodes) surfaces as a fatal "Class not found"
+        // exactly when something has already gone wrong, masking the
+        // real failure. Exercise the branch explicitly.
+        $this->nextResponse = [
+            'ok' => false, 'status' => 502,
+            'body' => ['ok' => false, 'error' => 'transport failed'],
+        ];
+        $cli = new PluginCliRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('demo', ['cli_commands' => [['name' => 'demo']]]),
+        ]);
+        $this->svc->registerAll($this->hooks, null, null, null, null, $cli);
+
+        $output = $this->createMock(\Eiou\Cli\CliOutputManager::class);
+        $output->expects($this->once())
+            ->method('error')
+            ->with(
+                $this->stringContains("Plugin 'demo' did not respond"),
+                \Eiou\Core\ErrorCodes::GENERAL_ERROR,
+                502
+            );
+
+        $cli->dispatch('demo', ['demo'], $output);
+    }
+
+    #[Test]
     public function cliRegistryIsOptional(): void
     {
         $this->loader->method('listAllPlugins')->willReturn([

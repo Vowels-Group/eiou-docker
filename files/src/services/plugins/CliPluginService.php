@@ -122,10 +122,14 @@ class CliPluginService
         }
 
         if (!$this->loader->setEnabled($name, $enabled)) {
-            $output->error(
-                'Failed to persist plugin state',
-                ErrorCodes::GENERAL_ERROR
-            );
+            // Surface the actual failure stage rather than the legacy
+            // generic "Failed to persist plugin state" string, which
+            // historically lit up for three distinct failure modes
+            // (refused, isolation, sandbox, state) and made operator
+            // diagnostics needlessly hard.
+            $failure = $this->loader->getLastSetEnabledFailure();
+            $message = $failure['message'] ?? 'Plugin state change failed (no detail available)';
+            $output->error($message, ErrorCodes::GENERAL_ERROR);
             return;
         }
 
