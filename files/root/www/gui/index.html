@@ -130,6 +130,12 @@ $pluginController = $app->pluginLoader !== null
         // path, so the null fallback is acceptable there.
         $app->services !== null
             ? $app->services->getPluginInstallService()
+            : null,
+        // Upgrade service drives pluginsUploadAsUpgrade and pluginsUpgrade
+        // (the bundled-version upgrade). Same gating as the install
+        // service — null in the no-wallet bootstrap path.
+        $app->services !== null
+            ? $app->services->getPluginUpgradeService()
             : null
     )
     : null;

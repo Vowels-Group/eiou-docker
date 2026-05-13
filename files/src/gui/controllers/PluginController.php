@@ -8,6 +8,7 @@ use Eiou\Gui\Includes\Session;
 use Eiou\Core\UserContext;
 use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\PluginInstallService;
+use Eiou\Services\PluginUpgradeService;
 use Eiou\Services\PluginLoader;
 use Eiou\Services\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
@@ -34,19 +35,22 @@ class PluginController
     private RestartRequestService $restartRequester;
     private ?PluginUninstallService $uninstallService;
     private ?PluginInstallService $installService;
+    private ?PluginUpgradeService $upgradeService;
 
     public function __construct(
         Session $session,
         PluginLoader $loader,
         ?RestartRequestService $restartRequester = null,
         ?PluginUninstallService $uninstallService = null,
-        ?PluginInstallService $installService = null
+        ?PluginInstallService $installService = null,
+        ?PluginUpgradeService $upgradeService = null
     ) {
         $this->session = $session;
         $this->loader = $loader;
         $this->restartRequester = $restartRequester ?? new RestartRequestService();
         $this->uninstallService = $uninstallService;
         $this->installService = $installService;
+        $this->upgradeService = $upgradeService;
     }
 
     /**
@@ -61,6 +65,8 @@ class PluginController
         'pluginChangelog',
         'pluginsUninstall',
         'pluginsUpload',
+        'pluginsUploadAsUpgrade',
+        'pluginsUpgrade',
         'pluginsUploadLimits',
     ];
 
@@ -151,6 +157,12 @@ class PluginController
                 case 'pluginsUpload':
                     $this->uploadPlugin();
                     break;
+                case 'pluginsUploadAsUpgrade':
+                    $this->uploadAsUpgrade();
+                    break;
+                case 'pluginsUpgrade':
+                    $this->upgradeBundled();
+                    break;
                 case 'pluginsUploadLimits':
                     $this->reportUploadLimits();
                     break;
@@ -171,6 +183,26 @@ class PluginController
     private function listPlugins(): void
     {
         $plugins = $this->loader->listAllPlugins();
+
+        // Merge bundled-upgrade availability into each row when the
+        // upgrade service is wired. Operators see an "Upgrade" affordance
+        // next to plugins whose image-baked version is newer than what's
+        // installed in the volume. The merge is additive — rows without
+        // a bundled-newer counterpart are untouched.
+        if ($this->upgradeService !== null) {
+            $available = $this->upgradeService->availableBundledUpgrades();
+            foreach ($plugins as &$row) {
+                $name = $row['name'] ?? null;
+                if (is_string($name) && isset($available[$name])) {
+                    $row['upgrade_available'] = [
+                        'installed_version' => $available[$name]['installed_version'],
+                        'bundled_version'   => $available[$name]['bundled_version'],
+                    ];
+                }
+            }
+            unset($row);
+        }
+
         $this->respond([
             'success' => true,
             'plugins' => $plugins,
@@ -532,6 +564,181 @@ class PluginController
             $payload = array_merge($payload, $extras);
         }
         $this->respond($payload, $status);
+    }
+
+    // =========================================================================
+    // Upgrade actions
+    // =========================================================================
+
+    /**
+     * AJAX action: `pluginsUploadAsUpgrade`. Same upload surface as
+     * `pluginsUpload`, but routed through the upgrade flow instead of
+     * the install flow. The GUI calls this when the user explicitly
+     * confirms "Replace 1.2 with 1.3" after a regular `pluginsUpload`
+     * returned 409 already_installed with new_version/current_version
+     * context — a two-step confirmation so operators can't accidentally
+     * blow away a stateful plugin by re-uploading.
+     *
+     * Error envelopes mirror the install path's set, plus:
+     *   - 400 not_installed          — no installed plugin with that id
+     *   - 400 same_version           — incoming version equals installed
+     *   - 400 downgrade_refused      — incoming version is older
+     *   - 400 min_upgradable_violation — installed version too old per
+     *                                    the new manifest's
+     *                                    min_upgradable_from declaration
+     *   - 500 upgrade_unavailable    — upgrade service not wired
+     *   - 500 upgrade_failed         — filesystem / hook / supervisor failure
+     */
+    private function uploadAsUpgrade(): void
+    {
+        if ($this->upgradeService === null) {
+            $this->respondError(
+                'upgrade_unavailable',
+                'Plugin upgrade service is not wired in this context.',
+                500
+            );
+        }
+
+        $file = $_FILES['plugin_zip'] ?? null;
+        if (!is_array($file)) {
+            $this->respondError('invalid_upload', 'No file uploaded (expected field: plugin_zip)', 400);
+        }
+        $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($err !== UPLOAD_ERR_OK) {
+            $this->respondError(
+                'invalid_upload',
+                'Upload failed: ' . $this->describeUploadError($err),
+                400
+            );
+        }
+        $tmpPath = (string) ($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !$this->isUploadedFile($tmpPath)) {
+            $this->respondError('invalid_upload', 'Upload did not come from this request', 400);
+        }
+        $originalName = (string) ($file['name'] ?? '');
+
+        try {
+            $result = $this->upgradeService->upgradeFromZip($tmpPath, $originalName);
+        } catch (\InvalidArgumentException $e) {
+            // Map specific upgrade-refused messages to dedicated error
+            // codes so the GUI can render the right "why" without
+            // parsing free-text.
+            $msg = $e->getMessage();
+            $code = $this->classifyUpgradeRefusal($msg);
+            $this->respondError($code, $msg, 400);
+        } catch (\RuntimeException $e) {
+            $this->respondError('upgrade_failed', $e->getMessage(), 500);
+        } catch (Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'context' => 'plugin_upload_as_upgrade',
+                'original_filename' => $originalName,
+            ]);
+            $this->respondError('upgrade_failed', 'Unexpected error during upgrade', 500);
+        }
+
+        Logger::getInstance()->info('plugin_upgraded_via_gui_zip', [
+            'plugin' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+        ]);
+
+        $this->respond([
+            'success' => true,
+            'plugin_id' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+            'steps' => $result['steps'],
+            // The new plugin code is on disk and (if enabled) the FPM
+            // pool was reloaded. Enable-flag flips persist immediately
+            // for plugins that were already enabled; the wallet pool's
+            // own service graph might still reference cached state, so
+            // a restart picks up changes to register()/boot() bindings
+            // the new version may have altered.
+            'restart_required' => true,
+            'message' => "Plugin upgraded: {$result['plugin_id']} ({$result['old_version']} → {$result['new_version']}). Old version preserved at {$result['backup_dir']} for rollback.",
+        ]);
+    }
+
+    /**
+     * AJAX action: `pluginsUpgrade`. Operator clicks the "Upgrade
+     * available" affordance on a plugin row in the GUI; the row already
+     * surfaces the bundled-newer fact via the listPlugins enrichment, so
+     * by the time this action fires the operator has already seen the
+     * version delta.
+     *
+     * Request body: `plugin=<id>`. Same error-code shape as
+     * uploadAsUpgrade plus a couple bundle-specific cases.
+     */
+    private function upgradeBundled(): void
+    {
+        if ($this->upgradeService === null) {
+            $this->respondError(
+                'upgrade_unavailable',
+                'Plugin upgrade service is not wired in this context.',
+                500
+            );
+        }
+
+        $name = $_POST['plugin'] ?? '';
+        if (!is_string($name) || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $this->respondError(
+                'invalid_plugin_name',
+                'plugin must be kebab-case, 1-64 chars',
+                400
+            );
+        }
+
+        try {
+            $result = $this->upgradeService->upgradeFromBundle($name);
+        } catch (\InvalidArgumentException $e) {
+            $msg = $e->getMessage();
+            $code = $this->classifyUpgradeRefusal($msg);
+            $this->respondError($code, $msg, 400);
+        } catch (\RuntimeException $e) {
+            $this->respondError('upgrade_failed', $e->getMessage(), 500);
+        } catch (Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'context' => 'plugin_upgrade_bundled',
+                'plugin' => $name,
+            ]);
+            $this->respondError('upgrade_failed', 'Unexpected error during upgrade', 500);
+        }
+
+        Logger::getInstance()->info('plugin_upgraded_via_gui_bundle', [
+            'plugin' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+        ]);
+
+        $this->respond([
+            'success' => true,
+            'plugin_id' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+            'steps' => $result['steps'],
+            'restart_required' => true,
+            'message' => "Plugin upgraded: {$result['plugin_id']} ({$result['old_version']} → {$result['new_version']}). Old version preserved at {$result['backup_dir']} for rollback.",
+        ]);
+    }
+
+    /**
+     * Map an InvalidArgumentException message from PluginUpgradeService
+     * to a stable error code the GUI's JS can pivot on. The service's
+     * messages are stable strings; we match on substrings to avoid
+     * locking the controller to verbatim text.
+     */
+    private function classifyUpgradeRefusal(string $msg): string
+    {
+        if (stripos($msg, 'not installed') !== false)          return 'not_installed';
+        if (stripos($msg, 'already at version') !== false)     return 'same_version';
+        if (stripos($msg, 'Refusing downgrade') !== false)     return 'downgrade_refused';
+        if (stripos($msg, 'min_upgradable_from') !== false)    return 'min_upgradable_violation';
+        if (stripos($msg, 'No bundled version') !== false)     return 'no_bundle';
+        return 'upgrade_refused';
     }
 }
 
