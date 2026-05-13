@@ -413,6 +413,20 @@ class PluginLoader
                 'sandboxed' => $sandboxed,
             ];
 
+            // Optional upgrade-compatibility floor. When the upgrade
+            // service runs, it refuses to apply this manifest if the
+            // currently-installed version is below this floor — the
+            // plugin author declares "I cannot migrate state from
+            // below version X." Validated as a non-empty string here;
+            // PluginUpgradeService hands it to version_compare() at
+            // upgrade time so the comparison semantics are deferred
+            // (we don't try to parse semver up front).
+            if (isset($manifest['min_upgradable_from'])
+                && is_string($manifest['min_upgradable_from'])
+                && $manifest['min_upgradable_from'] !== '') {
+                $row['min_upgradable_from'] = $manifest['min_upgradable_from'];
+            }
+
             // Hard-deprecation surface — non-sandboxed plugins are no
             // longer loaded at all. The flag tells the GUI / CLI to
             // render them as "unsupported until migrated".
@@ -821,6 +835,26 @@ class PluginLoader
         // Stable order so the rendered snippet diffs cleanly between calls.
         usort($entries, fn(array $a, array $b): int => strcmp($a['plugin_id'], $b['plugin_id']));
 
+        return [
+            $this->nginxConfigService->renderSnippet($entries),
+            $this->nginxConfigService->renderZones($entries),
+        ];
+    }
+
+    /**
+     * Render the nginx snippet + zones for the current sandboxed-and-enabled
+     * plugin set as it appears in on-disk state right now — no delta
+     * applied. Used by PluginUpgradeService when re-applying a pool
+     * after replacing a plugin's code: the route shape hasn't changed,
+     * but the re-apply is what triggers the supervisor's SIGUSR2 to
+     * FPM so the new code is picked up by fresh workers.
+     *
+     * @return array{0:string, 1:string} [snippet, zones]
+     */
+    public function renderActiveSandboxArtifacts(): array
+    {
+        $entries = $this->collectSandboxedRouteEntries();
+        usort($entries, fn(array $a, array $b): int => strcmp($a['plugin_id'], $b['plugin_id']));
         return [
             $this->nginxConfigService->renderSnippet($entries),
             $this->nginxConfigService->renderZones($entries),

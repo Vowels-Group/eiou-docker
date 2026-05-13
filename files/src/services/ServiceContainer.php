@@ -1235,6 +1235,36 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginUpgradeService instance.
+     *
+     * Drives the upgrade flow for an already-installed plugin: validates
+     * the new bundle (zip or image-baked), atomically swaps the on-disk
+     * directory, runs the plugin's onUpgrade hook if implemented,
+     * reconciles MySQL grants against the new manifest, re-exports
+     * credentials, and reloads the FPM pool. The plugin's existing DB
+     * tables, user, credentials, and gateway token are preserved
+     * across the upgrade — install-then-uninstall would lose all of
+     * them, which is why this is a separate service.
+     */
+    public function getPluginUpgradeService(): \Eiou\Services\PluginUpgradeService {
+        if (!isset($this->services['PluginUpgradeService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PluginUpgradeService'] = new \Eiou\Services\PluginUpgradeService(
+                $this->getPluginInstallService(),
+                $app->pluginLoader,
+                $this->getPluginPoolService(),
+                $this->getPluginUserService(),
+                $this->getPluginDbUserService(),
+                $this->getPluginCredentialService(),
+                $this->getPluginCredentialsExportService(),
+                $this,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginUpgradeService'];
+    }
+
+    /**
      * Convenience wrapper that returns a PDO authenticated as the given
      * plugin's MySQL user. Identical to calling
      * `$container->getPluginPdoFactory()->getFor($pluginId)`. Cached

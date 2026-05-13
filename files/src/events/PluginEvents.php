@@ -98,4 +98,24 @@ class PluginEvents
      *   - steps: array    - Per-step status map: 'ok' / 'skipped' / 'error:<msg>'
      */
     public const PLUGIN_UNINSTALLED = 'plugin.uninstalled';
+
+    /**
+     * Dispatched after a successful plugin upgrade. The new plugin
+     * directory is in place, the onUpgrade hook (if implemented) has
+     * run, MySQL grants have been reconciled against the new manifest's
+     * owned_tables, and the FPM pool has been reloaded if the plugin
+     * was enabled at upgrade time. The old plugin directory is
+     * preserved at `<pluginDir>.backup-<oldver>-<ts>/` for rollback.
+     *
+     * NOT dispatched for partial / rolled-back upgrades — those throw
+     * before reaching the dispatch site so subscribers never observe a
+     * "half upgraded" state.
+     *
+     * Event data:
+     *   - name: string         — Plugin name
+     *   - old_version: string  — Version recorded in the previous manifest
+     *   - new_version: string  — Version in the new manifest
+     *   - source: string       — Origin of the new bundle: 'zip_upload' or 'bundled'
+     */
+    public const PLUGIN_UPGRADED = 'plugin.upgraded';
 }
