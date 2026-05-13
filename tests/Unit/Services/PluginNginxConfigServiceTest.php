@@ -255,6 +255,53 @@ class PluginNginxConfigServiceTest extends TestCase
     }
 
     #[Test]
+    public function publicRouteCorsHidesUpstreamCorsHeaders(): void
+    {
+        // A plugin handler that emits its own `Access-Control-Allow-Origin: *`
+        // could fight the host's allow-list and produce a CORS-broken
+        // response. fastcgi_hide_header drops the upstream value so the
+        // host's add_header is the only ACAO the client sees.
+        $onSvc = new PluginNginxConfigService(true);
+        $snippet = $onSvc->renderSnippet([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [
+                    [
+                        'method' => 'POST',
+                        'action' => 'chat',
+                        'cors_allowed_origins' => ['https://example.com'],
+                    ],
+                ],
+            ],
+        ]);
+        $this->assertStringContainsString('fastcgi_hide_header Access-Control-Allow-Origin', $snippet);
+        $this->assertStringContainsString('fastcgi_hide_header Access-Control-Allow-Methods', $snippet);
+        $this->assertStringContainsString('fastcgi_hide_header Access-Control-Allow-Headers', $snippet);
+        $this->assertStringContainsString('fastcgi_hide_header Access-Control-Allow-Credentials', $snippet);
+        $this->assertStringContainsString('fastcgi_hide_header Access-Control-Expose-Headers', $snippet);
+        $this->assertStringContainsString('fastcgi_hide_header Access-Control-Max-Age', $snippet);
+        $this->assertStringContainsString('fastcgi_hide_header Vary', $snippet);
+    }
+
+    #[Test]
+    public function publicRouteWithoutCorsDoesNotHideHeaders(): void
+    {
+        // A route without CORS configured should pass plugin response
+        // headers through unmolested. Hide-header is a CORS-specific
+        // hardening, not a blanket header strip.
+        $onSvc = new PluginNginxConfigService(true);
+        $snippet = $onSvc->renderSnippet([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [['method' => 'POST', 'action' => 'chat']],
+            ],
+        ]);
+        $this->assertStringNotContainsString('fastcgi_hide_header', $snippet);
+    }
+
+    #[Test]
     public function publicRouteCorsRendererDropsMalformedOrigin(): void
     {
         // Manifest validator should already drop these, but the renderer

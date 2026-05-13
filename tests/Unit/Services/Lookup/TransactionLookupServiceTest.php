@@ -100,6 +100,31 @@ class TransactionLookupServiceTest extends TestCase
         $this->assertSame([], $this->svc->getReceivedUserTransactions());
     }
 
+    public function testGetReceivedUserTransactionsCapsLimitAtMaxPageLimit(): void
+    {
+        // A plugin asking for 1_000_000 rows should not be able to
+        // bulk-dump the entire history — the service caps the request
+        // at MAX_PAGE_LIMIT before it reaches the repository.
+        $this->repo->expects($this->once())
+            ->method('getReceivedUserTransactions')
+            ->with(\Eiou\Services\Lookup\TransactionLookupService::MAX_PAGE_LIMIT, null)
+            ->willReturn([]);
+
+        $this->svc->getReceivedUserTransactions(1_000_000);
+    }
+
+    public function testGetReceivedUserTransactionsClampsNegativeLimitToZero(): void
+    {
+        // A negative $limit is nonsensical but mustn't pass through
+        // verbatim (some PDO drivers treat negative as unbounded).
+        $this->repo->expects($this->once())
+            ->method('getReceivedUserTransactions')
+            ->with(0, null)
+            ->willReturn([]);
+
+        $this->svc->getReceivedUserTransactions(-5);
+    }
+
     // =========================================================================
     // #[PluginCallable] attribute coverage — every method exposed to the
     // gateway MUST carry the attribute. Without this assertion, a refactor

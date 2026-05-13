@@ -185,6 +185,21 @@ class PluginNginxConfigService
             foreach ($corsOrigins as $origin) {
                 $out[] = "    if (\$http_origin = \"{$origin}\") { set \$cors_origin \$http_origin; }";
             }
+            // Drop any CORS headers the plugin handler might emit so
+            // the host's allow-list is the only Access-Control-* value
+            // the client ever sees. A plugin that emitted its own
+            // `Access-Control-Allow-Origin: *` couldn't actually widen
+            // CORS — browsers reject duplicate ACAO headers — but the
+            // resulting CORS-broken response would mask whether the
+            // plugin or the host was misconfigured. Hiding the
+            // upstream value keeps the host's intent authoritative.
+            $out[] = "    fastcgi_hide_header Access-Control-Allow-Origin;";
+            $out[] = "    fastcgi_hide_header Access-Control-Allow-Methods;";
+            $out[] = "    fastcgi_hide_header Access-Control-Allow-Headers;";
+            $out[] = "    fastcgi_hide_header Access-Control-Allow-Credentials;";
+            $out[] = "    fastcgi_hide_header Access-Control-Expose-Headers;";
+            $out[] = "    fastcgi_hide_header Access-Control-Max-Age;";
+            $out[] = "    fastcgi_hide_header Vary;";
             $out[] = "    add_header Access-Control-Allow-Origin  \$cors_origin always;";
             $out[] = "    add_header Access-Control-Allow-Methods \"{$method}, OPTIONS\" always;";
             $out[] = "    add_header Access-Control-Allow-Headers \"Authorization, Content-Type\" always;";

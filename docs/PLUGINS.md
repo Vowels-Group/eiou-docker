@@ -560,6 +560,30 @@ reconcile (so a `/etc/eiou` volume recreation or manual file
 deletion self-heals on the next boot). It is removed on plugin
 disable and on uninstall.
 
+**Operator obligation when retiring a plugin with a sibling:**
+
+`groupdel` refuses to remove a group with live members. If the
+operator added a sibling-container uid to `eiou-pc-<hex>` and then
+uninstalls the plugin without first removing that uid from the
+group, the supervisor's `groupdel` is rejected, the group persists,
+and the sibling uid retains its group membership. If the same
+plugin id is later reinstalled, the group already exists with the
+sibling still attached — meaning the sibling would inherit access
+to the new plugin's credentials without the operator opting in
+again. Two ways to avoid this:
+
+- **Recommended.** Detach the sibling before uninstall: stop the
+  sibling container, then `gpasswd -d <sibling-uid-name>
+  eiou-pc-<hex>` to remove it from the group, then `eiou plugin
+  uninstall <name>`. The supervisor's `groupdel` succeeds and the
+  group is fully torn down.
+
+- **Defensive.** If you only operate one set of plugins on a
+  host, reusing a plugin id with a new author / new database
+  schema is uncommon — but if you do reuse ids, also run
+  `getent group eiou-pc-<hex>` after uninstall to spot any
+  lingering members and clean them up before reinstalling.
+
 ### Boot-time reconciliation
 
 On every node boot, after the master key is loaded and before plugins'

@@ -36,6 +36,17 @@ use Eiou\Database\TransactionRepository;
  */
 class TransactionLookupService
 {
+    /** Hard cap on bulk reads. The repository accepts arbitrary
+     *  `$limit` values, which would let a plugin pull the entire
+     *  received-transaction history in one call — a bulk-exfiltration
+     *  primitive even though the same data is available incrementally
+     *  via `transaction.received` events. The cap aligns this service
+     *  with the surface policy ("prefer narrow lookups over bulk
+     *  listings"); a plugin needing more rows paginates by calling
+     *  again with the next page.
+     */
+    public const MAX_PAGE_LIMIT = 1000;
+
     private TransactionRepository $repository;
 
     public function __construct(TransactionRepository $repository)
@@ -67,9 +78,10 @@ class TransactionLookupService
         return $this->repository->isCompletedByTxid($txid);
     }
 
-    #[PluginCallable(description: 'List the most-recent received transactions for the wallet user, optionally filtered by currency. Bounded by $limit.')]
+    #[PluginCallable(description: 'List the most-recent received transactions for the wallet user, optionally filtered by currency. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value.')]
     public function getReceivedUserTransactions(int $limit = 10, ?string $currency = null): array
     {
-        return $this->repository->getReceivedUserTransactions($limit, $currency);
+        $bounded = max(0, min($limit, self::MAX_PAGE_LIMIT));
+        return $this->repository->getReceivedUserTransactions($bounded, $currency);
     }
 }
