@@ -223,6 +223,14 @@ class PluginLoader
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
+            if (self::isUpgradeBackupDir($entry)) {
+                // Upgrade backup snapshots ("<id>.backup-<ver>-<ts>")
+                // live alongside live plugins so operators can ls the
+                // dir and find both. They carry a copy of the old
+                // manifest with the same plugin name, which would
+                // otherwise collide with the live plugin on discover.
+                continue;
+            }
             $pluginPath = $this->pluginDir . '/' . $entry;
             if (!is_dir($pluginPath)) {
                 continue;
@@ -377,6 +385,12 @@ class PluginLoader
         $entries = @scandir($this->pluginDir) ?: [];
         foreach ($entries as $entry) {
             if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            if (self::isUpgradeBackupDir($entry)) {
+                // See discover() for the rationale — backup snapshots
+                // co-located with live plugins must be filtered out so
+                // they don't surface as duplicate-named plugins.
                 continue;
             }
             $manifestPath = $this->pluginDir . '/' . $entry . '/plugin.json';
@@ -901,6 +915,22 @@ class PluginLoader
             }
         }
         return $result;
+    }
+
+    /**
+     * Detect directory names that PluginUpgradeService creates when
+     * snapshotting an old plugin during upgrade ("<id>.backup-<ver>-
+     * <YYYYMMDD-HHMMSS>"). The scan loops skip these so a backup of
+     * `hello-eiou` doesn't surface as a duplicate "hello-eiou" plugin
+     * (its manifest carries the same `name` field). Anchored on the
+     * exact shape PluginUpgradeService produces; renaming a backup
+     * out of this pattern (e.g. for long-term retention) re-exposes
+     * it to the loader, which is fine because such a rename was an
+     * operator decision.
+     */
+    public static function isUpgradeBackupDir(string $entry): bool
+    {
+        return (bool) preg_match('/\.backup-[A-Za-z0-9._-]+-\d{8}-\d{6}$/', $entry);
     }
 
     /**
