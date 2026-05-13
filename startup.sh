@@ -2828,6 +2828,11 @@ plugin_routing_poller() {
     local REQ_GLOB="/tmp/eiou-routing-req-*.json"
     local LOG_PREFIX="[PLUGIN ROUTING POLLER]"
     local SNIPPET_PATH="/etc/nginx/snippets/eiou-plugins.conf"
+    # http{}-scope file holding limit_req_zone declarations for
+    # public-route rate limiting. Lives in conf.d so nginx picks
+    # it up at http{} level; the snippet above lives in snippets/
+    # and is included from inside server{}.
+    local ZONES_PATH="/etc/nginx/conf.d/eiou-plugin-zones.conf"
 
     write_result() {
         local res_path="$1"; local status="$2"; local error="${3:-}"
@@ -2876,7 +2881,7 @@ plugin_routing_poller() {
 
             # Parse — grep fallback like plugin_user_poller, since jq
             # isn't in the base image.
-            local action plugin_id system_user pool_path pool_config nginx_snippet
+            local action plugin_id system_user pool_path pool_config nginx_snippet zones_config
             if command -v jq >/dev/null 2>&1; then
                 action=$(jq -r '.action // empty' "$req" 2>/dev/null)
                 plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
@@ -2884,19 +2889,21 @@ plugin_routing_poller() {
                 pool_path=$(jq -r '.pool_path // empty' "$req" 2>/dev/null)
                 pool_config=$(jq -r '.pool_config // empty' "$req" 2>/dev/null)
                 nginx_snippet=$(jq -r '.nginx_snippet // empty' "$req" 2>/dev/null)
+                zones_config=$(jq -r '.zones_config // empty' "$req" 2>/dev/null)
             else
                 # Single-line JSON fields. Multi-line content (pool_config
-                # / nginx_snippet) is JSON-encoded into the request with
-                # \n escapes; we decode after extraction. Slashes can
-                # arrive escaped (`\/`) when an upstream encoder doesn't
-                # set JSON_UNESCAPED_SLASHES; un-escape them so the path
-                # validators below match.
+                # / nginx_snippet / zones_config) is JSON-encoded into the
+                # request with \n escapes; we decode after extraction.
+                # Slashes can arrive escaped (`\/`) when an upstream encoder
+                # doesn't set JSON_UNESCAPED_SLASHES; un-escape them so the
+                # path validators below match.
                 action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
                 plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
                 system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
                 pool_path=$(grep -oP '"pool_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
                 pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
                 nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                zones_config=$(grep -oP '"zones_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
             fi
 
             rm -f "$req"
@@ -2926,6 +2933,12 @@ plugin_routing_poller() {
                 apply-pool)
                     apply_file "$pool_path" "$pool_config"
                     apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # zones_config is empty when the public-routes feature
+                    # flag is off OR no plugin declared any public_routes;
+                    # write an empty placeholder anyway so a stale zones
+                    # file from a previous boot doesn't continue declaring
+                    # references the snippet no longer makes.
+                    apply_file "$ZONES_PATH" "$zones_config"
                     # Per-plugin writable scratch dir referenced in the
                     # pool's open_basedir. Must exist + be owned by the
                     # plugin user, otherwise the plugin can't write
@@ -2952,6 +2965,12 @@ plugin_routing_poller() {
                         rm -f "$pool_path"
                     fi
                     apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # Rewrite zones to reflect the post-drop state — a
+                    # plugin being dropped means its routes (and zone
+                    # declarations) disappear, so refresh the file to
+                    # avoid stale `limit_req_zone` entries referring to
+                    # zone names no `limit_req` line uses anymore.
+                    apply_file "$ZONES_PATH" "$zones_config"
                     ;;
                 *)
                     echo "$LOG_PREFIX unknown action '$action'"
@@ -2961,12 +2980,14 @@ plugin_routing_poller() {
             esac
 
             # Verify nginx config — REFUSE to reload if -t fails. Restore
-            # the previous snippet + pool file so the wallet keeps serving.
+            # the previous snippet + zones + pool file so the wallet keeps
+            # serving.
             if ! nginx -t >/dev/null 2>&1; then
                 local nginx_err
                 nginx_err=$(nginx -t 2>&1 | tr '\n' ' ' | tr -d '\r')
                 echo "$LOG_PREFIX nginx -t FAILED: $nginx_err"
                 restore_backup "$SNIPPET_PATH"
+                restore_backup "$ZONES_PATH"
                 [ "$action" = "apply-pool" ] && restore_backup "$pool_path"
                 # Roll back the per-plugin scratch dir if we just created
                 # it. Without this it lingers as cosmetic cruft (next
@@ -3005,7 +3026,7 @@ plugin_routing_poller() {
             fi
 
             # Drop the backup files now that the new state is verified.
-            rm -f "${SNIPPET_PATH}.bak" "${pool_path}.bak" 2>/dev/null
+            rm -f "${SNIPPET_PATH}.bak" "${ZONES_PATH}.bak" "${pool_path}.bak" 2>/dev/null
             echo "$LOG_PREFIX $action complete for $plugin_id"
             write_result "$res" "ok"
         done

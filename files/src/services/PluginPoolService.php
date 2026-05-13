@@ -276,7 +276,8 @@ EOT;
         string $pluginId,
         string $systemUser,
         string $nginxSnippet,
-        bool $forceRotateToken = false
+        bool $forceRotateToken = false,
+        string $zonesConfig = ''
     ): bool {
         $this->validatePluginId($pluginId);
         $this->validateSystemUser($systemUser);
@@ -330,6 +331,7 @@ EOT;
             'pool_path'     => $this->poolPath($pluginId),
             'pool_config'   => $poolConfig,
             'nginx_snippet' => $nginxSnippet,
+            'zones_config'  => $zonesConfig,
         ]);
 
         $ok = ($result['status'] ?? '') === 'ok';
@@ -473,14 +475,18 @@ EOT;
      * omits this plugin). Supervisor handles the file deletion + reload
      * the same way applyPool does.
      */
-    public function dropPool(string $pluginId, string $nginxSnippet): bool
-    {
+    public function dropPool(
+        string $pluginId,
+        string $nginxSnippet,
+        string $zonesConfig = ''
+    ): bool {
         $this->validatePluginId($pluginId);
 
         $result = ($this->actionExecutor)('drop-pool', [
             'plugin_id'     => $pluginId,
             'pool_path'     => $this->poolPath($pluginId),
             'nginx_snippet' => $nginxSnippet,
+            'zones_config'  => $zonesConfig,
         ]);
 
         $ok = ($result['status'] ?? '') === 'ok';

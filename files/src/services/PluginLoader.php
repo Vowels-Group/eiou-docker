@@ -733,17 +733,17 @@ class PluginLoader
                     return false;
                 }
                 $systemUser = $this->userService->systemUsername($name);
-                $snippet = $this->renderNginxSnippetWithDelta($name, $systemUser, true);
+                [$snippet, $zones] = $this->renderNginxArtifactsWithDelta($name, $systemUser, true);
                 // Force-rotate the gateway token on explicit
                 // operator toggle so any previously-leaked token is
                 // invalidated. Reconcile uses the idempotent path.
-                if (!$this->poolService->applyPool($name, $systemUser, $snippet, true)) {
+                if (!$this->poolService->applyPool($name, $systemUser, $snippet, true, $zones)) {
                     $this->logger->error("applyPool failed for sandboxed plugin", ['plugin' => $name]);
                     return false;
                 }
             } else {
-                $snippet = $this->renderNginxSnippetWithDelta($name, null, false);
-                if (!$this->poolService->dropPool($name, $snippet)) {
+                [$snippet, $zones] = $this->renderNginxArtifactsWithDelta($name, null, false);
+                if (!$this->poolService->dropPool($name, $snippet, $zones)) {
                     $this->logger->error("dropPool failed for sandboxed plugin", ['plugin' => $name]);
                     return false;
                 }
@@ -774,7 +774,15 @@ class PluginLoader
      * current sandboxed+enabled set from state, then add / remove the
      * plugin being transitioned to produce the AFTER view.
      */
-    private function renderNginxSnippetWithDelta(string $name, ?string $systemUserOnEnable, bool $enabling): string
+    /**
+     * Render both nginx artifacts the supervisor needs in lockstep:
+     * the location-blocks snippet and the http{}-scope zone
+     * declarations. Returned as a two-tuple [snippet, zones] so the
+     * caller passes them to applyPool/dropPool together.
+     *
+     * @return array{0:string, 1:string}
+     */
+    private function renderNginxArtifactsWithDelta(string $name, ?string $systemUserOnEnable, bool $enabling): array
     {
         $entries = $this->collectSandboxedRouteEntries();
 
@@ -813,7 +821,10 @@ class PluginLoader
         // Stable order so the rendered snippet diffs cleanly between calls.
         usort($entries, fn(array $a, array $b): int => strcmp($a['plugin_id'], $b['plugin_id']));
 
-        return $this->nginxConfigService->renderSnippet($entries);
+        return [
+            $this->nginxConfigService->renderSnippet($entries),
+            $this->nginxConfigService->renderZones($entries),
+        ];
     }
 
     /**
@@ -1032,6 +1043,7 @@ class PluginLoader
     {
         $entries = $this->collectSandboxedRouteEntries();
         $snippet = $this->nginxConfigService->renderSnippet($entries);
+        $zones   = $this->nginxConfigService->renderZones($entries);
 
         // Forward-pass: ensure each enabled-sandboxed plugin has its
         // user + pool. Short-circuit on plugins where on-disk state
@@ -1053,7 +1065,7 @@ class PluginLoader
                     $report['skipped'][] = $pluginId;
                     continue;
                 }
-                if (!$this->poolService->applyPool($pluginId, $entry['system_user'], $snippet)) {
+                if (!$this->poolService->applyPool($pluginId, $entry['system_user'], $snippet, false, $zones)) {
                     $report['errors'][] = ['plugin_id' => $pluginId, 'message' => 'applyPool failed'];
                     continue;
                 }

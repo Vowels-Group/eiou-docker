@@ -286,6 +286,99 @@ class PluginNginxConfigServiceTest extends TestCase
         $this->assertStringNotContainsString('/path"', $snippet);
     }
 
+    // =========================================================================
+    // Per-bearer rate limit zones — limit_req_zone declarations at http{}
+    // scope + limit_req references in the snippet location blocks.
+    // =========================================================================
+
+    #[Test]
+    public function renderZonesEmitsEmptyHeaderWhenFlagOff(): void
+    {
+        $offSvc = new PluginNginxConfigService(false);
+        $zones = $offSvc->renderZones([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [['method' => 'POST', 'action' => 'chat']],
+            ],
+        ]);
+        $this->assertStringNotContainsString('limit_req_zone', $zones);
+        $this->assertStringContainsString('EIOU_PUBLIC_PLUGIN_ROUTES off', $zones);
+    }
+
+    #[Test]
+    public function renderZonesEmitsOneZonePerPublicRoute(): void
+    {
+        $onSvc = new PluginNginxConfigService(true);
+        $zones = $onSvc->renderZones([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [
+                    ['method' => 'POST', 'action' => 'chat',   'rate_per_minute' => 60],
+                    ['method' => 'GET',  'action' => 'status', 'rate_per_minute' => 300],
+                ],
+            ],
+        ]);
+        // One declaration per route, both keyed on $http_authorization.
+        $this->assertSame(2, substr_count($zones, 'limit_req_zone $http_authorization zone='));
+        $this->assertStringContainsString('rate=60r/m', $zones);
+        $this->assertStringContainsString('rate=300r/m', $zones);
+    }
+
+    #[Test]
+    public function renderZonesAndSnippetUseMatchingZoneNames(): void
+    {
+        $onSvc = new PluginNginxConfigService(true);
+        $entries = [
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [['method' => 'POST', 'action' => 'chat']],
+            ],
+        ];
+        $snippet = $onSvc->renderSnippet($entries);
+        $zones = $onSvc->renderZones($entries);
+
+        // Find the zone name in the zones file and assert the snippet
+        // references the same name in a limit_req statement.
+        $this->assertMatchesRegularExpression('/zone=(pp_[a-f0-9]{12}):/', $zones, $zones);
+        preg_match('/zone=(pp_[a-f0-9]{12}):/', $zones, $m);
+        $this->assertStringContainsString("limit_req zone={$m[1]} burst=", $snippet);
+        $this->assertStringContainsString('limit_req_status 429', $snippet);
+    }
+
+    #[Test]
+    public function renderZonesFallsBackToDefaultRateWhenOutOfBounds(): void
+    {
+        $onSvc = new PluginNginxConfigService(true);
+        $zones = $onSvc->renderZones([
+            [
+                'plugin_id'   => 'demo',
+                'system_user' => 'eiou-p-deadbeef',
+                'public_routes' => [
+                    ['method' => 'POST', 'action' => 'chat', 'rate_per_minute' => 9999],  // > cap
+                ],
+            ],
+        ]);
+        $this->assertStringContainsString('rate=60r/m', $zones); // DEFAULT_RATE_PER_MINUTE
+        $this->assertStringNotContainsString('9999', $zones);
+    }
+
+    #[Test]
+    public function zoneNameForIsDeterministicAndDiffersPerRoute(): void
+    {
+        $svc = new PluginNginxConfigService(true);
+        $a = $svc->zoneNameFor('demo', 'chat');
+        $b = $svc->zoneNameFor('demo', 'chat');
+        $c = $svc->zoneNameFor('demo', 'status');
+        $d = $svc->zoneNameFor('other', 'chat');
+        $this->assertSame($a, $b);
+        $this->assertNotSame($a, $c);
+        $this->assertNotSame($a, $d);
+        $this->assertMatchesRegularExpression('/^pp_[a-f0-9]{12}$/', $a);
+    }
+
     #[Test]
     public function publicRouteCorsBlockOnlyAddsOnceWhenFlagOff(): void
     {
