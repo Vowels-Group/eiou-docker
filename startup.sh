@@ -92,6 +92,8 @@ CLEANUP_PID=""
 CONTACT_STATUS_PID=""
 WATCHDOG_PID=""
 RESTART_POLLER_PID=""
+PLUGIN_USER_POLLER_PID=""
+PLUGIN_ROUTING_POLLER_PID=""
 
 # -----------------------------------------------------------------------------
 # graceful_shutdown() - Signal handler for clean container termination
@@ -126,6 +128,21 @@ graceful_shutdown() {
         echo "[Shutdown] Stopping restart poller (PID: $RESTART_POLLER_PID)"
         kill "$RESTART_POLLER_PID" 2>/dev/null
         wait "$RESTART_POLLER_PID" 2>/dev/null || true
+    fi
+
+    # Stop plugin sandbox pollers — they're bash subshells servicing
+    # plugin enable/disable request files. Killing them before nginx
+    # + FPM shutdown prevents a half-applied plugin pool from racing
+    # the reload sequence.
+    if [ -n "$PLUGIN_USER_POLLER_PID" ] && kill -0 "$PLUGIN_USER_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin user poller (PID: $PLUGIN_USER_POLLER_PID)"
+        kill "$PLUGIN_USER_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_USER_POLLER_PID" 2>/dev/null || true
+    fi
+    if [ -n "$PLUGIN_ROUTING_POLLER_PID" ] && kill -0 "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin routing poller (PID: $PLUGIN_ROUTING_POLLER_PID)"
+        kill "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null || true
     fi
 
     echo ""
@@ -192,12 +209,33 @@ graceful_shutdown() {
         pids_to_wait="$pids_to_wait $CONTACT_STATUS_PID"
     fi
 
-    # Also check for any PHP processors by their lockfiles
+    # Also signal each processor's PHP child via its lockfile.
+    #
+    # Each processor is spawned as `runuser -u www-data -- php …`. The
+    # watchdog tracks the runuser PARENT PID (P2P_PID, TRANSACTION_PID,
+    # etc. — set when the runuser process was forked). The PHP process
+    # inside writes its OWN PID — the child of runuser — to its
+    # lockfile. So the lockfile PID and the watchdog-tracked PID are
+    # always different processes in the same spawn chain: signalling
+    # the parent propagates to the child, signalling the lockfile PID
+    # hits the child directly. Both reach the same PHP process; the
+    # double-send is just belt-and-braces in case runuser ever fails
+    # to propagate.
+    #
+    # Skip lockfiles whose PID is already in $pids_to_wait — that means
+    # we somehow ended up tracking the child PID directly (would be a
+    # bug elsewhere, but we don't want to double-list it in waits).
     for lockfile in /tmp/p2pmessages_lock.pid /tmp/transactionmessages_lock.pid /tmp/cleanupmessages_lock.pid /tmp/contact_status.pid; do
         if [ -f "$lockfile" ]; then
             local pid=$(cat "$lockfile" 2>/dev/null)
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                echo "[Shutdown] Found additional processor from lockfile (PID: $pid)"
+                # Already tracked as parent? Skip silently.
+                if echo " $pids_to_wait " | grep -q " $pid "; then
+                    continue
+                fi
+                local proc_name
+                proc_name=$(basename "$lockfile" .pid)
+                echo "[Shutdown] Signalling PHP child of ${proc_name} (PID: $pid)"
                 kill -TERM "$pid" 2>/dev/null
                 pids_to_wait="$pids_to_wait $pid"
             fi
@@ -274,6 +312,14 @@ graceful_shutdown() {
     rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
     rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
     rm -f /tmp/contact_status.pid 2>/dev/null
+    # Supervisor poller lockfiles (written by the bash subshells that
+    # service plugin enable/disable). The pollers themselves were
+    # SIGTERM'd above; this removes the now-stale PID files so the
+    # next boot doesn't see them as live processes.
+    rm -f /tmp/eiou_watchdog.pid 2>/dev/null
+    rm -f /tmp/eiou_restart_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_user_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_routing_poller.pid 2>/dev/null
     rm -f "$SHUTDOWN_FLAG" 2>/dev/null
     rm -f "$MAINTENANCE_LOCKFILE" 2>/dev/null
 
