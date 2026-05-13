@@ -9,10 +9,10 @@ use Eiou\Utils\Logger;
  * PluginAssetServer — validates + serves plugin static assets under
  * `/gui/plugin-assets/<id>/<path>`.
  *
- * Phase 6 of the plugin-GUI-hooks design. Files larger than the
- * inline-render threshold (see PluginAssetRegistry) emit
- * `<link rel="stylesheet" href="…">` / `<script src="…">` tags; the
- * URL is what nginx forwards into this server.
+ * Files larger than the inline-render threshold (see
+ * PluginAssetRegistry) emit `<link rel="stylesheet" href="…">` /
+ * `<script src="…">` tags; the URL is what nginx forwards into this
+ * server.
  *
  * The server is intentionally minimal:
  *

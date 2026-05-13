@@ -147,9 +147,17 @@ class Application {
                 $this->services->getPluginCredentialService(),
                 $this->services->getPluginDbUserService()
             );
-            // Sandbox services for Phase 2.5 — when wired, plugins whose
-            // manifest declares "sandboxed": true get their own Unix
-            // user + FPM pool on enable. See docs/PLUGIN_SANDBOXING.md.
+            // Wire the sibling-container credentials exporter. When set,
+            // enable / reconcile write /etc/eiou/credentials/plugin-<id>.json
+            // for each enabled plugin so an operator-deployed sibling
+            // container can mount the file and share state with the
+            // plugin's MySQL user. Disable / uninstall remove the file.
+            $this->pluginLoader->setCredentialsExportService(
+                $this->services->getPluginCredentialsExportService()
+            );
+            // Sandbox services — when wired, plugins whose manifest
+            // declares "sandboxed": true get their own Unix user + FPM
+            // pool on enable. See docs/PLUGINS.md (Sandboxing).
             $this->pluginLoader->setSandboxServices(
                 $this->services->getPluginUserService(),
                 $this->services->getPluginPoolService(),
@@ -172,7 +180,7 @@ class Application {
             $this->pluginLoader->reconcileIsolation();
             // Sandbox reconcile — self-heals after a missed enable/disable
             // (e.g. supervisor restart mid-transition, or a manual edit of
-            // plugins.json). Idempotent. See docs/PLUGIN_SANDBOXING.md.
+            // plugins.json). Idempotent. See docs/PLUGINS.md (Sandboxing).
             $this->pluginLoader->reconcileSandbox();
             $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services
@@ -181,11 +189,11 @@ class Application {
             // when plugins subscribe to events or decorate services.
             $this->pluginLoader->bootAll($this->services);
 
-            // Phase 5: register IPC forwarders for every sandboxed,
-            // enabled plugin's declared events / filter hooks / render
-            // hooks. Done AFTER bootAll() so in-process subscribers
-            // register first and sandboxed forwarders register
-            // alongside them — both fire when an event dispatches.
+            // Register IPC forwarders for every sandboxed, enabled
+            // plugin's declared events / filter hooks / render hooks.
+            // Done AFTER bootAll() so in-process subscribers register
+            // first and sandboxed forwarders register alongside them
+            // — both fire when an event dispatches.
             $this->services->getPluginIpcForwarder($this->pluginLoader)->registerAll(
                 $this->services->getHooks(),
                 $this->services->getAssetRegistry(),

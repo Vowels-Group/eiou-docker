@@ -43,6 +43,7 @@ class PluginUninstallService
     private PDO $rootPdo;
     private ?Logger $logger;
     private string $pluginDir;
+    private ?PluginCredentialsExportService $credentialsExport;
 
     public function __construct(
         PluginLoader $loader,
@@ -51,7 +52,8 @@ class PluginUninstallService
         PluginPdoFactory $pdoFactory,
         PDO $rootPdo,
         ?Logger $logger = null,
-        string $pluginDir = '/etc/eiou/plugins'
+        string $pluginDir = '/etc/eiou/plugins',
+        ?PluginCredentialsExportService $credentialsExport = null
     ) {
         $this->loader = $loader;
         $this->credentials = $credentials;
@@ -60,6 +62,7 @@ class PluginUninstallService
         $this->rootPdo = $rootPdo;
         $this->logger = $logger;
         $this->pluginDir = rtrim($pluginDir, '/');
+        $this->credentialsExport = $credentialsExport;
     }
 
     /**
@@ -140,6 +143,18 @@ class PluginUninstallService
             $steps['drop_credentials'] = $this->safeStep(fn() => $this->credentials->delete($pluginId));
         } else {
             $steps['drop_credentials'] = 'skipped';
+        }
+
+        // 5b. Remove the sibling-mountable credentials file. Idempotent
+        //     — runs unconditionally because a stale file may exist
+        //     even when the DB row is already gone (partial cleanup
+        //     from a prior failed uninstall).
+        if ($this->credentialsExport !== null) {
+            $steps['drop_credentials_file'] = $this->safeStep(
+                fn() => $this->credentialsExport->revoke($pluginId)
+            );
+        } else {
+            $steps['drop_credentials_file'] = 'skipped';
         }
 
         // 6. Remove the plugin's files from /etc/eiou/plugins/<id>/.

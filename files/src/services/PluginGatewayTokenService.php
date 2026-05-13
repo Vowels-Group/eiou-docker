@@ -10,7 +10,7 @@ use RuntimeException;
 /**
  * PluginGatewayTokenService
  *
- * Per-plugin bearer tokens that the Phase 4 service gateway uses to
+ * Per-plugin bearer tokens that the service gateway uses to
  * authenticate inbound HTTP requests from a sandboxed plugin's
  * __dispatch.php. Each enabled sandboxed plugin gets a fresh
  * 256-bit random token at applyPool() time. The token is:
@@ -34,7 +34,7 @@ use RuntimeException;
  * would prevent online lookup, breaking the O(1) authentication
  * path on every gateway call.
  *
- * Phase 4 of plugin sandboxing — see docs/PLUGIN_SANDBOXING.md.
+ * See docs/PLUGINS.md (Sandboxing) for the broader trust model.
  */
 class PluginGatewayTokenService
 {

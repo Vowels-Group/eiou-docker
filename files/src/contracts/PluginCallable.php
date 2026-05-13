@@ -9,9 +9,9 @@ use Attribute;
  * #[PluginCallable]
  *
  * Marks a method as callable from a sandboxed plugin's __dispatch.php
- * via the Phase 4 service gateway. Without this attribute, no plugin
- * can reach the method — even if its manifest declares it in
- * `core_services`. Default-deny: a fresh codebase exposes zero methods.
+ * via the service gateway. Without this attribute, no plugin can reach
+ * the method — even if its manifest declares it in `core_services`.
+ * Default-deny: a fresh codebase exposes zero methods.
  *
  * Plugins additionally declare which #[PluginCallable] methods they
  * want to use in their plugin.json:
@@ -42,7 +42,7 @@ use Attribute;
  *     PluginCallable becomes operator-visible attack surface; treat
  *     it like a public REST endpoint.
  *
- * See docs/PLUGIN_SANDBOXING.md.
+ * See docs/PLUGINS.md (Sandboxing).
  */
 #[Attribute(Attribute::TARGET_METHOD)]
 final class PluginCallable

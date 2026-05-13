@@ -295,7 +295,7 @@ function displayTxDescription(desc, currency) {
 // `Paginator.get(key).apply()` so Paginator recomputes which subset of the
 // currently-visible (unfiltered) rows falls in the active page.
 //
-// Phase 2 "Load older" is layered on via the `loadMore` config: Paginator
+// "Load older" is layered on via the `loadMore` config: Paginator
 // renders a button below the nav that triggers the configured fetcher,
 // appends the returned HTML fragment to the tbody, and re-runs `apply()`.
 
@@ -5095,9 +5095,9 @@ function initPaginators() {
         });
     }
 
-    // Contacts — Phase 1 (client slicing) AND Phase 2 (load-older). Only
-    // accepted contacts paginate via Phase 2; pending + blocked are always
-    // rendered up-front because they're small and operationally important.
+    // Contacts — client slicing AND load-older. Only accepted contacts
+    // paginate via load-older; pending + blocked are always rendered
+    // up-front because they're small and operationally important.
     var contactsBody = document.getElementById('contacts-grid');
     var contactsContainer = document.getElementById('contacts-paginator');
     if (contactsBody && contactsContainer) {

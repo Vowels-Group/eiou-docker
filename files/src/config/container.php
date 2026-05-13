@@ -9,7 +9,7 @@ namespace Eiou\Config;
  * This file configures the dependency injection container using PHP-DI.
  * It maps interfaces to implementations and configures service factories.
  *
- * Phase 1: Foundation setup - defines interface bindings and basic autowiring.
+ * Foundation setup - defines interface bindings and basic autowiring.
  * The existing ServiceContainer delegates to this container internally.
  *
  * @see https://php-di.org/doc/php-definitions.html

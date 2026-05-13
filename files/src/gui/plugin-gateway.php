@@ -1,14 +1,14 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# HTTP entry point for the plugin sandbox service gateway (Phase 4).
+# HTTP entry point for the plugin sandbox service gateway.
 # nginx routes /__plugin_gateway here, served by the wallet's www-data
 # FPM pool. The dispatched method runs with the wallet's privileges
 # (master key in scope, full DB access) AFTER PluginGatewayController
 # validates the per-plugin bearer token and the manifest allow-list.
 #
 # Plugin code never reaches here — only its OUTBOUND HTTP request does.
-# See docs/PLUGIN_SANDBOXING.md.
+# See docs/PLUGINS.md (Sandboxing).
 
 declare(strict_types=1);
 

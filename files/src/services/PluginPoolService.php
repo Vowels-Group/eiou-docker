@@ -30,10 +30,8 @@ use InvalidArgumentException;
  * supervisor in startup.sh writes the file, runs `nginx -t`, then
  * SIGHUP nginx + SIGUSR2 PHP-FPM, and returns a structured result.
  *
- * Phase 2 of plugin sandboxing — see docs/PLUGIN_SANDBOXING.md. Not
- * yet wired into PluginLoader's enable/disable lifecycle; a plugin
- * has to opt in via "sandboxed": true in its manifest (Phase 2 follow-
- * up) for a pool to be generated.
+ * A plugin has to opt in via "sandboxed": true in its manifest for a
+ * pool to be generated. See docs/PLUGINS.md (Sandboxing).
  */
 class PluginPoolService
 {
@@ -283,8 +281,8 @@ EOT;
         $this->validatePluginId($pluginId);
         $this->validateSystemUser($systemUser);
 
-        // Install the Phase 3a dispatcher template into the plugin's
-        // dir BEFORE asking the supervisor to bring the pool up. Once
+        // Install the dispatcher template into the plugin's dir BEFORE
+        // asking the supervisor to bring the pool up. Once
         // FPM picks up the new pool, requests to it must land on a
         // valid __dispatch.php or they 404 — installing first means the
         // very first request after reload finds the file ready.
@@ -297,7 +295,7 @@ EOT;
             return false;
         }
 
-        // Phase 4: ensure a gateway token exists.
+        // Ensure a gateway token exists.
         //
         // Two callers, two behaviours:
         //
@@ -491,7 +489,7 @@ EOT;
             'result' => $result,
         ]);
 
-        // Phase 4: revoke the gateway token. Revoke even when the pool
+        // Revoke the gateway token. Revoke even when the pool
         // drop reported failure — keeping a stale token alive while
         // the rest of the plugin is dismantled would be the worse
         // failure mode. Idempotent; no-ops cleanly.

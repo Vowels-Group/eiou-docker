@@ -10,8 +10,8 @@ use Throwable;
 /**
  * PluginIpcForwarder
  *
- * Phase 5 bridge: turns in-process firing of events / filters / render
- * hooks into outbound HTTP POSTs to sandboxed plugins' __dispatch.php.
+ * Bridges in-process firing of events / filters / render hooks into
+ * outbound HTTP POSTs to sandboxed plugins' __dispatch.php.
  *
  * Sandboxed plugins never load in-process — their `subscribes_to`,
  * `filter_hooks`, and `render_hooks` declarations in plugin.json
@@ -36,7 +36,7 @@ use Throwable;
  * forwarded into core's Logger with `{plugin: <id>}` context so they
  * appear in the wallet's central log under the plugin's name.
  *
- * See docs/PLUGIN_SANDBOXING.md.
+ * See docs/PLUGINS.md (Sandboxing).
  */
 class PluginIpcForwarder
 {
@@ -438,7 +438,7 @@ class PluginIpcForwarder
         string $pluginId,
         array $tab
     ): bool {
-        // Manifest only requires id + label per Phase 5a's validator.
+        // Manifest only requires id + label per the manifest validator.
         // TabRegistry requires id + label + icon + order. Default the
         // missing two so a minimal manifest still produces a valid tab.
         $id = (string) ($tab['id'] ?? '');

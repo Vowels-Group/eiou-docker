@@ -22,11 +22,10 @@ use Eiou\Utils\Logger;
  * silently dropped + logged at render time so a renamed asset doesn't
  * crash the host page.
  *
- * Render mode is "inline" for v1 (Phase 2 of the plugin-GUI-hooks
- * design): the file is read at render time and embedded in
- * <style nonce> / <script nonce> blocks. Phase 6 will add a
- * static-asset route + content-hash cache-bust for files larger than
- * a threshold; the registry's API stays the same.
+ * Render mode is "inline" for v1: the file is read at render time and
+ * embedded in <style nonce> / <script nonce> blocks. A static-asset
+ * route + content-hash cache-bust for files larger than a threshold is
+ * a planned follow-up; the registry's API stays the same.
  *
  * The registry doesn't fire hooks itself — Application boot (or the
  * GUI's Functions.php) wires the host render listeners that drain the

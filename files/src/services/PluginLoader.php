@@ -73,6 +73,19 @@ class PluginLoader
     private ?PluginDbUserService $dbUserService = null;
 
     /**
+     * Optional sibling-container credential exporter. When present (the
+     * normal path on a real node), enable / reconcile write the plugin's
+     * MySQL credentials to /etc/eiou/credentials/plugin-<id>.json so
+     * operator-deployed sibling containers can mount the file and share
+     * state with the plugin. Disable and uninstall remove the file.
+     *
+     * When null (test harness / early boot without the supervisor),
+     * isolation still functions; only the sibling-container surface is
+     * skipped, with a "skipped" log entry.
+     */
+    private ?PluginCredentialsExportService $credentialsExportService = null;
+
+    /**
      * Optional signature verifier + enforcement mode. Enforcement is a
      * global policy (one setting controls behaviour for every plugin):
      *
@@ -100,7 +113,7 @@ class PluginLoader
      * a sandboxed plugin returns false and logs why, instead of half-
      * committing some side effects and crashing on the missing ones.
      *
-     * See docs/PLUGIN_SANDBOXING.md.
+     * See docs/PLUGINS.md (Sandboxing).
      */
     private ?PluginUserService $userService = null;
     private ?PluginPoolService $poolService = null;
@@ -152,12 +165,23 @@ class PluginLoader
     }
 
     /**
-     * Wire the sandbox services (Phase 2.5 of plugin sandboxing).
-     * Called by Application::__construct after the ServiceContainer
-     * is ready. When any of the three is null the sandbox path is
-     * effectively unavailable — setEnabled() on a sandboxed plugin
-     * will refuse rather than half-commit. See
-     * docs/PLUGIN_SANDBOXING.md.
+     * Wire the sibling-container credentials exporter. Optional — when
+     * null, applyIsolationSideEffects() and reconcileIsolation() skip
+     * the on-disk credential file step but still drive the MySQL DDL
+     * normally.
+     */
+    public function setCredentialsExportService(
+        ?PluginCredentialsExportService $exportService
+    ): void {
+        $this->credentialsExportService = $exportService;
+    }
+
+    /**
+     * Wire the sandbox services. Called by Application::__construct
+     * after the ServiceContainer is ready. When any of the three is
+     * null the sandbox path is effectively unavailable — setEnabled()
+     * on a sandboxed plugin will refuse rather than half-commit. See
+     * docs/PLUGINS.md (Sandboxing).
      */
     public function setSandboxServices(
         ?PluginUserService $userService,
@@ -389,24 +413,23 @@ class PluginLoader
                 'sandboxed' => $sandboxed,
             ];
 
-            // Phase 6 hard-deprecation surface — non-sandboxed plugins
-            // are no longer loaded at all. The flag tells the GUI / CLI
-            // to render them as "unsupported until migrated".
+            // Hard-deprecation surface — non-sandboxed plugins are no
+            // longer loaded at all. The flag tells the GUI / CLI to
+            // render them as "unsupported until migrated".
             if (!$sandboxed) {
                 $row['legacy_in_process'] = true;
                 $row['legacy_warning']    = 'In-process plugins are no longer supported. This plugin '
                                           . 'is enabled in plugins.json but inert — its register() / '
                                           . 'boot() will not run. The plugin author must ship an '
                                           . 'updated manifest with "sandboxed": true (see '
-                                          . 'docs/PLUGIN_SANDBOXING.md).';
+                                          . 'docs/PLUGINS.md, Sandboxing section).';
             }
 
-            // Phase 4: core_services allow-list. Each entry is
-            // "<Service>.<method>" — the gateway checks every
-            // sandboxed-plugin call against this list before
-            // dispatching. Manifest fields outside the kebab/dotted
-            // shape are filtered out so a malformed manifest can't
-            // poison the gateway's match.
+            // core_services allow-list. Each entry is "<Service>.<method>"
+            // — the gateway checks every sandboxed-plugin call against
+            // this list before dispatching. Manifest fields outside the
+            // kebab/dotted shape are filtered out so a malformed manifest
+            // can't poison the gateway's match.
             $coreServices = $manifest['core_services'] ?? [];
             if (is_array($coreServices)) {
                 $row['core_services'] = array_values(array_filter(
@@ -418,18 +441,18 @@ class PluginLoader
                 $row['core_services'] = [];
             }
 
-            // Phase 5: declarative surface fields. These tell the IPC
-            // forwarder which events/filters/renders to bridge from
-            // in-process firing to a sandboxed plugin's __dispatch.php.
-            // Each list is filtered to a safe shape so a malformed
-            // manifest can't poison the forwarder's registrations.
+            // Declarative surface fields. These tell the IPC forwarder
+            // which events/filters/renders to bridge from in-process
+            // firing to a sandboxed plugin's __dispatch.php. Each list
+            // is filtered to a safe shape so a malformed manifest can't
+            // poison the forwarder's registrations.
             $row['subscribes_to'] = $this->stringListField($manifest, 'subscribes_to', '/^[a-z][a-z0-9_.-]*$/');
             $row['filter_hooks']  = $this->stringListField($manifest, 'filter_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
             $row['render_hooks']  = $this->stringListField($manifest, 'render_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
             // gui_actions, tabs, gui_assets, api_routes, cli_commands
-            // carry richer payloads. Phase 5 forwarders read them
-            // through the list; basic structural validation here
-            // keeps the forwarder code simpler.
+            // carry richer payloads. IPC forwarders read them through
+            // the list; basic structural validation here keeps the
+            // forwarder code simpler.
             $row['gui_actions'] = $this->shapedListField(
                 $manifest,
                 'gui_actions',
@@ -614,9 +637,9 @@ class PluginLoader
             return false;
         }
 
-        // Sandbox side-effects (Phase 2.5). Only run for plugins that
-        // declare "sandboxed": true in their manifest. Failures abort
-        // the state flip the same way isolation failures do — operator
+        // Sandbox side-effects. Only run for plugins that declare
+        // "sandboxed": true in their manifest. Failures abort the
+        // state flip the same way isolation failures do — operator
         // can retry; boot-time reconcile self-heals partial states.
         if (!$this->applySandboxSideEffects($name, $enabled)) {
             return false;
@@ -792,7 +815,7 @@ class PluginLoader
     /**
      * Extract a manifest field that should be a list of strings matching
      * a regex. Drops entries that don't match. Empty / non-array values
-     * normalize to []. Used by Phase 5 declarative surface parsing.
+     * normalize to []. Used by declarative surface parsing.
      *
      * @return list<string>
      */
@@ -808,7 +831,7 @@ class PluginLoader
 
     /**
      * Extract a manifest field that should be a list of objects passing
-     * a per-entry validator. Used for richer Phase 5 fields (tabs,
+     * a per-entry validator. Used for richer manifest fields (tabs,
      * actions, etc.) where entries carry sub-keys.
      *
      * @return list<array<string, mixed>>
@@ -957,9 +980,8 @@ class PluginLoader
         // Reverse pass for stranded users/pools is intentionally NOT
         // implemented here — it requires enumerating /etc/php/<ver>/fpm/pool.d/
         // and /etc/passwd to find eiou-p-* entries that have no matching
-        // plugin. Both are root-only reads. Phase 2.5 ships the forward
-        // pass; the reverse pass will move into the supervisor poller
-        // when Phase 6 (legacy deprecation) lands.
+        // plugin. Both are root-only reads, so when added the reverse
+        // pass will live in the supervisor poller, not here.
         return $report;
     }
 
@@ -1001,11 +1023,28 @@ class PluginLoader
 
             $this->dbUserService->ensureUser($name, $plaintext, $limits);
             $this->dbUserService->grant($name, $owned);
+
+            // Export credentials to the on-disk file siblings can mount.
+            // Best-effort: a failure here logs but does NOT abort the
+            // enable. The plugin still functions inside the eIOU
+            // container; only the sibling-container surface is degraded.
+            if ($this->credentialsExportService !== null) {
+                $this->credentialsExportService->export($name, $plaintext);
+            }
         } else {
             // Leave credentials + user + tables in place. Disable is
             // meant to be cheaply reversible; uninstall is the path that
             // drops everything, and it goes through a separate method.
             $this->dbUserService->revoke($name);
+
+            // Remove the sibling-mountable credentials file. The MySQL
+            // REVOKE above already cuts off any sibling that was
+            // authenticated, but deleting the file makes the disabled
+            // state visible on disk and prevents a stale file from
+            // confusing a fresh sibling deploy.
+            if ($this->credentialsExportService !== null) {
+                $this->credentialsExportService->revoke($name);
+            }
         }
     }
 
@@ -1068,6 +1107,14 @@ class PluginLoader
                     $owned = (array) ($db['owned_tables'] ?? []);
                     $this->dbUserService->ensureUser($pluginId, $plaintext, $limits);
                     $this->dbUserService->grant($pluginId, $owned);
+                    // Re-export the sibling-mountable credentials file
+                    // so a volume rebuild / manual delete self-heals on
+                    // the next boot. Failure logs but doesn't change
+                    // the result code — MySQL state is what reconcile's
+                    // status reflects.
+                    if ($this->credentialsExportService !== null) {
+                        $this->credentialsExportService->export($pluginId, $plaintext);
+                    }
                     $results[$pluginId] = 'granted';
                 } else {
                     // For disabled plugins that *have* credentials, make
@@ -1077,6 +1124,12 @@ class PluginLoader
                     // DDL-first ordering was added.
                     if ($this->credentialService->exists($pluginId)) {
                         $this->dbUserService->revoke($pluginId);
+                        // Also clear any stale credentials file from an
+                        // earlier enabled state so the on-disk view stays
+                        // consistent with "disabled".
+                        if ($this->credentialsExportService !== null) {
+                            $this->credentialsExportService->revoke($pluginId);
+                        }
                         $results[$pluginId] = 'revoked';
                     } else {
                         $results[$pluginId] = 'skipped';
@@ -1538,10 +1591,10 @@ class PluginLoader
         $enabled = (bool) ($state[$name]['enabled'] ?? false);
 
         // Parse the "sandboxed" flag. Sandboxing is now MANDATORY —
-        // any plugin without `"sandboxed": true` is refused load. This
-        // is the Phase 6 hard deprecation: a malicious in-process
-        // plugin can read the master key + decrypt the seed phrase, so
-        // we no longer offer the in-process path at all.
+        // any plugin without `"sandboxed": true` is refused load. A
+        // malicious in-process plugin could read the master key and
+        // decrypt the seed phrase, so the in-process path is no longer
+        // offered at all.
         $sandboxed = !empty($manifest['sandboxed']);
 
         if (!$enabled) {
@@ -1561,8 +1614,8 @@ class PluginLoader
         // stay on disk, listAllPlugins() surfaces a clear status
         // explaining why, but register()/boot() never run and the
         // autoloader never registers. Operator has to migrate the
-        // plugin's manifest to "sandboxed": true (see
-        // docs/PLUGIN_SANDBOXING.md) before it does anything.
+        // plugin's manifest to "sandboxed": true (see docs/PLUGINS.md,
+        // Sandboxing section) before it does anything.
         if (!$sandboxed) {
             $this->logger->warning(
                 'PluginLoader: refusing to load non-sandboxed plugin',

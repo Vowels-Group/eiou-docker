@@ -1,21 +1,17 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 #
-# Plugin __dispatch.php — Phase 3a stub template.
+# Plugin __dispatch.php — stub template installed into
+# /etc/eiou/plugins/<plugin-id>/__dispatch.php at plugin enable time.
+# This file is the single HTTP entry point that nginx routes
+# /gui/plugin/<plugin-id>/* requests to inside the per-plugin FPM pool.
+# It receives a structured envelope from core, dispatches by type, and
+# returns a structured envelope plus the plugin's log entries.
 #
-# Installed into /etc/eiou/plugins/<plugin-id>/__dispatch.php at plugin
-# enable time (Phase 3a wire-in, follow-up). This file is the single
-# HTTP entry point that nginx routes /gui/plugin/<plugin-id>/* requests
-# to inside the per-plugin FPM pool. It receives a structured envelope
-# from core, dispatches by type, and returns a structured envelope plus
-# the plugin's log entries.
-#
-# In Phase 3a, every handler returns 501 / handler_not_found — this
+# Stub behaviour: every handler returns 501 / handler_not_found — this
 # proves the routing and the contract shape without any real plugin
-# code yet. Phase 3b+ replaces each case in the switch with real
+# code. A plugin author replaces each case in the switch with real
 # handlers that call into the plugin's entry class.
-#
-# Contract spec: docs/PLUGIN_SANDBOX_DISPATCH_CONTRACT.md (untracked).
 #
 # Security context: this file runs as the eiou-p-<hash> user inside the
 # plugin's FPM pool, with open_basedir restricted to the plugin's own
@@ -75,7 +71,7 @@ final class PluginLog
 $log = new PluginLog();
 
 // =============================================================================
-// core_call($service, $method, $args) — Phase 4 service gateway client.
+// core_call($service, $method, $args) — service gateway client.
 //
 // Plugins call this from inside handlers to reach a whitelisted subset of
 // core services. The gateway validates:
@@ -216,8 +212,8 @@ if (!in_array($type, $allowedTypes, true)) {
     ], $log);
 }
 
-// Phase 3a stub: every type returns 501. Phase 3b+ replaces each case
-// in this switch with calls into the plugin's entry class.
+// Stub: every type returns 501. A plugin author replaces each case in
+// this switch with calls into the plugin's entry class.
 switch ($type) {
     case 'event':
     case 'filter':
@@ -233,7 +229,7 @@ switch ($type) {
             'ok' => false,
             'error' => [
                 'code' => 'handler_not_found',
-                'message' => "no handler bound for {$type}:{$name} (Phase 3a stub)",
+                'message' => "no handler bound for {$type}:{$name} (dispatch stub)",
             ],
         ], $log);
         break;

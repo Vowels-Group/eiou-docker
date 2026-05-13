@@ -12,10 +12,10 @@ use RuntimeException;
  *
  * Manages the Linux system-user lifecycle for sandboxed plugins. Each
  * enabled plugin is paired with its own UID (`eiou-p-<8-hex>`) so that
- * when Phase 2 spins up a per-plugin PHP-FPM pool, the worker process
- * cannot read `/etc/eiou/config/.master.key` or `userconfig.json` — the
- * kernel blocks the read with EACCES, regardless of what `open_basedir`
- * or `disable_functions` the pool config sets.
+ * when the per-plugin PHP-FPM pool spins up, the worker process cannot
+ * read `/etc/eiou/config/.master.key` or `userconfig.json` — the kernel
+ * blocks the read with EACCES, regardless of what `open_basedir` or
+ * `disable_functions` the pool config sets.
  *
  * Operations:
  *
@@ -32,10 +32,7 @@ use RuntimeException;
  * /tmp/eiou-pluser-res-<id>.json. www-data polls for the result with a
  * short timeout. Same one-way-privilege pattern as RestartRequestService.
  *
- * Phase 1 of plugin sandboxing — see docs/PLUGIN_SANDBOXING.md. This
- * service is foundational and NOT yet wired into PluginLoader's
- * enable/disable lifecycle; that comes in Phase 2 along with the FPM
- * pool generator.
+ * See docs/PLUGINS.md (Sandboxing) for the broader trust model.
  */
 class PluginUserService
 {
@@ -138,7 +135,7 @@ class PluginUserService
      * Idempotent — returns true if the user already exists; runs useradd
      * via the supervisor if not. Failures (the supervisor rejected the
      * request, the request timed out, etc.) return false; the caller
-     * decides what to do (Phase 2 will refuse to enable the plugin).
+     * (PluginLoader::setEnabled) refuses to enable the plugin.
      */
     public function ensureUser(string $pluginId): bool
     {
@@ -196,8 +193,8 @@ class PluginUserService
      * NOTE: this method does NOT enumerate /etc/passwd directly. The
      * caller passes in the list of system users currently present (via
      * `getent passwd | grep ^eiou-p-`), keeping the syscall surface
-     * mockable. The supervisor side of the protocol exposes a third
-     * action `list` for callers that want this list — Phase 2 plumbing.
+     * mockable. The supervisor side of the protocol also exposes a
+     * `list` action that returns this list directly.
      *
      * @param list<string> $installedPluginIds
      * @param list<string> $existingPluginUsers list of eiou-p-* usernames currently on the system
