@@ -3131,6 +3131,18 @@ enabled flag. It is written atomically via temp-file + rename. Corrupted or
 unreadable state falls back to "all plugins disabled" — no crash, no ghost
 state.
 
+Two writers produce the file in normal operation: the wallet pool (running as
+`www-data`, via GUI/REST plugin toggles) and the operator CLI (`eiou plugin
+enable|disable`, typically running as root inside the container via `docker
+exec`). Both must produce a file the wallet pool can read, otherwise CLI-driven
+changes would be invisible to HTTP requests until a subsequent www-data-owned
+write re-established readability. `writeState()` chmods the temp file to `0640`
+and chgrps it to `www-data` before the atomic rename, so the root-write path
+ends up `root:www-data 0640` and the www-data-write path ends up
+`www-data:www-data 0640`; in both cases the wallet pool can read its own state.
+Mirrors the multi-writer ownership pattern used elsewhere for plugin-gateway
+tokens.
+
 ---
 
 ## Troubleshooting
