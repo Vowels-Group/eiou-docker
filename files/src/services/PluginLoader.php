@@ -863,7 +863,7 @@ class PluginLoader
      */
     public function reconcileSandbox(): array
     {
-        $report = ['applied' => [], 'dropped' => [], 'errors' => []];
+        $report = ['applied' => [], 'dropped' => [], 'skipped' => [], 'errors' => []];
         if ($this->userService === null
             || $this->poolService === null
             || $this->nginxConfigService === null
@@ -875,13 +875,23 @@ class PluginLoader
         $snippet = $this->nginxConfigService->renderSnippet($entries);
 
         // Forward-pass: ensure each enabled-sandboxed plugin has its
-        // user + pool. If user already exists ensureUser is a no-op;
-        // applyPool also rewrites idempotently, so this is cheap.
+        // user + pool. Short-circuit on plugins where on-disk state
+        // already matches what we'd produce — without this every
+        // Application::__construct (and there are many: GUI page, CLI
+        // invocation, health probe) re-applies every sandboxed plugin
+        // and the supervisor log fills with "apply-pool complete"
+        // lines. The check itself reads a few small files (pool
+        // config, nginx snippet, tokens index, dispatcher path) so
+        // it's much cheaper than a supervisor round-trip.
         foreach ($entries as $entry) {
             $pluginId = $entry['plugin_id'];
             try {
                 if (!$this->userService->ensureUser($pluginId)) {
                     $report['errors'][] = ['plugin_id' => $pluginId, 'message' => 'ensureUser failed'];
+                    continue;
+                }
+                if ($this->poolService->isPoolUpToDate($pluginId, $entry['system_user'], $snippet)) {
+                    $report['skipped'][] = $pluginId;
                     continue;
                 }
                 if (!$this->poolService->applyPool($pluginId, $entry['system_user'], $snippet)) {

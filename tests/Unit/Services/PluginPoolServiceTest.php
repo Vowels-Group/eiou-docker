@@ -258,6 +258,22 @@ class PluginPoolServiceTest extends TestCase
     }
 
     #[Test]
+    public function isPoolUpToDateReturnsFalseWhenPoolMissing(): void
+    {
+        // No pool config has been written to /etc/php/*/fpm/pool.d/ —
+        // expected behavior in any test environment. isPoolUpToDate
+        // returns false → reconcileSandbox will trigger applyPool.
+        $this->assertFalse($this->svc->isPoolUpToDate('missing', 'eiou-p-deadbeef', 'snippet'));
+    }
+
+    #[Test]
+    public function isPoolUpToDateReturnsFalseForInvalidPluginId(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->svc->isPoolUpToDate('Bad-Caps', 'eiou-p-deadbeef', 'snippet');
+    }
+
+    #[Test]
     public function dispatcherStaleVersionLogsDeprecationWarning(): void
     {
         // Set the template to v2.

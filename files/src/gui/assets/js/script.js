@@ -9888,14 +9888,24 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         // "Running" = the plugin is actually live in the current node process.
-        // `booted` is the only status that means fully loaded + subscribed.
-        // Everything else (disabled, failed, registered, discovered) means
-        // not-running from a runtime perspective.
-        function isRunning(p) { return p && p.status === 'booted'; }
+        // Sandboxed plugins are live as soon as their FPM pool is up
+        // (status 'sandboxed'). Legacy in-process plugins (status
+        // 'booted' / 'registered' / 'discovered') need full node
+        // bootstrap; only 'booted' means fully loaded + subscribed.
+        function isRunning(p) {
+            if (!p) return false;
+            if (p.sandboxed) return p.status === 'sandboxed';
+            return p.status === 'booted';
+        }
 
         // A plugin needs a restart iff its desired enabled flag diverges from
-        // the runtime. Toggling back to the pre-change state clears the need.
-        function isDivergent(p) { return !!p.enabled !== isRunning(p); }
+        // the runtime. Sandboxed plugins never need a restart — applyPool /
+        // dropPool already reloaded FPM + nginx via the supervisor.
+        function isDivergent(p) {
+            if (!p) return false;
+            if (p.sandboxed) return false;
+            return !!p.enabled !== isRunning(p);
+        }
 
         function updateRestartBanner() {
             var any = false;

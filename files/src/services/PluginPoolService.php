@@ -183,6 +183,92 @@ EOT;
      * NO files were changed — the supervisor refuses to reload when its
      * config-test step fails.
      */
+    /**
+     * Check whether the on-disk state matches what applyPool would
+     * produce. Used by reconcileSandbox to short-circuit the supervisor
+     * round-trip when nothing has diverged — without this, every
+     * Application::__construct re-applies every sandboxed plugin and
+     * the supervisor log fills with "apply-pool complete" lines.
+     *
+     * Returns true iff all of these are present + current:
+     *   - Pool config at poolPath() byte-matches the expected render
+     *   - nginx snippet contains the plugin's location block
+     *   - Token exists in the central tokens index
+     *   - Dispatcher file is in the plugin's dir
+     *
+     * Scratch dir + per-plugin token file aren't checked here — they're
+     * root-owned and www-data can't stat them (without traversal
+     * permission), so we trust the supervisor's idempotent ensure
+     * if we get as far as calling applyPool.
+     */
+    public function isPoolUpToDate(
+        string $pluginId,
+        string $systemUser,
+        string $nginxSnippet
+    ): bool {
+        $this->validatePluginId($pluginId);
+        $this->validateSystemUser($systemUser);
+
+        // Pool config file must exist and match exactly. Mismatch
+        // means either the supervisor never wrote it, or a manual
+        // edit drifted from the rendered output — either way, apply.
+        $poolPath = $this->poolPath($pluginId);
+        if (!is_file($poolPath) || !is_readable($poolPath)) {
+            return false;
+        }
+        $expected = $this->renderPoolConfig($pluginId, $systemUser);
+        if ((string) @file_get_contents($poolPath) !== $expected) {
+            return false;
+        }
+
+        // nginx snippet contains the plugin's location block (the
+        // snippet is a concatenation; we just check substring inclusion
+        // rather than byte-equality so a sibling-plugin's apply doesn't
+        // invalidate this check).
+        $snippetOnDisk = is_readable(self::NGINX_SNIPPET_PATH)
+            ? (string) @file_get_contents(self::NGINX_SNIPPET_PATH)
+            : '';
+        if (strpos($snippetOnDisk, '/gui/plugin/' . $pluginId . '/') === false) {
+            return false;
+        }
+
+        // Token must be registered in the central index (mode 600 www-data,
+        // we can read it). Per-plugin token file is plugin-owned and not
+        // readable; the index is authoritative for "has a token".
+        if (!$this->tokenServiceHasToken($pluginId)) {
+            return false;
+        }
+
+        // Dispatcher must be installed. If a plugin shipped its own
+        // __dispatch.php, we're done. If we'd install the template,
+        // it should already be there.
+        $dispatcher = $this->pluginRoot . '/' . $pluginId . '/__dispatch.php';
+        if (!is_file($dispatcher)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Read the central tokens index and check whether this plugin has
+     * an entry. Cheap — file is small, owned by www-data so we can
+     * just file_get_contents it.
+     */
+    private function tokenServiceHasToken(string $pluginId): bool
+    {
+        $path = \Eiou\Services\PluginGatewayTokenService::DEFAULT_TOKENS_PATH;
+        if (!is_file($path) || !is_readable($path)) {
+            return false;
+        }
+        $decoded = json_decode((string) @file_get_contents($path), true);
+        if (!is_array($decoded)) return false;
+        foreach ($decoded as $token => $owner) {
+            if ($owner === $pluginId) return true;
+        }
+        return false;
+    }
+
     public function applyPool(
         string $pluginId,
         string $systemUser,

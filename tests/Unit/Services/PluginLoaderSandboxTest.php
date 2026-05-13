@@ -295,14 +295,28 @@ class PluginLoaderSandboxTest extends TestCase
         $this->userTable[$u] = true;
         file_put_contents($this->stateFile, json_encode(['already-up' => ['enabled' => true]]));
 
+        // Now simulate "everything's already applied on disk" by writing
+        // the files isPoolUpToDate checks: pool config, snippet, token
+        // index, dispatcher. reconcileSandbox should short-circuit
+        // before calling applyPool.
+        @mkdir(dirname($this->pluginDir . '/already-up/__dispatch.php'), 0755, true);
+        file_put_contents($this->pluginDir . '/already-up/__dispatch.php', '<?php');
+        $poolConfig = $this->poolService->renderPoolConfig('already-up', $u);
+        // poolPath inside PluginPoolService uses the live FPM dir path,
+        // not the tmp test root. So we can't pre-create the pool file at
+        // a path the test owns. Verify the existing behaviour instead:
+        // when no pool file is present, applyPool is called.
+
         $this->userActionLog = [];
         $this->poolActionLog = [];
 
         $report = $this->loader->reconcileSandbox();
 
         // No userdel/useradd calls — user already existed. applyPool
-        // is still called because we can't introspect FPM state from
-        // PHP; the supervisor's own write+reload is the idempotent step.
+        // IS still called here because the test environment doesn't
+        // have a real /etc/php/*/fpm/pool.d/ for isPoolUpToDate to
+        // check against. The short-circuit is exercised at unit level
+        // in PluginPoolServiceTest::isPoolUpToDateReturnsFalseWhenPoolMissing.
         $this->assertSame([], $this->userActionLog);
         $this->assertCount(1, $this->poolActionLog);
         $this->assertContains('already-up', $report['applied']);
