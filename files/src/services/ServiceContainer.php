@@ -561,6 +561,30 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get WalletOutboundService instance.
+     *
+     * Sandbox bridge: lets a plugin reach `TransactionService::sendEiou()`
+     * from inside its FPM pool, where direct access is blocked by
+     * `open_basedir`. The plugin gateway resolves this service from
+     * a plugin manifest's `core_services` allow-list and injects the
+     * calling plugin's id via PluginCallerAware. The service itself
+     * does NOT enforce spending caps or write an audit table — that's
+     * the plugin's responsibility, in the plugin's own DB schema.
+     * Operators who don't trust a plugin to honour its own caps
+     * shouldn't allow-list it at all (the safer path is the
+     * event-publish + operator-approval flow).
+     */
+    public function getWalletOutboundService(): \Eiou\Services\WalletOutboundService {
+        if (!isset($this->services['WalletOutboundService'])) {
+            $this->services['WalletOutboundService'] = new \Eiou\Services\WalletOutboundService(
+                $this->getTransactionService(),
+                Logger::getInstance()
+            );
+        }
+        return $this->services['WalletOutboundService'];
+    }
+
+    /**
      * Get P2pService instance
      *
      * Integrates MessageDeliveryService for reliable P2P message delivery

@@ -1930,6 +1930,7 @@ small. As of this writing, the callable surface is:
 | `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
 | `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
 | `PluginEventPublisher`          | `publish`                                                                                            |
+| `WalletOutboundService`         | `send`                                                                                               |
 
 That's it. The list grows **on demand**, when a concrete plugin
 needs something — not speculatively. The reasoning is straightforward:
@@ -1964,6 +1965,92 @@ The maintainer adds it as a thin `Lookup/` service if the use case
 holds up. Decoration on the repository itself is *not* the path —
 those classes stay pure data-access.
 
+### Where plugin-owned state and code lives
+
+Sandboxed plugins are full PHP applications inside their own FPM pool.
+Anything beyond the dispatcher is **plugin-owned and plugin-managed** —
+core doesn't load it, doesn't audit it, doesn't migrate it. A
+typical layout for a non-trivial plugin:
+
+    /etc/eiou/plugins/payback-btc/
+      plugin.json                       ← manifest (declares autoload, surfaces, etc.)
+      __dispatch.php                    ← entry; routes envelope types
+      src/
+        PaybackBtcPlugin.php            ← entry class (PluginInterface)
+        CustomerRepository.php          ← plugin-owned, queries the plugin's own MySQL schema
+        RefundPolicyService.php         ← plugin-owned, enforces the plugin's own caps
+        OutboundAuditRepository.php     ← plugin-owned, writes to the plugin's own audit table
+        ...
+
+Your `__dispatch.php` is responsible for loading these classes
+itself. The manifest's `autoload.psr-4` field is metadata that
+tooling (and the pre-sandbox in-process load path) read, but the
+sandboxed FPM pool **does not register an autoloader on your behalf**
+— the dispatcher template ships without one. Two practical paths:
+
+**`require_once` from the top of `__dispatch.php`:**
+
+    require_once __DIR__ . '/src/CustomerRepository.php';
+    require_once __DIR__ . '/src/RefundPolicyService.php';
+    require_once __DIR__ . '/src/OutboundAuditRepository.php';
+
+Simple and explicit. Fine for small plugins. The plugin's
+`open_basedir` includes its own dir, so the includes succeed; the
+disabled-functions list does not block `require_once`.
+
+**Register a PSR-4 autoloader from the top of `__dispatch.php`:**
+
+    spl_autoload_register(function (string $class): void {
+        $prefix = 'Eiou\\Plugins\\PaybackBtc\\';
+        if (strncmp($class, $prefix, strlen($prefix)) !== 0) return;
+        $relative = substr($class, strlen($prefix));
+        $file = __DIR__ . '/src/' . str_replace('\\', '/', $relative) . '.php';
+        if (is_file($file)) require_once $file;
+    });
+
+Cleaner for plugins with many classes — instantiate by FQCN and the
+file gets loaded on demand. Mirrors the autoloader core used to run
+on the in-process load path; nothing stops you from porting that
+exact closure into your dispatcher.
+
+Your handler then instantiates the classes as plain PHP, and they
+talk to your per-plugin MySQL user via the connection your handler
+opens itself.
+
+Core doesn't have a "factory that auto-loads plugin services" — and
+deliberately so:
+
+- **It would defeat the sandbox.** Loading plugin code into the
+  wallet's FPM pool would give that code the wallet's master key,
+  full DB access, and no `open_basedir` restriction. That's the
+  pre-#929 model that was deliberately removed.
+- **The plugin's pool is the right home anyway.** Plugin state
+  belongs in the plugin's own DB schema (isolated MySQL user, can't
+  reach wallet tables); plugin business logic runs as the plugin's
+  Unix user under restricted `open_basedir`. There's no reason for
+  the wallet pool to know about either.
+
+What core DOES provide for plugin-owned tables: per-plugin database
+isolation (see [Database Isolation](#database-isolation)). Your
+plugin gets a MySQL user, a credential entry, optional
+sibling-container credential export, and grants on tables your
+manifest declares via `owned_tables` (or unrestricted DDL if you
+prefer to `CREATE TABLE IF NOT EXISTS` from your own boot path).
+What core does NOT provide is a class loader for your services —
+that's PSR-4 autoload, configured in your manifest's `autoload`
+field, exactly as it would be in any other PHP application.
+
+The trade-off this design accepts: plugin-managed state is opaque to
+the operator. If a plugin maintains its own audit log of, say,
+outbound spending, the operator's view of that log is whatever the
+plugin chooses to show. The honest framing is that this matches the
+trust model — if you trust a plugin enough to allow-list a
+mutating core service like `WalletOutboundService.send`, you trust
+it enough to keep its own honest audit. If you don't, the right
+path is the event-publish + operator-approval flow, where the
+operator is the one clicking through the existing wallet send GUI
+and the canonical record is the wallet's own `transactions` table.
+
 ### What you CAN do as a sandboxed plugin
 
 - Subscribe to events; emit log lines via the `_log` envelope.
@@ -1978,6 +2065,9 @@ those classes stay pure data-access.
 - Open MySQL connections to your own per-plugin database user (your
   manifest's `database.user: true` flag still works the same way it
   did pre-sandboxing).
+- Ship your own PHP classes (repositories, services, value objects,
+  whatever) — `require_once` them or register your own autoloader
+  from `__dispatch.php`. Core doesn't load them.
 - Call whitelisted core services via `core_call`.
 
 ### What you CANNOT do as a sandboxed plugin
