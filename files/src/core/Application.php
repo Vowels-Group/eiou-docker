@@ -214,7 +214,8 @@ class Application {
                 $this->services->getTabRegistry(),
                 $this->services->getActionRegistry(),
                 $this->services->getPluginApiRegistry(),
-                $this->services->getPluginCliRegistry()
+                $this->services->getPluginCliRegistry(),
+                $this->services->getPaybackMethodTypeRegistry()
             );
 
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)

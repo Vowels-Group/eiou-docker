@@ -542,6 +542,27 @@ class PluginLoader
                     && isset($e['name']) && is_string($e['name'])
                     && preg_match('/^[a-z][a-z0-9-]*$/', $e['name']) === 1
             );
+            // payback_method_types entries declare plugin-provided rail
+            // types (BTC, PayPal, etc.) that bridge into the wallet's
+            // PaybackMethodTypeRegistry. Each entry carries the static
+            // catalog row (id, label, group, icon, description,
+            // currencies, fields); the dynamic methods (validate, mask,
+            // defaultPrecision) are forwarded into the plugin's
+            // __dispatch.php with type "payback_method". `id` must match
+            // ^[a-z][a-z0-9_]{0,31}$ (the same shape the registry
+            // enforces) and not collide with the reserved core ids
+            // bank_wire / custom — the registry would refuse those at
+            // registration time, but filtering here keeps malformed
+            // manifests off the row entirely.
+            $row['payback_method_types'] = $this->shapedListField(
+                $manifest,
+                'payback_method_types',
+                fn($e): bool => is_array($e)
+                    && isset($e['id']) && is_string($e['id'])
+                    && preg_match('/^[a-z][a-z0-9_]{0,31}$/', $e['id']) === 1
+                    && !in_array($e['id'], ['bank_wire', 'custom'], true)
+                    && isset($e['catalog']) && is_array($e['catalog'])
+            );
             if (isset($live[$name]['error'])) {
                 $row['error'] = (string) $live[$name]['error'];
             }
@@ -1643,6 +1664,17 @@ class PluginLoader
             return false;
         }
         @chmod($tmp, 0640);
+        // PluginLoader is consumed by both the operator CLI (typically
+        // root via `docker exec`) and the www-data FPM pool. Without an
+        // explicit chgrp, a root-written file ends up root:root 0640 —
+        // the wallet pool then can't read its own state, and every
+        // plugin enabled via CLI looks disabled until something
+        // www-data-owned re-writes the file. @ swallows EPERM in the
+        // www-data writer case (where the file is already
+        // www-data-owned and no chown is needed). Same shape as
+        // PluginGatewayTokenService::writeIndex.
+        @chown($tmp, 'root');
+        @chgrp($tmp, 'www-data');
         if (!@rename($tmp, $this->stateFile)) {
             @unlink($tmp);
             return false;
