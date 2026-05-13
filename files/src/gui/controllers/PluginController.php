@@ -7,6 +7,7 @@ use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Core\UserContext;
 use Eiou\Services\GuiActionRegistry;
+use Eiou\Services\PluginInstallService;
 use Eiou\Services\PluginLoader;
 use Eiou\Services\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
@@ -32,17 +33,20 @@ class PluginController
     private PluginLoader $loader;
     private RestartRequestService $restartRequester;
     private ?PluginUninstallService $uninstallService;
+    private ?PluginInstallService $installService;
 
     public function __construct(
         Session $session,
         PluginLoader $loader,
         ?RestartRequestService $restartRequester = null,
-        ?PluginUninstallService $uninstallService = null
+        ?PluginUninstallService $uninstallService = null,
+        ?PluginInstallService $installService = null
     ) {
         $this->session = $session;
         $this->loader = $loader;
         $this->restartRequester = $restartRequester ?? new RestartRequestService();
         $this->uninstallService = $uninstallService;
+        $this->installService = $installService;
     }
 
     /**
@@ -56,6 +60,8 @@ class PluginController
         'pluginsRequestRestart',
         'pluginChangelog',
         'pluginsUninstall',
+        'pluginsUpload',
+        'pluginsUploadLimits',
     ];
 
     /**
@@ -142,6 +148,12 @@ class PluginController
                 case 'pluginsUninstall':
                     $this->uninstallPlugin();
                     break;
+                case 'pluginsUpload':
+                    $this->uploadPlugin();
+                    break;
+                case 'pluginsUploadLimits':
+                    $this->reportUploadLimits();
+                    break;
                 default:
                     $this->respondError('unknown_action', 'Unknown action', 400);
             }
@@ -181,11 +193,19 @@ class PluginController
     private function computeRestartRequired(array $plugins): bool
     {
         // status values from PluginLoader: discovered, registered, booted,
-        // failed, disabled, not_loaded. Anything that ran register/boot is
-        // "actually loaded" from the worker's perspective.
+        // failed, disabled, sandboxed, not_loaded. Anything that ran
+        // register/boot is "actually loaded" from the worker's perspective.
         $loadedStatuses = ['discovered', 'registered', 'booted'];
 
         foreach ($plugins as $p) {
+            // Sandboxed plugins never load in-process — their pool is
+            // a separate FPM process. Their enabled flag took effect on
+            // applyPool / dropPool, not at PHP-FPM master startup, so a
+            // state vs in-process divergence here is expected and
+            // doesn't mean a restart is needed.
+            if (!empty($p['sandboxed'])) {
+                continue;
+            }
             $isLoaded = in_array($p['status'] ?? '', $loadedStatuses, true);
             if (($p['enabled'] ?? false) !== $isLoaded) {
                 return true;
@@ -252,16 +272,31 @@ class PluginController
             $this->respondError('persist_failed', 'Could not persist the new state', 500);
         }
 
+        // Sandboxed plugins took effect immediately (applyPool reloaded
+        // FPM + nginx). In-process plugins need a full node restart so
+        // PluginLoader's register()/boot() can re-run with the new
+        // state. Surface the distinction so the GUI doesn't raise a
+        // "restart required" banner when nothing actually requires it.
+        $isSandboxed = false;
+        foreach ($this->loader->listAllPlugins() as $row) {
+            if (($row['name'] ?? null) === $name) {
+                $isSandboxed = !empty($row['sandboxed']);
+                break;
+            }
+        }
+
         Logger::getInstance()->info('plugin_toggled_via_gui', [
             'plugin' => $name,
             'enabled' => $enabled,
+            'sandboxed' => $isSandboxed,
         ]);
 
         $this->respond([
             'success' => true,
             'plugin' => $name,
             'enabled' => $enabled,
-            'restart_required' => true,
+            'sandboxed' => $isSandboxed,
+            'restart_required' => !$isSandboxed,
         ]);
     }
 
@@ -328,6 +363,147 @@ class PluginController
             'plugin' => $name,
             'html' => UpdateCheckService::markdownToHtml($markdown),
         ]);
+    }
+
+    /**
+     * Install a plugin from an uploaded zip. The plugin lands on disk
+     * DISABLED — install never auto-enables. The client is expected to
+     * call pluginsList afterwards to refresh the table and then either
+     * pluginsToggle + pluginsRequestRestart to activate it, or
+     * pluginsUninstall if the operator changes their mind after seeing
+     * the signature status.
+     *
+     * Error envelopes:
+     *   - 400 invalid_upload        — no file, partial upload, PHP UPLOAD_ERR_*
+     *   - 400 invalid_zip           — bad magic / zip-slip / oversize / bad ext
+     *   - 409 already_installed     — target dir already exists
+     *   - 500 install_unavailable   — service not wired (shouldn't normally happen)
+     *   - 500 install_failed        — filesystem / signature-required failure
+     */
+    private function uploadPlugin(): void
+    {
+        if ($this->installService === null) {
+            $this->respondError(
+                'install_unavailable',
+                'Plugin install service is not wired in this context.',
+                500
+            );
+        }
+
+        $file = $_FILES['plugin_zip'] ?? null;
+        if (!is_array($file)) {
+            $this->respondError('invalid_upload', 'No file uploaded (expected field: plugin_zip)', 400);
+        }
+
+        $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($err !== UPLOAD_ERR_OK) {
+            $this->respondError(
+                'invalid_upload',
+                'Upload failed: ' . $this->describeUploadError($err),
+                400
+            );
+        }
+
+        $tmpPath = (string) ($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !$this->isUploadedFile($tmpPath)) {
+            // is_uploaded_file() is the canonical "this came from the same
+            // request" check — guards against a caller passing /etc/passwd
+            // as tmp_name in a forged $_FILES array (which can't happen via
+            // the wire but is the documented safety check).
+            $this->respondError('invalid_upload', 'Upload did not come from this request', 400);
+        }
+
+        $originalName = (string) ($file['name'] ?? '');
+        try {
+            $result = $this->installService->installFromZip($tmpPath, $originalName);
+        } catch (\InvalidArgumentException $e) {
+            // Two of the InvalidArgument cases ("already installed",
+            // "appeared during install") map to 409 — both mean a clash
+            // with existing on-disk state rather than malformed input.
+            $msg = $e->getMessage();
+            $code = (stripos($msg, 'already installed') !== false || stripos($msg, 'appeared during install') !== false)
+                ? 'already_installed'
+                : 'invalid_zip';
+            $status = $code === 'already_installed' ? 409 : 400;
+            $this->respondError($code, $msg, $status);
+        } catch (\RuntimeException $e) {
+            $this->respondError('install_failed', $e->getMessage(), 500);
+        } catch (Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'context' => 'plugin_install',
+                'original_filename' => $originalName,
+            ]);
+            $this->respondError('install_failed', 'Unexpected error during install', 500);
+        }
+
+        Logger::getInstance()->info('plugin_uploaded_via_gui', [
+            'plugin' => $result['plugin_id'],
+            'version' => $result['version'],
+            'signature_status' => $result['signature']['status'],
+        ]);
+
+        $this->respond([
+            'success' => true,
+            'plugin_id' => $result['plugin_id'],
+            'version' => $result['version'],
+            'signature' => $result['signature'],
+            // The plugin is staged DISABLED. Installing does not require a
+            // restart by itself; *enabling* does. Surface that here so the
+            // GUI doesn't immediately raise the restart banner.
+            'enabled' => false,
+            'restart_required' => false,
+            'message' => 'Plugin uploaded and staged as disabled. Enable it and restart the node to activate.',
+        ]);
+    }
+
+    /**
+     * Expose the install service's limits so the upload UI can present them
+     * without copying constants out of PHP. Cheap, idempotent, CSRF-checked.
+     */
+    private function reportUploadLimits(): void
+    {
+        // Limits live in the service even when no service instance is wired
+        // — they're static. Callers can use them to pre-validate before
+        // shipping the bytes over the wire.
+        $this->respond([
+            'success' => true,
+            'limits' => PluginInstallService::limits(),
+            'install_available' => $this->installService !== null,
+        ]);
+    }
+
+    /**
+     * Thin wrapper around PHP's is_uploaded_file() so tests can override
+     * the check without spinning up a real multipart request. Production
+     * code path is the genuine PHP-internal check.
+     */
+    protected function isUploadedFile(string $path): bool
+    {
+        return is_uploaded_file($path);
+    }
+
+    private function describeUploadError(int $err): string
+    {
+        // PHP's upload_err_* constants — translate to operator-friendly text.
+        // INI_SIZE / FORM_SIZE both surface the same way to the user: the
+        // file was too big.
+        switch ($err) {
+            case UPLOAD_ERR_INI_SIZE:
+            case UPLOAD_ERR_FORM_SIZE:
+                return 'file exceeded the upload size limit';
+            case UPLOAD_ERR_PARTIAL:
+                return 'upload was interrupted';
+            case UPLOAD_ERR_NO_FILE:
+                return 'no file was sent';
+            case UPLOAD_ERR_NO_TMP_DIR:
+                return 'server is missing its tmp directory';
+            case UPLOAD_ERR_CANT_WRITE:
+                return 'server could not write the upload to disk';
+            case UPLOAD_ERR_EXTENSION:
+                return 'a PHP extension blocked the upload';
+            default:
+                return "PHP upload error code {$err}";
+        }
     }
 
     /**

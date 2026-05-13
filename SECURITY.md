@@ -511,6 +511,7 @@ State is file-based in `/tmp/tor-circuit-health/` (clears on container restart).
 | Rate limiting | Per-key limits (default: 100 requests/minute) via `RateLimiterService` |
 | Security headers | `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` on all responses; CSP with per-request nonces at the application layer |
 | Secure logging | Automatic masking of passwords, auth codes, API keys, and mnemonics in log output |
+| Plugin zip upload validation | `PluginInstallService` rejects zip uploads on magic-byte mismatch, path traversal (`..`, absolute paths, `\`), multiple top-level directories, disallowed file extensions, hidden dotfiles, oversized files (>15 MiB / file or >50 MiB total), suspicious compression ratios (>100:1), >500-file archives, or extracted symlinks. Uploaded plugins land disabled and never auto-execute. See [PLUGINS.md → Installing Plugins](docs/PLUGINS.md#installing-plugins). |
 
 ### Transport Security
 
@@ -572,6 +573,7 @@ The following are known security limitations of the current alpha release.
 | No multi-factor authentication | API access relies on HMAC-SHA256 key-based authentication without a second factor |
 | Seed phrase is the single root of trust | Compromise of the 24-word seed phrase grants full control over the wallet, Tor identity, and backup decryption |
 | Contact request messages are not E2E encrypted | Initial contact requests (`type: create`) cannot be E2E encrypted because the recipient's public key is not yet known. The optional message/description included with a contact request is protected only by transport-level encryption (Tor or HTTPS). Avoid including sensitive information in contact request messages when using plain HTTP transport |
+| Plugins run at PHP-FPM privilege | A plugin you trust enough to enable can do anything the PHP runtime can do, including reading every file in `/etc/eiou/config/`. The zip-upload validation pipeline mechanically rejects malformed and oversized archives, but cannot judge whether a syntactically valid plugin's code is safe — trust is a human decision. Plugin signatures (when enforced) prove only that an upload was signed by a key in `trusted-keys/`, not that the code is benign. Review the manifest and changelog before enabling any plugin. |
 
 These limitations will be addressed as the project matures toward a production release.
 

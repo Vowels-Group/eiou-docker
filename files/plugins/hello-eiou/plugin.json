@@ -1,7 +1,7 @@
 {
   "name": "hello-eiou",
-  "version": "1.2.0",
-  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the eIOU plugin API surface: events, CLI, REST, and the GUI hooks system (render hooks, asset enqueue, tab registry, action registry, filter slots).",
+  "version": "1.3.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the sandboxed eIOU plugin contract: declarative manifest surfaces, an in-pool __dispatch.php, event/filter/render/action handlers, REST + CLI dispatch, and core_call into whitelisted core services.",
   "author": {
     "name": "EIOU",
     "url": "https://eiou.org"
@@ -13,5 +13,52 @@
     "psr-4": {
       "Eiou\\Plugins\\HelloEiou\\": "src/"
     }
-  }
+  },
+
+  "sandboxed": true,
+
+  "subscribes_to": [
+    "sync.completed"
+  ],
+
+  "render_hooks": [
+    "gui.dashboard.after"
+  ],
+
+  "filter_hooks": [
+    "gui.dashboard.widgets",
+    "gui.contact.actions"
+  ],
+
+  "core_services": [
+    "Logger.info",
+    "Logger.warning",
+    "Logger.error",
+    "Logger.debug"
+  ],
+
+  "gui_assets": [
+    {"type": "css", "path": "assets/styles.css"}
+  ],
+
+  "tabs": [
+    {
+      "id": "hello-eiou-fortunes",
+      "label": "Fortunes",
+      "icon": "fas fa-cookie-bite",
+      "order": 45
+    }
+  ],
+
+  "gui_actions": [
+    {"name": "helloEiouFortune", "tier": "csrf"}
+  ],
+
+  "api_routes": [
+    {"method": "GET", "action": "fortune"}
+  ],
+
+  "cli_commands": [
+    {"name": "hello-eiou", "description": "Print a random eIOU fortune."}
+  ]
 }

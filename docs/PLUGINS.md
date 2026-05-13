@@ -13,18 +13,20 @@ default until the operator explicitly enables them.
 4. [Database Isolation](#database-isolation)
 5. [Plugin Signatures](#plugin-signatures)
 6. [Lifecycle](#lifecycle)
-7. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
-8. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
-9. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
-10. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
-11. [Writing a Plugin](#writing-a-plugin)
-12. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-13. [Extending the GUI](#extending-the-gui)
-14. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-15. [Testing a Plugin](#testing-a-plugin)
-16. [Safety Model and Limitations](#safety-model-and-limitations)
-17. [Troubleshooting](#troubleshooting)
-18. [Related Documentation](#related-documentation)
+7. [Installing Plugins](#installing-plugins)
+8. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
+9. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
+10. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
+11. [Sandboxed Plugin Authoring](#sandboxed-plugin-authoring)
+12. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
+13. [Writing a Plugin](#writing-a-plugin)
+14. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+15. [Extending the GUI](#extending-the-gui)
+16. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+17. [Testing a Plugin](#testing-a-plugin)
+18. [Safety Model and Limitations](#safety-model-and-limitations)
+19. [Troubleshooting](#troubleshooting)
+20. [Related Documentation](#related-documentation)
 
 ---
 
@@ -820,6 +822,153 @@ this via the request-marker pattern documented in
 
 ---
 
+## Installing Plugins
+
+There are three ways to land a plugin's files in `/etc/eiou/plugins/<name>/`:
+
+1. **Drop the directory in by hand** — log in to the container, copy the
+   plugin's files into `/etc/eiou/plugins/`, then enable it in the GUI / CLI.
+   This is the path operators with shell access have always had. The plugin
+   is disabled by default ([Disabled by default](#disabled-by-default)).
+
+2. **Bundled** — plugins shipped inside the Docker image are seeded into the
+   plugins volume on first boot via `cp -rn` ([Bundled
+   plugins](#bundled-plugins)).
+
+3. **Upload a `.zip` through the GUI** — the operator picks a `.zip` from
+   their machine and the node stages it disabled, after a layered validation
+   pass. The rest of this section documents that path.
+
+### Why a separate code path
+
+A plugin installs at PHP-FPM privilege — once it runs, it can do anything PHP
+can do (see [No sandboxing](#no-sandboxing)). The upload path's job is not to
+make every plugin safe — it can't — but to make the *install decision*
+deliberate and to ensure that a malformed, oversized, or hostile zip cannot
+exploit the node before the operator has even decided whether to enable the
+plugin. Trust comes from the operator (and optionally the signature trust
+chain — see [Plugin Signatures](#plugin-signatures)). Mechanical safety
+comes from the gates below.
+
+### Service
+
+`Eiou\Services\PluginInstallService` owns the validation and extraction
+pipeline. The GUI's `pluginsUpload` action delegates to it. The CLI does
+not yet expose this — operators with shell access can already drop files in
+directly, so a CLI form would just duplicate the existing path.
+
+### Validation pipeline
+
+Validations run in the order listed. The pipeline short-circuits on the
+first failure, and any bytes already written to the staging directory are
+removed before the error returns.
+
+| Gate                          | Limit / Rule                                                                                         | Why                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| File readable, non-empty      | `PluginInstallService::MAX_ZIP_BYTES` (25 MiB)                                                       | First-line DoS guard; rejects before the zip is even opened.                                     |
+| Magic bytes                   | First 4 bytes must be `PK\x03\x04`                                                                   | Client-supplied MIME / extension aren't trusted; the magic header is.                            |
+| Path traversal                | No `..`, no leading `/`, no `\`, no `./`                                                             | Zip-slip — prevents extraction from escaping `/etc/eiou/plugins/`.                               |
+| Single top-level directory    | All entries share one root, matching `^[a-z0-9][a-z0-9_-]{0,63}$`                                    | A plugin is one named directory; multiple roots or capital-letter names break the loader's contract. |
+| Per-file uncompressed size    | `MAX_FILE_BYTES` (15 MiB)                                                                            | No single file can dominate the install; sized to forgive heavy single assets (large splash images, bundled fonts) without raising the aggregate cap. |
+| Total uncompressed size       | `MAX_UNCOMPRESSED_BYTES` (50 MiB)                                                                    | Disk-space cap.                                                                                  |
+| File count                    | `MAX_FILE_COUNT` (500)                                                                               | Inode-pressure cap.                                                                              |
+| Compression ratio             | `MAX_COMPRESSION_RATIO` (100:1)                                                                      | Zip-bomb sentinel; legitimate plugin zips sit well under 20:1.                                   |
+| File extension allow-list     | `php, json, md, txt, css, js, map, html, htm, svg, png, jpg, jpeg, gif, webp, ico, woff, woff2, ttf, otf, eot` | Refuses `.phar`, `.so`, `.htaccess`, hidden dotfiles, anything outside the plugin asset contract. |
+| Symlink rejection             | No `is_link()` paths in the extracted tree                                                           | Belt-and-suspenders: even if entry walk approved a name, an actual symlink on disk is anomalous. |
+| Extraction stays inside root  | `realpath()` of every extracted path is under the staging dir                                        | Cross-checks the entry walk against the post-extraction filesystem state.                        |
+| Manifest validation           | `plugin.json` parses, `name` matches directory, `version` and `entryClass` present                   | Catches corrupt manifests before the loader has to.                                              |
+| No overwrite                  | Target dir must not already exist                                                                    | Install is not update; refresh through uninstall → upload so the destructive step is explicit.   |
+| Signature (mode dependent)    | In `require` mode, the zip must include a valid `plugin.sig` against a trusted key                   | See [Enforcement modes](#enforcement-modes). `warn` and `off` modes accept the upload but report the verifier's verdict in the response. |
+
+The numeric limits and the allow-list are returned to the GUI by the
+`pluginsUploadLimits` action so the upload form can echo them without
+duplicating constants.
+
+### Staging and atomic publish
+
+Uploaded bytes are not written under their final name. The pipeline:
+
+1. The upload tmp file (provided by PHP under `$_FILES['plugin_zip']['tmp_name']`)
+   is opened read-only via `ZipArchive`.
+2. Every entry is walked with `statIndex()` — no extraction yet — and the
+   gates above run against the metadata.
+3. If the walk passes, extraction targets a sibling directory:
+   `/etc/eiou/plugins/.staging-<16-hex-chars>/`. A failure here leaves the
+   staging directory in place, which the service immediately recursive-deletes
+   inside the catch block.
+4. The extracted tree is walked again for symlinks / realpath escapes, and
+   the manifest is parsed.
+5. If signature mode is `require`, the verifier runs against the staged tree.
+   A bad verdict aborts the install; the staging directory is cleaned up.
+6. `rename()` moves `.staging-…/<plugin_id>/` to
+   `/etc/eiou/plugins/<plugin_id>/`. `rename()` inside the same filesystem is
+   atomic, so `PluginLoader::discover()` never sees a half-written plugin.
+7. The staging parent is removed. The `PLUGIN_INSTALLED` event fires.
+
+If anything between steps 3 and 6 fails, the catch block recursive-deletes
+the staging directory before re-throwing, so failed uploads leave no
+artefacts on the volume.
+
+### What the upload does *not* do
+
+- **Enable.** Installed plugins land disabled. No `register()` or `boot()`
+  runs. The operator must toggle the plugin on and restart the node, exactly
+  like a manually-dropped-in plugin. This matches the
+  [Disabled by default](#disabled-by-default) stance.
+- **Replace an existing plugin.** Re-uploading a plugin that's already on
+  disk returns `409 already_installed`. Updates require an explicit
+  uninstall first, so the operator acknowledges the destructive step.
+- **Bypass signature enforcement.** If `PLUGIN_SIGNATURE_MODE` is set to
+  `require`, the upload path applies the same verifier as the loader.
+
+### Response shape
+
+```json
+{
+  "success": true,
+  "plugin_id": "my-plugin",
+  "version": "1.2.3",
+  "signature": {
+    "status": "ok",
+    "key_fingerprint": "sha256:…",
+    "enforced": true
+  },
+  "enabled": false,
+  "restart_required": false,
+  "message": "Plugin uploaded and staged as disabled. Enable it and restart the node to activate."
+}
+```
+
+`signature.status` mirrors `PluginSignatureVerifier::verify()`: `ok`,
+`unsigned`, `untrusted_key`, `bad_signature`, `malformed_sig`,
+`malformed_manifest`, or `not_checked` when no verifier is wired.
+
+### Errors
+
+| HTTP | Code                 | When                                                                   |
+| ---- | -------------------- | ---------------------------------------------------------------------- |
+| 400  | `invalid_upload`     | No file, partial upload, PHP `UPLOAD_ERR_*`, or forged `tmp_name`      |
+| 400  | `invalid_zip`        | Magic-byte / zip-slip / oversize / bad-extension / manifest failures   |
+| 409  | `already_installed`  | Target directory already exists                                        |
+| 500  | `install_unavailable`| Service not wired (early-boot / no-wallet state)                       |
+| 500  | `install_failed`     | Filesystem failure, signature required but verification failed, etc.   |
+
+### Trust boundary
+
+Every check above is mechanical. None of them can answer "should I trust
+this plugin's code?" — that is a human decision, and a plugin you trust
+enough to enable runs at PHP-FPM privilege ([No
+sandboxing](#no-sandboxing)). Before enabling an uploaded plugin:
+
+- Read the manifest.
+- Read the changelog (the detail modal renders it).
+- Note the signature status — `ok` proves only that the plugin was signed
+  by a key in `trusted-keys/`, not that the code is safe.
+- If you're running with `database.user` declarations, review them —
+  enabling triggers `CREATE USER` / `GRANT`.
+
+---
+
 ## Managing Plugins in the GUI
 
 The Plugins section lives under **Settings → Plugins**.
@@ -858,6 +1007,18 @@ Clicking any row opens a detail modal showing:
   two-step "disable → confirm uninstall" flow; the service refuses to
   uninstall an enabled plugin regardless of how the request arrives. See
   [Database Isolation → Uninstall](#uninstall).
+
+### Uploading a `.zip`
+
+The section header carries an **Upload .zip** button next to **Refresh**.
+Clicking it opens the OS file picker; selecting a `.zip` POSTs it to the
+`pluginsUpload` action. On success the new plugin appears in the table as
+disabled (grey dot); the row's signature status is reflected in the toast
+(`ok`, `unsigned`, etc.). To activate, toggle the plugin on and use the
+restart banner — same flow as a manually-dropped-in plugin.
+
+The full validation contract and threat model is documented in
+[Installing Plugins](#installing-plugins).
 
 ### Restart banner
 
@@ -1004,6 +1165,222 @@ Errors: `400 invalid_name` (regex mismatch), `404 unknown_plugin`
 (not on disk), `500 persist_failed` (state file unwritable),
 `500 plugin_loader_unavailable` (the plugin system didn't initialize
 during boot — usually means the node is in an incomplete state).
+
+---
+
+## Sandboxed Plugin Authoring
+
+Plugins can opt into running in an isolated PHP-FPM pool as their own
+Unix user, with no access to `/etc/eiou/config/` (and therefore no
+access to the master key, the seed phrase, the encrypted private key,
+or any other wallet secret). Set `"sandboxed": true` in the manifest.
+
+See [`docs/PLUGIN_SANDBOXING.md`](PLUGIN_SANDBOXING.md) for the full
+architecture; what you need to know as an author is below.
+
+### Sandboxing is mandatory
+
+All plugins must declare `"sandboxed": true` in their manifest. The
+in-process plugin model has been removed — non-sandboxed plugins
+could read the master key and decrypt the seed phrase, so the loader
+refuses to load them. Operator-facing behaviour:
+
+| Manifest | At install | At enable | At boot |
+|---|---|---|---|
+| `"sandboxed": true` | Accepted | Accepted | Pool spawned, IPC plumbed |
+| Missing flag *or* `"sandboxed": false` | **Rejected** with `sandboxed_required` | **Rejected** — `setEnabled` returns false | `legacy_unsupported` status, auto-flipped to disabled in `plugins.json` |
+
+Plugins run in their own per-plugin PHP-FPM pool as their own Unix
+user (`eiou-p-<hash>`), with `open_basedir` restricted to the
+plugin's dir + scratch, `disable_functions` blocking shell-out and
+eval, and zero filesystem access to wallet secrets.
+
+### Manifest surfaces a sandboxed plugin declares
+
+Everything a plugin would have wired in `boot()` becomes manifest
+metadata:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "entryClass": "Vendor\\MyPlugin\\Entry",
+  "autoload": { "psr-4": { "Vendor\\MyPlugin\\": "src/" } },
+
+  "sandboxed": true,
+
+  "subscribes_to":  ["sync.completed", "contact.created"],
+  "render_hooks":   ["gui.dashboard.after"],
+  "filter_hooks":   ["gui.dashboard.widgets"],
+  "tabs":           [{"id": "my-tab", "label": "My Tab", "icon": "fas fa-puzzle-piece", "order": 50}],
+  "gui_actions":    [{"name": "myPluginAction", "tier": "csrf"}],
+  "gui_assets":     [{"type": "css", "path": "assets/styles.css"}],
+  "api_routes":     [{"method": "GET", "action": "fortune"}],
+  "cli_commands":   [{"name": "my-plugin"}],
+
+  "core_services":  ["Logger.info", "Logger.warning"]
+}
+```
+
+Core reads each list at boot and registers IPC forwarders that route
+each surface into the plugin's `__dispatch.php`. The plugin's own
+PHP code never executes in-process.
+
+### The `__dispatch.php` contract
+
+The plugin ships **one** PHP file as its sandboxed entry point:
+`<plugin-dir>/__dispatch.php`. nginx is configured to route
+`/gui/plugin/<plugin-id>/*` to the plugin's FPM socket with
+`SCRIPT_FILENAME` pinned to that file — the plugin never picks its
+own entry.
+
+Wire shape (request):
+
+```http
+POST /gui/plugin/<id>/__dispatch HTTP/1.1
+Content-Type: application/json
+
+{
+  "type":    "event" | "filter" | "render" | "action" | "rest" | "cli",
+  "name":    "<event_name | hook_name | action_name | route_action | command>",
+  "context": <type-specific payload>
+}
+```
+
+Response:
+
+```json
+{
+  "ok":     true,
+  "result": <type-specific>,
+  "_log":   [
+    {"level": "info", "message": "...", "context": {...}},
+    ...
+  ]
+}
+```
+
+The `_log` array is copied into the wallet's central log under the
+plugin's name when the dispatch returns — so log lines emitted by
+the plugin appear next to wallet log lines for the same operation,
+even though the plugin couldn't write `/var/log/` directly.
+
+Use the bundled template at
+`files/src/templates/plugin-dispatch-template.php` as the starting
+point for your dispatcher. The template carries a
+`PLUGIN_DISPATCH_VERSION` constant — bump it in lockstep with
+upstream so the wallet can warn operators if your plugin's
+dispatcher is older than the current contract.
+
+### Calling core services from your handler — `core_call()`
+
+The dispatcher template includes a `core_call($service, $method, $args, $log)`
+helper. It POSTs an authenticated request to the wallet's gateway
+endpoint, which validates:
+
+1. The plugin's bearer token (loaded from `.gateway-token` in the
+   plugin's dir, written there by core at enable time).
+2. The plugin's manifest declares `"<Service>.<method>"` in
+   `core_services` (this manifest gate is *operator-visible* —
+   operators see which APIs the plugin wants to use *before*
+   they enable it).
+3. The target method on the core service carries the
+   `#[\Eiou\Contracts\PluginCallable]` attribute. This is a per-
+   method allow-list in the core codebase, reviewable in
+   `git grep PluginCallable`.
+
+Example:
+
+```php
+core_call('Logger', 'info', [
+    "Sync completed for {$contactPubkey}",
+    ['plugin' => 'my-plugin', 'contact_pubkey' => $contactPubkey],
+], $log);
+```
+
+Returns the method's return value on success, `null` on failure
+(transport error / validation rejection / handler exception).
+Failure cases log to `$log` with structured context.
+
+### What you CAN do as a sandboxed plugin
+
+- Subscribe to events; emit log lines via the `_log` envelope.
+- Render dashboard widgets, register tabs, contribute filter values.
+- Handle GUI actions (CSRF + auth tier validated by core before
+  dispatch).
+- Serve REST endpoints at `/api/v1/plugins/<your-id>/<action>`.
+- Register CLI subcommands; the `eiou` binary dispatches to your
+  plugin via IPC.
+- Read your own files and the scratch dir at
+  `/var/lib/eiou/plugin-scratch/<your-system-user>/`.
+- Open MySQL connections to your own per-plugin database user (your
+  manifest's `database.user: true` flag still works the same way it
+  did pre-sandboxing).
+- Call whitelisted core services via `core_call`.
+
+### What you CANNOT do as a sandboxed plugin
+
+- Read `/etc/eiou/config/.master.key` or any wallet secret. **EACCES
+  at the kernel level.** This is the whole point.
+- Decorate / wrap a core service. Plugin code runs in a different
+  process from core; there's no shared address space to override.
+  Use events to observe core actions instead.
+- Call into another plugin directly. Plugins talk to core only;
+  cross-plugin coordination happens via shared events or
+  database tables that core mediates.
+- Execute shell-out functions (`exec`, `shell_exec`, `passthru`,
+  `proc_open`, `popen`, `system`, `pcntl_exec`, `eval`, `assert`).
+- Open arbitrary file URLs (`allow_url_fopen=0`,
+  `allow_url_include=0`).
+
+### Constraints to design around
+
+- **Handler timeout**: 500ms per IPC call. Long-running work needs to
+  be queued in the plugin's own DB tables and processed
+  asynchronously by the plugin's own processor (if you have one).
+- **Event-mid-transaction**: if core fires an event while inside an
+  uncommitted DB transaction, your handler reads from a separate DB
+  connection and won't see the in-flight rows. (Core's own dispatch
+  call sites commit before firing for this reason.)
+- **Per-render IPC latency**: each render-hook fire adds ~1-5ms.
+  Negligible for a dashboard widget, expensive if your plugin
+  subscribes to a render hook that fires on every page render.
+
+### Migration checklist for an existing in-process plugin
+
+1. Take inventory of every `boot()` / `register()` action: events
+   subscribed, hooks registered, registries called, services added.
+2. For every service registration via `$container->setService(...)`
+   — **stop**. This pattern doesn't work sandboxed. Replace with
+   event-based observation or document the constraint.
+3. Move every declarative surface (event names, hook names, tab
+   metadata, asset paths, route paths, CLI names) into the manifest
+   fields above.
+4. Write `__dispatch.php` from the bundled template. Add a `case`
+   in the switch for each `type` your manifest declared.
+5. Declare every core service method your handler calls in
+   `core_services` (e.g. `"Logger.info"`).
+6. Set `"sandboxed": true`.
+7. Disable, then re-enable the plugin (rotates the gateway token,
+   triggers a fresh FPM pool reload).
+
+### Security note for plugin authors
+
+Even with sandboxing, **a plugin that's installed and enabled has
+real reach inside the operator's wallet** — it can:
+
+- Read every contact (via `ContactService` calls if its manifest
+  declares them).
+- Read every transaction (via `TransactionService` calls if
+  declared).
+- Sign messages on the wallet's behalf (if `MessageDeliveryService`
+  is whitelisted in the manifest *and* the core method is
+  `#[PluginCallable]`).
+
+Sandboxing prevents *seed-phrase exfiltration*. It doesn't make a
+plugin trustworthy. Operators reading your manifest's
+`core_services` list see the surface you're asking for — don't ask
+for more than you need.
 
 ---
 
@@ -1794,14 +2171,37 @@ entry points are called. This is a defensive measure against some
 edge cases in the PHP-FPM request lifecycle where the same worker PID would
 otherwise run the lifecycle twice and double-subscribe event listeners.
 
-### No sandboxing
+### Sandboxing is mandatory
 
-Plugins run with the same permissions and filesystem access as the core PHP
-process (`www-data` inside the container). There is no opcode sandbox, no
-capability filter, no per-plugin process isolation. **Only install plugins
-from sources you trust.** The manifest opt-in model (disabled by default) is
-a safety rail against *accidental* breakage, not a defence against malicious
-code.
+Every plugin must declare `"sandboxed": true` in its manifest. The
+in-process plugin model has been removed — a non-sandboxed plugin
+could read the master key and decrypt the seed phrase, so the loader
+refuses to load plugins missing the flag.
+
+In practice:
+
+- **At install** — `PluginInstallService` rejects zip uploads whose
+  manifest lacks `"sandboxed": true`. The plugin's bytes never reach
+  the plugins directory.
+- **At enable** — `PluginLoader::setEnabled(true)` refuses non-
+  sandboxed plugins. The state file is not modified.
+- **At boot** — `discover()` records non-sandboxed plugins with
+  status `legacy_unsupported`, never registers their autoloader,
+  never instantiates their entry class. Any plugin still marked
+  enabled in `plugins.json` after a manifest downgrade gets auto-
+  flipped to disabled and a single notice is written to the wallet
+  log so the operator knows what happened.
+
+Plugins run in their own per-plugin PHP-FPM pool as their own Unix
+user (`eiou-p-<hash>`), with `open_basedir` restricted to the
+plugin's dir + scratch, `disable_functions` blocking shell-out and
+eval, and zero filesystem access to wallet secrets. Communication
+with core happens over loopback HTTP through a per-plugin bearer
+token to a whitelisted service gateway. See [Sandboxed Plugin
+Authoring](#sandboxed-plugin-authoring) for the contract.
+
+The disabled-by-default rule still applies — a freshly-discovered
+plugin doesn't run until the operator explicitly enables it.
 
 ### URL validation for GUI rendering
 

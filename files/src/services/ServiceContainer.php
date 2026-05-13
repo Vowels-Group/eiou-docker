@@ -1086,6 +1086,67 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get PluginIpcForwarder — Phase 5 of plugin sandboxing.
+     * Bridges in-process firing of events / filters / render hooks
+     * to sandboxed plugins' __dispatch.php endpoints.
+     *
+     * The PluginLoader has to be passed in because this getter is
+     * sometimes called from inside Application::__construct (during
+     * the boot wiring step). At that point `Application::getInstance()`
+     * sees a null singleton and recurses into another `new self()` —
+     * which opens a fresh PDO, leaks it, and infinite-recurses until
+     * MySQL refuses new connections. Passing the loader explicitly
+     * avoids any second visit to Application's bootstrap.
+     */
+    public function getPluginIpcForwarder(\Eiou\Services\PluginLoader $loader): \Eiou\Services\PluginIpcForwarder {
+        if (!isset($this->services['PluginIpcForwarder'])) {
+            $this->services['PluginIpcForwarder'] = new \Eiou\Services\PluginIpcForwarder(
+                $loader,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginIpcForwarder'];
+    }
+
+    /**
+     * Get PluginUserService — Phase 1 of plugin sandboxing.
+     * Manages the per-plugin Unix-user lifecycle (eiou-p-<hash>) that
+     * a sandboxed plugin's FPM pool runs as. See
+     * docs/PLUGIN_SANDBOXING.md.
+     */
+    public function getPluginUserService(): \Eiou\Services\PluginUserService {
+        if (!isset($this->services['PluginUserService'])) {
+            $this->services['PluginUserService'] = new \Eiou\Services\PluginUserService();
+        }
+        return $this->services['PluginUserService'];
+    }
+
+    /**
+     * Get PluginPoolService — Phase 2 of plugin sandboxing. Renders
+     * + applies per-plugin PHP-FPM pool config so a sandboxed plugin
+     * runs in its own pool, as its own UID, with open_basedir and
+     * disable_functions restricted.
+     */
+    public function getPluginPoolService(): \Eiou\Services\PluginPoolService {
+        if (!isset($this->services['PluginPoolService'])) {
+            $this->services['PluginPoolService'] = new \Eiou\Services\PluginPoolService();
+        }
+        return $this->services['PluginPoolService'];
+    }
+
+    /**
+     * Get PluginNginxConfigService — Phase 2 of plugin sandboxing.
+     * Renders the per-plugin nginx location-block snippet that
+     * PluginPoolService bundles into its supervisor request.
+     */
+    public function getPluginNginxConfigService(): \Eiou\Services\PluginNginxConfigService {
+        if (!isset($this->services['PluginNginxConfigService'])) {
+            $this->services['PluginNginxConfigService'] = new \Eiou\Services\PluginNginxConfigService();
+        }
+        return $this->services['PluginNginxConfigService'];
+    }
+
+    /**
      * Get PluginUninstallService instance.
      *
      * Runs the full uninstall flow (onUninstall hook, revoke, drop tables,
@@ -1105,6 +1166,30 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['PluginUninstallService'];
+    }
+
+    /**
+     * Get PluginInstallService instance.
+     *
+     * Handles operator-uploaded plugin zips: validates them, extracts to
+     * a staging directory under /etc/eiou/plugins/, atomically renames
+     * into place, and emits the PLUGIN_INSTALLED event. The new plugin
+     * sits DISABLED on disk — discover() picks it up on the next boot
+     * but won't register/boot it until the operator toggles it on.
+     *
+     * Mirrors the signature verifier + mode the PluginLoader uses, so an
+     * operator who has signature mode set to 'require' can't sidestep
+     * verification through the upload path.
+     */
+    public function getPluginInstallService(): \Eiou\Services\PluginInstallService {
+        if (!isset($this->services['PluginInstallService'])) {
+            $this->services['PluginInstallService'] = new \Eiou\Services\PluginInstallService(
+                '/etc/eiou/plugins',
+                $this->getPluginSignatureVerifier(),
+                \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
+            );
+        }
+        return $this->services['PluginInstallService'];
     }
 
     /**

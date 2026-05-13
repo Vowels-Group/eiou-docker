@@ -124,6 +124,12 @@ $pluginController = $app->pluginLoader !== null
         // the null fallback degrades gracefully.
         $app->services !== null
             ? $app->services->getPluginUninstallService()
+            : null,
+        // Install service follows the same gating — it's only used by
+        // the pluginsUpload action and never on the no-wallet bootstrap
+        // path, so the null fallback is acceptable there.
+        $app->services !== null
+            ? $app->services->getPluginInstallService()
             : null
     )
     : null;

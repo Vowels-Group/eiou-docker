@@ -5,6 +5,42 @@ All notable changes to the `hello-eiou` plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this plugin follows [Semantic Versioning](https://semver.org/).
 
+## 1.3.0
+
+### Changed
+- Migrated to the sandboxed plugin contract — `hello-eiou` now runs in its
+  own per-plugin PHP-FPM pool under a dedicated Unix user
+  (`eiou-p-<8-hex-sha256>`) with `open_basedir` + `disable_functions` and no
+  read access to the seed/master-key/userconfig files. All core-service
+  interactions go through the per-plugin bearer-authenticated gateway at
+  `/__plugin_gateway`; in-process `EventDispatcher::subscribe` /
+  `$container->getPluginCliRegistry()->register(…)` / direct
+  `Logger::getInstance()` calls are gone.
+- `plugin.json` now declares `sandboxed: true` and lists every previously
+  imperative surface declaratively:
+  - `subscribes_to: ["sync.completed"]` (was `EventDispatcher::subscribe`)
+  - `render_hooks: ["gui.dashboard.after"]` (was `RenderRegistry::register`)
+  - `filter_hooks: ["gui.dashboard.widgets", "gui.contact.actions"]`
+    (was `FilterRegistry::register`)
+  - `core_services: ["Logger.info", "Logger.warning", "Logger.error",
+    "Logger.debug"]` allow-list for core_call back through the gateway
+  - `gui_assets`, `tabs`, `gui_actions`, `api_routes`, `cli_commands`
+    (were imperative `enqueueStyle` / `TabRegistry` /
+    `GuiActionRegistry::register` / `PluginApiRegistry::register` /
+    `PluginCliRegistry::register` calls)
+- Real runtime is now `__dispatch.php` at the plugin root. The core calls
+  it over FastCGI on the plugin's FPM pool for events, render hooks,
+  filters, GUI actions, REST routes, and CLI commands. The dispatcher
+  reads the bundled bearer token from `/etc/eiou/plugins/hello-eiou/
+  .gateway-token` and uses it for any core_call back into the main node.
+
+### Removed
+- `src/HelloEiouPlugin.php`'s imperative `register()` / `boot()` lifecycle
+  is no longer wired up — the sandbox dispatcher is the entry point. The
+  file is kept for now as a metadata holder (`getName`, `getVersion`) but
+  none of its `->register` / `->subscribe` calls run anymore; they were
+  superseded by the manifest's declarative surfaces.
+
 ## 1.2.0
 
 ### Added

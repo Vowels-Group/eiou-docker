@@ -356,7 +356,14 @@ services:
         limits:
           cpus: '2.0'
           memory: 1024M
-          pids: 200
+          # Bumped from 200 to 256 in the sandboxing branch — the two
+          # new supervisor pollers (plugin_user_poller, plugin_routing_poller)
+          # add ~2 PIDs steady-state, and per-plugin FPM pools each
+          # consume PIDs once an operator enables a sandboxed plugin.
+          # The previous 200 had ~5 PIDs headroom which was insufficient
+          # for `docker exec` to spawn cleanly while the pollers were
+          # active. See docs/PLUGIN_SANDBOXING.md.
+          pids: 256
         reservations:
           memory: 512M
     healthcheck:

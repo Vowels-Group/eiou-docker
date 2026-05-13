@@ -8676,6 +8676,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'openPluginUninstall': function(el) {
             if (window.plugins) window.plugins.openUninstall(el.getAttribute('data-plugin'));
         },
+        'uploadPlugin': function() { if (window.plugins) window.plugins.openUpload(); },
 
         // Payback Methods
         'openPaybackMethodForm': function(el) {
@@ -9807,9 +9808,20 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function statusBadge(status) {
             var label = status || 'unknown';
             var cls = 'status-badge status-unknown';
-            if (status === 'booted')        { cls = 'status-badge status-online';  label = 'Running'; }
+            if (status === 'booted' || status === 'sandboxed') {
+                // 'sandboxed' = running in its own FPM pool; from the
+                // operator's perspective it's the same "actively
+                // serving requests" state as 'booted', just for a
+                // sandboxed plugin instead of an in-process one.
+                cls = 'status-badge status-online';
+                label = 'Running';
+            }
             else if (status === 'failed')   { cls = 'badge-danger';                 label = 'Failed'; }
             else if (status === 'disabled') { cls = 'status-badge status-offline'; label = 'Disabled'; }
+            else if (status === 'legacy_unsupported') {
+                cls = 'badge-danger';
+                label = 'Unsupported (legacy)';
+            }
             else if (status === 'registered' || status === 'discovered') {
                 cls = 'status-badge status-partial'; label = 'Loaded';
             }
@@ -9887,14 +9899,24 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         // "Running" = the plugin is actually live in the current node process.
-        // `booted` is the only status that means fully loaded + subscribed.
-        // Everything else (disabled, failed, registered, discovered) means
-        // not-running from a runtime perspective.
-        function isRunning(p) { return p && p.status === 'booted'; }
+        // Sandboxed plugins are live as soon as their FPM pool is up
+        // (status 'sandboxed'). Legacy in-process plugins (status
+        // 'booted' / 'registered' / 'discovered') need full node
+        // bootstrap; only 'booted' means fully loaded + subscribed.
+        function isRunning(p) {
+            if (!p) return false;
+            if (p.sandboxed) return p.status === 'sandboxed';
+            return p.status === 'booted';
+        }
 
         // A plugin needs a restart iff its desired enabled flag diverges from
-        // the runtime. Toggling back to the pre-change state clears the need.
-        function isDivergent(p) { return !!p.enabled !== isRunning(p); }
+        // the runtime. Sandboxed plugins never need a restart — applyPool /
+        // dropPool already reloaded FPM + nginx via the supervisor.
+        function isDivergent(p) {
+            if (!p) return false;
+            if (p.sandboxed) return false;
+            return !!p.enabled !== isRunning(p);
+        }
 
         function updateRestartBanner() {
             var any = false;
@@ -10037,11 +10059,42 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     // follow-up toggle decisions see the current desired state.
                     var p = findByName(name);
                     if (p) p.enabled = enabled;
+                    // Also reflect the new status so the dot / badge
+                    // update locally without waiting for a full reload.
+                    // Sandboxed plugins toggle directly between
+                    // 'sandboxed' and 'disabled'; in-process plugins
+                    // keep their old behaviour until next restart.
+                    if (p && p.sandboxed) {
+                        p.status = enabled ? 'sandboxed' : 'disabled';
+                    }
                     updateRestartBanner();
+                    // Force the checkbox visual to match the desired
+                    // state (the user already flipped it, but this
+                    // protects against any double-click / race where
+                    // the visual drifts from intent).
+                    var cbSync = document.querySelector(
+                        'input[data-plugin="' + name.replace(/"/g, '') + '"]'
+                    );
+                    if (cbSync) cbSync.checked = enabled;
+                    // Refresh the row so the status dot / version /
+                    // description re-render against the new state.
+                    renderList(lastList);
                     if (typeof showToast === 'function') {
-                        var msg = (p && isDivergent(p))
-                            ? name + ' — restart the node for the change to take effect.'
-                            : name + ' — matches the current runtime, no restart needed.';
+                        var msg;
+                        if (p && p.sandboxed) {
+                            // Sandboxed plugins take effect immediately
+                            // via the supervisor's graceful FPM + nginx
+                            // reload. Wording emphasises the new state
+                            // rather than the absence of further action.
+                            msg = enabled
+                                ? name + ' is now active. Sandboxed FPM pool started.'
+                                : name + ' is now inactive. Sandboxed FPM pool stopped.';
+                        } else {
+                            // Legacy in-process plugin — needs node restart.
+                            msg = (p && isDivergent(p))
+                                ? name + ' — restart the node for the change to take effect.'
+                                : name + ' — matches the current runtime, no restart needed.';
+                        }
                         showToast(
                             enabled ? 'Plugin enabled' : 'Plugin disabled',
                             msg,
@@ -10219,7 +10272,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             '</label>' +
                         '</div>' +
                         '<div class="text-muted text-sm" style="margin-top:0.75rem">' +
-                            'Toggles persist immediately but take effect after a node restart.' +
+                            (p.sandboxed
+                                ? 'Toggles take effect immediately — the plugin\'s FPM pool starts or stops gracefully via the supervisor.'
+                                : 'Toggles persist immediately but take effect after a node restart.') +
                         '</div>' +
                         errBlock +
                         // Uninstall is a permanent action — only offered when
@@ -10362,6 +10417,227 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             toggle(name, enabled);
         }
 
+        // -- Upload flow ----------------------------------------------------
+        // Triggers the hidden #plugins-upload-input file picker. When the
+        // user picks a file we POST it directly via FormData — no fancy
+        // drag-drop, no JS-side magic-byte check (the server has to
+        // validate anyway). Tor Browser ships with FormData and the
+        // basic fetch() body type — no streaming or compression APIs
+        // are touched. See [[feedback_tor_browser_compat]].
+        // openUpload() shows a pre-flight modal explaining the rules and
+        // trust posture before the OS file picker opens. Continue triggers
+        // the hidden #plugins-upload-input click; the change handler then
+        // POSTs the file via FormData. Tor Browser-safe (FormData + fetch
+        // only, no streaming APIs).
+        //
+        // Limits are fetched once per session from pluginsUploadLimits so
+        // the modal copy stays in sync with PHP constants without
+        // duplicating them client-side. A network failure on the limits
+        // call falls back to hardcoded copy — the modal must always
+        // render so the operator can't accidentally bypass the warning.
+        var cachedLimits = null;
+
+        function fetchLimits() {
+            if (cachedLimits) return Promise.resolve(cachedLimits);
+            return post({ action: 'pluginsUploadLimits' }).then(function(r) {
+                if (r.data && r.data.success && r.data.limits) {
+                    cachedLimits = r.data.limits;
+                }
+                return cachedLimits;
+            }).catch(function() { return null; });
+        }
+
+        function openUpload() {
+            var input = document.getElementById('plugins-upload-input');
+            if (!input) {
+                if (typeof showToast === 'function') {
+                    showToast('Error', 'Upload control is not available on this page', 'error');
+                }
+                return;
+            }
+            fetchLimits().then(function(limits) {
+                showUploadPreflight(limits, function() {
+                    triggerFilePicker(input);
+                });
+            });
+        }
+
+        function showUploadPreflight(limits, onContinue) {
+            var fmt = function(n) {
+                if (typeof n !== 'number') return '—';
+                if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(0) + ' MiB';
+                if (n >= 1024) return (n / 1024).toFixed(0) + ' KiB';
+                return n + ' B';
+            };
+            // Server is authoritative; fall back to copy that matches
+            // PluginInstallService constants if the limits fetch failed.
+            var zipMax  = limits ? limits.max_zip_bytes          : 25 * 1024 * 1024;
+            var fileMax = limits ? limits.max_file_bytes         : 15 * 1024 * 1024;
+            var totMax  = limits ? limits.max_uncompressed_bytes : 50 * 1024 * 1024;
+            var fileCnt = limits ? limits.max_file_count         : 500;
+            var ratio   = limits ? limits.max_compression_ratio  : 100;
+            var exts    = limits && limits.allowed_extensions
+                ? limits.allowed_extensions.join(', ')
+                : 'php, json, md, txt, css, js, map, html, htm, svg, png, jpg, jpeg, gif, webp, ico, woff, woff2, ttf, otf, eot';
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal modal-stack-top';
+            overlay.setAttribute('role', 'dialog');
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width: 580px;">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-upload"></i> Upload plugin (.zip)</h3>' +
+                        '<span class="close" data-plugin-upload-close="1" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding: 1rem 1.5rem; font-size: 0.9rem;">' +
+                        '<div class="alert alert-info" style="margin-bottom: 1rem;">' +
+                            '<strong><i class="fas fa-shield-alt"></i> Plugins run sandboxed.</strong> ' +
+                            'A sandboxed plugin runs as its own Unix user in its own PHP-FPM pool — it ' +
+                            '<strong>cannot</strong> read this node\'s master key, decrypt the seed phrase, ' +
+                            'or read <code>/etc/eiou/config/</code>. It <strong>can</strong> call core services ' +
+                            'declared in its <code>core_services</code> manifest field; review that list ' +
+                            'before you enable the plugin.' +
+                        '</div>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Layout</strong></p>' +
+                        '<ul style="margin: 0 0 1rem 1.25rem; padding: 0;">' +
+                            '<li>One <strong>top-level folder</strong> matching <code>^[a-z0-9][a-z0-9_-]{0,63}$</code></li>' +
+                            '<li>That folder is the plugin name, must match <code>plugin.json</code> &rarr; <code>name</code></li>' +
+                            '<li><code>plugin.json</code> with <code>name</code>, <code>version</code>, <code>entryClass</code>, <code>"sandboxed": true</code> all required</li>' +
+                        '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Limits</strong></p>' +
+                        '<ul style="margin: 0 0 1rem 1.25rem; padding: 0;">' +
+                            '<li>Archive &le; <strong>' + escapeHtml(fmt(zipMax)) + '</strong> compressed, &le; <strong>' + escapeHtml(fmt(totMax)) + '</strong> uncompressed</li>' +
+                            '<li>Single file &le; <strong>' + escapeHtml(fmt(fileMax)) + '</strong> uncompressed</li>' +
+                            '<li>&le; <strong>' + escapeHtml(String(fileCnt)) + '</strong> files; compression ratio &le; <strong>' + escapeHtml(String(ratio)) + ':1</strong> (zip-bomb sentinel)</li>' +
+                        '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Allowed file extensions</strong></p>' +
+                        '<p style="margin: 0 0 1rem 0; color: #495057; font-family: monospace; font-size: 0.85rem; word-break: break-word;">' +
+                            escapeHtml(exts) +
+                        '</p>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Rejected automatically</strong></p>' +
+                        '<ul style="margin: 0 0 0.25rem 1.25rem; padding: 0;">' +
+                            '<li>Manifests without <code>"sandboxed": true</code> (in-process plugins are no longer supported)</li>' +
+                            '<li>Path traversal (<code>..</code>, leading <code>/</code>, backslashes)</li>' +
+                            '<li>Symlinks, hidden dotfiles, <code>.phar</code>, <code>.htaccess</code>, anything outside the allow-list</li>' +
+                            '<li>Plugins already installed (uninstall first to replace)</li>' +
+                        '</ul>' +
+                    '</div>' +
+                    '<div class="modal-footer" style="gap: 0.5rem;">' +
+                        '<button type="button" class="btn btn-secondary" data-plugin-upload-cancel="1">Cancel</button>' +
+                        '<button type="button" class="btn btn-primary" data-plugin-upload-continue="1">' +
+                            '<i class="fas fa-folder-open"></i> Choose .zip&hellip;' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+            function cleanup() {
+                document.removeEventListener('keydown', keyHandler);
+                if (document.body.contains(overlay)) {
+                    document.body.removeChild(overlay);
+                }
+            }
+            function keyHandler(e) {
+                if (e.key === 'Escape' || e.keyCode === 27) { cleanup(); }
+            }
+            overlay.querySelector('[data-plugin-upload-continue]').onclick = function() {
+                cleanup();
+                onContinue();
+            };
+            overlay.querySelector('[data-plugin-upload-cancel]').onclick = cleanup;
+            overlay.querySelector('[data-plugin-upload-close]').onclick = cleanup;
+            overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); } };
+            document.addEventListener('keydown', keyHandler);
+            document.body.appendChild(overlay);
+            try { overlay.querySelector('[data-plugin-upload-continue]').focus(); } catch (e) {}
+        }
+
+        function triggerFilePicker(input) {
+            // The change handler is one-shot per pick. Detaching after each
+            // invocation prevents leftover listeners stacking up if the
+            // user opens the picker, cancels, then opens it again — that
+            // would otherwise fire the handler multiple times on the next
+            // successful pick.
+            var onChange = function() {
+                input.removeEventListener('change', onChange);
+                var file = input.files && input.files[0];
+                input.value = ''; // allow picking the same file again
+                if (!file) return;
+                submitUpload(file);
+            };
+            input.addEventListener('change', onChange);
+            input.click();
+        }
+
+        function submitUpload(file) {
+            // Cheap client-side guard for the obvious cases. The server
+            // re-validates every check — this just gives faster feedback
+            // for a wrong-file mistake without a round-trip.
+            if (!/\.zip$/i.test(file.name)) {
+                if (typeof showToast === 'function') {
+                    showToast('Upload rejected', 'Please pick a .zip file', 'error');
+                }
+                return;
+            }
+            // 25 MiB ceiling mirrored from PluginInstallService::MAX_ZIP_BYTES.
+            // Server is authoritative; this is just a UX shortcut.
+            var hardLimit = 25 * 1024 * 1024;
+            if (file.size > hardLimit) {
+                if (typeof showToast === 'function') {
+                    showToast('Upload rejected', 'Zip exceeds 25 MiB limit', 'error');
+                }
+                return;
+            }
+
+            if (typeof showToast === 'function') {
+                showToast('Uploading…', file.name, 'info');
+            }
+
+            var body = new FormData();
+            body.append('action', 'pluginsUpload');
+            body.append('csrf_token', csrfToken());
+            body.append('plugin_zip', file);
+
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) { return { status: res.status, data: data }; });
+            }).then(function(r) {
+                if (r.data && r.data.success) {
+                    var sig = r.data.signature || {};
+                    var sigLine = '';
+                    if (sig.status && sig.status !== 'not_checked') {
+                        sigLine = ' Signature: ' + sig.status
+                            + (sig.enforced ? ' (required)' : '');
+                    }
+                    if (typeof showToast === 'function') {
+                        showToast(
+                            'Plugin uploaded',
+                            r.data.plugin_id + ' v' + r.data.version
+                                + ' is staged disabled.' + sigLine
+                                + ' Enable it and restart the node to activate.',
+                            'success'
+                        );
+                    }
+                    // Refresh list so the new plugin shows up.
+                    refresh();
+                } else {
+                    var msg = (r.data && r.data.error) ||
+                              (r.data && r.data.message) ||
+                              'Upload failed';
+                    if (typeof showToast === 'function') {
+                        showToast('Upload failed', msg, 'error');
+                    }
+                }
+            }).catch(function() {
+                if (typeof showToast === 'function') {
+                    showToast('Upload failed', 'Network error during upload', 'error');
+                }
+            });
+        }
+
         return {
             reload: function() { loaded = false; return refresh(); },
             toggle: toggle,
@@ -10369,6 +10645,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             openModal: openModal,
             openUninstall: openUninstallModal,
             openChangelog: openChangelogModal,
+            openUpload: openUpload,
             requestRestart: requestRestart
         };
     })();

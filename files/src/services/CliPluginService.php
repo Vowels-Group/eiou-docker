@@ -124,10 +124,30 @@ class CliPluginService
         }
 
         $verb = $enabled ? 'enabled' : 'disabled';
-        $output->success(
-            "Plugin {$verb}: {$name}. Run 'eiou restart' for the change to take effect.",
-            ['plugin' => $name, 'enabled' => $enabled, 'restart_required' => true]
-        );
+
+        // Sandboxed plugins don't need a node restart on toggle — their
+        // FPM pool + nginx route already reloaded gracefully inside
+        // applyPool/dropPool via the supervisor. Restart is only
+        // needed for in-process plugins whose register()/boot() runs
+        // bind at PHP-FPM master startup.
+        $isSandboxed = false;
+        foreach ($this->loader->listAllPlugins() as $row) {
+            if (($row['name'] ?? null) === $name) {
+                $isSandboxed = !empty($row['sandboxed']);
+                break;
+            }
+        }
+
+        $message = $isSandboxed
+            ? "Plugin {$verb}: {$name}. Change took effect immediately (sandboxed)."
+            : "Plugin {$verb}: {$name}. Run 'eiou restart' for the change to take effect.";
+
+        $output->success($message, [
+            'plugin' => $name,
+            'enabled' => $enabled,
+            'restart_required' => !$isSandboxed,
+            'sandboxed' => $isSandboxed,
+        ]);
     }
 
     /**

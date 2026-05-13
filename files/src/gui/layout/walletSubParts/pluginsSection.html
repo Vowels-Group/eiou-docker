@@ -49,9 +49,22 @@ echo renderSection([
     'id'    => 'plugins-section',
     'icon'  => 'fas fa-puzzle-piece',
     'title' => 'Plugins',
-    'headerExtras' => '<button type="button" class="btn btn-primary btn-sm" data-action="reloadPlugins" title="Refresh the list from disk">'
-                   . '<i class="fas fa-sync"></i> <span class="btn-text-collapse">Refresh</span>'
-                   . '</button>',
+    'headerExtras' => ''
+        // .section-header-actions wraps the buttons into a single flex item
+        // so renderSection()'s `justify-content: space-between` doesn't
+        // strand the upload button in the middle of the header — the row
+        // stays {title} on the left and {actions group} on the right.
+        . '<div class="section-header-actions">'
+        .   '<button type="button" class="btn btn-secondary btn-sm" data-action="uploadPlugin" title="Upload a plugin .zip">'
+        .     '<i class="fas fa-upload"></i> <span class="btn-text-collapse">Upload .zip</span>'
+        .   '</button>'
+        .   '<button type="button" class="btn btn-primary btn-sm" data-action="reloadPlugins" title="Refresh the list from disk">'
+        .     '<i class="fas fa-sync"></i> <span class="btn-text-collapse">Refresh</span>'
+        .   '</button>'
+        . '</div>'
+        // Hidden file input lives in the section header so a screen reader
+        // can still tab into it; the upload button just triggers a click.
+        . '<input type="file" id="plugins-upload-input" name="plugin_zip" accept=".zip,application/zip" hidden>',
     'introTitle' => 'About Plugins',
     'intro' => 'Plugins live under <code>/etc/eiou/plugins/</code>. They subscribe to '
              . 'internal events (sync, transactions, contacts) and add capabilities '
@@ -63,6 +76,13 @@ echo renderSection([
              . 'cannot crash the node on its first boot &mdash; you opt in '
              . 'deliberately, with the chance to read the manifest first. '
              . 'Toggles persist immediately but take effect only after a restart, '
-             . 'since event subscriptions are wired during startup.',
+             . 'since event subscriptions are wired during startup.'
+             . '<br><br>'
+             . '<strong>Uploading a <code>.zip</code></strong> stages a plugin in the '
+             . 'directory and immediately marks it disabled. The upload rejects '
+             . 'oversized archives, zip bombs, path traversal, symlinks, and any '
+             . 'extension outside the plugin asset allow-list &mdash; but a plugin you '
+             . 'trust enough to enable can do anything PHP can do, so review the '
+             . 'manifest and signature status before flipping it on.',
     'body'  => $body,
 ]);

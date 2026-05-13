@@ -92,6 +92,8 @@ CLEANUP_PID=""
 CONTACT_STATUS_PID=""
 WATCHDOG_PID=""
 RESTART_POLLER_PID=""
+PLUGIN_USER_POLLER_PID=""
+PLUGIN_ROUTING_POLLER_PID=""
 
 # -----------------------------------------------------------------------------
 # graceful_shutdown() - Signal handler for clean container termination
@@ -126,6 +128,21 @@ graceful_shutdown() {
         echo "[Shutdown] Stopping restart poller (PID: $RESTART_POLLER_PID)"
         kill "$RESTART_POLLER_PID" 2>/dev/null
         wait "$RESTART_POLLER_PID" 2>/dev/null || true
+    fi
+
+    # Stop plugin sandbox pollers — they're bash subshells servicing
+    # plugin enable/disable request files. Killing them before nginx
+    # + FPM shutdown prevents a half-applied plugin pool from racing
+    # the reload sequence.
+    if [ -n "$PLUGIN_USER_POLLER_PID" ] && kill -0 "$PLUGIN_USER_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin user poller (PID: $PLUGIN_USER_POLLER_PID)"
+        kill "$PLUGIN_USER_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_USER_POLLER_PID" 2>/dev/null || true
+    fi
+    if [ -n "$PLUGIN_ROUTING_POLLER_PID" ] && kill -0 "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin routing poller (PID: $PLUGIN_ROUTING_POLLER_PID)"
+        kill "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null || true
     fi
 
     echo ""
@@ -192,12 +209,33 @@ graceful_shutdown() {
         pids_to_wait="$pids_to_wait $CONTACT_STATUS_PID"
     fi
 
-    # Also check for any PHP processors by their lockfiles
+    # Also signal each processor's PHP child via its lockfile.
+    #
+    # Each processor is spawned as `runuser -u www-data -- php …`. The
+    # watchdog tracks the runuser PARENT PID (P2P_PID, TRANSACTION_PID,
+    # etc. — set when the runuser process was forked). The PHP process
+    # inside writes its OWN PID — the child of runuser — to its
+    # lockfile. So the lockfile PID and the watchdog-tracked PID are
+    # always different processes in the same spawn chain: signalling
+    # the parent propagates to the child, signalling the lockfile PID
+    # hits the child directly. Both reach the same PHP process; the
+    # double-send is just belt-and-braces in case runuser ever fails
+    # to propagate.
+    #
+    # Skip lockfiles whose PID is already in $pids_to_wait — that means
+    # we somehow ended up tracking the child PID directly (would be a
+    # bug elsewhere, but we don't want to double-list it in waits).
     for lockfile in /tmp/p2pmessages_lock.pid /tmp/transactionmessages_lock.pid /tmp/cleanupmessages_lock.pid /tmp/contact_status.pid; do
         if [ -f "$lockfile" ]; then
             local pid=$(cat "$lockfile" 2>/dev/null)
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                echo "[Shutdown] Found additional processor from lockfile (PID: $pid)"
+                # Already tracked as parent? Skip silently.
+                if echo " $pids_to_wait " | grep -q " $pid "; then
+                    continue
+                fi
+                local proc_name
+                proc_name=$(basename "$lockfile" .pid)
+                echo "[Shutdown] Signalling PHP child of ${proc_name} (PID: $pid)"
                 kill -TERM "$pid" 2>/dev/null
                 pids_to_wait="$pids_to_wait $pid"
             fi
@@ -260,10 +298,33 @@ graceful_shutdown() {
     echo "[Shutdown] Stopping MariaDB..."
     timeout 5 service mariadb stop 2>/dev/null || true
 
-    # Tor's init script may report "failed" with a PID mismatch warning —
-    # this is a known quirk of the Tor service script and is harmless.
+    # Stop Tor by SIGTERM'ing its PID directly. The Debian init.d
+    # script's identity check reads /proc/<pid>/exe — which Tor blocks
+    # for anyone other than the process owner (debian-tor) by setting
+    # itself non-dumpable. Inside this container the init.d script
+    # runs as root but still can't readlink the exe symlink, so it
+    # fails with "Is <pid> not tor?  Is /usr/bin/tor a different
+    # binary now?" and refuses to stop. Bypassing the broken identity
+    # check and signalling the PID directly avoids the noise + the
+    # 3-second wasted timeout.
     echo "[Shutdown] Stopping Tor..."
-    timeout 3 service tor stop 2>/dev/null || true
+    if [ -f /run/tor/tor.pid ]; then
+        tor_pid=$(cat /run/tor/tor.pid 2>/dev/null)
+        if [ -n "$tor_pid" ] && kill -0 "$tor_pid" 2>/dev/null; then
+            kill -TERM "$tor_pid" 2>/dev/null
+            # Tor's graceful shutdown advertises the descriptor as
+            # going away first; capped at 2s so the container stop
+            # doesn't drag.
+            for _ in 1 2 3 4; do
+                kill -0 "$tor_pid" 2>/dev/null || break
+                sleep 0.5
+            done
+            # SIGKILL anything that's still around — Docker will
+            # do the same when the container stops; we just want
+            # the log line to say we asked nicely first.
+            kill -KILL "$tor_pid" 2>/dev/null || true
+        fi
+    fi
 
     echo "[Shutdown] Stopping Cron..."
     timeout 2 service cron stop 2>/dev/null || true
@@ -274,6 +335,14 @@ graceful_shutdown() {
     rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
     rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
     rm -f /tmp/contact_status.pid 2>/dev/null
+    # Supervisor poller lockfiles (written by the bash subshells that
+    # service plugin enable/disable). The pollers themselves were
+    # SIGTERM'd above; this removes the now-stale PID files so the
+    # next boot doesn't see them as live processes.
+    rm -f /tmp/eiou_watchdog.pid 2>/dev/null
+    rm -f /tmp/eiou_restart_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_user_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_routing_poller.pid 2>/dev/null
     rm -f "$SHUTDOWN_FLAG" 2>/dev/null
     rm -f "$MAINTENANCE_LOCKFILE" 2>/dev/null
 
@@ -2608,15 +2677,367 @@ restart_poller() {
     done
 }
 
-# Start watchdog in background
+# =============================================================================
+# plugin_user_poller() — root-side hook for the plugin sandboxing user
+# lifecycle (Phase 1 of docs/PLUGIN_SANDBOXING.md).
+#
+# www-data PHP cannot call useradd/userdel directly, so PluginUserService
+# writes /tmp/eiou-pluser-req-<id>.json with shape:
+#
+#   { "ts": <unix>, "action": "create"|"remove", "system_user": "eiou-p-<hex>" }
+#
+# This loop polls every 100 ms (matching the PHP-side wait granularity),
+# runs the requested useradd/userdel as root, and writes the result to
+# /tmp/eiou-pluser-res-<id>.json with shape:
+#
+#   { "ts": <unix>, "status": "ok"|"failed", "error": "..." }
+#
+# Validation matches the service's PluginUserService::looksLikePluginUsername:
+# only `eiou-p-<8 hex>` usernames are touched. Anything else is rejected
+# even before useradd is invoked — defence-in-depth so a corrupted
+# request file can't be used to drop www-data or root.
+# =============================================================================
+plugin_user_poller() {
+    # Poll once a second — plugin enable/disable is operator-driven
+    # and infrequent. Faster polling burns container PIDs (each sleep
+    # spawns a child process) without buying meaningful latency.
+    local POLL_INTERVAL=1
+    local REQ_GLOB="/tmp/eiou-pluser-req-*.json"
+    local LOG_PREFIX="[PLUGIN USER POLLER]"
+
+    write_result() {
+        local res_path="$1"
+        local status="$2"
+        local error="${3:-}"
+        local now
+        now=$(date +%s)
+        # Atomic via temp-file + rename so the PHP side never sees a
+        # partial write. Mode 644 (world-readable) so www-data can read
+        # what root wrote.
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$error" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        # `compgen -G` returns 0 only if any path matches the glob, which
+        # avoids the `[ -f "$req" ]` race against an empty for-loop when
+        # nothing matches.
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+
+            # Derive the result path from the request path so they pair
+            # 1:1 regardless of how many concurrent requests exist.
+            local res="${req/-req-/-res-}"
+
+            # Read request body. jq is in the image (used by other parts
+            # of startup.sh already); fall back to a grep-based parse if
+            # jq is missing for some reason.
+            local action system_user
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty'      "$req" 2>/dev/null)
+                system_user=$(jq -r '.system_user // empty' "$req" 2>/dev/null)
+            else
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z]+' "$req" 2>/dev/null | head -1)
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" 2>/dev/null | head -1 | sed 's|\\/|/|g')
+            fi
+
+            # Delete the request BEFORE acting, so a crash inside
+            # useradd/userdel doesn't loop us forever on the same line.
+            rm -f "$req"
+
+            # Validation pass — refuse anything outside the eiou-p-<hex> shape.
+            if [[ ! "$system_user" =~ ^eiou-p-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected unsafe system_user='$system_user'"
+                write_result "$res" "failed" "invalid system_user shape"
+                continue
+            fi
+
+            case "$action" in
+                create)
+                    if id "$system_user" >/dev/null 2>&1; then
+                        # Already exists — useradd is idempotent at this layer.
+                        write_result "$res" "ok"
+                    elif useradd -M -s /usr/sbin/nologin "$system_user" >/dev/null 2>&1; then
+                        echo "$LOG_PREFIX created user $system_user"
+                        write_result "$res" "ok"
+                    else
+                        echo "$LOG_PREFIX useradd failed for $system_user"
+                        write_result "$res" "failed" "useradd failed"
+                    fi
+                    ;;
+                remove)
+                    if ! id "$system_user" >/dev/null 2>&1; then
+                        write_result "$res" "ok"
+                    elif userdel "$system_user" >/dev/null 2>&1; then
+                        echo "$LOG_PREFIX removed user $system_user"
+                        write_result "$res" "ok"
+                    else
+                        echo "$LOG_PREFIX userdel failed for $system_user"
+                        write_result "$res" "failed" "userdel failed"
+                    fi
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action' for $system_user"
+                    write_result "$res" "failed" "unknown action: $action"
+                    ;;
+            esac
+        done
+    done
+}
+
+# =============================================================================
+# plugin_routing_poller() — Phase 2 of plugin sandboxing.
+#
+# Applies per-plugin FPM pool config + the shared nginx snippet that
+# routes /gui/plugin/<id>/* to each plugin's socket. www-data PHP cannot
+# write to /etc/php/*/fpm/pool.d/ or /etc/nginx/snippets/ (root-only),
+# so PluginPoolService writes /tmp/eiou-routing-req-<id>.json with the
+# rendered content and this loop applies it.
+#
+# Transactional shape: nginx -t verifies the new snippet BEFORE reload.
+# If verification fails, the previous snippet is restored from backup
+# and the result file reports the failure — the wallet's routes stay
+# intact. Same protection on the FPM pool file (a malformed pool would
+# fail-init on reload; we write a backup first so we can restore).
+#
+# Request schema:
+#   { ts, action: "apply-pool" | "drop-pool",
+#     plugin_id, system_user (apply only), pool_path, pool_config (apply only),
+#     nginx_snippet }
+# =============================================================================
+plugin_routing_poller() {
+    # Poll once a second — see plugin_user_poller for why we don't
+    # spin tighter. Operator-driven traffic; FPM/nginx reload cost
+    # dwarfs the poll interval.
+    local POLL_INTERVAL=1
+    local REQ_GLOB="/tmp/eiou-routing-req-*.json"
+    local LOG_PREFIX="[PLUGIN ROUTING POLLER]"
+    local SNIPPET_PATH="/etc/nginx/snippets/eiou-plugins.conf"
+
+    write_result() {
+        local res_path="$1"; local status="$2"; local error="${3:-}"
+        local now; now=$(date +%s)
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            # Escape double-quotes in the error so the JSON stays valid.
+            local esc; esc=${error//\"/\\\"}
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$esc" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    # Atomic file write — content from the heredoc-style $2 string,
+    # restorable via the .bak we leave behind on every overwrite.
+    apply_file() {
+        local path="$1"
+        local content="$2"
+        if [ -f "$path" ]; then
+            cp -p "$path" "${path}.bak"
+        fi
+        local tmp="${path}.tmp"
+        printf '%s' "$content" > "$tmp"
+        chmod 644 "$tmp"
+        mv "$tmp" "$path"
+    }
+
+    restore_backup() {
+        local path="$1"
+        if [ -f "${path}.bak" ]; then
+            mv "${path}.bak" "$path"
+        else
+            rm -f "$path"
+        fi
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+            local res="${req/-req-/-res-}"
+
+            # Parse — grep fallback like plugin_user_poller, since jq
+            # isn't in the base image.
+            local action plugin_id system_user pool_path pool_config nginx_snippet
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty' "$req" 2>/dev/null)
+                plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
+                system_user=$(jq -r '.system_user // empty' "$req" 2>/dev/null)
+                pool_path=$(jq -r '.pool_path // empty' "$req" 2>/dev/null)
+                pool_config=$(jq -r '.pool_config // empty' "$req" 2>/dev/null)
+                nginx_snippet=$(jq -r '.nginx_snippet // empty' "$req" 2>/dev/null)
+            else
+                # Single-line JSON fields. Multi-line content (pool_config
+                # / nginx_snippet) is JSON-encoded into the request with
+                # \n escapes; we decode after extraction. Slashes can
+                # arrive escaped (`\/`) when an upstream encoder doesn't
+                # set JSON_UNESCAPED_SLASHES; un-escape them so the path
+                # validators below match.
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
+                plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                pool_path=$(grep -oP '"pool_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+            fi
+
+            rm -f "$req"
+
+            # Plugin-id and system-user validation — defence in depth so a
+            # corrupted request file can't be used to write arbitrary
+            # paths into /etc/php/*/fpm/pool.d/ or /etc/nginx/snippets/.
+            if [[ ! "$plugin_id" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid plugin_id='$plugin_id'"
+                write_result "$res" "failed" "invalid plugin_id"
+                continue
+            fi
+            if [ "$action" = "apply-pool" ] && [[ ! "$system_user" =~ ^eiou-p-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid system_user='$system_user'"
+                write_result "$res" "failed" "invalid system_user"
+                continue
+            fi
+            # Refuse pool paths outside /etc/php/*/fpm/pool.d/. Hard-pin
+            # the prefix here; the supervisor never writes anywhere else.
+            if [[ ! "$pool_path" =~ ^/etc/php/[0-9]\.[0-9]+/fpm/pool\.d/eiou-plugin-[a-z0-9_-]+\.conf$ ]]; then
+                echo "$LOG_PREFIX rejected unsafe pool_path='$pool_path'"
+                write_result "$res" "failed" "invalid pool_path"
+                continue
+            fi
+
+            case "$action" in
+                apply-pool)
+                    apply_file "$pool_path" "$pool_config"
+                    apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # Per-plugin writable scratch dir referenced in the
+                    # pool's open_basedir. Must exist + be owned by the
+                    # plugin user, otherwise the plugin can't write
+                    # anywhere. Created idempotently on every apply.
+                    local scratch="/var/lib/eiou/plugin-scratch/${system_user}"
+                    mkdir -p "$scratch"
+                    chown "$system_user:$system_user" "$scratch"
+                    chmod 700 "$scratch"
+                    # The Phase 4 .gateway-token file was minted by
+                    # www-data and inherited its ownership. The plugin's
+                    # pool user needs to read it (core_call reads the
+                    # file at request time), so chown it to the plugin
+                    # user. Mode stays 600 so no other plugin user can
+                    # see another plugin's token.
+                    local token_file="/etc/eiou/plugins/${plugin_id}/.gateway-token"
+                    if [ -f "$token_file" ]; then
+                        chown "$system_user:$system_user" "$token_file"
+                        chmod 600 "$token_file"
+                    fi
+                    ;;
+                drop-pool)
+                    if [ -f "$pool_path" ]; then
+                        cp -p "$pool_path" "${pool_path}.bak"
+                        rm -f "$pool_path"
+                    fi
+                    apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action'"
+                    write_result "$res" "failed" "unknown action: $action"
+                    continue
+                    ;;
+            esac
+
+            # Verify nginx config — REFUSE to reload if -t fails. Restore
+            # the previous snippet + pool file so the wallet keeps serving.
+            if ! nginx -t >/dev/null 2>&1; then
+                local nginx_err
+                nginx_err=$(nginx -t 2>&1 | tr '\n' ' ' | tr -d '\r')
+                echo "$LOG_PREFIX nginx -t FAILED: $nginx_err"
+                restore_backup "$SNIPPET_PATH"
+                [ "$action" = "apply-pool" ] && restore_backup "$pool_path"
+                # Roll back the per-plugin scratch dir if we just created
+                # it. Without this it lingers as cosmetic cruft (next
+                # retry's mkdir -p is idempotent, but leaving it across
+                # FAILED applies makes /var/lib/eiou/plugin-scratch/ fill
+                # with abandoned dirs over time).
+                if [ "$action" = "apply-pool" ] && [ -n "$system_user" ]; then
+                    local scratch="/var/lib/eiou/plugin-scratch/${system_user}"
+                    # Only remove if EMPTY — preserve any plugin state
+                    # that might already exist from a previous successful
+                    # apply (this same apply could be a retry).
+                    if [ -d "$scratch" ] && [ -z "$(ls -A "$scratch" 2>/dev/null)" ]; then
+                        rmdir "$scratch" 2>/dev/null || true
+                    fi
+                fi
+                # Still verify the restore was clean.
+                if ! nginx -t >/dev/null 2>&1; then
+                    echo "$LOG_PREFIX RESTORE ALSO FAILED — manual intervention required"
+                fi
+                write_result "$res" "failed" "nginx -t: $nginx_err"
+                continue
+            fi
+
+            # Reload nginx (graceful) + reload PHP-FPM (graceful).
+            if ! nginx -s reload >/dev/null 2>&1; then
+                echo "$LOG_PREFIX nginx reload failed"
+                write_result "$res" "failed" "nginx reload"
+                continue
+            fi
+            # Find the FPM master and signal SIGUSR2 (graceful pool reload).
+            # pgrep -o = oldest match = master process.
+            local fpm_master
+            fpm_master=$(pgrep -o "php-fpm: master" 2>/dev/null)
+            if [ -n "$fpm_master" ]; then
+                kill -USR2 "$fpm_master" 2>/dev/null || true
+            fi
+
+            # Drop the backup files now that the new state is verified.
+            rm -f "${SNIPPET_PATH}.bak" "${pool_path}.bak" 2>/dev/null
+            echo "$LOG_PREFIX $action complete for $plugin_id"
+            write_result "$res" "ok"
+        done
+    done
+}
+
+# Start watchdog in background. PID lockfile mirrors the pattern the
+# message processors use so the GUI's Debug → Processes panel can
+# discover supervisor pollers via the same lockfile-and-posix_kill
+# detection as the long-running PHP daemons.
 watchdog &
 WATCHDOG_PID=$!
+echo "$WATCHDOG_PID" > /tmp/eiou_watchdog.pid
 echo "Watchdog started (PID: $WATCHDOG_PID)"
 
 # Start restart-request poller in background
 restart_poller &
 RESTART_POLLER_PID=$!
+echo "$RESTART_POLLER_PID" > /tmp/eiou_restart_poller.pid
 echo "Restart poller started (PID: $RESTART_POLLER_PID)"
+
+# Start plugin-user poller in background. www-data PHP cannot call
+# useradd/userdel directly (root required), so PluginUserService writes
+# /tmp/eiou-pluser-req-<id>.json and this loop turns those into
+# useradd/userdel invocations as the root supervisor. See
+# docs/PLUGIN_SANDBOXING.md.
+plugin_user_poller &
+PLUGIN_USER_POLLER_PID=$!
+echo "$PLUGIN_USER_POLLER_PID" > /tmp/eiou_plugin_user_poller.pid
+echo "Plugin user poller started (PID: $PLUGIN_USER_POLLER_PID)"
+
+# Start plugin-routing poller in background. Applies per-plugin FPM
+# pool config + nginx routing snippet atomically, with nginx -t
+# validation before reload so a malformed entry cannot take down the
+# wallet's routes.
+plugin_routing_poller &
+PLUGIN_ROUTING_POLLER_PID=$!
+echo "$PLUGIN_ROUTING_POLLER_PID" > /tmp/eiou_plugin_routing_poller.pid
+echo "Plugin routing poller started (PID: $PLUGIN_ROUTING_POLLER_PID)"
 
 echo ""
 echo "=========================================="

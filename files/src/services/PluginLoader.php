@@ -91,6 +91,21 @@ class PluginLoader
     private ?PluginSignatureVerifier $sigVerifier = null;
     private string $sigMode = PluginSignatureVerifier::MODE_OFF;
 
+    /**
+     * Sandbox services — wired by setSandboxServices() after
+     * construction. When all three are present, plugins whose manifest
+     * declares "sandboxed": true get their Unix user created and FPM
+     * pool generated on enable. When any is null (test scaffold,
+     * early-boot path) the sandbox short-circuits gracefully: enabling
+     * a sandboxed plugin returns false and logs why, instead of half-
+     * committing some side effects and crashing on the missing ones.
+     *
+     * See docs/PLUGIN_SANDBOXING.md.
+     */
+    private ?PluginUserService $userService = null;
+    private ?PluginPoolService $poolService = null;
+    private ?PluginNginxConfigService $nginxConfigService = null;
+
     public function __construct(
         string $pluginDir = '/etc/eiou/plugins',
         ?Logger $logger = null,
@@ -137,6 +152,24 @@ class PluginLoader
     }
 
     /**
+     * Wire the sandbox services (Phase 2.5 of plugin sandboxing).
+     * Called by Application::__construct after the ServiceContainer
+     * is ready. When any of the three is null the sandbox path is
+     * effectively unavailable — setEnabled() on a sandboxed plugin
+     * will refuse rather than half-commit. See
+     * docs/PLUGIN_SANDBOXING.md.
+     */
+    public function setSandboxServices(
+        ?PluginUserService $userService,
+        ?PluginPoolService $poolService,
+        ?PluginNginxConfigService $nginxConfigService
+    ): void {
+        $this->userService = $userService;
+        $this->poolService = $poolService;
+        $this->nginxConfigService = $nginxConfigService;
+    }
+
+    /**
      * Scan the plugin directory, register autoloaders, and instantiate
      * each plugin's entry class. Disabled plugins are recorded in metadata
      * but their autoloaders are NOT registered and their entry class is
@@ -171,6 +204,41 @@ class PluginLoader
                 continue;
             }
             $this->loadPlugin($pluginPath, $state);
+        }
+
+        // At boot, find every plugin that's enabled in plugins.json
+        // but lacks "sandboxed": true in its manifest. These are inert
+        // (we refused to load them above); leaving them as enabled in
+        // the state file would mean every subsequent boot logs the
+        // same warning forever, and the GUI would keep showing them
+        // as "enabled". Auto-flip them to disabled in the state file
+        // and emit a one-shot notice telling the operator what
+        // happened.
+        $autoDisabled = [];
+        foreach ($this->metadata as $name => $meta) {
+            if (($meta['status'] ?? '') !== 'legacy_unsupported') continue;
+            if (!array_key_exists($name, $state)) continue;
+            if (empty($state[$name]['enabled'])) continue;
+            $state[$name]['enabled'] = false;
+            $autoDisabled[] = $name;
+            // Mirror the metadata flag so listAllPlugins shows
+            // enabled=false from this point on, without waiting for
+            // the next reconcile pass.
+            $this->metadata[$name]['enabled'] = false;
+        }
+        if ($autoDisabled !== []) {
+            $this->writeState($state);
+            $this->logger->warning(
+                'plugin_legacy_auto_disabled',
+                [
+                    'plugins' => $autoDisabled,
+                    'reason' => 'Sandboxing is mandatory. Plugins missing "sandboxed": true in '
+                              . 'their manifest were enabled in plugins.json but inert; this '
+                              . 'boot auto-flipped them to disabled. Operator should either '
+                              . 'wait for the plugin author to ship a sandboxed migration, or '
+                              . 'uninstall the plugin. See docs/PLUGINS.md.',
+                ]
+            );
         }
 
         return $this->plugins;
@@ -304,13 +372,107 @@ class PluginLoader
             $enabled = (bool) ($state[$name]['enabled'] ?? false);
             $status = $live[$name]['status'] ?? ($enabled ? 'not_loaded' : 'disabled');
 
+            $sandboxed = !empty($manifest['sandboxed']);
+            // For sandboxed-enabled plugins the in-process metadata
+            // status is 'sandboxed' (see loadPlugin), which is more
+            // informative than the default 'not_loaded' fallback.
+            if ($enabled && $sandboxed && !isset($live[$name]['status'])) {
+                $status = 'sandboxed';
+            }
+
             $row = [
                 'name' => $name,
                 'version' => $manifest['version'] ?? '',
                 'description' => $manifest['description'] ?? '',
                 'enabled' => $enabled,
                 'status' => $status,
+                'sandboxed' => $sandboxed,
             ];
+
+            // Phase 6 hard-deprecation surface — non-sandboxed plugins
+            // are no longer loaded at all. The flag tells the GUI / CLI
+            // to render them as "unsupported until migrated".
+            if (!$sandboxed) {
+                $row['legacy_in_process'] = true;
+                $row['legacy_warning']    = 'In-process plugins are no longer supported. This plugin '
+                                          . 'is enabled in plugins.json but inert — its register() / '
+                                          . 'boot() will not run. The plugin author must ship an '
+                                          . 'updated manifest with "sandboxed": true (see '
+                                          . 'docs/PLUGIN_SANDBOXING.md).';
+            }
+
+            // Phase 4: core_services allow-list. Each entry is
+            // "<Service>.<method>" — the gateway checks every
+            // sandboxed-plugin call against this list before
+            // dispatching. Manifest fields outside the kebab/dotted
+            // shape are filtered out so a malformed manifest can't
+            // poison the gateway's match.
+            $coreServices = $manifest['core_services'] ?? [];
+            if (is_array($coreServices)) {
+                $row['core_services'] = array_values(array_filter(
+                    $coreServices,
+                    fn($entry): bool => is_string($entry)
+                        && preg_match('/^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9_]*$/', $entry) === 1
+                ));
+            } else {
+                $row['core_services'] = [];
+            }
+
+            // Phase 5: declarative surface fields. These tell the IPC
+            // forwarder which events/filters/renders to bridge from
+            // in-process firing to a sandboxed plugin's __dispatch.php.
+            // Each list is filtered to a safe shape so a malformed
+            // manifest can't poison the forwarder's registrations.
+            $row['subscribes_to'] = $this->stringListField($manifest, 'subscribes_to', '/^[a-z][a-z0-9_.-]*$/');
+            $row['filter_hooks']  = $this->stringListField($manifest, 'filter_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
+            $row['render_hooks']  = $this->stringListField($manifest, 'render_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
+            // gui_actions, tabs, gui_assets, api_routes, cli_commands
+            // carry richer payloads. Phase 5 forwarders read them
+            // through the list; basic structural validation here
+            // keeps the forwarder code simpler.
+            $row['gui_actions'] = $this->shapedListField(
+                $manifest,
+                'gui_actions',
+                fn($e): bool => is_array($e)
+                    && isset($e['name']) && is_string($e['name'])
+                    && preg_match('/^[a-z][a-zA-Z0-9_]*$/', $e['name']) === 1
+            );
+            $row['tabs'] = $this->shapedListField(
+                $manifest,
+                'tabs',
+                fn($e): bool => is_array($e)
+                    && isset($e['id']) && is_string($e['id'])
+                    && preg_match('/^[a-z0-9][a-z0-9_-]*$/', $e['id']) === 1
+                    && isset($e['label']) && is_string($e['label'])
+            );
+            $row['gui_assets'] = $this->shapedListField(
+                $manifest,
+                'gui_assets',
+                fn($e): bool => is_array($e)
+                    && isset($e['type'], $e['path'])
+                    && in_array($e['type'], ['css', 'js'], true)
+                    && is_string($e['path'])
+                    && strpos($e['path'], '..') === false
+            );
+            // api_routes entries mirror PluginApiRegistry::register
+            // shape: {method, action} where method ∈ HTTP verbs and
+            // action is the path suffix under /api/v1/plugins/<id>/.
+            $row['api_routes'] = $this->shapedListField(
+                $manifest,
+                'api_routes',
+                fn($e): bool => is_array($e)
+                    && isset($e['method'], $e['action'])
+                    && in_array($e['method'], ['GET','POST','PUT','PATCH','DELETE'], true)
+                    && is_string($e['action'])
+                    && preg_match('/^[a-z][a-z0-9-]{0,63}$/', $e['action']) === 1
+            );
+            $row['cli_commands'] = $this->shapedListField(
+                $manifest,
+                'cli_commands',
+                fn($e): bool => is_array($e)
+                    && isset($e['name']) && is_string($e['name'])
+                    && preg_match('/^[a-z][a-z0-9-]*$/', $e['name']) === 1
+            );
             if (isset($live[$name]['error'])) {
                 $row['error'] = (string) $live[$name]['error'];
             }
@@ -420,6 +582,25 @@ class PluginLoader
      */
     public function setEnabled(string $name, bool $enabled): bool
     {
+        // Refuse to enable a plugin whose manifest doesn't opt into
+        // sandboxing. Disabling a non-sandboxed plugin always
+        // succeeds at the state-flip layer (operator wants to mark
+        // it disabled even if it was never going to load anyway).
+        if ($enabled) {
+            $manifest = $this->readManifestFromDisk($name);
+            if ($manifest !== null && empty($manifest['sandboxed'])) {
+                $this->logger->warning(
+                    "Refusing to enable non-sandboxed plugin",
+                    [
+                        'plugin' => $name,
+                        'remediation' => 'Set "sandboxed": true in plugin.json. '
+                                       . 'See docs/PLUGINS.md (Sandboxed Plugin Authoring).',
+                    ]
+                );
+                return false;
+            }
+        }
+
         // Run the DDL side-effects first — if they fail, we don't flip
         // the flag, so the operator can retry without a stale state file.
         try {
@@ -433,9 +614,353 @@ class PluginLoader
             return false;
         }
 
+        // Sandbox side-effects (Phase 2.5). Only run for plugins that
+        // declare "sandboxed": true in their manifest. Failures abort
+        // the state flip the same way isolation failures do — operator
+        // can retry; boot-time reconcile self-heals partial states.
+        if (!$this->applySandboxSideEffects($name, $enabled)) {
+            return false;
+        }
+
         $state = $this->readState();
         $state[$name] = ['enabled' => $enabled];
-        return $this->writeState($state);
+        if ($this->writeState($state)) {
+            return true;
+        }
+
+        // State write failed AFTER sandbox side effects committed (the
+        // pool is alive but plugins.json doesn't reflect it). Roll back
+        // the sandbox change so the on-disk state stays internally
+        // consistent. If the rollback itself fails (uncommon — only
+        // possible if the supervisor died between steps), log loudly
+        // and let reconcileSandbox heal at next boot.
+        $this->logger->error("writeState failed after sandbox side-effects — rolling back", [
+            'plugin' => $name,
+            'target_enabled' => $enabled,
+        ]);
+        if (!$this->applySandboxSideEffects($name, !$enabled)) {
+            $this->logger->critical(
+                "sandbox rollback failed; plugin pool is in a state divergent from plugins.json. "
+                . "Boot-time reconcileSandbox will attempt cleanup.",
+                ['plugin' => $name, 'target_enabled' => $enabled]
+            );
+        }
+        return false;
+    }
+
+    /**
+     * Apply the sandbox side-effects for a plugin transition:
+     *
+     *   enable + sandboxed=true  → ensureUser + applyPool with refreshed
+     *                              nginx snippet that now includes this
+     *                              plugin
+     *   disable + sandboxed=true → dropPool with refreshed snippet that
+     *                              now excludes this plugin, then dropUser
+     *   either + sandboxed=false → no-op (non-sandboxed plugin path)
+     *
+     * Returns true on success or no-op. Returns false (and logs) if the
+     * plugin is sandboxed but the sandbox services aren't wired, or if
+     * any step fails. On false the caller (setEnabled) aborts the state
+     * flip — partial commits are healed by reconcileSandbox() on the
+     * next boot.
+     */
+    private function applySandboxSideEffects(string $name, bool $enabled): bool
+    {
+        $manifest = $this->readManifestFromDisk($name);
+        if ($manifest === null || empty($manifest['sandboxed'])) {
+            return true; // non-sandboxed plugin — nothing to do
+        }
+
+        if ($this->userService === null
+            || $this->poolService === null
+            || $this->nginxConfigService === null
+        ) {
+            $this->logger->error(
+                "Sandbox transition refused — sandbox services not wired",
+                ['plugin' => $name, 'target_enabled' => $enabled]
+            );
+            return false;
+        }
+
+        try {
+            if ($enabled) {
+                // Ensure user first. Pool config references the user, and
+                // applyPool's nginx -t would fail if the user doesn't exist
+                // yet (FPM refuses to start a pool whose user is unknown).
+                if (!$this->userService->ensureUser($name)) {
+                    $this->logger->error("ensureUser failed for sandboxed plugin", ['plugin' => $name]);
+                    return false;
+                }
+                $systemUser = $this->userService->systemUsername($name);
+                $snippet = $this->renderNginxSnippetWithDelta($name, $systemUser, true);
+                // Force-rotate the gateway token on explicit
+                // operator toggle so any previously-leaked token is
+                // invalidated. Reconcile uses the idempotent path.
+                if (!$this->poolService->applyPool($name, $systemUser, $snippet, true)) {
+                    $this->logger->error("applyPool failed for sandboxed plugin", ['plugin' => $name]);
+                    return false;
+                }
+            } else {
+                $snippet = $this->renderNginxSnippetWithDelta($name, null, false);
+                if (!$this->poolService->dropPool($name, $snippet)) {
+                    $this->logger->error("dropPool failed for sandboxed plugin", ['plugin' => $name]);
+                    return false;
+                }
+                if (!$this->userService->dropUser($name)) {
+                    // User removal failed but pool is already gone — log
+                    // but treat as success since the security boundary is
+                    // intact (no pool = no place for the user to run code).
+                    // Reconcile at next boot will clean the orphaned user.
+                    $this->logger->warning("dropUser failed; will retry at next boot", ['plugin' => $name]);
+                }
+            }
+            return true;
+        } catch (Throwable $e) {
+            $this->logger->error("Sandbox side-effect threw", [
+                'plugin' => $name,
+                'target_enabled' => $enabled,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Render the full nginx snippet for the supervisor's apply step.
+     *
+     * "Delta" because the caller is mid-transition — the on-disk state
+     * doesn't yet reflect the change being applied. So we collect the
+     * current sandboxed+enabled set from state, then add / remove the
+     * plugin being transitioned to produce the AFTER view.
+     */
+    private function renderNginxSnippetWithDelta(string $name, ?string $systemUserOnEnable, bool $enabling): string
+    {
+        $entries = $this->collectSandboxedRouteEntries();
+
+        if ($enabling) {
+            $alreadyPresent = false;
+            foreach ($entries as $e) {
+                if ($e['plugin_id'] === $name) { $alreadyPresent = true; break; }
+            }
+            if (!$alreadyPresent && $systemUserOnEnable !== null) {
+                $entries[] = ['plugin_id' => $name, 'system_user' => $systemUserOnEnable];
+            }
+        } else {
+            $entries = array_values(array_filter(
+                $entries,
+                fn(array $e): bool => $e['plugin_id'] !== $name
+            ));
+        }
+
+        // Stable order so the rendered snippet diffs cleanly between calls.
+        usort($entries, fn(array $a, array $b): int => strcmp($a['plugin_id'], $b['plugin_id']));
+
+        return $this->nginxConfigService->renderSnippet($entries);
+    }
+
+    /**
+     * Collect the (plugin_id, system_user) pairs for every sandboxed-enabled
+     * plugin currently on disk. Reads from the state file + on-disk manifests
+     * so it works before / after / during loadPlugin().
+     *
+     * @return list<array{plugin_id:string, system_user:string}>
+     */
+    private function collectSandboxedRouteEntries(): array
+    {
+        if ($this->userService === null) return [];
+        $state = $this->readState();
+        $result = [];
+        foreach ($state as $pluginId => $entry) {
+            if (empty($entry['enabled'])) continue;
+            $manifest = $this->readManifestFromDisk((string) $pluginId);
+            if ($manifest === null || empty($manifest['sandboxed'])) continue;
+            try {
+                $result[] = [
+                    'plugin_id'   => (string) $pluginId,
+                    'system_user' => $this->userService->systemUsername((string) $pluginId),
+                ];
+            } catch (\InvalidArgumentException $e) {
+                $this->logger->warning("Skipping malformed plugin id in state", [
+                    'plugin_id' => $pluginId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Extract a manifest field that should be a list of strings matching
+     * a regex. Drops entries that don't match. Empty / non-array values
+     * normalize to []. Used by Phase 5 declarative surface parsing.
+     *
+     * @return list<string>
+     */
+    private function stringListField(array $manifest, string $key, string $regex): array
+    {
+        $raw = $manifest[$key] ?? [];
+        if (!is_array($raw)) return [];
+        return array_values(array_filter(
+            $raw,
+            fn($entry): bool => is_string($entry) && preg_match($regex, $entry) === 1
+        ));
+    }
+
+    /**
+     * Extract a manifest field that should be a list of objects passing
+     * a per-entry validator. Used for richer Phase 5 fields (tabs,
+     * actions, etc.) where entries carry sub-keys.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function shapedListField(array $manifest, string $key, callable $validator): array
+    {
+        $raw = $manifest[$key] ?? [];
+        if (!is_array($raw)) return [];
+        $out = [];
+        foreach ($raw as $entry) {
+            if ($validator($entry)) {
+                $out[] = $entry;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Read a plugin's manifest from disk. Cheap (small file), called from
+     * the sandbox-side-effect path where we need the latest "sandboxed"
+     * flag without depending on whether $this->metadata is populated
+     * (sandboxed plugins don't get loaded into metadata's full shape).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function readManifestFromDisk(string $name): ?array
+    {
+        $path = $this->pluginDir . '/' . $name . '/plugin.json';
+        if (!is_file($path)) return null;
+        $raw = @file_get_contents($path);
+        if ($raw === false) return null;
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Boot-time reconcile of sandbox resources. Mirrors
+     * reconcileIsolation() — runs through every enabled sandboxed
+     * plugin on disk, ensures its Unix user + FPM pool config are
+     * present, and drops stranded resources for plugins that were
+     * uninstalled / disabled outside the normal lifecycle.
+     *
+     * Idempotent. Safe to call on every boot. Failures during the
+     * pass are logged per-plugin but never throw — a single broken
+     * plugin must not block the whole reconcile.
+     *
+     * @return array{
+     *     applied: list<string>,
+     *     dropped: list<string>,
+     *     errors:  list<array{plugin_id:string, message:string}>
+     * }
+     */
+    public function reconcileSandbox(): array
+    {
+        $report = ['applied' => [], 'dropped' => [], 'skipped' => [], 'errors' => []];
+        if ($this->userService === null
+            || $this->poolService === null
+            || $this->nginxConfigService === null
+        ) {
+            return $report;
+        }
+
+        // Cold-boot race guard. Application::__construct runs in every
+        // PHP entrypoint — GUI workers, CLI calls, AND each of the 4
+        // message processors as they spawn. On a fresh container boot
+        // the processors all bootstrap roughly simultaneously, each
+        // calls reconcileSandbox, and each sees "pool not yet on disk"
+        // (because the first one's apply-pool hasn't completed the
+        // supervisor round-trip yet). Result: 4 apply-pool requests
+        // for the same plugin, all firing before the first one settled.
+        //
+        // A non-blocking flock serialises this. The first caller
+        // acquires the lock and does the work; the rest immediately
+        // skip with skipped=[lock_held]. Their isPoolUpToDate check
+        // would have short-circuited a moment later anyway once the
+        // first finished, so functionally nothing is lost.
+        $lockPath = '/tmp/eiou-sandbox-reconcile.lock';
+        $lockFp = @fopen($lockPath, 'c');
+        if ($lockFp === false) {
+            // Can't open the lock — fall back to the unlocked path.
+            // Rare; the lock is just an optimization, the actual
+            // safety properties (idempotent apply, isPoolUpToDate)
+            // are unchanged whether or not we serialize.
+        } elseif (!@flock($lockFp, LOCK_EX | LOCK_NB)) {
+            // Another process holds the reconcile lock right now.
+            // Skip silently; the winner will get the plugins into
+            // the correct state.
+            fclose($lockFp);
+            $report['skipped'][] = '__lock_held';
+            return $report;
+        }
+
+        try {
+            $result = $this->doReconcileSandbox($report);
+        } finally {
+            if (is_resource($lockFp)) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * The actual reconcile body, factored out of reconcileSandbox so the
+     * flock wrapper above can guard a single execution per boot. Don't
+     * call this directly — go through reconcileSandbox().
+     *
+     * @param array{applied:list<string>, dropped:list<string>, skipped:list<string>, errors:list<array{plugin_id:string, message:string}>} $report
+     */
+    private function doReconcileSandbox(array $report): array
+    {
+        $entries = $this->collectSandboxedRouteEntries();
+        $snippet = $this->nginxConfigService->renderSnippet($entries);
+
+        // Forward-pass: ensure each enabled-sandboxed plugin has its
+        // user + pool. Short-circuit on plugins where on-disk state
+        // already matches what we'd produce — without this every
+        // Application::__construct (and there are many: GUI page, CLI
+        // invocation, health probe) re-applies every sandboxed plugin
+        // and the supervisor log fills with "apply-pool complete"
+        // lines. The check itself reads a few small files (pool
+        // config, nginx snippet, tokens index, dispatcher path) so
+        // it's much cheaper than a supervisor round-trip.
+        foreach ($entries as $entry) {
+            $pluginId = $entry['plugin_id'];
+            try {
+                if (!$this->userService->ensureUser($pluginId)) {
+                    $report['errors'][] = ['plugin_id' => $pluginId, 'message' => 'ensureUser failed'];
+                    continue;
+                }
+                if ($this->poolService->isPoolUpToDate($pluginId, $entry['system_user'], $snippet)) {
+                    $report['skipped'][] = $pluginId;
+                    continue;
+                }
+                if (!$this->poolService->applyPool($pluginId, $entry['system_user'], $snippet)) {
+                    $report['errors'][] = ['plugin_id' => $pluginId, 'message' => 'applyPool failed'];
+                    continue;
+                }
+                $report['applied'][] = $pluginId;
+            } catch (Throwable $e) {
+                $report['errors'][] = ['plugin_id' => $pluginId, 'message' => $e->getMessage()];
+            }
+        }
+
+        // Reverse pass for stranded users/pools is intentionally NOT
+        // implemented here — it requires enumerating /etc/php/<ver>/fpm/pool.d/
+        // and /etc/passwd to find eiou-p-* entries that have no matching
+        // plugin. Both are root-only reads. Phase 2.5 ships the forward
+        // pass; the reverse pass will move into the supervisor poller
+        // when Phase 6 (legacy deprecation) lands.
+        return $report;
     }
 
     /**
@@ -1012,6 +1537,13 @@ class PluginLoader
         // node on its first boot, because it never runs without consent.
         $enabled = (bool) ($state[$name]['enabled'] ?? false);
 
+        // Parse the "sandboxed" flag. Sandboxing is now MANDATORY —
+        // any plugin without `"sandboxed": true` is refused load. This
+        // is the Phase 6 hard deprecation: a malicious in-process
+        // plugin can read the master key + decrypt the seed phrase, so
+        // we no longer offer the in-process path at all.
+        $sandboxed = !empty($manifest['sandboxed']);
+
         if (!$enabled) {
             $this->metadata[$name] = [
                 'version' => $manifest['version'],
@@ -1020,58 +1552,63 @@ class PluginLoader
                 'enabled' => false,
                 'database' => $dbConfig,
                 'signature' => $sigResult,
+                'sandboxed' => $sandboxed,
             ];
             return;
         }
 
-        // Register PSR-4 autoloader for this plugin's namespace(s)
-        $psr4 = $manifest['autoload']['psr-4'] ?? [];
-        if (!is_array($psr4) || empty($psr4)) {
-            $this->logger->warning("PluginLoader: manifest missing autoload.psr-4", [
-                'name' => $name
-            ]);
-            return;
-        }
-        foreach ($psr4 as $prefix => $relativeDir) {
-            $this->registerPsr4($prefix, $pluginPath . '/' . trim($relativeDir, '/'));
-        }
-
-        // Instantiate entry class
-        $entryClass = $manifest['entryClass'];
-        try {
-            if (!class_exists($entryClass)) {
-                $this->logger->warning("PluginLoader: entry class not found", [
+        // Enabled but NOT sandboxed → refuse to load. Plugin's files
+        // stay on disk, listAllPlugins() surfaces a clear status
+        // explaining why, but register()/boot() never run and the
+        // autoloader never registers. Operator has to migrate the
+        // plugin's manifest to "sandboxed": true (see
+        // docs/PLUGIN_SANDBOXING.md) before it does anything.
+        if (!$sandboxed) {
+            $this->logger->warning(
+                'PluginLoader: refusing to load non-sandboxed plugin',
+                [
                     'name' => $name,
-                    'class' => $entryClass
-                ]);
-                return;
-            }
-            $instance = new $entryClass();
-            if (!$instance instanceof PluginInterface) {
-                $this->logger->warning("PluginLoader: entry class does not implement PluginInterface", [
-                    'name' => $name,
-                    'class' => $entryClass
-                ]);
-                return;
-            }
-        } catch (Throwable $e) {
-            $this->logger->warning("PluginLoader: failed to instantiate entry class", [
-                'name' => $name,
-                'class' => $entryClass,
-                'error' => $e->getMessage()
-            ]);
+                    'reason' => 'Sandboxing is mandatory. Set "sandboxed": true in plugin.json.',
+                ]
+            );
+            $this->metadata[$name] = [
+                'version' => $manifest['version'],
+                'description' => $manifest['description'] ?? '',
+                'status' => 'legacy_unsupported',
+                'enabled' => true,
+                'database' => $dbConfig,
+                'signature' => $sigResult,
+                'sandboxed' => false,
+                'error' => 'Plugin must declare "sandboxed": true. In-process plugins are not supported.',
+            ];
             return;
         }
 
-        $this->plugins[$name] = $instance;
+        // Sandboxed plugins NEVER load in-process. Their code runs only
+        // in their own FPM pool, reached over IPC via __dispatch.php.
+        // PluginLoader keeps a metadata entry so listAllPlugins() can
+        // surface them, but does NOT register their autoloader, instantiate
+        // their entry class, or run register()/boot(). This is the whole
+        // point of sandboxing — the plugin's code never touches the wallet's
+        // address space.
         $this->metadata[$name] = [
             'version' => $manifest['version'],
             'description' => $manifest['description'] ?? '',
-            'status' => 'discovered',
+            'status' => 'sandboxed',
             'enabled' => true,
             'database' => $dbConfig,
             'signature' => $sigResult,
+            'sandboxed' => true,
         ];
+
+        // The legacy in-process path (autoload registration + entry-class
+        // instantiation + register()/boot() lifecycle) used to live here.
+        // It was removed when sandboxing became mandatory — every load
+        // path now either returns early (disabled / legacy_unsupported)
+        // or stops at the sandboxed-metadata write above. The
+        // registerPsr4() / instantiation helpers stayed in this file for
+        // tests and for the `plugins` property that's still populated by
+        // tests; production never reaches them.
     }
 
     /**

@@ -42,7 +42,24 @@ class PluginLoaderTest extends TestCase
 
     private function loader(): PluginLoader
     {
-        return new PluginLoader($this->pluginRoot(), $this->logger, $this->stateFile);
+        $l = new PluginLoader($this->pluginRoot(), $this->logger, $this->stateFile);
+        // Sandboxing is mandatory now. Every test fixture wires inert
+        // mock sandbox services so setEnabled() doesn't refuse with
+        // "services not wired". Tests that specifically care about
+        // sandbox-service behaviour build their own loader.
+        $userSvc = $this->createMock(\Eiou\Services\PluginUserService::class);
+        $userSvc->method('ensureUser')->willReturn(true);
+        $userSvc->method('dropUser')->willReturn(true);
+        $userSvc->method('systemUsername')->willReturnCallback(
+            fn(string $id) => 'eiou-p-' . substr(hash('sha256', $id), 0, 8)
+        );
+        $poolSvc = $this->createMock(\Eiou\Services\PluginPoolService::class);
+        $poolSvc->method('applyPool')->willReturn(true);
+        $poolSvc->method('dropPool')->willReturn(true);
+        $nginxSvc = $this->createMock(\Eiou\Services\PluginNginxConfigService::class);
+        $nginxSvc->method('renderSnippet')->willReturn('');
+        $l->setSandboxServices($userSvc, $poolSvc, $nginxSvc);
+        return $l;
     }
 
     private function pluginRoot(): string
@@ -71,12 +88,15 @@ class PluginLoaderTest extends TestCase
         $this->writePlugin('valid', 'Eiou\\Tests\\Plugins\\Valid\\ValidPlugin', $this->validPluginSource('Valid'));
 
         $loader = $this->loader();
-        $plugins = $loader->discover();
+        $loader->discover();
 
-        $this->assertArrayHasKey('valid', $plugins);
-        $this->assertSame('1.0.0', $plugins['valid']->getVersion());
-        $this->assertSame('discovered', $loader->getLoadedPlugins()['valid']['status']);
-        $this->assertTrue($loader->getLoadedPlugins()['valid']['enabled']);
+        // Sandboxed plugins never load in-process (no entry-class
+        // instance lives in $plugins), but they're recorded in metadata
+        // so listAllPlugins / the GUI can show them.
+        $meta = $loader->getLoadedPlugins();
+        $this->assertArrayHasKey('valid', $meta);
+        $this->assertSame('sandboxed', $meta['valid']['status']);
+        $this->assertTrue($meta['valid']['enabled']);
     }
 
     public function testDiscoverSkipsPluginWithMissingManifest(): void
@@ -106,98 +126,29 @@ class PluginLoaderTest extends TestCase
         $this->assertSame([], $this->loader()->discover());
     }
 
-    public function testDiscoverSkipsClassNotImplementingInterface(): void
-    {
-        $source = "<?php\nnamespace Eiou\\Tests\\Plugins\\Bad;\nclass BadPlugin { public function getName(): string { return 'bad'; } }\n";
-        $this->writePlugin('bad', 'Eiou\\Tests\\Plugins\\Bad\\BadPlugin', $source);
+    // [removed] testDiscoverSkipsClassNotImplementingInterface: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $this->logger->expects($this->atLeastOnce())->method('warning');
-        $this->assertSame([], $this->loader()->discover());
-    }
 
-    public function testRegisterAllCallsRegisterOnEachPlugin(): void
-    {
-        $this->writePlugin('reg', 'Eiou\\Tests\\Plugins\\Reg\\RegPlugin', $this->validPluginSource('Reg'));
+    // [removed] testRegisterAllCallsRegisterOnEachPlugin: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $loader = $this->loader();
-        $loader->discover();
 
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
+    // [removed] testBootAllCallsBootOnEachPlugin: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $this->assertSame('registered', $loader->getLoadedPlugins()['reg']['status']);
-    }
 
-    public function testBootAllCallsBootOnEachPlugin(): void
-    {
-        $this->writePlugin('booted', 'Eiou\\Tests\\Plugins\\Booted\\BootedPlugin', $this->validPluginSource('Booted'));
+    // [removed] testRegisterFailureDisablesPluginWithoutAffectingSiblings: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $loader = $this->loader();
-        $loader->discover();
 
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-        $loader->bootAll($container);
+    // [removed] testBootFailureDisablesOnlyThatPlugin: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $this->assertSame('booted', $loader->getLoadedPlugins()['booted']['status']);
-    }
 
-    public function testRegisterFailureDisablesPluginWithoutAffectingSiblings(): void
-    {
-        $this->writePlugin('throwing', 'Eiou\\Tests\\Plugins\\Throwing\\ThrowingPlugin',
-            $this->throwingPluginSource('Throwing', 'register'));
-        $this->writePlugin('healthy', 'Eiou\\Tests\\Plugins\\Healthy\\HealthyPlugin',
-            $this->validPluginSource('Healthy'));
+    // [removed] testFailedPluginIsSkippedInBootPhase: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $this->logger->expects($this->atLeastOnce())->method('error');
-        $loader = $this->loader();
-        $loader->discover();
-
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-        $loader->bootAll($container);
-
-        $meta = $loader->getLoadedPlugins();
-        $this->assertSame('failed', $meta['throwing']['status']);
-        $this->assertStringContainsString('register', $meta['throwing']['error']);
-        $this->assertSame('booted', $meta['healthy']['status']);
-    }
-
-    public function testBootFailureDisablesOnlyThatPlugin(): void
-    {
-        $this->writePlugin('boot-fail', 'Eiou\\Tests\\Plugins\\BootFail\\BootFailPlugin',
-            $this->throwingPluginSource('BootFail', 'boot'));
-        $this->writePlugin('boot-ok', 'Eiou\\Tests\\Plugins\\BootOk\\BootOkPlugin',
-            $this->validPluginSource('BootOk'));
-
-        $this->logger->expects($this->atLeastOnce())->method('error');
-        $loader = $this->loader();
-        $loader->discover();
-
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-        $loader->bootAll($container);
-
-        $meta = $loader->getLoadedPlugins();
-        $this->assertSame('failed', $meta['boot-fail']['status']);
-        $this->assertSame('booted', $meta['boot-ok']['status']);
-    }
-
-    public function testFailedPluginIsSkippedInBootPhase(): void
-    {
-        $this->writePlugin('skip-boot', 'Eiou\\Tests\\Plugins\\SkipBoot\\SkipBootPlugin',
-            $this->throwingPluginSource('SkipBoot', 'register'));
-
-        $loader = $this->loader();
-        $loader->discover();
-
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-        $loader->bootAll($container);
-
-        $meta = $loader->getLoadedPlugins();
-        $this->assertStringContainsString('register', $meta['skip-boot']['error']);
-    }
 
     public function testDuplicatePluginNameIsSkipped(): void
     {
@@ -211,15 +162,19 @@ class PluginLoaderTest extends TestCase
             'version' => '2.0.0',
             'entryClass' => 'Eiou\\Tests\\Plugins\\DupTwo\\DupTwoPlugin',
             'autoload' => ['psr-4' => ['Eiou\\Tests\\Plugins\\DupTwo\\' => 'src/']],
+            'sandboxed' => true,
         ]));
         file_put_contents($secondPath . '/src/DupTwoPlugin.php', $this->validPluginSource('DupTwo'));
 
         $this->logger->expects($this->atLeastOnce())->method('warning');
         $loader = $this->loader();
-        $plugins = $loader->discover();
+        $loader->discover();
 
-        $this->assertCount(1, $plugins);
-        $this->assertSame('1.0.0', $loader->getLoadedPlugins()['dup']['version']);
+        // First-write-wins: dup-second's metadata entry never lands
+        // because the name was already claimed.
+        $meta = $loader->getLoadedPlugins();
+        $this->assertArrayHasKey('dup', $meta);
+        $this->assertSame('1.0.0', $meta['dup']['version']);
     }
 
     // -- Enable / disable persistence --------------------------------------
@@ -268,10 +223,11 @@ class PluginLoaderTest extends TestCase
             $this->validPluginSource('ExplicitlyOn'));
 
         $loader = $this->loader();
-        $plugins = $loader->discover();
+        $loader->discover();
 
-        $this->assertArrayHasKey('explicitly-on', $plugins);
-        $this->assertTrue($loader->getLoadedPlugins()['explicitly-on']['enabled']);
+        $meta = $loader->getLoadedPlugins();
+        $this->assertArrayHasKey('explicitly-on', $meta);
+        $this->assertTrue($meta['explicitly-on']['enabled']);
     }
 
     public function testSetEnabledPersistsToStateFile(): void
@@ -443,133 +399,31 @@ class PluginLoaderTest extends TestCase
 
     // -- Lifecycle event dispatch ------------------------------------------
 
-    public function testRegisterAllDispatchesPluginRegistered(): void
-    {
-        $this->writePlugin('lifecycle-ok', 'Eiou\\Tests\\Plugins\\LifecycleOk\\LifecycleOkPlugin',
-            $this->validPluginSource('LifecycleOk'));
-        $loader = $this->loader();
-        $loader->discover();
+    // [removed] testRegisterAllDispatchesPluginRegistered: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $fired = [];
-        EventDispatcher::getInstance()->subscribe(PluginEvents::PLUGIN_REGISTERED, function (array $data) use (&$fired) {
-            $fired[] = $data;
-        });
 
-        $loader->registerAll($this->createMock(ServiceContainer::class));
+    // [removed] testBootAllDispatchesPluginBooted: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $this->assertCount(1, $fired);
-        $this->assertSame('lifecycle-ok', $fired[0]['name']);
-        $this->assertSame('1.0.0', $fired[0]['version']);
-    }
 
-    public function testBootAllDispatchesPluginBooted(): void
-    {
-        $this->writePlugin('boot-ok', 'Eiou\\Tests\\Plugins\\BootOk\\BootOkPlugin',
-            $this->validPluginSource('BootOk'));
-        $loader = $this->loader();
-        $loader->discover();
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
+    // [removed] testFailedPluginDispatchesPluginFailed: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $fired = [];
-        EventDispatcher::getInstance()->subscribe(PluginEvents::PLUGIN_BOOTED, function (array $data) use (&$fired) {
-            $fired[] = $data;
-        });
-
-        $loader->bootAll($container);
-
-        $this->assertCount(1, $fired);
-        $this->assertSame('boot-ok', $fired[0]['name']);
-    }
-
-    public function testFailedPluginDispatchesPluginFailed(): void
-    {
-        // Plugin that throws inside boot() — covers the disablePlugin path
-        // for the 'boot' phase. The register phase uses the same disable
-        // helper so this single test covers both.
-        $this->writePlugin('boom',
-            'Eiou\\Tests\\Plugins\\Boom\\BoomPlugin',
-            $this->throwingPluginSource('Boom', 'boot')
-        );
-        $loader = $this->loader();
-        $loader->discover();
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-
-        $fired = [];
-        EventDispatcher::getInstance()->subscribe(PluginEvents::PLUGIN_FAILED, function (array $data) use (&$fired) {
-            $fired[] = $data;
-        });
-
-        $loader->bootAll($container);
-
-        $this->assertCount(1, $fired);
-        $this->assertSame('boom', $fired[0]['name']);
-        $this->assertSame('boot', $fired[0]['phase']);
-        $this->assertStringContainsString('boot exploded', $fired[0]['error']);
-    }
 
     // -- Lifecycle idempotency ---------------------------------------------
 
-    public function testRegisterAllIsIdempotent(): void
-    {
-        // Plugin counts register() calls in a static so tests can observe
-        // how many times the lifecycle ran on the same loader.
-        $this->writePlugin('count-reg', 'Eiou\\Tests\\Plugins\\CountReg\\CountRegPlugin',
-            $this->countingPluginSource('CountReg'));
+    // [removed] testRegisterAllIsIdempotent: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $loader = $this->loader();
-        $loader->discover();
 
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-        $loader->registerAll($container);
-        $loader->registerAll($container);
+    // [removed] testBootAllIsIdempotent: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $registerCount = \Eiou\Tests\Plugins\CountReg\CountRegPlugin::$registerCalls;
-        $this->assertSame(1, $registerCount,
-            'registerAll() called 3 times but plugin->register() should only fire once');
-    }
 
-    public function testBootAllIsIdempotent(): void
-    {
-        // The real bug we're guarding against: a second bootAll() must NOT
-        // re-call boot(). If boot() re-ran, it would double-subscribe event
-        // listeners and one event would trigger N reactions per worker.
-        $this->writePlugin('count-boot', 'Eiou\\Tests\\Plugins\\CountBoot\\CountBootPlugin',
-            $this->countingPluginSource('CountBoot'));
+    // [removed] testFailedPluginNotRetriedOnSecondRegisterAll: tested in-process plugin lifecycle (register/boot/instantiation). Sandboxing is now mandatory; the
+    // loader no longer instantiates plugin entry classes — these assertions are about a deleted code path.
 
-        $loader = $this->loader();
-        $loader->discover();
-
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-        $loader->bootAll($container);
-        $loader->bootAll($container);
-        $loader->bootAll($container);
-
-        $bootCount = \Eiou\Tests\Plugins\CountBoot\CountBootPlugin::$bootCalls;
-        $this->assertSame(1, $bootCount,
-            'bootAll() called 3 times but plugin->boot() should only fire once');
-    }
-
-    public function testFailedPluginNotRetriedOnSecondRegisterAll(): void
-    {
-        // Once register() throws, the plugin is marked failed. Subsequent
-        // registerAll() calls should leave it failed, not retry it.
-        $this->writePlugin('fail-once', 'Eiou\\Tests\\Plugins\\FailOnce\\FailOncePlugin',
-            $this->throwingPluginSource('FailOnce', 'register'));
-
-        $this->logger->expects($this->atLeastOnce())->method('error');
-        $loader = $this->loader();
-        $loader->discover();
-
-        $container = $this->createMock(ServiceContainer::class);
-        $loader->registerAll($container);
-        $loader->registerAll($container);
-
-        $this->assertSame('failed', $loader->getLoadedPlugins()['fail-once']['status']);
-    }
 
     // -- Helpers --------------------------------------------------------------
 
@@ -592,6 +446,10 @@ class PluginLoaderTest extends TestCase
             'version' => '1.0.0',
             'entryClass' => $entryClass,
             'autoload' => ['psr-4' => [$namespace . '\\' => 'src/']],
+            // Sandboxing is mandatory — every test plugin opts in so
+            // the loader processes it. Tests that care about the
+            // refuse-non-sandboxed path build their manifest manually.
+            'sandboxed' => true,
         ];
         if ($description !== '') {
             $manifest['description'] = $description;
@@ -636,6 +494,7 @@ class PluginLoaderTest extends TestCase
             'version' => '1.0.0',
             'entryClass' => $entryClass,
             'autoload' => ['psr-4' => [$namespace . '\\' => 'src/']],
+            'sandboxed' => true,
         ], $extras);
 
         file_put_contents($path . '/plugin.json', json_encode($manifest));
@@ -756,7 +615,8 @@ PHP;
 
         $loader = $this->loader();
         $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_OFF);
-        $this->assertArrayHasKey('no-check', $loader->discover());
+        $loader->discover();
+        $this->assertArrayHasKey('no-check', $loader->getLoadedPlugins());
     }
 
     public function testSignatureModeRequireBlocksUnsignedPlugin(): void
@@ -790,10 +650,10 @@ PHP;
 
         $loader = $this->loader();
         $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_WARN);
-        $plugins = $loader->discover();
-        $this->assertArrayHasKey('warn-only', $plugins, 'warn mode must not block load');
+        $loader->discover();
         $meta = $loader->getLoadedPlugins();
-        $this->assertSame('discovered', $meta['warn-only']['status']);
+        $this->assertArrayHasKey('warn-only', $meta, 'warn mode must not block load');
+        $this->assertSame('sandboxed', $meta['warn-only']['status']);
         $this->assertSame('untrusted_key', $meta['warn-only']['signature']['status']);
     }
 
@@ -810,9 +670,9 @@ PHP;
 
         $loader = $this->loader();
         $loader->setSignatureVerifier($verifier, \Eiou\Services\PluginSignatureVerifier::MODE_REQUIRE);
-        $plugins = $loader->discover();
-        $this->assertArrayHasKey('signed-ok', $plugins);
+        $loader->discover();
         $meta = $loader->getLoadedPlugins();
+        $this->assertArrayHasKey('signed-ok', $meta);
         $this->assertSame('ok', $meta['signed-ok']['signature']['status']);
     }
 
@@ -829,7 +689,8 @@ PHP;
 
         $loader = $this->loader();
         $loader->setSignatureVerifier($verifier, 'REQUIRED'); // not 'require'
-        $this->assertArrayHasKey('bogus-mode', $loader->discover());
+        $loader->discover();
+        $this->assertArrayHasKey('bogus-mode', $loader->getLoadedPlugins());
     }
 
     public function testListAllPluginsCarriesSignatureStatus(): void
