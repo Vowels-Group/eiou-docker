@@ -221,7 +221,7 @@ Isolation](#database-isolation)):
   "filter_hooks":  ["gui.dashboard.widgets"],
   "render_hooks":  ["gui.dashboard.after"],
 
-  "tabs":         [{"id": "my-tab", "label": "My Tab", "icon": "fas fa-puzzle-piece", "order": 50}],
+  "plugin_tab_panel": {"label": "My Plugin", "icon": "fas fa-puzzle-piece"},
   "gui_actions":  [{"name": "myPluginAction", "tier": "csrf"}],
   "gui_assets":   [{"type": "css", "path": "assets/styles.css"}],
   "api_routes":   [{"method": "GET", "action": "fortune"}],
@@ -299,7 +299,8 @@ contract](#the-__dispatchphp-contract) for the wire shape.
 | `subscribes_to`        | no       | list&lt;string&gt;    | Event names this plugin handles. Core's IPC forwarder POSTs each fired event into your `__dispatch.php` with `type: "event"`. See [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to). |
 | `filter_hooks`         | no       | list&lt;string&gt;    | Filter hook names this plugin transforms. IPC forwarder routes each `applyFilter` call into the dispatcher with `type: "filter"`. See [Extending the GUI](#extending-the-gui). |
 | `render_hooks`         | no       | list&lt;string&gt;    | Render hook names this plugin contributes HTML to. IPC forwarder routes each `doRender` call into the dispatcher with `type: "render"`. |
-| `tabs`                 | no       | list&lt;object&gt;    | Top-level GUI tabs this plugin adds. Each entry: `{id, label, icon, order?}`. |
+| `tabs`                 | no       | list&lt;object&gt;    | **Deprecated for plugins.** Was used to declare top-level GUI tabs; the host now owns a single Plugins tab and each plugin registers a sub-panel via `plugin_tab_panel`. Manifests carrying `tabs` log a deprecation warning and the entries are not registered. Use `plugin_tab_panel` instead. |
+| `plugin_tab_panel`     | no       | object               | Single object `{label, icon?, order?}` declaring this plugin's panel inside the host-owned **Plugins** tab (between Activity and Settings). Operators see a dropdown of all installed plugins at the top of that tab; selecting an entry swaps the panel body. `label` is required and shown in the dropdown; `icon` defaults to `fas fa-puzzle-piece`; `order` defaults to 100 (lower = earlier in the dropdown). |
 | `gui_actions`          | no       | list&lt;object&gt;    | POST handlers this plugin exposes inside the wallet GUI. Each entry: `{name, tier?}`. |
 | `gui_assets`           | no       | list&lt;object&gt;    | CSS/JS files to enqueue. Each entry: `{type: "css"\|"js", path}`. Paths are plugin-dir-relative. |
 | `api_routes`           | no       | list&lt;object&gt;    | Admin-scoped REST endpoints under `/api/v1/plugins/<id>/<action>`. Each entry: `{method, action}`. |
@@ -1866,7 +1867,7 @@ metadata:
   "subscribes_to":  ["sync.completed", "contact.created"],
   "render_hooks":   ["gui.dashboard.after"],
   "filter_hooks":   ["gui.dashboard.widgets"],
-  "tabs":           [{"id": "my-tab", "label": "My Tab", "icon": "fas fa-puzzle-piece", "order": 50}],
+  "plugin_tab_panel": {"label": "My Plugin", "icon": "fas fa-puzzle-piece"},
   "gui_actions":    [{"name": "myPluginAction", "tier": "csrf"}],
   "gui_assets":     [{"type": "css", "path": "assets/styles.css"}],
   "api_routes":     [{"method": "GET", "action": "fortune"}],
@@ -2177,6 +2178,19 @@ panel (after enable) listing each key with its catalog label and
 description. Operators reviewing a plugin before flipping the toggle
 read the panel as a separate line of consent from the routine
 `core_services` list.
+
+**Consent gate on enable.** When the operator slides the Enabled
+toggle on for a plugin that declares any `permissions`, the GUI
+intercepts the toggle and opens a confirmation modal listing every
+requested permission with its full description. The toggle does not
+flip until the operator clicks **Grant & enable**; Cancel reverts
+the slider without firing the enable POST. The gate fires from both
+call sites — the Settings → Plugins row toggle AND the slider
+inside the plugin's detail modal — so an operator who flips the row
+without ever opening the detail surface still sees the same
+consent screen. Disable always passes through without a prompt
+(reducing access doesn't need confirmation), and plugins that
+request no permissions also bypass the modal entirely.
 
 ### Where plugin-owned state and code lives
 
@@ -3052,16 +3066,25 @@ both return a random fortune. Both declarations live in `plugin.json`
 ## Extending the GUI
 
 Plugins extend the wallet GUI through five complementary surfaces —
-render hooks, filter hooks, asset enqueues, top-level tabs, and POST
-action handlers. All five are **manifest-declared, dispatcher-handled**:
+render hooks, filter hooks, asset enqueues, a Plugins-tab sub-panel,
+and POST action handlers. All five are **manifest-declared,
+dispatcher-handled**:
 
-| Surface         | Manifest field   | Dispatcher type | What the handler returns         |
-| --------------- | ---------------- | --------------- | -------------------------------- |
-| Render slot     | `render_hooks`   | `"render"`      | An HTML string                   |
-| Filter slot     | `filter_hooks`   | `"filter"`      | The transformed filter value     |
-| Top-level tab   | `tabs`           | `"render"` (via the tab's own slot, see below) | HTML for the tab body |
-| POST action     | `gui_actions`    | `"action"`      | A response envelope (JSON or redirect) |
-| CSS / JS asset  | `gui_assets`     | — purely declarative; no handler runs |  Asset file at the declared path |
+| Surface           | Manifest field      | Dispatcher type | What the handler returns         |
+| ----------------- | ------------------- | --------------- | -------------------------------- |
+| Render slot       | `render_hooks`      | `"render"`      | An HTML string                   |
+| Filter slot       | `filter_hooks`      | `"filter"`      | The transformed filter value     |
+| Plugins-tab panel | `plugin_tab_panel`  | `"render"` (name=`plugin_tab_panel`) | HTML for the plugin's body inside the host's Plugins tab |
+| POST action       | `gui_actions`       | `"action"`      | A response envelope (JSON or redirect) |
+| CSS / JS asset    | `gui_assets`        | — purely declarative; no handler runs |  Asset file at the declared path |
+
+> **Note:** the older `tabs` manifest field (which let plugins register
+> their own top-level tabs in the wallet nav) is deprecated for plugin
+> use. The host now owns a single **Plugins** tab between Activity and
+> Settings with a dropdown of installed plugins; each plugin gets one
+> sub-panel via `plugin_tab_panel`. Manifests still carrying `tabs`
+> log a deprecation warning at boot and the entries are not
+> registered.
 
 The IPC forwarder reads each manifest list at wallet boot and binds
 matching in-process listeners; when a slot fires / filter resolves /
@@ -3271,46 +3294,72 @@ same outer shape (`<div class="contacts-table-wrapper">` containing a
 `<table class="contacts-table <variant>-table">`) and the CSS will
 style it identically.
 
-### Top-level tabs
+### The Plugins tab — `plugin_tab_panel`
+
+The host owns a single **Plugins** tab in the wallet nav, between
+Activity and Settings. Each enabled plugin can register one sub-panel
+that appears in a dropdown at the top of that tab; selecting a plugin
+swaps the panel body below the dropdown.
+
+Why a host-owned parent rather than per-plugin top-level tabs: the
+wallet's primary navigation is small and stable on purpose — five
+core tabs operators learn once and don't have to relearn after every
+plugin install. A wallet running four plugins would otherwise grow
+the nav by 80 %; consolidating into one parent tab keeps the nav
+size constant regardless of how many plugins are installed.
 
 **Manifest:**
 
 ```json
 {
-  "tabs": [
-    {"id": "myplugin", "label": "My Plugin", "icon": "fas fa-puzzle-piece", "order": 50}
-  ]
+  "plugin_tab_panel": {
+    "label": "My Plugin",
+    "icon":  "fas fa-puzzle-piece",
+    "order": 100
+  }
 }
 ```
 
-Field rules: `id` is kebab-case and must not collide with a core tab
-(`dashboard`, `payment`, `contacts`, `activity`, `settings`); `label`
-is plain text; `icon` is a Font Awesome class; `order` is a number
-(core tabs use 10/20/30/40/50). Optional `badge` (int) and
-`badgeTitle` (string) for a numeric pill on the tab button.
+Field rules: `label` is plain text up to 64 chars (shown in the
+dropdown); `icon` defaults to `fas fa-puzzle-piece`; `order` defaults
+to 100 (lower = earlier in the dropdown, ties broken by plugin id).
+The plugin's `name` is the row's identity — there's no separate `id`
+in `plugin_tab_panel` because each plugin gets at most one panel.
 
-The host renders the tab nav and an empty panel container; the panel
-body is fetched lazily via a render hook fired on the tab's `id`. To
-fill the body, register a render hook for the tab's slot:
-
-```json
-{
-  "tabs": [{"id": "myplugin", "label": "My Plugin", "icon": "fas fa-puzzle-piece", "order": 50}],
-  "render_hooks": ["gui.tab.myplugin"]
-}
-```
+**Dispatcher handler:**
 
 ```php
-// inside __dispatch.php's switch ($type), case 'render':
-if ($name === 'gui.tab.myplugin') {
-    respond(200, ['result' => '<div class="plugin-myplugin">…</div>'], $log);
-}
+// inside __dispatch.php's switch ($type)
+case 'render':
+    if ($name === 'plugin_tab_panel') {
+        respond(200, ['result' => '<div class="plugin-myplugin">…</div>'], $log);
+    }
 ```
 
-`wallet.html` iterates the tab registry once and emits the desktop
-nav, the mobile nav, and the empty panel sections from a single
-source of truth — your tab automatically appears in all three places
-without any plugin-side wiring.
+The host POSTs `type: "render"`, `name: "plugin_tab_panel"` (fixed
+— no per-tab suffix, since each plugin gets at most one panel) when
+it needs the panel's HTML. The plugin's body renders inside a
+host-provided container with the tab title already in place, so the
+plugin's body should drop the outer `<h2>` and start with its own
+sub-header (typically `<h3>`).
+
+**Empty state.** When zero plugins have a panel registered, the
+Plugins tab shows a helpful empty-state message ("No plugins
+installed yet. Upload a plugin from Settings → Plugins.") instead of
+an empty dropdown.
+
+**Persistence.** The operator's last-viewed panel selection is
+saved to `localStorage`; revisiting the Plugins tab restores the
+last choice. A stored selection pointing at an uninstalled plugin
+silently falls back to the first registered panel.
+
+> **Deprecation note:** the older `tabs` manifest field is no longer
+> the registration path for plugins — the IPC forwarder logs a
+> deprecation warning and does not register manifest `tabs` entries.
+> Existing plugins should move their panel into `plugin_tab_panel`
+> (drop the outer `tabs` list entirely) and rename the dispatcher's
+> render handler from `tab:<id>` to `plugin_tab_panel`. See
+> `files/plugins/hello-eiou/` for the reference migration.
 
 ### POST action handlers
 

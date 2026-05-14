@@ -283,6 +283,21 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get the registry of sub-panels rendered inside the host's
+     * Plugins tab. Each enabled plugin that declares
+     * `plugin_tab_panel` in its manifest gets one entry here; the
+     * Plugins tab renders a dropdown over `all()` and the selected
+     * plugin's render closure. See docs/PLUGINS.md "Extending the GUI".
+     */
+    public function getPluginsTabPanelRegistry(): PluginsTabPanelRegistry
+    {
+        if (!isset($this->services['PluginsTabPanelRegistry'])) {
+            $this->services['PluginsTabPanelRegistry'] = new PluginsTabPanelRegistry();
+        }
+        return $this->services['PluginsTabPanelRegistry'];
+    }
+
+    /**
      * Get the plugin asset registry. Plugins call enqueueStyle /
      * enqueueScript in boot(); the registry's renderStyles /
      * renderScripts are drained by the host render listeners attached

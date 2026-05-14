@@ -64,6 +64,7 @@ class PluginLookupService implements PluginCallerAware
         'filter_hooks',
         'render_hooks',
         'tabs',
+        'plugin_tab_panel',
         'gui_actions',
         'gui_assets',
         'api_routes',
@@ -106,7 +107,7 @@ class PluginLookupService implements PluginCallerAware
     }
 
     #[PluginCallable(
-        description: 'Return the calling plugin\'s own manifest, projected to a documented subset of fields (name, version, enabled, sandboxed, description, author, license, homepage, changelog, core_services, permissions, subscribes_to, filter_hooks, render_hooks, tabs, gui_actions, gui_assets, api_routes, cli_commands, public_routes, cron, payback_method_types, min_upgradable_from). Host-injected fields like gateway tokens or runtime-derived system-user names are deliberately omitted. Plugins use this to read back their own declared surface — e.g. to render a settings page that lists their own api_routes, or to check at boot whether the host saw the manifest field the plugin author expected.',
+        description: 'Return the calling plugin\'s own manifest, projected to a documented subset of fields (name, version, enabled, sandboxed, description, author, license, homepage, changelog, core_services, permissions, subscribes_to, filter_hooks, render_hooks, tabs, plugin_tab_panel, gui_actions, gui_assets, api_routes, cli_commands, public_routes, cron, payback_method_types, min_upgradable_from). Host-injected fields like gateway tokens or runtime-derived system-user names are deliberately omitted. Plugins use this to read back their own declared surface — e.g. to render a settings page that lists their own api_routes, or to check at boot whether the host saw the manifest field the plugin author expected.',
         ratePerMinute: 60
     )]
     public function getOwnManifest(): array

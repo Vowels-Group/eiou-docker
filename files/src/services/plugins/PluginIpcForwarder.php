@@ -195,11 +195,12 @@ class PluginIpcForwarder
         ?\Eiou\Services\GuiActionRegistry $actionRegistry = null,
         ?\Eiou\Services\Plugins\PluginApiRegistry $apiRegistry = null,
         ?\Eiou\Services\Plugins\PluginCliRegistry $cliRegistry = null,
-        ?\Eiou\Services\PaybackMethodTypeRegistry $paybackTypeRegistry = null
+        ?\Eiou\Services\PaybackMethodTypeRegistry $paybackTypeRegistry = null,
+        ?\Eiou\Services\PluginsTabPanelRegistry $pluginsTabPanelRegistry = null
     ): array {
         $report = [
             'events' => [], 'filters' => [], 'renders' => [],
-            'assets' => [], 'tabs' => [], 'actions' => [],
+            'assets' => [], 'plugin_tab_panels' => [], 'actions' => [],
             'api_routes' => [], 'cli_commands' => [],
             'payback_method_types' => [],
         ];
@@ -222,18 +223,31 @@ class PluginIpcForwarder
                 $this->registerRender($hooks, $pluginId, (string) $hook);
                 $report['renders'][] = ['plugin' => $pluginId, 'hook' => (string) $hook];
             }
-            // Tabs — manifest declares id + label + icon + order, the
-            // render is an IPC POST to the plugin's __dispatch. Skip
-            // silently when the registry isn't wired so test scaffolds
-            // that only care about events keep working.
-            if ($tabRegistry !== null) {
-                foreach (($row['tabs'] ?? []) as $tab) {
-                    if (!is_array($tab)) continue;
-                    if ($this->registerTab($tabRegistry, $pluginId, $tab)) {
-                        $report['tabs'][] = [
-                            'plugin' => $pluginId, 'id' => (string) $tab['id'],
-                        ];
-                    }
+            // `tabs` is no longer the plugin-registration path — the
+            // host owns a single Plugins tab and each plugin gets a
+            // sub-panel inside it via `plugin_tab_panel`. Existing
+            // manifests carrying `tabs` get a log warning so the
+            // plugin author knows the path moved, but the entries
+            // are not registered.
+            if (!empty($row['tabs']) && is_array($row['tabs'])) {
+                $this->log('warning', 'plugin_manifest_tabs_deprecated', [
+                    'plugin' => $pluginId,
+                    'count' => count($row['tabs']),
+                    'replacement' => 'plugin_tab_panel',
+                ]);
+            }
+
+            // plugin_tab_panel — single object {label, icon?, order?}
+            // declaring this plugin's panel inside the host's Plugins
+            // tab. Skip silently when the registry isn't wired so
+            // test scaffolds that only care about events keep working.
+            if ($pluginsTabPanelRegistry !== null) {
+                $panel = $row['plugin_tab_panel'] ?? null;
+                if (is_array($panel) && $this->registerPluginTabPanel($pluginsTabPanelRegistry, $pluginId, $panel)) {
+                    $report['plugin_tab_panels'][] = [
+                        'plugin' => $pluginId,
+                        'label'  => (string) $panel['label'],
+                    ];
                 }
             }
 
@@ -546,28 +560,29 @@ class PluginIpcForwarder
     }
 
     /**
-     * Register a tab entry whose render closure IPCs into the plugin's
-     * __dispatch. Returns true if the registry accepted it.
+     * Register the plugin's panel under the host's Plugins tab. The
+     * render closure IPCs into the plugin's __dispatch with
+     * type=render, name=plugin_tab_panel — note the fixed name (no
+     * per-tab suffix), since each plugin has at most one panel.
+     *
+     * Returns true if the registry accepted the entry.
      */
-    private function registerTab(
-        \Eiou\Services\TabRegistry $tabRegistry,
+    private function registerPluginTabPanel(
+        \Eiou\Services\PluginsTabPanelRegistry $registry,
         string $pluginId,
-        array $tab
+        array $panel
     ): bool {
-        // Manifest only requires id + label per the manifest validator.
-        // TabRegistry requires id + label + icon + order. Default the
-        // missing two so a minimal manifest still produces a valid tab.
-        $id = (string) ($tab['id'] ?? '');
-        if ($id === '') return false;
+        $label = isset($panel['label']) && is_string($panel['label']) ? $panel['label'] : '';
+        if ($label === '') {
+            return false;
+        }
         $entry = [
-            'id'    => $id,
-            'label' => (string) ($tab['label'] ?? ucfirst($id)),
-            'icon'  => (string) ($tab['icon'] ?? 'fas fa-puzzle-piece'),
-            'order' => isset($tab['order']) && is_int($tab['order']) ? (int) $tab['order'] : 50,
-            'render' => function () use ($pluginId, $id): string {
+            'plugin_id' => $pluginId,
+            'label'     => $label,
+            'render'    => function () use ($pluginId): string {
                 $response = $this->dispatch($pluginId, [
-                    'type' => 'render',
-                    'name' => 'tab:' . $id,
+                    'type'    => 'render',
+                    'name'    => 'plugin_tab_panel',
                     'context' => [],
                 ]);
                 if ($response === null || !isset($response['result'])) {
@@ -577,10 +592,13 @@ class PluginIpcForwarder
                 return is_string($result) ? $result : '';
             },
         ];
-        if (isset($tab['mobileLabel']) && is_string($tab['mobileLabel'])) {
-            $entry['mobileLabel'] = $tab['mobileLabel'];
+        if (isset($panel['icon']) && is_string($panel['icon']) && $panel['icon'] !== '') {
+            $entry['icon'] = $panel['icon'];
         }
-        return $tabRegistry->register($entry);
+        if (isset($panel['order']) && is_int($panel['order'])) {
+            $entry['order'] = $panel['order'];
+        }
+        return $registry->register($entry);
     }
 
     /**

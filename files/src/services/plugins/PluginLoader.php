@@ -574,6 +574,26 @@ class PluginLoader
                     && preg_match('/^[a-z0-9][a-z0-9_-]*$/', $e['id']) === 1
                     && isset($e['label']) && is_string($e['label'])
             );
+
+            // plugin_tab_panel — single object {label, icon?, order?}
+            // declaring the plugin's panel inside the host's Plugins
+            // tab. Defence in depth here: even though
+            // PluginInstallService rejects malformed values at upload
+            // time, a row that pre-dates a schema change should fail
+            // closed rather than carry a bad shape into the registry.
+            $panel = $manifest['plugin_tab_panel'] ?? null;
+            if (is_array($panel)
+                && isset($panel['label']) && is_string($panel['label']) && $panel['label'] !== ''
+            ) {
+                $normalised = ['label' => $panel['label']];
+                if (isset($panel['icon']) && is_string($panel['icon']) && $panel['icon'] !== '') {
+                    $normalised['icon'] = $panel['icon'];
+                }
+                if (isset($panel['order']) && is_int($panel['order'])) {
+                    $normalised['order'] = $panel['order'];
+                }
+                $row['plugin_tab_panel'] = $normalised;
+            }
             $row['gui_assets'] = $this->shapedListField(
                 $manifest,
                 'gui_assets',

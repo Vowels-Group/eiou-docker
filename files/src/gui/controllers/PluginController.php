@@ -324,10 +324,20 @@ class PluginController
         // PluginLoader's register()/boot() can re-run with the new
         // state. Surface the distinction so the GUI doesn't raise a
         // "restart required" banner when nothing actually requires it.
+        //
+        // Also surface whether this plugin declares a `plugin_tab_panel`
+        // — if it does, the Plugins-tab dropdown is now stale (the
+        // entry needs to appear on enable / disappear on disable) and
+        // the JS triggers a soft page reload so the server-side
+        // rendered Plugins tab catches up. Plugins without a panel
+        // don't need a reload — local DOM updates in script.js cover
+        // the Settings → Plugins row state.
         $isSandboxed = false;
+        $hasPluginTabPanel = false;
         foreach ($this->loader->listAllPlugins() as $row) {
             if (($row['name'] ?? null) === $name) {
                 $isSandboxed = !empty($row['sandboxed']);
+                $hasPluginTabPanel = isset($row['plugin_tab_panel']) && is_array($row['plugin_tab_panel']);
                 break;
             }
         }
@@ -336,6 +346,7 @@ class PluginController
             'plugin' => $name,
             'enabled' => $enabled,
             'sandboxed' => $isSandboxed,
+            'has_plugin_tab_panel' => $hasPluginTabPanel,
         ]);
 
         $this->respond([
@@ -343,6 +354,7 @@ class PluginController
             'plugin' => $name,
             'enabled' => $enabled,
             'sandboxed' => $isSandboxed,
+            'has_plugin_tab_panel' => $hasPluginTabPanel,
             'restart_required' => !$isSandboxed,
         ]);
     }
@@ -557,12 +569,25 @@ class PluginController
      * Emit a JSON response and unwind. Same test-seam pattern as
      * ApiKeysController::respond().
      *
+     * Calls fastcgi_finish_request() after the echo so the response
+     * is flushed to nginx immediately, before any longer post-handler
+     * cleanup runs. This matters specifically for plugin-toggle:
+     * setEnabled triggers an FPM pool reload via the supervisor;
+     * without an explicit flush, the response can sit in PHP's
+     * output buffer past the brief window the supervisor leaves
+     * before signalling the reload, and the connection gets reset
+     * while nginx is still reading from FPM. With the flush, the
+     * response is in nginx's hands before the throw even returns.
+     *
      * @param array<string,mixed> $payload
      */
     protected function respond(array $payload, int $status = 200): void
     {
         http_response_code($status);
         echo json_encode($payload);
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        }
         throw new PluginControllerResponseSent($status);
     }
 

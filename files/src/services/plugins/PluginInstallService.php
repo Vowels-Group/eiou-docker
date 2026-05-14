@@ -687,6 +687,33 @@ class PluginInstallService
             isset($e['name']) && is_string($e['name'])
             && preg_match('/^[a-z][a-z0-9-]*$/', $e['name']) === 1
         );
+
+        // plugin_tab_panel — a single object, not a list. Each plugin
+        // gets at most one panel inside the host's Plugins tab.
+        $panel = $manifest['plugin_tab_panel'] ?? null;
+        if ($panel !== null) {
+            if (!is_array($panel)) {
+                throw new InvalidArgumentException(
+                    "plugin.json 'plugin_tab_panel' must be an object"
+                );
+            }
+            $label = $panel['label'] ?? null;
+            if (!is_string($label) || $label === '' || strlen($label) > 64) {
+                throw new InvalidArgumentException(
+                    "plugin.json 'plugin_tab_panel.label' is required and must be a non-empty string up to 64 chars"
+                );
+            }
+            if (isset($panel['icon']) && (!is_string($panel['icon']) || $panel['icon'] === '')) {
+                throw new InvalidArgumentException(
+                    "plugin.json 'plugin_tab_panel.icon' must be a non-empty string when set"
+                );
+            }
+            if (isset($panel['order']) && !is_int($panel['order'])) {
+                throw new InvalidArgumentException(
+                    "plugin.json 'plugin_tab_panel.order' must be an integer when set"
+                );
+            }
+        }
     }
 
     /**

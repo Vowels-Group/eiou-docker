@@ -216,7 +216,8 @@ class Application {
                 $this->services->getActionRegistry(),
                 $this->services->getPluginApiRegistry(),
                 $this->services->getPluginCliRegistry(),
-                $this->services->getPaybackMethodTypeRegistry()
+                $this->services->getPaybackMethodTypeRegistry(),
+                $this->services->getPluginsTabPanelRegistry()
             );
 
             // Wire the lifecycle dispatcher so PluginLoader::setEnabled()

@@ -447,71 +447,99 @@ class PluginIpcForwarderTest extends TestCase
     // ===================================================================
 
     #[Test]
-    public function tabRegistrationProducesAWorkingIpcRender(): void
+    public function pluginTabPanelRegistrationProducesAWorkingIpcRender(): void
     {
+        // Manifest `plugin_tab_panel` routes through
+        // PluginsTabPanelRegistry (not TabRegistry — plugin top-level
+        // tabs are gone; the host owns one Plugins tab and each
+        // plugin gets a panel inside it).
         $this->nextResponse = [
             'ok' => true, 'status' => 200,
-            'body' => ['ok' => true, 'result' => '<div>tab body from plugin</div>'],
+            'body' => ['ok' => true, 'result' => '<div>panel body from plugin</div>'],
         ];
-        $tabs = new TabRegistry();
+        $panels = new \Eiou\Services\PluginsTabPanelRegistry();
         $this->loader->method('listAllPlugins')->willReturn([
             $this->pluginRow('hello-eiou', [
-                'tabs' => [
-                    ['id' => 'fortunes', 'label' => 'Fortunes', 'icon' => 'fa-x', 'order' => 45],
-                ],
+                'plugin_tab_panel' => ['label' => 'Hello eIOU', 'icon' => 'fa-x', 'order' => 90],
+            ]),
+        ]);
+
+        $report = $this->svc->registerAll(
+            $this->hooks, null, null, null, null, null, null, $panels
+        );
+
+        $this->assertSame(
+            [['plugin' => 'hello-eiou', 'label' => 'Hello eIOU']],
+            $report['plugin_tab_panels']
+        );
+
+        $registered = $panels->find('hello-eiou');
+        $this->assertNotNull($registered);
+        $this->assertSame('Hello eIOU', $registered['label']);
+        $this->assertSame(90, $registered['order']);
+        $this->assertSame('fa-x', $registered['icon']);
+
+        // The render closure IPCs to the plugin and returns the result.
+        // The envelope name is the fixed `plugin_tab_panel` (no per-tab
+        // suffix — each plugin gets at most one panel).
+        $html = ($registered['render'])();
+        $this->assertSame('<div>panel body from plugin</div>', $html);
+        $this->assertSame('render', $this->httpLog[0]['body']['type']);
+        $this->assertSame('plugin_tab_panel', $this->httpLog[0]['body']['name']);
+    }
+
+    #[Test]
+    public function pluginTabPanelRegistrationDefaultsMissingIconAndOrder(): void
+    {
+        $panels = new \Eiou\Services\PluginsTabPanelRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            // Minimal manifest: only label. Icon defaults to a puzzle
+            // piece; order defaults to 100. Mirrors the optional-field
+            // handling for the prior `tabs` path.
+            $this->pluginRow('demo', [
+                'plugin_tab_panel' => ['label' => 'Minimal'],
+            ]),
+        ]);
+
+        $this->svc->registerAll($this->hooks, null, null, null, null, null, null, $panels);
+
+        $entry = $panels->find('demo');
+        $this->assertNotNull($entry, 'panel with minimal manifest entry must register');
+        $this->assertSame('fas fa-puzzle-piece', $entry['icon']);
+        $this->assertSame(100, $entry['order']);
+    }
+
+    #[Test]
+    public function pluginsTabPanelRegistryIsOptional(): void
+    {
+        // Test scaffolds that only care about events keep working.
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('demo', [
+                'plugin_tab_panel' => ['label' => 'Will Skip'],
+            ]),
+        ]);
+        $report = $this->svc->registerAll($this->hooks);
+        $this->assertSame([], $report['plugin_tab_panels']);
+    }
+
+    #[Test]
+    public function legacyTabsManifestEntriesAreNoLongerRegistered(): void
+    {
+        // The host-owned Plugins tab replaced the per-plugin top-level
+        // tab path. A manifest still carrying `tabs` does NOT get its
+        // entries registered into TabRegistry; the IPC forwarder logs
+        // a deprecation warning and skips them.
+        $tabs = new TabRegistry();
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('legacy', [
+                'tabs' => [['id' => 'stale', 'label' => 'Stale']],
             ]),
         ]);
 
         $report = $this->svc->registerAll($this->hooks, null, $tabs);
 
-        $this->assertSame([['plugin' => 'hello-eiou', 'id' => 'fortunes']], $report['tabs']);
-
-        $registered = $tabs->find('fortunes');
-        $this->assertNotNull($registered);
-        $this->assertSame('Fortunes', $registered['label']);
-        $this->assertSame(45, $registered['order']);
-
-        // The render closure IPCs to the plugin and returns the result.
-        $html = ($registered['render'])();
-        $this->assertSame('<div>tab body from plugin</div>', $html);
-        // Verify the envelope shape — name carries the tab: prefix so
-        // the dispatcher can disambiguate from regular render hooks.
-        $this->assertSame('render', $this->httpLog[0]['body']['type']);
-        $this->assertSame('tab:fortunes', $this->httpLog[0]['body']['name']);
-    }
-
-    #[Test]
-    public function tabRegistrationDefaultsMissingIconAndOrder(): void
-    {
-        $tabs = new TabRegistry();
-        $this->loader->method('listAllPlugins')->willReturn([
-            // Manifest only required id + label per Phase 5a's shape
-            // validator. Icon + order must default to keep TabRegistry
-            // happy.
-            $this->pluginRow('demo', [
-                'tabs' => [['id' => 'minimal', 'label' => 'Minimal']],
-            ]),
-        ]);
-
-        $this->svc->registerAll($this->hooks, null, $tabs);
-
-        $entry = $tabs->find('minimal');
-        $this->assertNotNull($entry, 'tab with minimal manifest entry must register');
-        $this->assertSame('fas fa-puzzle-piece', $entry['icon']);
-        $this->assertSame(50, $entry['order']);
-    }
-
-    #[Test]
-    public function tabRegistryIsOptional(): void
-    {
-        // Test scaffolds that only care about events keep working.
-        $this->loader->method('listAllPlugins')->willReturn([
-            $this->pluginRow('demo', [
-                'tabs' => [['id' => 'will-skip', 'label' => 'Skipped']],
-            ]),
-        ]);
-        $report = $this->svc->registerAll($this->hooks);
-        $this->assertSame([], $report['tabs']);
+        $this->assertNull($tabs->find('stale'), 'manifest tabs must not register into TabRegistry');
+        $this->assertSame([], $report['plugin_tab_panels']);
     }
 
     // ===================================================================

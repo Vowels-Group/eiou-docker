@@ -1,7 +1,7 @@
 {
   "name": "hello-eiou",
-  "version": "1.4.0",
-  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the sandboxed eIOU plugin contract: declarative manifest surfaces, an in-pool __dispatch.php, event/filter/render/action handlers, REST + CLI dispatch, core_call into whitelisted core services, and the manifest permissions tier for surfaces that warrant louder operator consent.",
+  "version": "1.6.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the sandboxed eIOU plugin contract: declarative manifest surfaces, an in-pool __dispatch.php, event/filter/render/action handlers, REST + CLI dispatch, core_call into whitelisted core services, the manifest permissions tier for surfaces that warrant louder operator consent, and the plugin_tab_panel field for rendering inside the host's Plugins tab.",
   "author": {
     "name": "EIOU",
     "url": "https://eiou.org"
@@ -45,17 +45,14 @@
   ],
 
   "gui_assets": [
-    {"type": "css", "path": "assets/styles.css"}
+    {"type": "css", "path": "assets/styles.css"},
+    {"type": "js",  "path": "assets/script.js"}
   ],
 
-  "tabs": [
-    {
-      "id": "hello-eiou-fortunes",
-      "label": "Fortunes",
-      "icon": "fas fa-cookie-bite",
-      "order": 45
-    }
-  ],
+  "plugin_tab_panel": {
+    "label": "Hello eIOU",
+    "icon": "fas fa-cookie-bite"
+  },
 
   "gui_actions": [
     {"name": "helloEiouFortune", "tier": "csrf"}
