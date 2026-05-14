@@ -1170,7 +1170,7 @@ watch_hs_descriptor_publication() {
     fi
 
     if [ -z "$cookie_file" ]; then
-        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)"
         return 1
     fi
 
@@ -1178,7 +1178,7 @@ watch_hs_descriptor_publication() {
     local cookie_hex
     cookie_hex=$(od -An -tx1 < "$cookie_file" 2>/dev/null | tr -d ' \n')
     if [ -z "$cookie_hex" ] || [ ${#cookie_hex} -ne 64 ]; then
-        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled"
         return 1
     fi
 
@@ -1197,7 +1197,7 @@ watch_hs_descriptor_publication() {
         sleep 1
     done
     if [ "$connected" != true ]; then
-        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled"
         return 1
     fi
 
@@ -1205,14 +1205,14 @@ watch_hs_descriptor_publication() {
     printf 'AUTHENTICATE %s\r\n' "$cookie_hex" >&3
     local auth_reply
     if ! IFS= read -r -t 5 auth_reply <&3; then
-        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out"
         exec 3<&-
         return 1
     fi
     case "$auth_reply" in
         '250 OK'*) ;;
         *)
-            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply"
             exec 3<&-
             return 1
             ;;
@@ -1233,7 +1233,7 @@ watch_hs_descriptor_publication() {
             ;;
     esac
 
-    echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)"
 
     # Initial publishing status
     rm -f "$status_file" 2>/dev/null
@@ -1252,7 +1252,7 @@ watch_hs_descriptor_publication() {
         now=$(date +%s)
         elapsed=$((now - start_time))
         if [ $elapsed -ge $total_timeout ]; then
-            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)"
             break
         fi
 
@@ -1275,7 +1275,7 @@ watch_hs_descriptor_publication() {
             case "$line" in
                 650*HS_DESC*UPLOADED*)
                     upload_count=$((upload_count + 1))
-                    echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}"
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}"
                     rm -f "$status_file" 2>/dev/null
                     echo "{\"status\":\"publishing\",\"uploads\":$upload_count,\"target\":$target_uploads,\"timestamp\":$now,\"message\":\"Tor descriptor publishing — $upload_count/$target_uploads HSDirs confirmed\"}" > "$status_file" 2>/dev/null
                     chmod 666 "$status_file" 2>/dev/null
@@ -1283,12 +1283,12 @@ watch_hs_descriptor_publication() {
                     ;;
                 650*HS_DESC*FAILED*)
                     fail_count=$((fail_count + 1))
-                    echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line"
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line"
                     ;;
             esac
         elif [ $read_rc -le 128 ]; then
             # EOF — Tor closed the control connection
-            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher"
             connection_dropped=true
             break
         fi
@@ -1300,7 +1300,7 @@ watch_hs_descriptor_publication() {
     exec 3<&-
 
     if [ $upload_count -ge $target_uploads ]; then
-        echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)"
         # Mark "published" briefly, then clear (the GUI banner only shows
         # publishing/issue/restarting; "published" status fires the
         # "Tor Restored" toast via the recovered branch).
@@ -1327,7 +1327,7 @@ watch_hs_descriptor_publication() {
         local signal_file="/tmp/tor-restart-requested"
         if [ ! -f "$signal_file" ]; then
             echo "$(date +%s)" > "$signal_file" 2>/dev/null
-            echo -e "\n[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart"
         fi
 
         # Leave status as 'publishing' with whatever we got. The watchdog
@@ -1388,14 +1388,19 @@ if [ "$MARIADB_VERSION_CHANGED" = "true" ]; then
     echo "Starting MariaDB with innodb_force_recovery=1 to bypass stale redo logs..."
     printf '[mysqld]\ninnodb_force_recovery=1\n' > /etc/mysql/conf.d/zz-force-recovery.cnf
 
-    service mariadb start
+    # Silence the Debian init script's per-line `Starting MariaDB...mariadbd`
+    # banner + progress dots — we already log "Starting MariaDB..." above and
+    # wait_for_mariadb reports its own per-10s progress. Without the redirect
+    # the init dots interleave with concurrently-firing watcher output (e.g.
+    # the HS_DESC watcher) and surface as stray "." lines mid-boot.
+    service mariadb start >/dev/null 2>&1
     if wait_for_mariadb "MariaDB force-recovery" 60; then
         echo "Force-recovery succeeded. Performing clean shutdown to regenerate redo logs..."
-        service mariadb stop
+        service mariadb stop >/dev/null 2>&1
         sleep 2
         rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
         echo "Restarting MariaDB in normal mode..."
-        service mariadb start
+        service mariadb start >/dev/null 2>&1
         if wait_for_mariadb "MariaDB normal restart" 60; then
             MARIADB_STARTED=true
             echo "MariaDB version upgrade completed successfully."
@@ -1409,7 +1414,8 @@ if [ "$MARIADB_VERSION_CHANGED" = "true" ]; then
     fi
 else
     # Normal startup (no version change)
-    service mariadb start
+    echo "Starting MariaDB database server..."
+    service mariadb start >/dev/null 2>&1
     if wait_for_mariadb "MariaDB" 60; then
         MARIADB_STARTED=true
     else
@@ -1430,16 +1436,16 @@ if [ "$MARIADB_STARTED" = "false" ] && [ "$MARIADB_VERSION_CHANGED" = "false" ];
     sleep 2
 
     printf '[mysqld]\ninnodb_force_recovery=1\n' > /etc/mysql/conf.d/zz-force-recovery.cnf
-    service mariadb start
+    service mariadb start >/dev/null 2>&1
     MARIADB_UPGRADE_NEEDED=true
 
     if wait_for_mariadb "MariaDB force-recovery" 60; then
         echo "Force-recovery succeeded. Clean shutdown to regenerate redo logs..."
-        service mariadb stop
+        service mariadb stop >/dev/null 2>&1
         sleep 2
         rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
         echo "Restarting MariaDB in normal mode..."
-        service mariadb start
+        service mariadb start >/dev/null 2>&1
         if wait_for_mariadb "MariaDB normal restart" 60; then
             MARIADB_STARTED=true
             echo "MariaDB recovery completed successfully."
@@ -1491,7 +1497,7 @@ if [ "$MARIADB_STARTED" = "false" ]; then
     mysql_install_db --user=mysql --datadir=/var/lib/mysql --skip-test-db 2>/dev/null
 
     # Start MariaDB on the fresh database
-    service mariadb start
+    service mariadb start >/dev/null 2>&1
     if wait_for_mariadb "MariaDB fresh init" 60; then
         MARIADB_STARTED=true
         echo "MariaDB started on fresh database."
@@ -2316,7 +2322,11 @@ watchdog() {
 
     local WAS_SHUTDOWN=false  # Track shutdown-to-normal transitions
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs and Tor health"
+    # No "Watchdog started" log here — the launcher already prints
+    # "Watchdog started (PID: <n>)" before fork. Emitting it from
+    # inside the watchdog body raced with the poller-startup banner
+    # lines (the watchdog ran concurrently with the polling forks)
+    # and surfaced as out-of-order log salad in the boot sequence.
 
     while true; do
         sleep $WATCHDOG_INTERVAL
