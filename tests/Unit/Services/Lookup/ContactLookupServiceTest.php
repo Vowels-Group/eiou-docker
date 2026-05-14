@@ -108,111 +108,51 @@ class ContactLookupServiceTest extends TestCase
     }
 
     // =========================================================================
-    // listAccepted — paging + cap behaviour
+    // No bulk-enumerate surface
+    //
+    // An earlier shape of the service exposed listAccepted() as a paginated
+    // walk of the address book. That was removed before any plugin shipped
+    // depending on it — a plugin allow-listed for "list" could enumerate the
+    // operator's entire accepted-contacts list (with .onion addresses and
+    // operator-private labels) regardless of any legitimate workflow. By
+    // contrast, getByPubkeyHash() requires the plugin to first KNOW the hash
+    // (typically learned from a transaction.received event), keeping the
+    // contact-graph view demand-driven. This test pins the absence of the
+    // bulk method so a future refactor doesn't quietly bring it back.
     // =========================================================================
 
-    public function testListAcceptedPassesLimitAndOffset(): void
+    public function testNoBulkEnumerateMethodIsExposed(): void
     {
-        $this->repo->expects($this->once())
-            ->method('getAcceptedContactsPage')
-            ->with(20, 40)
-            ->willReturn([
-                ['name' => 'Carol', 'http' => 'h', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h-c'],
-            ]);
-
-        $result = $this->svc->listAccepted(20, 40);
-        $this->assertCount(1, $result);
-        $this->assertSame('Carol', $result[0]['name']);
-    }
-
-    public function testListAcceptedAppliesDefaults(): void
-    {
-        $this->repo->expects($this->once())
-            ->method('getAcceptedContactsPage')
-            ->with(50, 0)
-            ->willReturn([]);
-
-        $this->assertSame([], $this->svc->listAccepted());
-    }
-
-    public function testListAcceptedCapsLimitAtMaxPageLimit(): void
-    {
-        // Same anti-exfiltration cap as TransactionLookupService — a
-        // plugin can't pull the entire contact list in one call.
-        $this->repo->expects($this->once())
-            ->method('getAcceptedContactsPage')
-            ->with(ContactLookupService::MAX_PAGE_LIMIT, 0)
-            ->willReturn([]);
-
-        $this->svc->listAccepted(1_000_000);
-    }
-
-    public function testListAcceptedClampsNegativeBoundsToZero(): void
-    {
-        $this->repo->expects($this->once())
-            ->method('getAcceptedContactsPage')
-            ->with(0, 0)
-            ->willReturn([]);
-
-        $this->svc->listAccepted(-1, -100);
-    }
-
-    public function testListAcceptedProjectsEachRow(): void
-    {
-        $this->repo->method('getAcceptedContactsPage')->willReturn([
-            [
-                'name' => 'Alice', 'http' => 'h', 'https' => null,
-                'tor' => null, 'pubkey_hash' => 'h-a',
-                'pubkey' => 'SECRET', 'status' => 'accepted',
-            ],
-            [
-                'name' => 'Bob', 'http' => null, 'https' => 's',
-                'tor' => null, 'pubkey_hash' => 'h-b',
-                'contact_id' => 'SECRET',
-            ],
-        ]);
-
-        $result = $this->svc->listAccepted();
-        foreach ($result as $row) {
-            $this->assertSame(
-                ['name', 'http', 'https', 'tor', 'pubkey_hash'],
-                array_keys($row),
-                'every row in listAccepted must carry exactly the documented shape'
-            );
-        }
+        $this->assertFalse(
+            method_exists(ContactLookupService::class, 'listAccepted'),
+            'listAccepted was removed for contact-graph privacy; do not reintroduce '
+            . 'without operator-visible manifest gating distinguishing it from '
+            . 'per-hash lookups (see class docblock for the rationale).'
+        );
     }
 
     // =========================================================================
-    // #[PluginCallable] attribute coverage. Both methods MUST carry the
+    // #[PluginCallable] attribute coverage. The method MUST carry the
     // attribute — without it PluginGatewayController's reflection gate would
     // refuse the call even if a manifest allow-listed the method.
     // =========================================================================
 
-    public static function pluginCallableMethodProvider(): array
+    public function testGetByPubkeyHashCarriesPluginCallableAttribute(): void
     {
-        return [
-            'getByPubkeyHash' => ['getByPubkeyHash'],
-            'listAccepted'    => ['listAccepted'],
-        ];
-    }
-
-    #[\PHPUnit\Framework\Attributes\DataProvider('pluginCallableMethodProvider')]
-    public function testMethodCarriesPluginCallableAttribute(string $method): void
-    {
-        $reflection = new ReflectionMethod(ContactLookupService::class, $method);
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'getByPubkeyHash');
         $attributes = $reflection->getAttributes(PluginCallable::class);
 
         $this->assertCount(
             1,
             $attributes,
-            "ContactLookupService::{$method}() must carry exactly one #[PluginCallable] attribute"
+            'ContactLookupService::getByPubkeyHash() must carry exactly one #[PluginCallable] attribute'
         );
 
         $instance = $attributes[0]->newInstance();
         $this->assertNotSame(
             '',
             $instance->description ?? '',
-            "ContactLookupService::{$method}()'s #[PluginCallable] must have a non-empty description"
+            "getByPubkeyHash's #[PluginCallable] must have a non-empty description"
         );
     }
 }

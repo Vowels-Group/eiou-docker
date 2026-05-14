@@ -198,7 +198,7 @@ Integration tests validate the complete system behavior using Docker containers.
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
-| **ContactLookupServiceTest.php** | 12 | Read-only contact facade for sandboxed plugins. Projection contract (narrow `{name, http, https, tor, pubkey_hash}` shape — extra repository columns like `status`, `pubkey`, `contact_id` must NOT leak), `getByPubkeyHash` (null on missing, empty-input short-circuit, lowercase/trim normalization, null-preservation for missing transports), `listAccepted` (default limit/offset, `MAX_PAGE_LIMIT` cap, negative-bounds clamp, per-row projection), `#[PluginCallable]` attribute presence on both methods. |
+| **ContactLookupServiceTest.php** | 7 | Read-only contact facade for sandboxed plugins. Demand-driven only — single `getByPubkeyHash()` surface, no bulk-enumerate. Projection contract (narrow `{name, http, https, tor, pubkey_hash}` shape — extra repository columns like `status`, `pubkey`, `contact_id` must NOT leak), `getByPubkeyHash` (null on missing, empty-input short-circuit, lowercase/trim normalization, null-preservation for missing transports), regression guard pinning the absence of a `listAccepted` method (a contact-graph exfiltration primitive that was removed before any plugin shipped depending on it), `#[PluginCallable]` attribute presence on the surviving method. |
 
 ### Services Proxies Tests (`tests/Unit/Services/Proxies/`)
 
