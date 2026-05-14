@@ -206,6 +206,19 @@ class WalletOutboundServiceTest extends TestCase
     }
 
     #[Test]
+    public function sendRequiresWalletOutboundSendPermission(): void
+    {
+        // Spending operator funds is the most consequential surface in
+        // the callable catalog. The permission must be on the attribute
+        // so that gateway gate 3b refuses any plugin whose manifest
+        // doesn't declare it — operators see "may send payments on your
+        // behalf" as a distinct line in the plugin modal before enable.
+        $reflection = new ReflectionMethod(WalletOutboundService::class, 'send');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+        $this->assertSame('wallet_outbound_send', $instance->permission);
+    }
+
+    #[Test]
     public function callerIdIsClearableBetweenCalls(): void
     {
         $this->tx->method('sendEiou')->willReturnCallback(

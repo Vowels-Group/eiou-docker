@@ -527,6 +527,26 @@ class PluginLoader
                 $row['core_services'] = [];
             }
 
+            // permissions — louder-consent tier on top of core_services.
+            // Each entry is a snake_case key the host catalogues in
+            // PluginPermissionCatalog. The gateway requires a permission
+            // entry whenever the target #[PluginCallable] attribute
+            // carries a non-null permission key. Filtered defensively
+            // here against malformed-row drift even though the install
+            // validator rejects unknown keys at upload time — a row
+            // that pre-dates a key rename should fail closed.
+            $perms = $manifest['permissions'] ?? [];
+            if (is_array($perms)) {
+                $row['permissions'] = array_values(array_filter(
+                    $perms,
+                    fn($entry): bool => is_string($entry)
+                        && preg_match('/^[a-z][a-z0-9_]*$/', $entry) === 1
+                        && PluginPermissionCatalog::isKnown($entry)
+                ));
+            } else {
+                $row['permissions'] = [];
+            }
+
             // Declarative surface fields. These tell the IPC forwarder
             // which events/filters/renders to bridge from in-process
             // firing to a sandboxed plugin's __dispatch.php. Each list

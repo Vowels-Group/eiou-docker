@@ -1,7 +1,7 @@
 {
   "name": "hello-eiou",
-  "version": "1.3.0",
-  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the sandboxed eIOU plugin contract: declarative manifest surfaces, an in-pool __dispatch.php, event/filter/render/action handlers, REST + CLI dispatch, and core_call into whitelisted core services.",
+  "version": "1.4.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the sandboxed eIOU plugin contract: declarative manifest surfaces, an in-pool __dispatch.php, event/filter/render/action handlers, REST + CLI dispatch, core_call into whitelisted core services, and the manifest permissions tier for surfaces that warrant louder operator consent.",
   "author": {
     "name": "EIOU",
     "url": "https://eiou.org"
@@ -34,7 +34,14 @@
     "Logger.info",
     "Logger.warning",
     "Logger.error",
-    "Logger.debug"
+    "Logger.debug",
+    "ContactLookupService.listAccepted",
+    "PluginLookupService.getOwnPermissions",
+    "PluginLookupService.getOwnManifest"
+  ],
+
+  "permissions": [
+    "contact_address_book_enumerate"
   ],
 
   "gui_assets": [

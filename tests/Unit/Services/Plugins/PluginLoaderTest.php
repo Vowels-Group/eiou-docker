@@ -476,6 +476,38 @@ class PluginLoaderTest extends TestCase
         $this->assertSame([], $row['public_routes']);
     }
 
+    public function testListAllPluginsPersistsKnownPermissions(): void
+    {
+        $this->writePluginWithExtras('perms-ok', [
+            'permissions' => ['contact_address_book_enumerate'],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame(['contact_address_book_enumerate'], $row['permissions']);
+    }
+
+    public function testListAllPluginsDropsUnknownPermissionKeys(): void
+    {
+        // Loader filters defensively even though PluginInstallService
+        // rejects unknown keys at upload time — a row that pre-dates a
+        // permission rename should fail closed rather than carrying a
+        // stale key through to the gateway.
+        $this->writePluginWithExtras('perms-stale', [
+            'permissions' => [
+                'contact_address_book_enumerate',
+                'was_renamed_or_removed',
+            ],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame(['contact_address_book_enumerate'], $row['permissions']);
+    }
+
+    public function testListAllPluginsDefaultsPermissionsToEmptyList(): void
+    {
+        $this->writePluginWithExtras('perms-none', []);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame([], $row['permissions']);
+    }
+
     public function testListAllPluginsAcceptsValidCorsAllowedOrigins(): void
     {
         $this->writePluginWithExtras('pub-cors', [

@@ -29,6 +29,13 @@ use Throwable;
  *      "core_services" allow-list → 403 if not.
  *   3. The target method exists on the resolved service AND carries
  *      the #[PluginCallable] attribute → 403 if not.
+ *   3b. If the #[PluginCallable] attribute carries a `permission:`
+ *       key, the plugin's manifest also names that key in its
+ *       top-level `permissions` list → 403 if not. Adds a second,
+ *       louder-consent tier above `core_services` for surfaces the
+ *       operator would meaningfully reconsider on a second read
+ *       (bulk enumeration, broad-scope mutation). See
+ *       PluginPermissionCatalog for catalogued keys.
  *   4. Argument values are scalar | array-of-scalars (no callables,
  *      objects, or resources) → 400 if not.
  *   5. Plugin's per-minute rate limit not exceeded → 429 if exceeded.
@@ -184,6 +191,38 @@ class PluginGatewayController
         /** @var PluginCallable $pluginCallable */
         $pluginCallable = $attributes[0]->newInstance();
 
+        // Gate 3b: permission tier. When the attribute carries a
+        // permission key, require the plugin's manifest to also
+        // declare it in `permissions`. Two failure modes here:
+        //
+        //   - Unknown key: the attribute references a permission
+        //     the host doesn't catalogue. Almost certainly a
+        //     programmer error post-rename — fail closed with 503
+        //     (server misconfiguration, not the plugin's fault).
+        //   - Not granted: the plugin's manifest is missing the
+        //     key. 403 with a message naming the key so the plugin
+        //     author can add it.
+        if ($pluginCallable->permission !== null) {
+            $permKey = $pluginCallable->permission;
+            if (!PluginPermissionCatalog::isKnown($permKey)) {
+                $this->log('error', 'plugin_gateway_unknown_permission_attribute', [
+                    'plugin' => $pluginId, 'call' => $allowKey, 'permission' => $permKey,
+                ]);
+                return $this->errorResponse(
+                    503, 'unknown_permission_attribute',
+                    "'{$allowKey}' carries permission '{$permKey}' which is not in the host catalog"
+                );
+            }
+            $granted = $this->pluginPermissions($pluginId);
+            if (!in_array($permKey, $granted, true)) {
+                return $this->errorResponse(
+                    403, 'permission_not_granted',
+                    "plugin '{$pluginId}' did not declare permission '{$permKey}' "
+                    . "in its manifest 'permissions' list (required for '{$allowKey}')"
+                );
+            }
+        }
+
         // Gate 4: argument shape.
         if (!$this->argsAreSafe($args)) {
             return $this->errorResponse(400, 'unsafe_args', 'args must be scalar or array-of-scalars only');
@@ -262,6 +301,22 @@ class PluginGatewayController
                 $allow = $row['core_services'] ?? [];
                 if (is_array($allow)) {
                     return array_values(array_filter($allow, 'is_string'));
+                }
+            }
+        }
+        return [];
+    }
+
+    /**
+     * @return list<string> permission keys the plugin's manifest declared
+     */
+    private function pluginPermissions(string $pluginId): array
+    {
+        foreach ($this->loader->listAllPlugins() as $row) {
+            if (($row['name'] ?? null) === $pluginId) {
+                $perms = $row['permissions'] ?? [];
+                if (is_array($perms)) {
+                    return array_values(array_filter($perms, 'is_string'));
                 }
             }
         }

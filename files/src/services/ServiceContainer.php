@@ -501,6 +501,124 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get BalanceLookupService instance.
+     *
+     * Read-only facade exposing the wallet's own balance totals (overall
+     * and per-currency) to sandboxed plugins. Methods on this service
+     * carry the `wallet_balance_read` permission key — the plugin's
+     * manifest must declare that key in `permissions: [...]` in
+     * addition to the usual `core_services` entry. Same wrapper
+     * rationale as TransactionLookupService — the repository stays
+     * undecorated and is accessed only through RepositoryFactory.
+     */
+    public function getBalanceLookupService(): \Eiou\Services\Lookup\BalanceLookupService {
+        if (!isset($this->services['BalanceLookupService'])) {
+            $this->services['BalanceLookupService'] = new \Eiou\Services\Lookup\BalanceLookupService(
+                $this->getRepositoryFactory()->get(BalanceRepository::class)
+            );
+        }
+        return $this->services['BalanceLookupService'];
+    }
+
+    /**
+     * Get TransactionStatisticsLookupService instance.
+     *
+     * Aggregate stats facade for sandboxed plugins (count + total for
+     * a time period, optionally filtered by currency). Gated on the
+     * `transaction_history_aggregate` permission — separate from the
+     * row-level `transaction_history_enumerate` because aggregates
+     * leak volume but not counterparties or memos.
+     */
+    public function getTransactionStatisticsLookupService(): \Eiou\Services\Lookup\TransactionStatisticsLookupService {
+        if (!isset($this->services['TransactionStatisticsLookupService'])) {
+            $this->services['TransactionStatisticsLookupService'] = new \Eiou\Services\Lookup\TransactionStatisticsLookupService(
+                $this->getRepositoryFactory()->get(TransactionStatisticsRepository::class)
+            );
+        }
+        return $this->services['TransactionStatisticsLookupService'];
+    }
+
+    /**
+     * Get ContactCreditLookupService instance.
+     *
+     * Per-contact available-credit facade for sandboxed plugins. Gated
+     * on `contact_credit_read` — credit limits are operator-set
+     * financial policy distinct from contact identity and from the
+     * wallet's own balance.
+     */
+    public function getContactCreditLookupService(): \Eiou\Services\Lookup\ContactCreditLookupService {
+        if (!isset($this->services['ContactCreditLookupService'])) {
+            $this->services['ContactCreditLookupService'] = new \Eiou\Services\Lookup\ContactCreditLookupService(
+                $this->getRepositoryFactory()->get(ContactCreditRepository::class)
+            );
+        }
+        return $this->services['ContactCreditLookupService'];
+    }
+
+    /**
+     * Get PaymentRequestLookupService instance.
+     *
+     * Read-only payment-request facade for sandboxed plugins. Per-id
+     * lookups are demand-driven and ungated; the enumerate forms
+     * (pending-incoming / outgoing) require the
+     * `payment_request_enumerate` permission since they reveal the
+     * operator's pending-debts / receivables lists.
+     */
+    public function getPaymentRequestLookupService(): \Eiou\Services\Lookup\PaymentRequestLookupService {
+        if (!isset($this->services['PaymentRequestLookupService'])) {
+            $this->services['PaymentRequestLookupService'] = new \Eiou\Services\Lookup\PaymentRequestLookupService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestRepository::class)
+            );
+        }
+        return $this->services['PaymentRequestLookupService'];
+    }
+
+    /**
+     * Get PaybackMethodLookupService instance.
+     *
+     * Capability-discovery facade for plugins implementing payback
+     * rails. PluginCallerAware-backed so the plugin's declared
+     * `payback_method_types` is the scope authority — a plugin only
+     * sees methods of rail types it itself declared. Two methods:
+     * one for the operator's own configured methods
+     * (`payback_method_read_own`), one for contact-side preferences
+     * received over the wire (`payback_method_read_contact`). Both
+     * project to capability metadata only — encrypted_fields /
+     * fields_json are not exposed.
+     */
+    public function getPaybackMethodLookupService(): \Eiou\Services\Lookup\PaybackMethodLookupService {
+        if (!isset($this->services['PaybackMethodLookupService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PaybackMethodLookupService'] = new \Eiou\Services\Lookup\PaybackMethodLookupService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodRepository::class),
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodReceivedRepository::class),
+                $app->pluginLoader
+            );
+        }
+        return $this->services['PaybackMethodLookupService'];
+    }
+
+    /**
+     * Get PluginLookupService instance.
+     *
+     * Self-introspection surface for sandboxed plugins (read your own
+     * granted permissions, read your own projected manifest). Uses
+     * PluginLoader as the source of truth — same row the gateway
+     * checks for core_services and permissions. No permission key
+     * required since the service can only ever return the calling
+     * plugin's own data.
+     */
+    public function getPluginLookupService(): \Eiou\Services\Lookup\PluginLookupService {
+        if (!isset($this->services['PluginLookupService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PluginLookupService'] = new \Eiou\Services\Lookup\PluginLookupService(
+                $app->pluginLoader
+            );
+        }
+        return $this->services['PluginLookupService'];
+    }
+
+    /**
      * Get IdentityLookupService instance.
      *
      * Read-only facade exposing a narrow slice of UserContext (public key,

@@ -295,6 +295,7 @@ contract](#the-__dispatchphp-contract) for the wire shape.
 | `database`             | no       | object                | Enables per-plugin MySQL user isolation. See [Database Isolation](#database-isolation).        |
 | `min_upgradable_from`  | no       | string (semver)       | Lowest version this manifest can be upgraded from. `PluginUpgradeService` refuses upgrades whose installed version is below this floor. See [Upgrading Plugins → `min_upgradable_from`](#min_upgradable_from-manifest-field). |
 | `core_services`        | no       | list&lt;string&gt;    | Allow-list of `<Service>.<method>` entries the plugin will call via `core_call()`. Methods not in this list are 403'd by the gateway even if they carry `#[PluginCallable]`. See [Plugin-callable surface — policy](#plugin-callable-surface--policy). |
+| `permissions`          | no       | list&lt;string&gt;    | Louder-consent grants required by a subset of `#[PluginCallable]` methods (e.g. bulk address-book enumeration). Each entry is a snake_case key catalogued by the host in `PluginPermissionCatalog`. Keys not in the catalog are rejected at install time. See [Permissions — louder consent than `core_services`](#permissions--louder-consent-than-core_services). |
 | `subscribes_to`        | no       | list&lt;string&gt;    | Event names this plugin handles. Core's IPC forwarder POSTs each fired event into your `__dispatch.php` with `type: "event"`. See [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to). |
 | `filter_hooks`         | no       | list&lt;string&gt;    | Filter hook names this plugin transforms. IPC forwarder routes each `applyFilter` call into the dispatcher with `type: "filter"`. See [Extending the GUI](#extending-the-gui). |
 | `render_hooks`         | no       | list&lt;string&gt;    | Render hook names this plugin contributes HTML to. IPC forwarder routes each `doRender` call into the dispatcher with `type: "render"`. |
@@ -494,6 +495,25 @@ What this means in practice:
 | ---- | ---------- |
 | Read recent transactions | `core_call('TransactionLookupService', 'getReceivedUserTransactions', …)` |
 | Look up a contact by pubkey hash | `core_call('ContactLookupService', 'getByPubkeyHash', …)` |
+| Look up a contact by name | `core_call('ContactLookupService', 'getByName', …)` |
+| Check whether a contact is online | `core_call('ContactLookupService', 'getOnlineStatus', …)` |
+| List accepted contacts (paginated) | `core_call('ContactLookupService', 'listAccepted', …)` (also requires `permissions: ["contact_address_book_enumerate"]`) |
+| List pending contact requests | `core_call('ContactLookupService', 'listPending', …)` (also requires `permissions: ["contact_pending_enumerate"]`) |
+| Read a contact's available credit | `core_call('ContactCreditLookupService', 'getCreditState', …)` (also requires `permissions: ["contact_credit_read"]`) |
+| Look up a transaction by memo | `core_call('TransactionLookupService', 'getByMemo', …)` |
+| Read sent transactions | `core_call('TransactionLookupService', 'getSentUserTransactions', …)` (also requires `permissions: ["transaction_history_enumerate"]`) |
+| Read transactions between two pubkeys | `core_call('TransactionLookupService', 'getTransactionsBetweenPubkeys', …)` (also requires `permissions: ["transaction_history_enumerate"]`) |
+| Read aggregate stats for a period | `core_call('TransactionStatisticsLookupService', 'getStatsForPeriod', …)` (also requires `permissions: ["transaction_history_aggregate"]`) |
+| Read the wallet balance | `core_call('BalanceLookupService', 'getUserBalance', …)` (also requires `permissions: ["wallet_balance_read"]`) |
+| Read a contact's balance | `core_call('BalanceLookupService', 'getUserBalanceContact', …)` (also requires `permissions: ["wallet_balance_read"]`) |
+| Look up a payment request by id | `core_call('PaymentRequestLookupService', 'getByRequestId', …)` |
+| List pending incoming payment requests | `core_call('PaymentRequestLookupService', 'listPendingIncoming', …)` (also requires `permissions: ["payment_request_enumerate"]`) |
+| List outgoing payment requests | `core_call('PaymentRequestLookupService', 'listOutgoing', …)` (also requires `permissions: ["payment_request_enumerate"]`) |
+| Read your own configured payback methods | `core_call('PaybackMethodLookupService', 'getMyConfiguredMethods', …)` (also requires `permissions: ["payback_method_read_own"]`) |
+| Read a contact's payback preferences | `core_call('PaybackMethodLookupService', 'getContactPaybackPreference', …)` (also requires `permissions: ["payback_method_read_contact"]`) |
+| Read your own permissions / manifest | `core_call('PluginLookupService', 'getOwnPermissions', …)` / `'getOwnManifest'` |
+| List other enabled plugins | `core_call('PluginLookupService', 'listEnabledPluginIds', …)` (also requires `permissions: ["plugin_inventory_read"]`) |
+| Send EIOU on behalf of the wallet | `core_call('WalletOutboundService', 'send', …)` (also requires `permissions: ["wallet_outbound_send"]`) |
 | Bill a contact (mint a payment request) | `core_call('PaymentRequestService', 'create', …)` |
 | Stop your sidecar container on disable | `core_call('ContainerLifecycleService', 'stopSidecar', …)` |
 | React to a sync event | declare `subscribes_to: ["sync.completed"]` in the manifest |
@@ -2053,12 +2073,18 @@ small. As of this writing, the callable surface is:
 | Service                         | Methods                                                                                              |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `Logger`                        | `debug`, `info`, `warning`, `error`                                                                  |
-| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions`   |
-| `ContactLookupService`          | `getByPubkeyHash` (no bulk-enumerate by design — see class docblock)                                 |
+| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getByMemo`, `getStatusByMemo`, `getReceivedUserTransactions` (requires `transaction_history_enumerate`), `getSentUserTransactions` (requires `transaction_history_enumerate`), `getTransactionsBetweenPubkeys` (requires `transaction_history_enumerate`) |
+| `TransactionStatisticsLookupService` | `getStatsForPeriod` (requires `transaction_history_aggregate`)                                  |
+| `ContactLookupService`          | `getByPubkeyHash`, `getByName`, `getOnlineStatus`, `listAccepted` (requires `contact_address_book_enumerate`), `listPending` (requires `contact_pending_enumerate`) |
+| `ContactCreditLookupService`    | `getCreditState` (requires `contact_credit_read`)                                                    |
+| `BalanceLookupService`          | `getUserBalance` (requires `wallet_balance_read`), `getUserBalanceContact` (requires `wallet_balance_read`) |
+| `PaymentRequestLookupService`   | `getByRequestId`, `listPendingIncoming` (requires `payment_request_enumerate`), `listOutgoing` (requires `payment_request_enumerate`) |
+| `PaybackMethodLookupService`    | `getMyConfiguredMethods` (requires `payback_method_read_own`), `getContactPaybackPreference` (requires `payback_method_read_contact`) — both strictly scoped to the plugin's declared `payback_method_types` |
+| `PluginLookupService`           | `getOwnPermissions`, `getOwnManifest` (self-introspection — no permission key, scope is the calling plugin's own row only), `listEnabledPluginIds` (requires `plugin_inventory_read`) |
 | `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
 | `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
 | `PluginEventPublisher`          | `publish`                                                                                            |
-| `WalletOutboundService`         | `send`                                                                                               |
+| `WalletOutboundService`         | `send` (requires `wallet_outbound_send`)                                                             |
 | `PaymentRequestService`         | `create`                                                                                             |
 | `ContainerLifecycleService`     | `startSidecar`, `stopSidecar`                                                                        |
 
@@ -2094,6 +2120,63 @@ include the smallest read-only repository method that satisfies it.
 The maintainer adds it as a thin `Lookup/` service if the use case
 holds up. Decoration on the repository itself is *not* the path —
 those classes stay pure data-access.
+
+### Permissions — louder consent than `core_services`
+
+A subset of `#[PluginCallable]` methods carry a `permission:` key on
+their attribute. Those methods require the calling plugin to declare
+the key in a top-level `permissions: [...]` manifest field, in
+addition to the usual `core_services` entry. The gateway enforces
+this as a third gate (after the attribute presence and the
+`core_services` allow-list).
+
+Why the second tier exists: `core_services` is a per-method
+allow-list. That works well for narrow methods where one entry means
+roughly what its name suggests — `Logger.info`, a per-hash lookup, a
+send-payment call. It works less well for methods whose trust shape
+goes beyond what a single line conveys to a casual reader. The first
+example is `ContactLookupService.listAccepted`, which enumerates
+every accepted contact on the wallet (operator-chosen labels + all
+transport addresses including `.onion`) — a different shape of
+disclosure than the per-hash `getByPubkeyHash` on the same service,
+but a manifest reader skimming `core_services` sees two similarly-
+shaped lines. Routing the bulk-enumerate method through a separate
+`permissions` entry gives the operator a distinct line item to read
+and consent to.
+
+Catalogued keys (single source of truth: `PluginPermissionCatalog`):
+
+| Key | Granted when set | Required by |
+| --- | ---------------- | ----------- |
+| `contact_address_book_enumerate` | Plugin may list every accepted contact (operator-chosen labels + all transport addresses including `.onion`). Distinct from per-hash lookups, which only reveal contacts the plugin has already seen via events. | `ContactLookupService.listAccepted` |
+| `contact_pending_enumerate` | Plugin may walk the wallet's pending contact requests (people who have asked to connect but the operator has not accepted or blocked yet). Distinct from the address-book enumerate — pending requests reveal who wants to talk to the operator, not who they already do. | `ContactLookupService.listPending` |
+| `contact_credit_read` | Plugin may read per-contact credit policy (available credit for a given contact and currency) — operator-set financial policy normally not visible to plugins. | `ContactCreditLookupService.getCreditState` |
+| `transaction_history_enumerate` | Plugin may walk the wallet's received- and sent-transaction lists (amounts, currencies, descriptions, counterparty pubkey hashes). Distinct from per-txid lookups, which only reveal transactions the plugin has already learned about through events. | `TransactionLookupService.getReceivedUserTransactions`, `TransactionLookupService.getSentUserTransactions`, `TransactionLookupService.getTransactionsBetweenPubkeys` |
+| `transaction_history_aggregate` | Plugin may read aggregated totals across the wallet's transaction history (count + total amount for a time window, optionally per-currency). Distinct from the row-level enumerate — aggregates leak volume but not individual counterparties or memos. Dashboard / daily-summary plugins typically need this only. | `TransactionStatisticsLookupService.getStatsForPeriod` |
+| `wallet_balance_read` | Plugin may read the wallet's current balance totals (overall and per-currency) and per-contact balances. Discloses the operator's net financial position. | `BalanceLookupService.getUserBalance`, `BalanceLookupService.getUserBalanceContact` |
+| `wallet_outbound_send` | Plugin may spend funds from the wallet (same path as the `eiou send` CLI). The most consequential permission in the catalog — every call is rate-capped and logged, but within the cap the plugin can move money. | `WalletOutboundService.send` |
+| `payment_request_enumerate` | Plugin may walk the wallet's pending-incoming and outgoing payment-request lists. Per-id lookups by request_id are not gated by this permission — a plugin that minted the request via `PaymentRequestService.create` already knows its id. | `PaymentRequestLookupService.listPendingIncoming`, `PaymentRequestLookupService.listOutgoing` |
+| `payback_method_read_own` | Plugin may read capability metadata for the operator's configured payback methods of rail types this plugin itself declared in `payback_method_types`. Encrypted account identifiers are NOT exposed by this surface. | `PaybackMethodLookupService.getMyConfiguredMethods` |
+| `payback_method_read_contact` | Plugin may read capability metadata for a contact's chosen payback methods of rail types this plugin itself declared. Decrypted account identifiers are NOT exposed by this surface. | `PaybackMethodLookupService.getContactPaybackPreference` |
+| `plugin_inventory_read` | Plugin may enumerate which other plugins are enabled on this node (name + version). Orchestration plugins use this to branch on whether a companion is installed. | `PluginLookupService.listEnabledPluginIds` |
+
+Adding a permission key is a deliberate act in both directions:
+
+- **In code:** annotate the attribute (`#[PluginCallable(permission: "<key>")]`)
+  and add the catalog entry (`PluginPermissionCatalog::ENTRIES`) — the
+  install validator rejects manifests requesting un-catalogued keys, and
+  the gateway returns 503 if an attribute references a key the catalog
+  doesn't know about.
+- **In a manifest:** include the key in `permissions: [...]`. Missing the
+  key when the method requires it returns 403 with `permission_not_granted`
+  and a message naming the missing key.
+
+GUI surface: the plugin's modal in *Settings → Plugins* renders a
+"Permissions requested" panel (before enable) / "Permissions granted"
+panel (after enable) listing each key with its catalog label and
+description. Operators reviewing a plugin before flipping the toggle
+read the panel as a separate line of consent from the routine
+`core_services` list.
 
 ### Where plugin-owned state and code lives
 

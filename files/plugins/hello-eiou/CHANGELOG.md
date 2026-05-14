@@ -5,6 +5,25 @@ All notable changes to the `hello-eiou` plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this plugin follows [Semantic Versioning](https://semver.org/).
 
+## 1.4.0
+
+### Added
+- **Self-introspection demo** in the Fortunes tab — fetches and renders the
+  plugin's own granted permissions via `PluginLookupService.getOwnPermissions`
+  and its own manifest fields via `PluginLookupService.getOwnManifest`. Useful
+  reference for plugin authors who want to fail-fast at boot if a required
+  permission isn't granted, or render their own "this app uses…" panel.
+  Neither method requires a permission key — scope is the calling plugin's
+  own row only.
+- **Permission-gated demo**: `ContactLookupService.listAccepted` is now in
+  `core_services` and `contact_address_book_enumerate` is declared in the
+  new top-level `permissions` manifest field. The Fortunes tab picks a
+  random accepted contact and personalises one of the fortunes
+  ("Hello, Alice! …"). Falls back gracefully when the operator hasn't
+  granted the permission (gateway returns null) or when the wallet has no
+  accepted contacts. Demonstrates the louder-consent permission tier that
+  sits on top of `core_services` — see `docs/PLUGINS.md` for the catalog.
+
 ## 1.3.0
 
 ### Changed

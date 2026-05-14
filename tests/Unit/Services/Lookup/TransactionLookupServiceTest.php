@@ -126,6 +126,138 @@ class TransactionLookupServiceTest extends TestCase
     }
 
     // =========================================================================
+    // getSentUserTransactions — counterpart to received; same cap/clamp shape
+    // =========================================================================
+
+    public function testGetSentUserTransactionsPassesLimitAndCurrency(): void
+    {
+        $expected = [['txid' => 'tx-out', 'amount' => 100, 'currency' => 'USD']];
+        $this->repo->expects($this->once())
+            ->method('getSentUserTransactions')
+            ->with(25, 'USD')
+            ->willReturn($expected);
+
+        $this->assertSame($expected, $this->svc->getSentUserTransactions(25, 'USD'));
+    }
+
+    public function testGetSentUserTransactionsAppliesDefaults(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getSentUserTransactions')
+            ->with(10, null)
+            ->willReturn([]);
+
+        $this->assertSame([], $this->svc->getSentUserTransactions());
+    }
+
+    public function testGetSentUserTransactionsCapsLimitAtMaxPageLimit(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getSentUserTransactions')
+            ->with(TransactionLookupService::MAX_PAGE_LIMIT, null)
+            ->willReturn([]);
+
+        $this->svc->getSentUserTransactions(1_000_000);
+    }
+
+    public function testGetSentUserTransactionsClampsNegativeLimitToZero(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getSentUserTransactions')
+            ->with(0, null)
+            ->willReturn([]);
+
+        $this->svc->getSentUserTransactions(-5);
+    }
+
+    // =========================================================================
+    // getByMemo / getStatusByMemo — per-memo lookups, demand-driven
+    // =========================================================================
+
+    public function testGetByMemoDelegates(): void
+    {
+        $row = ['txid' => 'tx', 'memo' => 'm', 'amount' => 1];
+        $this->repo->expects($this->once())->method('getByMemo')->with('m')->willReturn($row);
+        $this->assertSame($row, $this->svc->getByMemo('m'));
+    }
+
+    public function testGetStatusByMemoDelegates(): void
+    {
+        $this->repo->expects($this->once())->method('getStatusByMemo')->with('m')->willReturn('completed');
+        $this->assertSame('completed', $this->svc->getStatusByMemo('m'));
+    }
+
+    // =========================================================================
+    // getTransactionsBetweenPubkeys — between-counterparties enumerate
+    // =========================================================================
+
+    public function testGetTransactionsBetweenPubkeysAppliesMaxLimitOnZero(): void
+    {
+        // Repository semantics: limit=0 means unbounded. The plugin
+        // surface must clamp 0 / negative / oversized to MAX_PAGE_LIMIT
+        // so a single call can't pull arbitrary history.
+        $this->repo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with('p1', 'p2', TransactionLookupService::MAX_PAGE_LIMIT)
+            ->willReturn([]);
+        $this->svc->getTransactionsBetweenPubkeys('p1', 'p2', 0);
+    }
+
+    public function testGetTransactionsBetweenPubkeysClampsOversizedLimit(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with('p1', 'p2', TransactionLookupService::MAX_PAGE_LIMIT)
+            ->willReturn([]);
+        $this->svc->getTransactionsBetweenPubkeys('p1', 'p2', 1_000_000);
+    }
+
+    public function testGetTransactionsBetweenPubkeysPassesValidLimit(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with('p1', 'p2', 25)
+            ->willReturn([['txid' => 'tx1']]);
+        $r = $this->svc->getTransactionsBetweenPubkeys('p1', 'p2', 25);
+        $this->assertCount(1, $r);
+    }
+
+    // =========================================================================
+    // Permission-gate annotation — both enumerate methods must gate on
+    // `transaction_history_enumerate`; per-txid lookups must stay
+    // core_services-only since the plugin needs to already know the txid.
+    // =========================================================================
+
+    public function testEnumerateMethodsRequireTransactionHistoryPermission(): void
+    {
+        foreach (['getReceivedUserTransactions', 'getSentUserTransactions', 'getTransactionsBetweenPubkeys'] as $method) {
+            $reflection = new ReflectionMethod(TransactionLookupService::class, $method);
+            $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+            $this->assertSame(
+                'transaction_history_enumerate',
+                $instance->permission,
+                "{$method} must gate on transaction_history_enumerate — "
+                . 'bulk reads of the transaction list are a distinct disclosure '
+                . 'shape from per-txid lookups'
+            );
+        }
+    }
+
+    public function testPerTxidAndPerMemoLookupsHaveNoPermissionRequirement(): void
+    {
+        foreach (['getByTxid', 'getStatusByTxid', 'existingTxid', 'isCompletedByTxid', 'getByMemo', 'getStatusByMemo'] as $method) {
+            $reflection = new ReflectionMethod(TransactionLookupService::class, $method);
+            $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+            $this->assertNull(
+                $instance->permission,
+                "{$method} must stay core_services-only — "
+                . 'per-txid / per-memo lookups are demand-driven (plugin '
+                . 'needs the id already, typically from an event), not enumeration'
+            );
+        }
+    }
+
+    // =========================================================================
     // #[PluginCallable] attribute coverage — every method exposed to the
     // gateway MUST carry the attribute. Without this assertion, a refactor
     // that drops the attribute would silently break every plugin manifest
@@ -137,11 +269,15 @@ class TransactionLookupServiceTest extends TestCase
     public static function pluginCallableMethodProvider(): array
     {
         return [
-            'getByTxid'                   => ['getByTxid'],
-            'getStatusByTxid'             => ['getStatusByTxid'],
-            'existingTxid'                => ['existingTxid'],
-            'isCompletedByTxid'           => ['isCompletedByTxid'],
-            'getReceivedUserTransactions' => ['getReceivedUserTransactions'],
+            'getByTxid'                       => ['getByTxid'],
+            'getStatusByTxid'                 => ['getStatusByTxid'],
+            'existingTxid'                    => ['existingTxid'],
+            'isCompletedByTxid'               => ['isCompletedByTxid'],
+            'getByMemo'                       => ['getByMemo'],
+            'getStatusByMemo'                 => ['getStatusByMemo'],
+            'getReceivedUserTransactions'     => ['getReceivedUserTransactions'],
+            'getSentUserTransactions'         => ['getSentUserTransactions'],
+            'getTransactionsBetweenPubkeys'   => ['getTransactionsBetweenPubkeys'],
         ];
     }
 

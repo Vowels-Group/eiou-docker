@@ -385,6 +385,68 @@ class PluginInstallServiceTest extends TestCase
     }
 
     #[Test]
+    public function rejectsPermissionsListWithWrongShape(): void
+    {
+        // Wrong shape (a string instead of a list of strings) — same
+        // generic "must be a list" branch as other manifest fields.
+        $zip = $this->buildZip([
+            'bad-perms/plugin.json' => json_encode([
+                'name' => 'bad-perms',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                'permissions' => 'not-a-list',
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/permissions.*must be a list/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
+    public function rejectsPermissionsListWithInvalidKeyShape(): void
+    {
+        // Snake-case shape gate catches keys with uppercase, dashes,
+        // etc. — `Bad-Key` violates the lowercase + underscore regex.
+        $zip = $this->buildZip([
+            'bad-perm-shape/plugin.json' => json_encode([
+                'name' => 'bad-perm-shape',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                'permissions' => ['Bad-Key'],
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/permissions.*invalid entry/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
+    public function rejectsPermissionsListWithUnknownCatalogKey(): void
+    {
+        // Shape-valid but the host doesn't catalogue the key — almost
+        // always a typo or a manifest from a newer plugin pinning a
+        // permission this host doesn't know about. Message names the
+        // catalog so the plugin author can correct it.
+        $zip = $this->buildZip([
+            'unknown-perm/plugin.json' => json_encode([
+                'name' => 'unknown-perm',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                'permissions' => ['shape_ok_but_uncataloged'],
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/unknown key.*shape_ok_but_uncataloged/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
     public function rejectsManifestMissingVersion(): void
     {
         $zip = $this->buildZip([

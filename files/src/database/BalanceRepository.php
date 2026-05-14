@@ -351,6 +351,47 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
+     * Lookup user balances by contact pubkey_hash (grouped by currency).
+     *
+     * Companion to getUserBalanceContact($pubkey) that accepts the
+     * already-hashed identifier — the form sandboxed plugins learn
+     * from on-the-wire envelopes. The raw-pubkey method hashes its
+     * argument internally; this one assumes the caller already has
+     * the pubkey_hash and would double-hash if it went through the
+     * other path.
+     *
+     * @param string $pubkeyHash SHA-256 pubkey hash
+     * @return array|null Contact data or null
+     */
+    public function getUserBalanceContactByPubkeyHash(string $pubkeyHash): array|null{
+
+        $query = "SELECT currency,
+                    SUM(received_whole) AS sum_received_whole, SUM(received_frac) AS sum_received_frac,
+                    SUM(sent_whole) AS sum_sent_whole, SUM(sent_frac) AS sum_sent_frac
+                    FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash
+                    GROUP BY currency";
+
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) {
+            return null;
+        }
+        return array_map(function ($row) {
+            $received = self::sumCarry((int)$row['sum_received_whole'], (int)$row['sum_received_frac']);
+            $sent = self::sumCarry((int)$row['sum_sent_whole'], (int)$row['sum_sent_frac']);
+            return [
+                'currency' => $row['currency'],
+                'total_balance' => $received->subtract($sent),
+            ];
+        }, $rows);
+    }
+
+    /**
      * Insert (initial) contact balance
      *
      * @param string $pubkey Contact pubkey

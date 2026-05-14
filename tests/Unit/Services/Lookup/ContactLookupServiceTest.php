@@ -108,51 +108,345 @@ class ContactLookupServiceTest extends TestCase
     }
 
     // =========================================================================
-    // No bulk-enumerate surface
-    //
-    // An earlier shape of the service exposed listAccepted() as a paginated
-    // walk of the address book. That was removed before any plugin shipped
-    // depending on it — a plugin allow-listed for "list" could enumerate the
-    // operator's entire accepted-contacts list (with .onion addresses and
-    // operator-private labels) regardless of any legitimate workflow. By
-    // contrast, getByPubkeyHash() requires the plugin to first KNOW the hash
-    // (typically learned from a transaction.received event), keeping the
-    // contact-graph view demand-driven. This test pins the absence of the
-    // bulk method so a future refactor doesn't quietly bring it back.
+    // getByName — strict-match semantics, null on ambiguity
     // =========================================================================
 
-    public function testNoBulkEnumerateMethodIsExposed(): void
+    public function testGetByNameProjectsTheUniqueMatch(): void
     {
-        $this->assertFalse(
-            method_exists(ContactLookupService::class, 'listAccepted'),
-            'listAccepted was removed for contact-graph privacy; do not reintroduce '
-            . 'without operator-visible manifest gating distinguishing it from '
-            . 'per-hash lookups (see class docblock for the rationale).'
+        $this->repo->expects($this->once())
+            ->method('lookupAllByName')
+            ->with('Alice')
+            ->willReturn([[
+                'name'        => 'Alice',
+                'http'        => 'http://alice.example/',
+                'https'       => 'https://alice.example/',
+                'tor'         => 'http://aliceabcd.onion/',
+                'pubkey_hash' => 'hash-a',
+                // Extra columns must not leak — same projection contract
+                // as getByPubkeyHash.
+                'pubkey'      => 'SECRET',
+                'status'      => 'accepted',
+            ]]);
+
+        $result = $this->svc->getByName('Alice');
+        $this->assertNotNull($result);
+        $this->assertSame(
+            ['name', 'http', 'https', 'tor', 'pubkey_hash'],
+            array_keys($result)
         );
+        $this->assertSame('Alice', $result['name']);
+        $this->assertSame('hash-a', $result['pubkey_hash']);
+    }
+
+    public function testGetByNameReturnsNullOnNoMatch(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('lookupAllByName')
+            ->with('Nobody')
+            ->willReturn([]);
+
+        $this->assertNull($this->svc->getByName('Nobody'));
+    }
+
+    public function testGetByNameReturnsNullOnAmbiguousMatch(): void
+    {
+        // Strict-match: returning the first row on an ambiguous name
+        // would let a downstream send call hit the wrong contact
+        // silently. The service must surface null so the plugin can
+        // ask the operator to disambiguate by pubkey hash instead.
+        $this->repo->expects($this->once())
+            ->method('lookupAllByName')
+            ->with('John')
+            ->willReturn([
+                ['name' => 'John', 'http' => 'a', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h1'],
+                ['name' => 'John', 'http' => 'b', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h2'],
+            ]);
+
+        $this->assertNull($this->svc->getByName('John'));
+    }
+
+    public function testGetByNameTrimsAndShortCircuitsEmpty(): void
+    {
+        // Whitespace-only input gets normalised to empty — short-circuit
+        // before hitting the repository so a malformed call doesn't
+        // count against the per-minute rate cap unnecessarily.
+        $this->repo->expects($this->never())->method('lookupAllByName');
+        $this->assertNull($this->svc->getByName('   '));
+        $this->assertNull($this->svc->getByName(''));
     }
 
     // =========================================================================
-    // #[PluginCallable] attribute coverage. The method MUST carry the
+    // getOnlineStatus — per-hash online flag, demand-driven
+    // =========================================================================
+
+    public function testGetOnlineStatusReturnsTheStatusField(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with('h-a')
+            ->willReturn([
+                'name' => 'Alice', 'http' => 'h', 'https' => null,
+                'tor' => null, 'pubkey_hash' => 'h-a',
+                'online_status' => 'online',
+            ]);
+
+        $this->assertSame('online', $this->svc->getOnlineStatus('h-a'));
+    }
+
+    public function testGetOnlineStatusReturnsNullWhenContactMissing(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with('h-missing')
+            ->willReturn(null);
+
+        $this->assertNull($this->svc->getOnlineStatus('h-missing'));
+    }
+
+    public function testGetOnlineStatusShortCircuitsEmptyInput(): void
+    {
+        $this->repo->expects($this->never())->method('lookupByPubkeyHash');
+        $this->assertNull($this->svc->getOnlineStatus(''));
+        $this->assertNull($this->svc->getOnlineStatus('   '));
+    }
+
+    public function testGetOnlineStatusNormalisesCase(): void
+    {
+        // Symmetry with getByPubkeyHash — both normalise case
+        // defensively so a plugin passing a hash with mixed case
+        // doesn't appear as a missing contact.
+        $this->repo->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with('abc123')
+            ->willReturn([
+                'name' => 'Bob', 'http' => 'h', 'https' => null,
+                'tor' => null, 'pubkey_hash' => 'abc123',
+                'online_status' => 'offline',
+            ]);
+
+        $this->assertSame('offline', $this->svc->getOnlineStatus(' ABC123 '));
+    }
+
+    // =========================================================================
+    // listPending — pending-incoming enumerate with permission gate
+    // =========================================================================
+
+    public function testListPendingProjectsRows(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getPendingContactRequests')
+            ->willReturn([
+                ['name' => null, 'http' => 'h1', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h-p1'],
+                ['name' => 'Eve', 'http' => 'h2', 'https' => 's', 'tor' => null, 'pubkey_hash' => 'h-p2'],
+            ]);
+
+        $result = $this->svc->listPending();
+        $this->assertCount(2, $result);
+        foreach ($result as $row) {
+            $this->assertSame(
+                ['name', 'http', 'https', 'tor', 'pubkey_hash'],
+                array_keys($row)
+            );
+        }
+        // Null name is expected for incoming pending requests until
+        // the operator labels them on accept.
+        $this->assertNull($result[0]['name']);
+        $this->assertSame('Eve', $result[1]['name']);
+    }
+
+    public function testListPendingReturnsEmptyOnNoPending(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getPendingContactRequests')
+            ->willReturn([]);
+        $this->assertSame([], $this->svc->listPending());
+    }
+
+    // =========================================================================
+    // listAccepted — paging + cap behaviour
+    // =========================================================================
+
+    public function testListAcceptedPassesLimitAndOffset(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getAcceptedContactsPage')
+            ->with(20, 40)
+            ->willReturn([
+                ['name' => 'Carol', 'http' => 'h', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h-c'],
+            ]);
+
+        $result = $this->svc->listAccepted(20, 40);
+        $this->assertCount(1, $result);
+        $this->assertSame('Carol', $result[0]['name']);
+    }
+
+    public function testListAcceptedAppliesDefaults(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getAcceptedContactsPage')
+            ->with(50, 0)
+            ->willReturn([]);
+
+        $this->assertSame([], $this->svc->listAccepted());
+    }
+
+    public function testListAcceptedCapsLimitAtMaxPageLimit(): void
+    {
+        // Same anti-exfiltration cap as TransactionLookupService — a
+        // plugin can't pull the entire contact list in one call.
+        $this->repo->expects($this->once())
+            ->method('getAcceptedContactsPage')
+            ->with(ContactLookupService::MAX_PAGE_LIMIT, 0)
+            ->willReturn([]);
+
+        $this->svc->listAccepted(1_000_000);
+    }
+
+    public function testListAcceptedClampsNegativeBoundsToZero(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getAcceptedContactsPage')
+            ->with(0, 0)
+            ->willReturn([]);
+
+        $this->svc->listAccepted(-1, -100);
+    }
+
+    public function testListAcceptedProjectsEachRow(): void
+    {
+        $this->repo->method('getAcceptedContactsPage')->willReturn([
+            [
+                'name' => 'Alice', 'http' => 'h', 'https' => null,
+                'tor' => null, 'pubkey_hash' => 'h-a',
+                'pubkey' => 'SECRET', 'status' => 'accepted',
+            ],
+            [
+                'name' => 'Bob', 'http' => null, 'https' => 's',
+                'tor' => null, 'pubkey_hash' => 'h-b',
+                'contact_id' => 'SECRET',
+            ],
+        ]);
+
+        $result = $this->svc->listAccepted();
+        foreach ($result as $row) {
+            $this->assertSame(
+                ['name', 'http', 'https', 'tor', 'pubkey_hash'],
+                array_keys($row),
+                'every row in listAccepted must carry exactly the documented shape'
+            );
+        }
+    }
+
+    // =========================================================================
+    // #[PluginCallable] attribute coverage. Both methods MUST carry the
     // attribute — without it PluginGatewayController's reflection gate would
     // refuse the call even if a manifest allow-listed the method.
     // =========================================================================
 
-    public function testGetByPubkeyHashCarriesPluginCallableAttribute(): void
+    public static function pluginCallableMethodProvider(): array
     {
-        $reflection = new ReflectionMethod(ContactLookupService::class, 'getByPubkeyHash');
+        return [
+            'getByPubkeyHash' => ['getByPubkeyHash'],
+            'getByName'       => ['getByName'],
+            'getOnlineStatus' => ['getOnlineStatus'],
+            'listAccepted'    => ['listAccepted'],
+            'listPending'     => ['listPending'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('pluginCallableMethodProvider')]
+    public function testMethodCarriesPluginCallableAttribute(string $method): void
+    {
+        $reflection = new ReflectionMethod(ContactLookupService::class, $method);
         $attributes = $reflection->getAttributes(PluginCallable::class);
 
         $this->assertCount(
             1,
             $attributes,
-            'ContactLookupService::getByPubkeyHash() must carry exactly one #[PluginCallable] attribute'
+            "ContactLookupService::{$method}() must carry exactly one #[PluginCallable] attribute"
         );
 
         $instance = $attributes[0]->newInstance();
         $this->assertNotSame(
             '',
             $instance->description ?? '',
-            "getByPubkeyHash's #[PluginCallable] must have a non-empty description"
+            "ContactLookupService::{$method}()'s #[PluginCallable] must have a non-empty description"
+        );
+    }
+
+    // =========================================================================
+    // Permission-gate annotation — the two methods sit on opposite
+    // sides of the louder-consent boundary. getByPubkeyHash is
+    // `core_services`-only (a plugin can resolve hashes it learned
+    // from events); listAccepted additionally gates on
+    // `contact_address_book_enumerate` because it enumerates the
+    // operator's entire address book.
+    // =========================================================================
+
+    public function testGetByPubkeyHashHasNoPermissionRequirement(): void
+    {
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'getByPubkeyHash');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+
+        $this->assertNull(
+            $instance->permission,
+            'getByPubkeyHash must remain a routine core_services surface — '
+            . 'per-hash lookups don\'t enumerate the address book, so they '
+            . 'don\'t need the louder-consent permission tier'
+        );
+    }
+
+    public function testGetByNameHasNoPermissionRequirement(): void
+    {
+        // Symmetric with getByPubkeyHash — both are demand-driven
+        // single-row resolvers, and getByName's strict-match-or-null
+        // semantics mean it can't be used to walk the address book
+        // (a plugin can only resolve names it already knows).
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'getByName');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+
+        $this->assertNull(
+            $instance->permission,
+            'getByName must stay core_services-only — name-based resolution '
+            . 'with strict-match-or-null semantics doesn\'t enable enumeration'
+        );
+    }
+
+    public function testGetOnlineStatusHasNoPermissionRequirement(): void
+    {
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'getOnlineStatus');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+        $this->assertNull(
+            $instance->permission,
+            'getOnlineStatus is demand-driven per-hash — no enumeration risk, no permission gate'
+        );
+    }
+
+    public function testListPendingRequiresPendingEnumeratePermission(): void
+    {
+        // The pending queue is a separate disclosure shape from the
+        // accepted address book — distinct permission key. Pinned here
+        // so a future refactor doesn't quietly fold the two together.
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'listPending');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+        $this->assertSame(
+            'contact_pending_enumerate',
+            $instance->permission,
+            'listPending must gate on contact_pending_enumerate — pending requests reveal who wants to talk to the operator, distinct from who they already talk to'
+        );
+    }
+
+    public function testListAcceptedRequiresAddressBookEnumeratePermission(): void
+    {
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'listAccepted');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+
+        $this->assertSame(
+            'contact_address_book_enumerate',
+            $instance->permission,
+            'listAccepted must gate on the address-book-enumerate permission — '
+            . 'bulk walking the contact list is a different shape of disclosure '
+            . 'than per-hash resolution and operators must consent to it distinctly'
         );
     }
 }
