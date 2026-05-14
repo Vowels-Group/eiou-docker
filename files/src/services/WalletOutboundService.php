@@ -53,7 +53,16 @@ class WalletOutboundService implements PluginCallerAware
     public const SUPPORTED_CURRENCY_PATTERN = '/^[A-Z]{3,8}$/';
     public const AMOUNT_PATTERN = '/^\d+(\.\d+)?$/';
     public const RECIPIENT_PATTERN = '/^[A-Za-z0-9._:@-]{1,128}$/';
-    public const MEMO_MAX_BYTES = 256;
+
+    /**
+     * Cap on the free-form description string (the operator-facing
+     * "[description]" argument on `eiou send`, what eventually lands
+     * in the on-chain `transactions.description` column). NOT to be
+     * confused with the database's `memo` column, which is the
+     * routing-hash discriminator (`standard` / `contact` / etc.) and
+     * is set internally by `sendEiou` — never user-supplied.
+     */
+    public const DESCRIPTION_MAX_BYTES = 256;
 
     private TransactionServiceInterface $transactionService;
     private ?Logger $logger;
@@ -75,10 +84,24 @@ class WalletOutboundService implements PluginCallerAware
     /**
      * Send an outbound transaction on behalf of the calling plugin.
      *
-     * @param string      $currency         ISO-like currency code (^[A-Z]{3,8}$).
-     * @param string      $amount           Decimal string. Must be positive.
+     * Argument order mirrors the operator-facing CLI: `eiou send
+     * <recipient> <amount> <currency> [description]`. A plugin call
+     * with the historical (currency, amount, recipient, description)
+     * order passes the recipient where the currency validator expects
+     * 3-8 uppercase letters and the call fails with a confusing
+     * message (e.g. `currency 'alice' must match /^[A-Z]{3,8}$/`).
+     * Matching the CLI order at the host boundary eliminates that
+     * footgun.
+     *
+     * `$description` is the free-form text that lands in the on-chain
+     * `transactions.description` column — distinct from the internal
+     * `transactions.memo` field, which is a routing-hash discriminator
+     * set by `sendEiou` itself and is not a plugin-controllable input.
+     *
      * @param string      $recipientAddress Recipient address or contact name.
-     * @param string|null $memo             Optional. Capped at 256 bytes.
+     * @param string      $amount           Decimal string. Must be positive.
+     * @param string      $currency         ISO-like currency code (^[A-Z]{3,8}$).
+     * @param string|null $description      Optional free-form description. Capped at 256 bytes.
      *
      * @return array{ok:true, txid:?string} On success. txid may be null when
      *                                       the underlying sendEiou queued the
@@ -88,10 +111,10 @@ class WalletOutboundService implements PluginCallerAware
      * @throws InvalidArgumentException On malformed arguments.
      */
     #[PluginCallable(
-        description: 'Send EIOU on behalf of the wallet to a recipient address or contact. The plugin is responsible for its own authorisation and audit; the host only crosses the sandbox boundary into the existing sendEiou path (which auto-picks direct or P2P routing based on whether the recipient resolves to a known contact). Returns {ok:true, txid} on success or throws on downstream refusal.',
+        description: 'Send EIOU on behalf of the wallet to a recipient address or contact. Argument order matches the `eiou send` CLI: recipient, amount, currency, optional description. The plugin is responsible for its own authorisation and audit; the host only crosses the sandbox boundary into the existing sendEiou path (which auto-picks direct or P2P routing based on whether the recipient resolves to a known contact). Returns {ok:true, txid} on success or throws on downstream refusal.',
         ratePerMinute: 60
     )]
-    public function send(string $currency, string $amount, string $recipientAddress, ?string $memo = null): array
+    public function send(string $recipientAddress, string $amount, string $currency, ?string $description = null): array
     {
         if ($this->callingPluginId === null) {
             // Defence in depth — only the gateway should reach this
@@ -100,12 +123,12 @@ class WalletOutboundService implements PluginCallerAware
         }
         $pluginId = $this->callingPluginId;
 
-        $this->validateArguments($currency, $amount, $recipientAddress, $memo);
+        $this->validateArguments($currency, $amount, $recipientAddress, $description);
 
         $capture = new CapturingCliOutputManager();
         // sendEiou expects a positional CLI-style request:
         //   [_, _, recipient, amount, currency, description]
-        $request = ['', '', $recipientAddress, $amount, $currency, $memo ?? ''];
+        $request = ['', '', $recipientAddress, $amount, $currency, $description ?? ''];
         try {
             $this->transactionService->sendEiou($request, $capture);
         } catch (Throwable $e) {
@@ -136,7 +159,7 @@ class WalletOutboundService implements PluginCallerAware
         return ['ok' => true, 'txid' => $txid];
     }
 
-    private function validateArguments(string $currency, string $amount, string $recipient, ?string $memo): void
+    private function validateArguments(string $currency, string $amount, string $recipient, ?string $description): void
     {
         if (preg_match(self::SUPPORTED_CURRENCY_PATTERN, $currency) !== 1) {
             throw new InvalidArgumentException("currency '{$currency}' must match " . self::SUPPORTED_CURRENCY_PATTERN);
@@ -147,8 +170,8 @@ class WalletOutboundService implements PluginCallerAware
         if (preg_match(self::RECIPIENT_PATTERN, $recipient) !== 1) {
             throw new InvalidArgumentException("recipient '{$recipient}' must match " . self::RECIPIENT_PATTERN);
         }
-        if ($memo !== null && strlen($memo) > self::MEMO_MAX_BYTES) {
-            throw new InvalidArgumentException("memo exceeds " . self::MEMO_MAX_BYTES . " bytes");
+        if ($description !== null && strlen($description) > self::DESCRIPTION_MAX_BYTES) {
+            throw new InvalidArgumentException("description exceeds " . self::DESCRIPTION_MAX_BYTES . " bytes");
         }
     }
 

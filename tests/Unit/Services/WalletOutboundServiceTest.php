@@ -42,7 +42,7 @@ class WalletOutboundServiceTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('gateway-injected caller id');
-        $this->svc->send('EIOU', '1.00', 'alice');
+        $this->svc->send('alice', '1.00', 'EIOU');
     }
 
     #[Test]
@@ -51,7 +51,7 @@ class WalletOutboundServiceTest extends TestCase
         $this->svc->setCallingPluginId('p1');
         $this->svc->setCallingPluginId(null);
         $this->expectException(RuntimeException::class);
-        $this->svc->send('EIOU', '1.00', 'alice');
+        $this->svc->send('alice', '1.00', 'EIOU');
     }
 
     // ===================================================================
@@ -62,42 +62,47 @@ class WalletOutboundServiceTest extends TestCase
     public function rejectsBadCurrency(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->withCaller('p1')->send('eu', '1', 'alice');
+        $this->withCaller('p1')->send('alice', '1', 'eu');
     }
 
     #[Test]
     public function rejectsZeroAmount(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->withCaller('p1')->send('EIOU', '0', 'alice');
+        $this->withCaller('p1')->send('alice', '0', 'EIOU');
     }
 
     #[Test]
     public function rejectsNegativeAmount(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->withCaller('p1')->send('EIOU', '-1', 'alice');
+        $this->withCaller('p1')->send('alice', '-1', 'EIOU');
     }
 
     #[Test]
     public function rejectsScientificAmount(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->withCaller('p1')->send('EIOU', '1e2', 'alice');
+        $this->withCaller('p1')->send('alice', '1e2', 'EIOU');
     }
 
     #[Test]
     public function rejectsRecipientWithSpaces(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->withCaller('p1')->send('EIOU', '1', 'has spaces');
+        $this->withCaller('p1')->send('has spaces', '1', 'EIOU');
     }
 
     #[Test]
-    public function rejectsOversizeMemo(): void
+    public function rejectsOversizeDescription(): void
     {
+        // `description` is the operator-facing free-form text from
+        // `eiou send <recipient> <amount> <currency> [description]`.
+        // Not to be confused with the internal `transactions.memo`
+        // routing-hash field, which is set by sendEiou itself and is
+        // not a plugin-controllable input.
         $this->expectException(InvalidArgumentException::class);
-        $this->withCaller('p1')->send('EIOU', '1', 'alice', str_repeat('x', 300));
+        $this->withCaller('p1')->send('alice', '1', 'EIOU', str_repeat('x', 300));
     }
 
     // ===================================================================
@@ -115,7 +120,7 @@ class WalletOutboundServiceTest extends TestCase
                 $out->success('sent', ['txid' => 'deadbeef']);
             });
 
-        $result = $this->withCaller('p1')->send('EIOU', '50.00', 'alice', 'refund-123');
+        $result = $this->withCaller('p1')->send('alice', '50.00', 'EIOU', 'refund-123');
         $this->assertTrue($result['ok']);
         $this->assertSame('deadbeef', $result['txid']);
 
@@ -135,7 +140,7 @@ class WalletOutboundServiceTest extends TestCase
                 $out->success('sent', ['txid' => 'tx-1']);
             });
 
-        $this->withCaller('p1')->send('EIOU', '1', 'alice');
+        $this->withCaller('p1')->send('alice', '1', 'EIOU');
         $this->assertSame('', $captured[5]);
     }
 
@@ -148,7 +153,7 @@ class WalletOutboundServiceTest extends TestCase
                 $out->success('queued for P2P route discovery', ['status' => 'pending']);
             });
 
-        $result = $this->withCaller('p1')->send('EIOU', '1', 'alice');
+        $result = $this->withCaller('p1')->send('alice', '1', 'EIOU');
         $this->assertTrue($result['ok']);
         $this->assertNull($result['txid']);
     }
@@ -167,7 +172,7 @@ class WalletOutboundServiceTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('outbound send refused');
-        $this->withCaller('p1')->send('EIOU', '50', 'alice');
+        $this->withCaller('p1')->send('alice', '50', 'EIOU');
     }
 
     #[Test]
@@ -177,7 +182,7 @@ class WalletOutboundServiceTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('outbound send failed: boom');
-        $this->withCaller('p1')->send('EIOU', '50', 'alice');
+        $this->withCaller('p1')->send('alice', '50', 'EIOU');
     }
 
     // ===================================================================
@@ -209,10 +214,10 @@ class WalletOutboundServiceTest extends TestCase
             }
         );
 
-        $this->withCaller('p1')->send('EIOU', '1', 'alice');
+        $this->withCaller('p1')->send('alice', '1', 'EIOU');
         $this->svc->setCallingPluginId(null);
 
         $this->expectException(RuntimeException::class);
-        $this->svc->send('EIOU', '1', 'alice');
+        $this->svc->send('alice', '1', 'EIOU');
     }
 }

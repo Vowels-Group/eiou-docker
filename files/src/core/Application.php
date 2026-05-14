@@ -208,7 +208,8 @@ class Application {
             // Done AFTER bootAll() so in-process subscribers register
             // first and sandboxed forwarders register alongside them
             // — both fire when an event dispatches.
-            $this->services->getPluginIpcForwarder($this->pluginLoader)->registerAll(
+            $ipcForwarder = $this->services->getPluginIpcForwarder($this->pluginLoader);
+            $ipcForwarder->registerAll(
                 $this->services->getHooks(),
                 $this->services->getAssetRegistry(),
                 $this->services->getTabRegistry(),
@@ -216,6 +217,18 @@ class Application {
                 $this->services->getPluginApiRegistry(),
                 $this->services->getPluginCliRegistry(),
                 $this->services->getPaybackMethodTypeRegistry()
+            );
+
+            // Wire the lifecycle dispatcher so PluginLoader::setEnabled()
+            // can fire an `on_enable` envelope at sandboxed plugins on
+            // first-time enable (the sandbox-model replacement for the
+            // pre-sandbox boot() method). Done AFTER ipcForwarder exists
+            // because the forwarder depends on the loader at construction
+            // — this is the one-way wiring that closes the loop without
+            // a circular constructor dep.
+            $this->pluginLoader->setLifecycleDispatcher(
+                fn(string $pluginId, string $event): ?array
+                    => $ipcForwarder->dispatchLifecycle($pluginId, $event)
             );
 
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)

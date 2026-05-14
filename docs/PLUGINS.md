@@ -62,9 +62,14 @@ forwarder bridges each declared surface into the plugin's
   `/p/<plugin>/<action>` for customer-bearer-token-authenticated traffic
   (off by default behind `EIOU_PUBLIC_PLUGIN_ROUTES`)
 - Reach a curated subset of core services via `core_call()` declared in
-  the `core_services` allow-list (today: `Logger.*` and
-  `TransactionLookupService.*`; see [Plugin-callable surface —
-  policy](#plugin-callable-surface--policy))
+  the `core_services` allow-list (`Logger.*`, the `*LookupService`
+  family for read-only facades over node identity / transactions /
+  contacts / runtime config, `PluginEventPublisher.publish` for
+  namespaced cross-plugin events, `WalletOutboundService.send` for
+  autonomous outbound transfers, `PaymentRequestService.create` for
+  billing contacts, `ContainerLifecycleService.start/stopSidecar`
+  for companion-container orchestration; full table in
+  [Plugin-callable surface — policy](#plugin-callable-surface--policy))
 - Own database tables under their `database.user` block, accessed
   through a per-plugin MySQL user with grants scoped to those tables
 - Register new payback-method rail types (Bitcoin, PayPal, Bizum, …)
@@ -300,7 +305,7 @@ contract](#the-__dispatchphp-contract) for the wire shape.
 | `cli_commands`         | no       | list&lt;object&gt;    | Top-level CLI subcommands. Each entry: `{name}` — operators invoke as `eiou <name> [args...]`. |
 | `public_routes`        | no       | list&lt;object&gt;    | Non-admin HTTP endpoints under `/p/<plugin-id>/<action>`, off by default behind `EIOU_PUBLIC_PLUGIN_ROUTES`. See [Public routes](#public-routes--non-admin-http-under-pplugin-idaction) for the entry shape. |
 | `payback_method_types` | no       | list&lt;object&gt;    | Plugin-provided payback-method rail types (Bitcoin, PayPal, Bizum, etc.). Each entry: `{id, catalog}`. See [Registering Payback-Method Rail Types](#registering-payback-method-rail-types). |
-| `cron`                 | no       | list&lt;object&gt;    | Host-driven scheduled tasks. Each entry: `{interval_minutes, action}` (`interval_minutes` bounded `[1, 1440]`, `action` kebab-case). See [Scheduled Tasks (cron)](#scheduled-tasks-cron). |
+| `cron`                 | no       | list&lt;object&gt;    | Host-driven scheduled tasks. Each entry: `{interval_minutes, action, timeout_ms?}` (`interval_minutes` bounded `[1, 1440]`, `action` kebab-case, optional `timeout_ms` overrides the default 5s cron dispatch budget, clamped to 25s — see [Per-entry timeout](#per-entry-timeout-optional)). See [Scheduled Tasks (cron)](#scheduled-tasks-cron). |
 
 ### Validation
 
@@ -487,8 +492,11 @@ What this means in practice:
 
 | Goal | Right path |
 | ---- | ---------- |
-| Read recent transactions | `core_call('TransactionLookupService', 'getRecent', …)` |
-| Look up a contact by pubkey | `core_call('ContactService', 'getByPublicKey', …)` |
+| Read recent transactions | `core_call('TransactionLookupService', 'getReceivedUserTransactions', …)` |
+| Look up a contact by pubkey hash | `core_call('ContactLookupService', 'getByPubkeyHash', …)` |
+| List accepted contacts (paginated) | `core_call('ContactLookupService', 'listAccepted', …)` |
+| Bill a contact (mint a payment request) | `core_call('PaymentRequestService', 'create', …)` |
+| Stop your sidecar container on disable | `core_call('ContainerLifecycleService', 'stopSidecar', …)` |
 | React to a sync event | declare `subscribes_to: ["sync.completed"]` in the manifest |
 | Store the plugin's own state | direct PDO against an `owned_tables` entry (see *Running queries*) |
 
@@ -1140,6 +1148,37 @@ Workers cycle on `pm.max_requests` / `pm.process_idle_timeout` —
 opcache picks up new code via mtime, so the upgrade flow's directory
 swap plus FPM SIGUSR2 reload is what causes workers to pick up the
 new on-disk version.
+
+### One-shot `on_enable` hook
+
+When `PluginLoader::setEnabled($id, true)` succeeds, the host
+dispatches a single `lifecycle` envelope at the plugin's
+`__dispatch.php` before returning to the caller:
+
+    {
+      "type":    "lifecycle",
+      "name":    "on_enable",
+      "context": {"fired_at": 1715635200}
+    }
+
+This is the sandbox-model replacement for the pre-sandbox `boot()`
+method. Plugins that need to wire sidecars (call
+`ContainerLifecycleService.startSidecar`), prime caches, verify a
+provider, or do any other one-shot setup do it here. The dispatch
+budget is 5 seconds (same as `cron`); failures are logged but do
+**not** roll back the enable — the plugin's state is already
+committed by the time the hook fires. Disable does NOT mirror this:
+by the time we'd dispatch the plugin's pool has already been
+dropped, and the call would never reach a live worker. Plugins that
+need cleanup work should register it inside the `on_enable` handler
+(e.g. via a manifest-declared cron that drains a wind-down queue).
+
+Plugin-side handling looks like every other envelope:
+
+    if ($type === 'lifecycle' && $name === 'on_enable') {
+        // one-shot setup work — verify, prime, register sidecars …
+        return ['ok' => true];
+    }
 
 ### Why GUI / event subscriptions need a wallet restart
 
@@ -2016,10 +2055,13 @@ small. As of this writing, the callable surface is:
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `Logger`                        | `debug`, `info`, `warning`, `error`                                                                  |
 | `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions`   |
+| `ContactLookupService`          | `getByPubkeyHash`, `listAccepted`                                                                    |
 | `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
 | `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
 | `PluginEventPublisher`          | `publish`                                                                                            |
 | `WalletOutboundService`         | `send`                                                                                               |
+| `PaymentRequestService`         | `create`                                                                                             |
+| `ContainerLifecycleService`     | `startSidecar`, `stopSidecar`                                                                        |
 
 That's it. The list grows **on demand**, when a concrete plugin
 needs something — not speculatively. The reasoning is straightforward:
@@ -2501,6 +2543,158 @@ Runs one tick manually. Useful for diagnostics, forced fires during
 development, and `--json` output for scripting. The startup poller
 invokes this same command — there is no separate code path for
 operator-triggered vs automated ticks.
+
+### Per-entry timeout (optional)
+
+The host caps each dispatch envelope's wall-clock budget. Cron's
+default cap is 5 seconds (much longer than the 500ms ceiling on
+user-blocking surfaces like `event` / `filter` / `render` — those
+park a real user's request, so a slow plugin must not extend the
+wait). Plugins that need more than 5s for a single tick can declare:
+
+    "cron": [
+      {"interval_minutes": 60, "action": "flush-usage", "timeout_ms": 15000}
+    ]
+
+The host clamps `timeout_ms` to a hard ceiling below the plugin
+pool's own FPM `request_terminate_timeout` (currently 25s vs 30s) so
+the host always times out first and logs the failure under our
+control. Bigger budgets indicate the tick is doing too much in one
+invocation — prefer the queue-and-drain pattern below.
+
+---
+
+## Async work pattern (cron + queue)
+
+Most non-trivial plugin work belongs in a cron tick, NOT in the
+event/filter/render handlers that fire on user requests. The hard
+constraint: those handlers have a **500ms host-side budget** and the
+user is parked waiting for the response. A handler that takes 2s to
+fetch a remote IPFS pin from a Kubo sidecar will:
+
+  1. Trip the host's 500ms timeout. The host logs
+     `plugin_ipc_transport_failed` and abandons the call.
+  2. Keep running inside the plugin's FPM worker — the worker
+     doesn't know its caller has hung up — until either (a) the
+     plugin's own work finishes and the worker silently drops the
+     response, or (b) the FPM `request_terminate_timeout` (30s)
+     fires.
+  3. Hold an FPM worker for the duration. With `pm.max_children = 4`
+     in the default pool render, four concurrent slow handlers
+     wedge the entire plugin.
+
+The right shape is "enqueue in the handler, drain in cron". The
+handler does only what fits in 500ms (insert a row, write a JSON
+file), and a cron tick walks the queue at its own pace.
+
+### Sketch — plugin-side queue table
+
+Add a small queue table in the plugin's MySQL schema (via
+`database.migrations`, see [Database Isolation](#database-isolation)):
+
+```sql
+CREATE TABLE my_plugin_pending_pins (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  txid        VARCHAR(64)  NOT NULL,
+  payload     JSON         NOT NULL,
+  status      VARCHAR(16)  NOT NULL DEFAULT 'pending',
+  attempts    INT UNSIGNED NOT NULL DEFAULT 0,
+  next_run_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  KEY status_run (status, next_run_at)
+);
+```
+
+### Sketch — `__dispatch.php` handler enqueues, doesn't do work
+
+```php
+if ($type === 'event' && $name === 'transaction.received') {
+    // 500ms budget. Insert + return; the actual work is for cron.
+    $pdo->prepare('
+        INSERT INTO my_plugin_pending_pins (txid, payload)
+        VALUES (:txid, :payload)
+    ')->execute([
+        ':txid'    => $context['data']['txid'] ?? '',
+        ':payload' => json_encode($context['data'] ?? []),
+    ]);
+    return ['ok' => true];
+}
+```
+
+### Sketch — cron tick drains the queue
+
+```php
+if ($type === 'cron' && $name === 'drain-pins') {
+    // 5s budget by default; declare timeout_ms in manifest if more
+    // is genuinely needed for a single tick.
+    $batch = $pdo->query('
+        SELECT id, txid, payload FROM my_plugin_pending_pins
+        WHERE status = "pending" AND next_run_at <= NOW(6)
+        ORDER BY next_run_at LIMIT 5
+    ')->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($batch as $row) {
+        try {
+            // Do the actual work — pin to IPFS, hit a remote API,
+            // whatever. Each iteration is its own try/catch so one
+            // poisonous row doesn't abort the batch.
+            doTheWork($row);
+            $pdo->prepare('
+                UPDATE my_plugin_pending_pins
+                SET status = "done"
+                WHERE id = :id
+            ')->execute([':id' => $row['id']]);
+        } catch (Throwable $e) {
+            // Backoff — exponential by attempts, capped. Mark
+            // 'failed' once attempts hit a manifest-defined ceiling
+            // so the row stops eating budget on every tick.
+            $pdo->prepare('
+                UPDATE my_plugin_pending_pins
+                SET attempts = attempts + 1,
+                    next_run_at = DATE_ADD(NOW(6), INTERVAL POW(2, attempts) MINUTE)
+                WHERE id = :id
+            ')->execute([':id' => $row['id']]);
+        }
+    }
+    return ['ok' => true, 'drained' => count($batch)];
+}
+```
+
+Manifest declares both surfaces:
+
+```json
+{
+  "subscribes_to": ["transaction.received"],
+  "cron": [{"interval_minutes": 1, "action": "drain-pins"}]
+}
+```
+
+### Sizing the batch
+
+Default LIMIT 5 leaves margin under the 5s cron budget for the
+slowest realistic iteration (a single IPFS pin can take ~1s on a
+warm sidecar; cold-cache walks can run to several). Tune per
+workload by measuring how long one iteration takes in production and
+choosing `batch_size * iteration_p99 < timeout_ms - 500ms_overhead`.
+
+If the queue grows faster than the cron tick can drain it, raise
+`interval_minutes` (smaller batches more often is usually better
+than huge batches less often — it bounds the per-tick blast radius).
+Don't be tempted to raise `timeout_ms` past ~10s; longer ticks just
+push the operational pain to discovery time (a stuck handler delays
+the next tick, the lockfile-skip pattern in [State and
+locking](#state-and-locking) only protects within one
+(plugin, action) pair).
+
+### When to skip the queue and just do the work synchronously
+
+If the work genuinely fits in 500ms (a cache read, a single
+in-process computation, a small DB query) the enqueue-and-drain
+pattern is overhead. The smell test: if the worst-case latency for a
+single invocation, including a cold network round-trip, comfortably
+fits in 500ms, do it in the event handler. If you're not sure, ship
+it in cron — moving from "synchronous in handler" to "queued for
+cron" is a refactor; moving back is not.
 
 ---
 
@@ -3499,6 +3693,46 @@ ends up `root:www-data 0640` and the www-data-write path ends up
 `www-data:www-data 0640`; in both cases the wallet pool can read its own state.
 Mirrors the multi-writer ownership pattern used elsewhere for plugin-gateway
 tokens.
+
+### Privileged writes into the plugin directory
+
+**Rule:** host code that needs to write a file under
+`/etc/eiou/plugins/<id>/` MUST route the write through the supervisor's
+`plugin_routing_poller` (via the `/tmp/eiou-routing-req-*.json` request-file
+protocol), not write directly from the wallet pool. The wallet pool runs as
+`www-data` and cannot reliably write into the per-plugin dir; the supervisor
+runs as root and can.
+
+**Why:** the directory's owner varies by install topology. Production
+zip-uploads land the dir owned by `www-data` (the wallet pool extracted the
+zip and chowned it that way), so a direct www-data write would actually
+succeed. Dev bind-mount layouts — where `/etc/eiou/plugins/` is mounted from
+the host filesystem — inherit the host operator's uid. On a typical host
+that uid is 1000, which inside the container collides with the
+`eiou-p-<8hex>` plugin pool user (also derived to land low) rather than
+with `www-data`. Direct writes from www-data into that dir then fail with
+EACCES, the failure surfaces as "plugin won't enable" with no obvious cause,
+and the operator's workaround (`usermod -aG eiou-p-<hash> www-data`) doesn't
+even work without a full container restart because FPM workers' supplementary
+groups are fixed at master start. Routing through the supervisor sidesteps
+the whole class of perm issues — root writes anywhere.
+
+**Reference implementation:** `PluginGatewayTokenService::mint()` generates
+the token in memory (no filesystem touch), `PluginPoolService::applyPool()`
+ships it through the `apply-pool` request payload as the `gateway_token`
+field, and `plugin_routing_poller` in `startup.sh` writes the per-plugin
+`.gateway-token` file as root with `chown <system_user>:<system_user>` plus
+mode `0600`. The request handler validates the token shape (`^[a-f0-9]{64}$`)
+as defence in depth against a corrupted-request write primitive against
+arbitrary paths.
+
+**Applies to future features too.** Anything that needs the host to write
+into the plugin dir — config snapshots, per-plugin certs, manifest
+overrides, generated assets — should extend the supervisor poller protocol
+with a new request type rather than try to write from the wallet pool
+directly. Doing so keeps the operational story consistent across production
+and dev bind-mount, and concentrates "wrote a privileged file" auditing in
+one place (the supervisor's stdout).
 
 ---
 

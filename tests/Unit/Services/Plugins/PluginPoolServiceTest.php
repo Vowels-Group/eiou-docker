@@ -216,6 +216,84 @@ class PluginPoolServiceTest extends TestCase
     }
 
     #[Test]
+    public function applyPoolDoesNotCommitTokenIndexWhenSupervisorFails(): void
+    {
+        // Regression guard for the token-sync bug. Pre-fix code called
+        // mintAndIndex() up front, so a supervisor failure left the
+        // index holding a token the per-plugin file never received —
+        // dispatcher's bearer was forever stale until an operator ran
+        // a manual sync. With the fix, the candidate token is held in
+        // memory until the supervisor returns ok; on failure, the
+        // index is unchanged.
+        @mkdir($this->pluginRoot . '/demo', 0755, true);
+        $tokensPath = $this->tmpRoot . '/plugin-gateway-tokens.json';
+
+        $this->nextResult = ['status' => 'failed', 'error' => 'nginx -t: bad block'];
+        $this->assertFalse($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
+
+        // No index file was written, OR if it exists it has no entry
+        // for 'demo'. Either represents "supervisor failure didn't
+        // commit drift" — which is the property under test.
+        if (is_file($tokensPath)) {
+            $index = json_decode((string) file_get_contents($tokensPath), true) ?: [];
+            $entriesForDemo = array_filter($index, fn($v) => $v === 'demo');
+            $this->assertSame([], $entriesForDemo, 'no index entry was committed for failed apply');
+        }
+
+        // Subsequent successful apply commits cleanly.
+        $this->nextResult = ['status' => 'ok'];
+        $this->assertTrue($this->svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
+        $this->assertFileExists($tokensPath);
+        $index = json_decode((string) file_get_contents($tokensPath), true);
+        $this->assertContains('demo', $index, 'successful apply commits exactly one entry');
+    }
+
+    #[Test]
+    public function applyPoolCommitsTokenIndexOnlyAfterSupervisorOk(): void
+    {
+        // Walk through the sequencing: mint() happens before the
+        // executor is called (the payload carries the candidate
+        // token), but commitToken() only runs after ok. Verified by
+        // asserting the index is empty during the executor callback
+        // and populated after applyPool returns.
+        @mkdir($this->pluginRoot . '/demo', 0755, true);
+        $tokensPath = $this->tmpRoot . '/plugin-gateway-tokens.json';
+
+        $sawIndexBeforeCommit = null;
+        $observer = function (string $action, array $payload) use ($tokensPath, &$sawIndexBeforeCommit): array {
+            $this->actionLog[] = ['action' => $action, 'payload' => $payload];
+            $sawIndexBeforeCommit = is_file($tokensPath)
+                ? json_decode((string) file_get_contents($tokensPath), true)
+                : null;
+            return ['status' => 'ok'];
+        };
+
+        $tokenService = new \Eiou\Services\Plugins\PluginGatewayTokenService(
+            $tokensPath,
+            $this->pluginRoot
+        );
+        $svc = new \Eiou\Services\Plugins\PluginPoolService(
+            null,
+            $observer,
+            $this->template,
+            $this->pluginRoot,
+            $tokenService
+        );
+
+        $this->assertTrue($svc->applyPool('demo', 'eiou-p-12345678', 'snippet'));
+        // While the executor was running, the index either didn't
+        // exist or had no entry for 'demo' (commit happens AFTER).
+        if ($sawIndexBeforeCommit !== null) {
+            $this->assertNotContains('demo', $sawIndexBeforeCommit);
+        }
+        // Post-call: the candidate token shipped to the supervisor is
+        // also the one now in the index.
+        $candidate = $this->actionLog[0]['payload']['gateway_token'];
+        $index = json_decode((string) file_get_contents($tokensPath), true);
+        $this->assertSame('demo', $index[$candidate]);
+    }
+
+    #[Test]
     public function applyPoolRotatesTokenWhenForced(): void
     {
         @mkdir($this->pluginRoot . '/demo', 0755, true);

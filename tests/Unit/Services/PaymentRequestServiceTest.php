@@ -1290,4 +1290,22 @@ class PaymentRequestServiceTest extends TestCase
 
         $this->service->searchResolvedHistory('alice');
     }
+
+    // =========================================================================
+    // #[PluginCallable] gate — create() is the single mutating entry point
+    // sandboxed plugins reach for auto-settle flows. The gateway's reflection
+    // check refuses any service method that doesn't carry the attribute, so
+    // a refactor that drops it would silently break every plugin manifest
+    // that allow-lists "PaymentRequestService.create".
+    // =========================================================================
+
+    public function testCreateCarriesPluginCallableAttribute(): void
+    {
+        $reflection = new \ReflectionMethod(PaymentRequestService::class, 'create');
+        $attributes = $reflection->getAttributes(\Eiou\Contracts\PluginCallable::class);
+
+        $this->assertCount(1, $attributes, 'create() must carry exactly one #[PluginCallable] attribute');
+        $instance = $attributes[0]->newInstance();
+        $this->assertNotSame('', $instance->description, 'PluginCallable must declare a non-empty description');
+    }
 }

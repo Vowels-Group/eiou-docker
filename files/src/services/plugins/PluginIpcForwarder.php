@@ -40,8 +40,52 @@ use Throwable;
  */
 class PluginIpcForwarder
 {
-    /** Per-call timeout in milliseconds (across connect + request). */
+    /**
+     * Per-call IPC timeout in milliseconds, indexed by envelope type.
+     *
+     * User-blocking surfaces (event/filter/render/action/api/cli) stay
+     * at 500ms — the GUI render or REST response is parked on the
+     * plugin's reply, so a slow plugin must not block a real user.
+     *
+     * `cron` is the exception. Cron handlers run on a timer, off the
+     * user's request path, and frequently do real work (drain a queue,
+     * walk a small recordset, hit a sidecar) that won't realistically
+     * finish in half a second. The earlier 500ms cap forced plugins to
+     * narrow each tick to a couple of events and the host's loopback
+     * curl declared `plugin_ipc_transport_failed` while the plugin's
+     * PHP-FPM worker kept running to its own 30s
+     * `request_terminate_timeout` — confusing logs around what was
+     * actually successful work. 5s aligns with the cron cadence (≥60s
+     * between ticks) and stays well under the FPM worker's own ceiling.
+     *
+     * Plugins can request a tighter or looser per-entry cap by declaring
+     * `timeout_ms` on the relevant manifest entry (currently honoured
+     * for `cron_actions`); the value is clamped to MAX_TIMEOUT_MS so a
+     * misbehaving manifest can't pin a worker indefinitely.
+     */
+    public const TIMEOUT_BY_TYPE_MS = [
+        'cron'      => 5000,
+        'lifecycle' => 5000,
+        'event'     => 500,
+        'filter'    => 500,
+        'render'    => 500,
+        'action'    => 500,
+        'api'       => 500,
+        'cli'       => 500,
+    ];
+
+    /** Fallback when an envelope's type isn't in TIMEOUT_BY_TYPE_MS. */
     public const DEFAULT_TIMEOUT_MS = 500;
+
+    /**
+     * Ceiling on any manifest-supplied timeout override. Higher values
+     * are silently clamped — a plugin manifest can't unilaterally
+     * extend a worker's request budget beyond the FPM
+     * `request_terminate_timeout` boundary (30s in PluginPoolService's
+     * pool render). 25s leaves a 5s gap so the host always times out
+     * first and logs the failure under our control.
+     */
+    public const MAX_TIMEOUT_MS = 25000;
 
     /**
      * Where to reach plugin dispatchers. The wallet's nginx routes
@@ -54,9 +98,18 @@ class PluginIpcForwarder
     private PluginLoader $loader;
     private ?Logger $logger;
     private string $dispatchBase;
-    private int $timeoutMs;
+    /** Manifest-supplied per-entry timeout overrides, keyed by "plugin|type|name". */
+    private array $timeoutOverrides = [];
 
-    /** @var callable(string $url, string $body): array{ok:bool, status:int, body:?array, error?:string} */
+    /**
+     * Test-seam constructor timeout. Null means "use TIMEOUT_BY_TYPE_MS
+     * per envelope"; a non-null value forces every dispatch to use that
+     * value regardless of envelope type, preserving the pre-refactor
+     * constructor contract for tests that pinned timeoutMs directly.
+     */
+    private ?int $timeoutMsOverride;
+
+    /** @var callable(string $url, string $body, int $timeoutMs): array{ok:bool, status:int, body:?array, error?:string} */
     private $httpClient;
 
     public function __construct(
@@ -69,10 +122,54 @@ class PluginIpcForwarder
         $this->loader = $loader;
         $this->logger = $logger;
         $this->dispatchBase = rtrim($dispatchBase ?? self::DEFAULT_DISPATCH_BASE, '/');
-        $this->timeoutMs = $timeoutMs ?? self::DEFAULT_TIMEOUT_MS;
-        $this->httpClient = $httpClient ?? function (string $url, string $body): array {
-            return $this->curlDefault($url, $body);
+        $this->timeoutMsOverride = $timeoutMs;
+        $this->httpClient = $httpClient ?? function (string $url, string $body, int $timeoutMs): array {
+            return $this->curlDefault($url, $body, $timeoutMs);
         };
+    }
+
+    /**
+     * Resolve the IPC timeout for one dispatch.
+     *
+     * Precedence (highest first):
+     *   1. Constructor override (`$timeoutMs` arg) — wins for test seams
+     *      that already pin a value.
+     *   2. Per-entry manifest override registered via
+     *      `setEntryTimeout()` — currently sourced from each plugin
+     *      manifest's `cron_actions[*].timeout_ms`.
+     *   3. Envelope type default from TIMEOUT_BY_TYPE_MS.
+     *   4. DEFAULT_TIMEOUT_MS.
+     */
+    private function resolveTimeoutMs(string $pluginId, array $envelope): int
+    {
+        if ($this->timeoutMsOverride !== null) {
+            return max(1, $this->timeoutMsOverride);
+        }
+        $type = (string) ($envelope['type'] ?? '');
+        $name = (string) ($envelope['name'] ?? '');
+        $key = $pluginId . '|' . $type . '|' . $name;
+        if (isset($this->timeoutOverrides[$key])) {
+            $clamped = max(1, min($this->timeoutOverrides[$key], self::MAX_TIMEOUT_MS));
+            return $clamped;
+        }
+        return self::TIMEOUT_BY_TYPE_MS[$type] ?? self::DEFAULT_TIMEOUT_MS;
+    }
+
+    /**
+     * Register a per-entry timeout override from a manifest field.
+     * Called by the registration loops in `registerAll()` when a
+     * plugin's `cron_actions` entry (or other future hook) declares
+     * `timeout_ms`. Public so PluginCronService can poke an override
+     * in for cron entries it manages outside of registerAll.
+     *
+     * Values are clamped to MAX_TIMEOUT_MS at resolve time, not here —
+     * keep the recorded value verbatim so the next reconcile can pick
+     * up a manifest change without restarting the host.
+     */
+    public function setEntryTimeout(string $pluginId, string $type, string $name, int $timeoutMs): void
+    {
+        if ($timeoutMs < 1) return;
+        $this->timeoutOverrides[$pluginId . '|' . $type . '|' . $name] = $timeoutMs;
     }
 
     /**
@@ -563,6 +660,39 @@ class PluginIpcForwarder
         ]);
     }
 
+    /**
+     * Fire a one-shot lifecycle dispatch — the replacement for the
+     * pre-sandbox `boot()` method.
+     *
+     * Sandboxed plugins don't load in-process, so the old "run setup
+     * on first include" path is gone. Operators expect equivalent
+     * behaviour: after `eiou plugin enable <id>`, the plugin should
+     * get one chance to wire up sidecars, verify providers, prime
+     * caches, etc. PluginLoader::setEnabled() calls this through a
+     * lifecycle-dispatcher callback after a successful enable, with
+     * event="on_enable". Disable is intentionally NOT mirrored — a
+     * plugin's pool is dropped before we'd dispatch to it, so the
+     * post-disable hook would never reach a live worker. Cleanup
+     * belongs in the plugin's `on_enable` initialisation register +
+     * an explicit teardown action the operator can call.
+     *
+     * @param string $event "on_enable" or future lifecycle events.
+     * @return array|null   Decoded plugin response or null on any
+     *                      transport/handler failure. Caller decides
+     *                      whether to surface the result; enablement
+     *                      itself is already committed by this point.
+     */
+    public function dispatchLifecycle(string $pluginId, string $event): ?array
+    {
+        return $this->dispatch($pluginId, [
+            'type' => 'lifecycle',
+            'name' => $event,
+            'context' => [
+                'fired_at' => time(),
+            ],
+        ]);
+    }
+
     private function dispatch(string $pluginId, array $envelope): ?array
     {
         $url = $this->dispatchBase . '/gui/plugin/' . $pluginId . '/__dispatch';
@@ -574,7 +704,8 @@ class PluginIpcForwarder
             return null;
         }
 
-        $result = ($this->httpClient)($url, $body);
+        $timeoutMs = $this->resolveTimeoutMs($pluginId, $envelope);
+        $result = ($this->httpClient)($url, $body, $timeoutMs);
         if (!$result['ok']) {
             $this->log('warning', 'plugin_ipc_transport_failed', [
                 'plugin' => $pluginId,
@@ -638,12 +769,16 @@ class PluginIpcForwarder
     /**
      * @return array{ok:bool, status:int, body:?array, error?:string}
      */
-    private function curlDefault(string $url, string $body): array
+    private function curlDefault(string $url, string $body, int $timeoutMs): array
     {
         $ch = curl_init($url);
         if ($ch === false) {
             return ['ok' => false, 'status' => 0, 'body' => null, 'error' => 'curl_init failed'];
         }
+        // Connect timeout caps at 1s — establishing a unix-socket-backed
+        // loopback connection should never take real wall time. Past
+        // that, the budget belongs to the plugin's handler.
+        $connectMs = (int) max(50, min(1000, $timeoutMs / 2));
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST           => true,
@@ -652,8 +787,8 @@ class PluginIpcForwarder
                 'Content-Type: application/json',
                 'Accept: application/json',
             ],
-            CURLOPT_TIMEOUT_MS         => $this->timeoutMs,
-            CURLOPT_CONNECTTIMEOUT_MS  => max(50, $this->timeoutMs / 2),
+            CURLOPT_TIMEOUT_MS         => $timeoutMs,
+            CURLOPT_CONNECTTIMEOUT_MS  => $connectMs,
         ]);
         $response = curl_exec($ch);
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);

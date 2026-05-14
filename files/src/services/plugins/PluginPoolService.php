@@ -5,6 +5,7 @@ namespace Eiou\Services\Plugins;
 
 use Eiou\Utils\Logger;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * PluginPoolService
@@ -316,7 +317,15 @@ EOT;
             return false;
         }
 
-        // Ensure a gateway token exists.
+        // Token handling — mint the candidate here (no I/O yet), ship
+        // it through the supervisor for the on-disk write, and only
+        // commit to the central index AFTER the supervisor confirms
+        // success. Pre-fix code updated the index before the file was
+        // written, so a supervisor failure (or a skipped apply that
+        // raced with a stale isPoolUpToDate check) left the index
+        // ahead of the file — the dispatcher then sent the old token,
+        // the gateway expected the new one, and auth was broken until
+        // operators ran a manual sync.
         //
         // Two callers, two behaviours:
         //
@@ -330,33 +339,12 @@ EOT;
         //     Operator-driven disable→enable cycle rotates the token
         //     so a previously-leaked token is invalidated. This is
         //     the security property the original design wanted.
-        // Token handling — generate the new token here and update the
-        // central index (both happen under www-data which has write
-        // access to /etc/eiou/config/), then ship the token through to
-        // the supervisor inside the apply-pool payload. The supervisor
-        // writes the per-plugin `.gateway-token` file as root, so the
-        // plugin dir's ownership (especially under dev bind-mount,
-        // where it's `eiou-p-<hash>` rather than `www-data`) doesn't
-        // matter — root writes anywhere.
-        //
-        // Two callers, two behaviours:
-        //
-        //   reconcileSandbox → $forceRotateToken=false. Idempotent
-        //     mint-if-missing. Reconcile fires on every Application
-        //     bootstrap (every FPM worker spawn), so unconditional
-        //     rotation would re-mint constantly and any plugin pool
-        //     that cached the old token would lose its credential.
-        //
-        //   setEnabled(true) explicit toggle → $forceRotateToken=true.
-        //     Operator-driven disable→enable cycle rotates the token
-        //     so a previously-leaked token is invalidated. This is
-        //     the security property the original design wanted.
-        $gatewayToken = '';
+        $candidateToken = '';
         try {
             $tokenPath = $this->pluginRoot . '/' . $pluginId
                        . '/' . \Eiou\Services\Plugins\PluginGatewayTokenService::PER_PLUGIN_TOKEN_FILENAME;
             if ($forceRotateToken || !is_file($tokenPath)) {
-                $gatewayToken = $this->tokenService->mintAndIndex($pluginId);
+                $candidateToken = $this->tokenService->mint();
             }
         } catch (Throwable $e) {
             $this->log('error', 'plugin_pool_token_mint_failed', [
@@ -375,13 +363,13 @@ EOT;
             'nginx_snippet' => $nginxSnippet,
             'zones_config'  => $zonesConfig,
         ];
-        if ($gatewayToken !== '') {
+        if ($candidateToken !== '') {
             // Supervisor writes /etc/eiou/plugins/<id>/.gateway-token
             // as root with chown to the pool user. Skipped when no
             // rotation happened this round (file already on disk from
             // a prior apply); reconcile's no-rotate case keeps the
             // existing token instead of re-issuing.
-            $payload['gateway_token'] = $gatewayToken;
+            $payload['gateway_token'] = $candidateToken;
         }
 
         $result = ($this->actionExecutor)('apply-pool', $payload);
@@ -392,6 +380,35 @@ EOT;
             'system_user' => $systemUser,
             'result' => $result,
         ]);
+
+        // Commit the token to the central index only after the
+        // supervisor confirmed the file landed on disk. A non-ok
+        // result means the .gateway-token file was either not
+        // written or was rolled back — keep the old index entry
+        // (if any) so the dispatcher's bearer still validates.
+        if ($ok && $candidateToken !== '') {
+            try {
+                $this->tokenService->commitToken($pluginId, $candidateToken);
+            } catch (Throwable $e) {
+                // Supervisor wrote the file but the index commit
+                // failed. The file is now ahead of the index — the
+                // opposite-direction drift, also fatal for auth.
+                // Surface as failure so the caller (reconcile / CLI
+                // / GUI) can retry, and the next attempt's mint-if-
+                // missing branch will see the file present, skip
+                // rotation, and the supervisor's chown-only path
+                // will leave the file alone. The retry's commit
+                // won't fire (no candidate), so a separate
+                // reconcileFromFile() pass is needed to align the
+                // index; the boot-time supervisor reconcile in
+                // startup.sh handles that.
+                $this->log('error', 'plugin_pool_token_commit_failed', [
+                    'plugin' => $pluginId,
+                    'error'  => $e->getMessage(),
+                ]);
+                return false;
+            }
+        }
         return $ok;
     }
 

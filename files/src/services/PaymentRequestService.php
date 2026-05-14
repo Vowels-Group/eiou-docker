@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Eiou\Contracts\PluginCallable;
 use Eiou\Database\PaymentRequestRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\AddressRepository;
@@ -82,13 +83,26 @@ class PaymentRequestService
     /**
      * Create and send a payment request to a contact.
      *
-     * @param string      $contactName  Recipient contact name
+     * Plugin-callable: a sandboxed plugin can invoke this through the
+     * gateway to ask a contact to pay the wallet. Use cases include
+     * auto-settle flows where the plugin bills the operator for
+     * services rendered (per-pin storage, MCP topups, etc.). The plugin
+     * cannot spoof who the request is "from" — the requester is always
+     * the wallet's own user, set from UserContext at call time. A
+     * plugin that wants to mint requests on behalf of a different
+     * pubkey hash has no host-provided path to do so.
+     *
+     * @param string      $contactName  Recipient contact name (must be unique within accepted contacts)
      * @param string      $amount       Amount string (e.g. "25.00")
      * @param string      $currency     Currency code (e.g. "USD")
      * @param string|null $description  Optional memo for the requester
      * @param string|null $addressType  Preferred transport (tor/https/http), null = auto
      * @return array ['success' => bool, 'error' => string, 'request_id' => string]
      */
+    #[PluginCallable(
+        description: 'Mint and deliver a payment request to a named accepted contact. Returns {success:true, request_id} on accept or {success:false, error} on validation failure (unknown contact, ambiguous name, bad amount/currency). Plugin authors should treat this as a single-action mutating call — the request is stored locally before delivery is attempted, so a transient transport error leaves a pending row the caller can reconcile against later by request_id.',
+        ratePerMinute: 30
+    )]
     public function create(string $contactName, string $amount, string $currency, ?string $description, ?string $addressType = null): array
     {
         // Validate amount

@@ -136,6 +136,28 @@ class PluginLoader
     private ?PluginPoolService $poolService = null;
     private ?PluginNginxConfigService $nginxConfigService = null;
 
+    /**
+     * Optional lifecycle-dispatch callback. Wired by Application
+     * after PluginIpcForwarder is constructed (the forwarder depends
+     * on this loader, so the wiring runs one-way after both exist).
+     *
+     * Signature: `function(string $pluginId, string $event): ?array`
+     *
+     * Called after a successful setEnabled($plugin, true) so the
+     * plugin gets a chance to do one-shot setup work (verify a
+     * provider, prime a cache, etc.) — the sandbox-model replacement
+     * for the pre-sandbox `boot()` method. Return value is logged but
+     * not load-bearing on the enable outcome; the state is already
+     * committed by the time we dispatch.
+     *
+     * Disable is intentionally NOT mirrored — by the time we'd
+     * dispatch the plugin's pool has already been dropped, so the
+     * call would never reach a live worker.
+     *
+     * @var (callable(string, string): ?array)|null
+     */
+    private $lifecycleDispatcher = null;
+
     public function __construct(
         string $pluginDir = '/etc/eiou/plugins',
         ?Logger $logger = null,
@@ -208,6 +230,25 @@ class PluginLoader
         $this->userService = $userService;
         $this->poolService = $poolService;
         $this->nginxConfigService = $nginxConfigService;
+    }
+
+    /**
+     * Wire the lifecycle-dispatch callback. Called by Application
+     * after PluginIpcForwarder is built — the wiring is necessarily
+     * one-directional (the forwarder depends on this loader at
+     * construction; the loader gets the dispatcher poked in afterwards
+     * via this setter).
+     *
+     * When null, lifecycle events are simply not dispatched — a test
+     * scaffold or early-boot path that doesn't wire the forwarder
+     * still gets working enable/disable behaviour, just without the
+     * one-shot on_enable hook reaching the plugin.
+     *
+     * @param (callable(string, string): ?array)|null $dispatcher
+     */
+    public function setLifecycleDispatcher(?callable $dispatcher): void
+    {
+        $this->lifecycleDispatcher = $dispatcher;
     }
 
     /**
@@ -772,6 +813,14 @@ class PluginLoader
         $state = $this->readState();
         $state[$name] = ['enabled' => $enabled];
         if ($this->writeState($state)) {
+            // Lifecycle hook — sandbox-model replacement for the
+            // pre-sandbox boot() method. Only fires on enable=true
+            // (disable's pool is already dropped by this point; the
+            // call would never reach a live worker). Failures are
+            // logged but not load-bearing — enable already succeeded.
+            if ($enabled) {
+                $this->dispatchLifecycleHook($name, 'on_enable');
+            }
             return true;
         }
 
@@ -789,6 +838,9 @@ class PluginLoader
                 "writeState reported failure but on-disk state matches target; treating as success",
                 ['plugin' => $name, 'target_enabled' => $enabled]
             );
+            if ($enabled) {
+                $this->dispatchLifecycleHook($name, 'on_enable');
+            }
             return true;
         }
 
@@ -824,6 +876,50 @@ class PluginLoader
     public function getLastSetEnabledFailure(): ?array
     {
         return $this->lastSetEnabledFailure;
+    }
+
+    /**
+     * Fire the registered lifecycle dispatcher for a (plugin, event)
+     * pair, swallowing failures. Called only from the enable success
+     * paths above; encapsulated here so the same fire-and-log shape is
+     * applied whichever success path got us here.
+     *
+     * Why fire-and-log instead of fire-and-fail: enablement state is
+     * already committed by the time we reach this method. A plugin
+     * whose on_enable handler returns non-ok still has its pool live
+     * and is otherwise functional — the operator can investigate the
+     * log message and call into the plugin manually if needed.
+     */
+    private function dispatchLifecycleHook(string $pluginId, string $event): void
+    {
+        if ($this->lifecycleDispatcher === null) {
+            return;
+        }
+        // Only dispatch for sandboxed plugins. Non-sandboxed plugins
+        // don't have a __dispatch.php to receive the call; their
+        // pre-sandbox boot() (if any) already ran via the in-process
+        // include path during discover().
+        $manifest = $this->readManifestFromDisk($pluginId);
+        if ($manifest === null || empty($manifest['sandboxed'])) {
+            return;
+        }
+        try {
+            $result = ($this->lifecycleDispatcher)($pluginId, $event);
+            if ($result === null) {
+                $this->logger->info("Plugin lifecycle hook did not return a result", [
+                    'plugin' => $pluginId, 'event' => $event,
+                ]);
+            } else {
+                $this->logger->info("Plugin lifecycle hook dispatched", [
+                    'plugin' => $pluginId, 'event' => $event,
+                ]);
+            }
+        } catch (Throwable $e) {
+            $this->logger->warning("Plugin lifecycle hook threw — ignoring", [
+                'plugin' => $pluginId, 'event' => $event,
+                'error'  => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
