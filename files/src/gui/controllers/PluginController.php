@@ -8,6 +8,7 @@ use Eiou\Gui\Includes\Session;
 use Eiou\Core\UserContext;
 use Eiou\Services\GuiActionRegistry;
 use Eiou\Services\Plugins\PluginInstallService;
+use Eiou\Services\Plugins\PluginPermissionCatalog;
 use Eiou\Services\Plugins\PluginUpgradeService;
 use Eiou\Services\Plugins\PluginLoader;
 use Eiou\Services\Plugins\PluginUninstallService;
@@ -202,6 +203,17 @@ class PluginController
             }
             unset($row);
         }
+
+        // Materialise the permission catalog entries for each plugin's
+        // granted permissions so the GUI renders human-readable copy
+        // without shipping the catalog to the client. Empty array when
+        // the plugin requested nothing; absent rows have already been
+        // dropped by PluginLoader.
+        foreach ($plugins as &$row) {
+            $keys = is_array($row['permissions'] ?? null) ? $row['permissions'] : [];
+            $row['permissions_described'] = PluginPermissionCatalog::describe($keys);
+        }
+        unset($row);
 
         $this->respond([
             'success' => true,

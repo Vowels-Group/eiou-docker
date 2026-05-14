@@ -643,6 +643,24 @@ class PluginInstallService
         $listOfStrings('filter_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
         $listOfStrings('render_hooks',  '/^[a-z][a-zA-Z0-9_.-]*$/');
         $listOfStrings('core_services', '/^[A-Z][A-Za-z0-9]*\.[a-z][A-Za-z0-9_]*$/');
+        // `permissions` are the louder-consent tier on top of
+        // core_services — see PluginCallable's docblock. Shape gate
+        // here is "lowercase snake_case key"; the *known-key* gate is
+        // below so an unknown key fails with a message that names the
+        // catalog rather than a regex.
+        $listOfStrings('permissions',   '/^[a-z][a-z0-9_]*$/');
+        $perms = $manifest['permissions'] ?? null;
+        if (is_array($perms)) {
+            foreach ($perms as $key) {
+                if (is_string($key) && !PluginPermissionCatalog::isKnown($key)) {
+                    throw new InvalidArgumentException(
+                        "plugin.json 'permissions' contains unknown key '{$key}' — "
+                        . "host does not catalogue this permission. Known keys: "
+                        . implode(', ', PluginPermissionCatalog::knownKeys())
+                    );
+                }
+            }
+        }
 
         $listOfShape('gui_actions', fn($e): bool =>
             isset($e['name']) && is_string($e['name'])

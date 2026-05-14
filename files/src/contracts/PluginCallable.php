@@ -18,15 +18,37 @@ use Attribute;
  *
  *   "core_services": ["Logger.info", "ContactService.lookupByPubkey"]
  *
- * Both gates must pass before the gateway dispatches a call:
+ * Up to three gates must pass before the gateway dispatches a call:
  *
  *   1. The target method exists and carries #[PluginCallable]
  *   2. The plugin's manifest names the "Service.method" in core_services
+ *   3. If the attribute carries a `permission:` key, the plugin's
+ *      manifest also names that key in `permissions` — see below
  *
  * This is the security trade-off for opening up service access at all
  * — every method we expose is reviewable in `git grep PluginCallable`
  * and the plugin has to ask for what it wants up front in a manifest
  * field operators can read before they enable.
+ *
+ * Permission keys — louder consent than core_services:
+ *
+ *   `core_services` is a per-method allow-list operators read before
+ *   enabling a plugin. That works for narrow methods (Logger.info,
+ *   per-hash lookups, send-payment) where one entry means roughly
+ *   what its name suggests. It works less well for methods that
+ *   expand the trust model — `ContactLookupService.listAccepted`
+ *   lets a plugin enumerate the operator's entire address book, a
+ *   different shape of disclosure than a per-hash lookup, but the
+ *   only signal in the manifest line is the method name.
+ *
+ *   Methods that expand the trust model can carry a `permission:`
+ *   key. When set, the gateway requires the plugin's manifest to
+ *   *also* declare that key in a top-level `permissions: [...]`
+ *   list — separate from `core_services` so it surfaces distinctly
+ *   in the install/enable confirmation GUI. The permission catalog
+ *   (PluginPermissionCatalog) carries the human-readable label and
+ *   description shown to operators. Methods without a permission
+ *   key behave as before — `core_services` alone is enough.
  *
  * Constraints on attributed methods:
  *
@@ -62,9 +84,24 @@ final class PluginCallable
      */
     public string $description;
 
-    public function __construct(string $description = '', ?int $ratePerMinute = null)
+    /**
+     * Optional permission key. When non-null, the gateway requires the
+     * calling plugin's manifest to declare this key in a top-level
+     * `permissions: [...]` list, in addition to the usual
+     * `core_services` entry. Use for methods whose trust shape goes
+     * beyond what a single `core_services` line conveys to a casual
+     * reader — bulk enumeration over operator data, broad-scope
+     * mutation, anything an operator would meaningfully reconsider
+     * granting if shown a second time. Catalogued in
+     * PluginPermissionCatalog so the GUI can surface a label /
+     * description alongside the raw key.
+     */
+    public ?string $permission;
+
+    public function __construct(string $description = '', ?int $ratePerMinute = null, ?string $permission = null)
     {
         $this->description = $description;
         $this->ratePerMinute = $ratePerMinute;
+        $this->permission = $permission;
     }
 }

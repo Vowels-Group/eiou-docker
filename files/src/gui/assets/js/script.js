@@ -10241,6 +10241,41 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 + '</div>'
                 : '';
 
+            // Permissions panel — louder-consent surface on top of the
+            // routine core_services allow-list. PluginController merges
+            // the human-readable {key,label,description} rows server-
+            // side via PluginPermissionCatalog, so the GUI doesn't need
+            // its own copy. Suppressed when the plugin requested none.
+            var permsList = (p.permissions_described && p.permissions_described.length)
+                ? p.permissions_described : [];
+            var permsBlock = '';
+            if (permsList.length) {
+                var permItems = '';
+                for (var i = 0; i < permsList.length; i++) {
+                    var perm = permsList[i];
+                    permItems +=
+                        '<li style="margin-bottom:0.5rem">' +
+                            '<strong>' + escapeHtml(perm.label || perm.key || '') + '</strong>' +
+                            '<div class="text-muted text-xs" style="margin-top:0.15rem">' +
+                                escapeHtml(perm.description || '') +
+                            '</div>' +
+                        '</li>';
+                }
+                permsBlock =
+                    '<div class="alert alert-warning text-sm" style="margin-top:0.75rem">' +
+                        '<div style="font-weight:600;margin-bottom:0.4rem">' +
+                            '<i class="fas fa-shield-alt"></i> ' +
+                            (p.enabled ? 'Permissions granted' : 'Permissions requested') +
+                        '</div>' +
+                        '<div class="text-muted text-xs" style="margin-bottom:0.5rem">' +
+                            (p.enabled
+                                ? 'This plugin already has the following permissions. Disable it if you no longer want to grant them.'
+                                : 'Enabling this plugin grants the following permissions. Each one is a surface beyond the routine call list — review before turning on.') +
+                        '</div>' +
+                        '<ul style="margin:0;padding-left:1.1rem">' + permItems + '</ul>' +
+                    '</div>';
+            }
+
             var overlay = document.createElement('div');
             overlay.className = 'modal';
             overlay.id = 'plugin-modal';
@@ -10261,6 +10296,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             (changelogLine(p) ? '<dt>Changelog</dt><dd>' + changelogLine(p) + '</dd>' : '') +
                             '<dt>Description</dt><dd>' + escapeHtml(p.description || '—') + '</dd>' +
                         '</dl>' +
+                        permsBlock +
                         '<div class="plugin-modal-toggle-row">' +
                             '<label for="' + checkId + '"><strong>Enabled</strong></label>' +
                             '<label class="toggle-switch" for="' + checkId + '">' +

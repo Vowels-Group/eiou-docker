@@ -295,6 +295,7 @@ contract](#the-__dispatchphp-contract) for the wire shape.
 | `database`             | no       | object                | Enables per-plugin MySQL user isolation. See [Database Isolation](#database-isolation).        |
 | `min_upgradable_from`  | no       | string (semver)       | Lowest version this manifest can be upgraded from. `PluginUpgradeService` refuses upgrades whose installed version is below this floor. See [Upgrading Plugins → `min_upgradable_from`](#min_upgradable_from-manifest-field). |
 | `core_services`        | no       | list&lt;string&gt;    | Allow-list of `<Service>.<method>` entries the plugin will call via `core_call()`. Methods not in this list are 403'd by the gateway even if they carry `#[PluginCallable]`. See [Plugin-callable surface — policy](#plugin-callable-surface--policy). |
+| `permissions`          | no       | list&lt;string&gt;    | Louder-consent grants required by a subset of `#[PluginCallable]` methods (e.g. bulk address-book enumeration). Each entry is a snake_case key catalogued by the host in `PluginPermissionCatalog`. Keys not in the catalog are rejected at install time. See [Permissions — louder consent than `core_services`](#permissions--louder-consent-than-core_services). |
 | `subscribes_to`        | no       | list&lt;string&gt;    | Event names this plugin handles. Core's IPC forwarder POSTs each fired event into your `__dispatch.php` with `type: "event"`. See [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to). |
 | `filter_hooks`         | no       | list&lt;string&gt;    | Filter hook names this plugin transforms. IPC forwarder routes each `applyFilter` call into the dispatcher with `type: "filter"`. See [Extending the GUI](#extending-the-gui). |
 | `render_hooks`         | no       | list&lt;string&gt;    | Render hook names this plugin contributes HTML to. IPC forwarder routes each `doRender` call into the dispatcher with `type: "render"`. |
@@ -494,7 +495,7 @@ What this means in practice:
 | ---- | ---------- |
 | Read recent transactions | `core_call('TransactionLookupService', 'getReceivedUserTransactions', …)` |
 | Look up a contact by pubkey hash | `core_call('ContactLookupService', 'getByPubkeyHash', …)` |
-| List accepted contacts (paginated) | `core_call('ContactLookupService', 'listAccepted', …)` |
+| List accepted contacts (paginated) | `core_call('ContactLookupService', 'listAccepted', …)` (also requires `permissions: ["contact_address_book_enumerate"]`) |
 | Bill a contact (mint a payment request) | `core_call('PaymentRequestService', 'create', …)` |
 | Stop your sidecar container on disable | `core_call('ContainerLifecycleService', 'stopSidecar', …)` |
 | React to a sync event | declare `subscribes_to: ["sync.completed"]` in the manifest |
@@ -2055,7 +2056,7 @@ small. As of this writing, the callable surface is:
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `Logger`                        | `debug`, `info`, `warning`, `error`                                                                  |
 | `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions`   |
-| `ContactLookupService`          | `getByPubkeyHash`, `listAccepted`                                                                    |
+| `ContactLookupService`          | `getByPubkeyHash`, `listAccepted` (`listAccepted` requires `contact_address_book_enumerate` permission — see below) |
 | `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
 | `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
 | `PluginEventPublisher`          | `publish`                                                                                            |
@@ -2095,6 +2096,53 @@ include the smallest read-only repository method that satisfies it.
 The maintainer adds it as a thin `Lookup/` service if the use case
 holds up. Decoration on the repository itself is *not* the path —
 those classes stay pure data-access.
+
+### Permissions — louder consent than `core_services`
+
+A subset of `#[PluginCallable]` methods carry a `permission:` key on
+their attribute. Those methods require the calling plugin to declare
+the key in a top-level `permissions: [...]` manifest field, in
+addition to the usual `core_services` entry. The gateway enforces
+this as a third gate (after the attribute presence and the
+`core_services` allow-list).
+
+Why the second tier exists: `core_services` is a per-method
+allow-list. That works well for narrow methods where one entry means
+roughly what its name suggests — `Logger.info`, a per-hash lookup, a
+send-payment call. It works less well for methods whose trust shape
+goes beyond what a single line conveys to a casual reader. The first
+example is `ContactLookupService.listAccepted`, which enumerates
+every accepted contact on the wallet (operator-chosen labels + all
+transport addresses including `.onion`) — a different shape of
+disclosure than the per-hash `getByPubkeyHash` on the same service,
+but a manifest reader skimming `core_services` sees two similarly-
+shaped lines. Routing the bulk-enumerate method through a separate
+`permissions` entry gives the operator a distinct line item to read
+and consent to.
+
+Catalogued keys (single source of truth: `PluginPermissionCatalog`):
+
+| Key | Granted when set | Required by |
+| --- | ---------------- | ----------- |
+| `contact_address_book_enumerate` | Plugin may list every accepted contact (operator-chosen labels + all transport addresses including `.onion`). Distinct from per-hash lookups, which only reveal contacts the plugin has already seen via events. | `ContactLookupService.listAccepted` |
+
+Adding a permission key is a deliberate act in both directions:
+
+- **In code:** annotate the attribute (`#[PluginCallable(permission: "<key>")]`)
+  and add the catalog entry (`PluginPermissionCatalog::ENTRIES`) — the
+  install validator rejects manifests requesting un-catalogued keys, and
+  the gateway returns 503 if an attribute references a key the catalog
+  doesn't know about.
+- **In a manifest:** include the key in `permissions: [...]`. Missing the
+  key when the method requires it returns 403 with `permission_not_granted`
+  and a message naming the missing key.
+
+GUI surface: the plugin's modal in *Settings → Plugins* renders a
+"Permissions requested" panel (before enable) / "Permissions granted"
+panel (after enable) listing each key with its catalog label and
+description. Operators reviewing a plugin before flipping the toggle
+read the panel as a separate line of consent from the routine
+`core_services` list.
 
 ### Where plugin-owned state and code lives
 

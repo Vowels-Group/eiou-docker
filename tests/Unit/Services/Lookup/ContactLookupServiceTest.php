@@ -215,4 +215,40 @@ class ContactLookupServiceTest extends TestCase
             "ContactLookupService::{$method}()'s #[PluginCallable] must have a non-empty description"
         );
     }
+
+    // =========================================================================
+    // Permission-gate annotation — the two methods sit on opposite
+    // sides of the louder-consent boundary. getByPubkeyHash is
+    // `core_services`-only (a plugin can resolve hashes it learned
+    // from events); listAccepted additionally gates on
+    // `contact_address_book_enumerate` because it enumerates the
+    // operator's entire address book.
+    // =========================================================================
+
+    public function testGetByPubkeyHashHasNoPermissionRequirement(): void
+    {
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'getByPubkeyHash');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+
+        $this->assertNull(
+            $instance->permission,
+            'getByPubkeyHash must remain a routine core_services surface — '
+            . 'per-hash lookups don\'t enumerate the address book, so they '
+            . 'don\'t need the louder-consent permission tier'
+        );
+    }
+
+    public function testListAcceptedRequiresAddressBookEnumeratePermission(): void
+    {
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'listAccepted');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+
+        $this->assertSame(
+            'contact_address_book_enumerate',
+            $instance->permission,
+            'listAccepted must gate on the address-book-enumerate permission — '
+            . 'bulk walking the contact list is a different shape of disclosure '
+            . 'than per-hash resolution and operators must consent to it distinctly'
+        );
+    }
 }

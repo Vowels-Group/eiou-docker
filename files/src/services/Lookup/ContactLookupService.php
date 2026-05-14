@@ -27,6 +27,21 @@ use Eiou\Database\ContactRepository;
  * later (rename a column, add a new status) without breaking the
  * plugin contract.
  *
+ * Two-tier gating across the two methods:
+ *
+ *   - getByPubkeyHash() is `core_services`-only: a plugin that learns
+ *     a pubkey_hash from an inbound event can resolve it to a contact.
+ *     The plugin can't enumerate beyond what events tell it.
+ *
+ *   - listAccepted() additionally requires the
+ *     `contact_address_book_enumerate` permission (declared in the
+ *     plugin's manifest `permissions: [...]`). That key gates bulk
+ *     enumeration of operator-chosen labels + all transport addresses
+ *     including .onion — a different shape of disclosure than per-hash
+ *     resolution and one the operator sees as a distinct line item in
+ *     the install/enable GUI. See PluginPermissionCatalog for the
+ *     human-readable description shown to operators.
+ *
  * Anything mutating (accept/block/delete) belongs in a different
  * service with its own gating; this one is strictly read-only by
  * design.
@@ -70,8 +85,9 @@ class ContactLookupService
     }
 
     #[PluginCallable(
-        description: 'List accepted contacts as {name, http, https, tor, pubkey_hash} rows. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value; $offset is the zero-based page offset. Pending and blocked contacts are not exposed through this surface.',
-        ratePerMinute: 30
+        description: 'List accepted contacts as {name, http, https, tor, pubkey_hash} rows. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value; $offset is the zero-based page offset. Pending and blocked contacts are not exposed through this surface. Requires the contact_address_book_enumerate permission in the plugin manifest in addition to the core_services entry.',
+        ratePerMinute: 30,
+        permission: 'contact_address_book_enumerate'
     )]
     public function listAccepted(int $limit = 50, int $offset = 0): array
     {

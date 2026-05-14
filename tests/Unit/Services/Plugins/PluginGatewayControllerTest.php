@@ -99,6 +99,32 @@ class TestableGatewayService
     {
         return "secret";
     }
+
+    // Carries a CATALOGED permission key. The gateway must require the
+    // calling plugin's manifest to declare this key in `permissions`,
+    // in addition to the usual core_services entry, before dispatching.
+    #[PluginCallable(
+        description: 'Gated by a real cataloged permission key.',
+        permission: 'contact_address_book_enumerate'
+    )]
+    public function gatedByCatalogedPermission(): string
+    {
+        return 'allowed';
+    }
+
+    // Carries a permission key the host does NOT catalogue. Almost
+    // certainly a programmer error post-rename. The gateway must fail
+    // closed with 503 rather than dispatching, since the GUI cannot
+    // describe the requested permission to the operator and a missing
+    // catalogue entry suggests host/plugin version skew.
+    #[PluginCallable(
+        description: 'Gated by an un-catalogued key — server misconfig case.',
+        permission: 'this_key_is_not_in_the_catalog'
+    )]
+    public function gatedByUncatalogedPermission(): string
+    {
+        return 'never reached';
+    }
 }
 
 #[CoversClass(PluginGatewayController::class)]
@@ -137,9 +163,12 @@ class PluginGatewayControllerTest extends TestCase
                     'TestableGatewayService.alwaysThrows',
                     'TestableGatewayService.returnsAnObject',
                     'TestableGatewayService.forbiddenSecret',
+                    'TestableGatewayService.gatedByCatalogedPermission',
+                    'TestableGatewayService.gatedByUncatalogedPermission',
                     'CallerAwareGatewayService.captureCaller',
                     'CallerAwareGatewayService.captureThenThrow',
                 ],
+                'permissions' => [],
             ],
         ]);
 
@@ -456,5 +485,111 @@ class PluginGatewayControllerTest extends TestCase
             $this->container->callerAware->current,
             'caller-id field must be cleared even when the call threw'
         );
+    }
+
+    // ===================================================================
+    // Permission gate (Gate 3b) — louder-consent tier on top of
+    // core_services. A method whose #[PluginCallable] attribute carries
+    // a `permission` key requires the calling plugin's manifest to
+    // additionally declare that key in `permissions: [...]`.
+    // ===================================================================
+
+    #[Test]
+    public function rejectsCalogedPermissionWhenNotInManifest(): void
+    {
+        // The default setUp() loader has `permissions => []`, so a
+        // call into a permission-gated method must 403 even though
+        // the method IS in core_services and DOES carry the attribute.
+        $r = $this->svc->handle(
+            json_encode([
+                'service' => 'TestableGatewayService',
+                'method' => 'gatedByCatalogedPermission',
+                'args' => [],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertSame(403, $r['status']);
+        $this->assertSame('permission_not_granted', $r['body']['error']['code']);
+        $this->assertStringContainsString(
+            'contact_address_book_enumerate',
+            $r['body']['error']['message'],
+            'error message should name the missing permission so the plugin author knows what to add'
+        );
+    }
+
+    #[Test]
+    public function acceptsCalogedPermissionWhenGrantedInManifest(): void
+    {
+        // Same method, but this time the plugin row carries the
+        // matching permission key. Gate 3b is satisfied; the call
+        // succeeds.
+        $loader = $this->createMock(PluginLoader::class);
+        $loader->method('listAllPlugins')->willReturn([
+            [
+                'name' => 'demo',
+                'core_services' => ['TestableGatewayService.gatedByCatalogedPermission'],
+                'permissions' => ['contact_address_book_enumerate'],
+            ],
+        ]);
+        $svc = new PluginGatewayController($this->tokenService, $loader, $this->container);
+
+        $r = $svc->handle(
+            json_encode([
+                'service' => 'TestableGatewayService',
+                'method' => 'gatedByCatalogedPermission',
+                'args' => [],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('allowed', $r['body']['result']);
+    }
+
+    #[Test]
+    public function rejectsAttributeReferencingUncatalogedPermission(): void
+    {
+        // Method's attribute references a permission key the host
+        // does not catalogue. Even with the plugin's manifest
+        // requesting the exact same key, the call must 503 — the
+        // GUI can't describe an un-catalogued permission to the
+        // operator, so it can't have been consented to meaningfully.
+        $loader = $this->createMock(PluginLoader::class);
+        $loader->method('listAllPlugins')->willReturn([
+            [
+                'name' => 'demo',
+                'core_services' => ['TestableGatewayService.gatedByUncatalogedPermission'],
+                'permissions' => ['this_key_is_not_in_the_catalog'],
+            ],
+        ]);
+        $svc = new PluginGatewayController($this->tokenService, $loader, $this->container);
+
+        $r = $svc->handle(
+            json_encode([
+                'service' => 'TestableGatewayService',
+                'method' => 'gatedByUncatalogedPermission',
+                'args' => [],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertSame(503, $r['status']);
+        $this->assertSame('unknown_permission_attribute', $r['body']['error']['code']);
+    }
+
+    #[Test]
+    public function permissionGateDoesNotBlockMethodsWithoutPermissionKey(): void
+    {
+        // Regression — `safeEcho` carries no permission attribute, so
+        // the default-null branch must skip the gate entirely. A
+        // permission entry in the manifest is irrelevant for it.
+        $r = $this->svc->handle(
+            json_encode([
+                'service' => 'TestableGatewayService',
+                'method' => 'safeEcho',
+                'args' => ['hello'],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('echo: hello', $r['body']['result']);
     }
 }
