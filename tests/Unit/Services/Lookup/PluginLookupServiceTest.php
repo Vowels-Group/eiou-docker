@@ -181,4 +181,60 @@ class PluginLookupServiceTest extends TestCase
             'getOwnManifest reads the plugin\'s own data only — no permission gate needed'
         );
     }
+
+    // =========================================================================
+    // listEnabledPluginIds — cross-plugin inventory, gated
+    // =========================================================================
+
+    public function testListEnabledPluginIdsReturnsOtherEnabledPlugins(): void
+    {
+        $this->loader->method('listAllPlugins')->willReturn([
+            ['name' => 'caller', 'version' => '1.0.0', 'enabled' => true],
+            ['name' => 'alpha',  'version' => '2.3.4', 'enabled' => true],
+            ['name' => 'beta',   'version' => '0.1.0', 'enabled' => false],
+            ['name' => 'gamma',  'version' => '5.0.0', 'enabled' => true],
+        ]);
+        $this->svc->setCallingPluginId('caller');
+
+        $result = $this->svc->listEnabledPluginIds();
+        // Caller's own row excluded; disabled rows excluded.
+        $this->assertSame(
+            [
+                ['name' => 'alpha', 'version' => '2.3.4'],
+                ['name' => 'gamma', 'version' => '5.0.0'],
+            ],
+            $result
+        );
+    }
+
+    public function testListEnabledPluginIdsExcludesSelfRegardlessOfArguments(): void
+    {
+        // No method arg can override the self-exclusion — the caller id
+        // is the only id the service ever consumes. Pin this so a
+        // future refactor doesn't quietly let a plugin enumerate "all
+        // plugins including itself" via some clever argument shape.
+        $this->loader->method('listAllPlugins')->willReturn([
+            ['name' => 'caller', 'version' => '1.0.0', 'enabled' => true],
+        ]);
+        $this->svc->setCallingPluginId('caller');
+        $this->assertSame([], $this->svc->listEnabledPluginIds());
+    }
+
+    public function testListEnabledPluginIdsRefusesWithoutCallerId(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('gateway-injected caller id');
+        $this->svc->listEnabledPluginIds();
+    }
+
+    public function testListEnabledPluginIdsRequiresPluginInventoryReadPermission(): void
+    {
+        $reflection = new ReflectionMethod(PluginLookupService::class, 'listEnabledPluginIds');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+        $this->assertSame(
+            'plugin_inventory_read',
+            $instance->permission,
+            'listEnabledPluginIds discloses operator-environment plugin choices; must gate'
+        );
+    }
 }

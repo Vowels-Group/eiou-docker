@@ -142,6 +142,75 @@ class BalanceLookupServiceTest extends TestCase
     }
 
     // =========================================================================
+    // getUserBalanceContact — per-contact balance, by pubkey_hash
+    // =========================================================================
+
+    public function testGetUserBalanceContactProjectsEachCurrency(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getUserBalanceContactByPubkeyHash')
+            ->with('hash-x')
+            ->willReturn([
+                ['currency' => 'USD', 'total_balance' => new SplitAmount(25, 0)],
+                ['currency' => 'EUR', 'total_balance' => new SplitAmount(-10, 50000000)],
+            ]);
+
+        $result = $this->svc->getUserBalanceContact('hash-x');
+        $this->assertCount(2, $result);
+        $this->assertSame('USD', $result[0]['currency']);
+        $this->assertSame(25, $result[0]['balance']['whole']);
+        $this->assertSame('EUR', $result[1]['currency']);
+        // Negative balance encoding from SplitAmount: -10.50 stored as
+        // whole=-11, frac=50000000 — see SplitAmount docblock. The
+        // test passes -10 explicitly to avoid coupling to that
+        // encoding here; what matters is the projection round-trips.
+        $this->assertSame(-10, $result[1]['balance']['whole']);
+        $this->assertSame(50000000, $result[1]['balance']['frac']);
+    }
+
+    public function testGetUserBalanceContactReturnsEmptyOnUnknownHash(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getUserBalanceContactByPubkeyHash')
+            ->with('unknown')
+            ->willReturn(null);
+        $this->assertSame([], $this->svc->getUserBalanceContact('unknown'));
+    }
+
+    public function testGetUserBalanceContactShortCircuitsEmptyInput(): void
+    {
+        $this->repo->expects($this->never())->method('getUserBalanceContactByPubkeyHash');
+        $this->assertSame([], $this->svc->getUserBalanceContact(''));
+        $this->assertSame([], $this->svc->getUserBalanceContact('   '));
+    }
+
+    public function testGetUserBalanceContactNormalisesCase(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getUserBalanceContactByPubkeyHash')
+            ->with('abc123')
+            ->willReturn([['currency' => 'USD', 'total_balance' => new SplitAmount(1, 0)]]);
+
+        $result = $this->svc->getUserBalanceContact(' ABC123 ');
+        $this->assertCount(1, $result);
+    }
+
+    public function testGetUserBalanceContactDropsMalformedRows(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getUserBalanceContactByPubkeyHash')
+            ->willReturn([
+                ['currency' => 'USD', 'total_balance' => new SplitAmount(1, 0)],
+                ['currency' => 'BAD', 'total_balance' => 'not a SplitAmount'],
+                ['total_balance' => new SplitAmount(2, 0)], // missing currency
+            ]);
+
+        $result = $this->svc->getUserBalanceContact('hash');
+        $this->assertCount(1, $result);
+        $this->assertSame('USD', $result[0]['currency']);
+    }
+
+    // =========================================================================
     // Permission-gate annotation
     // =========================================================================
 
@@ -155,6 +224,18 @@ class BalanceLookupServiceTest extends TestCase
             $instance->permission,
             'getUserBalance discloses the operator\'s net financial position; '
             . 'must gate on wallet_balance_read'
+        );
+    }
+
+    public function testGetUserBalanceContactRequiresWalletBalanceReadPermission(): void
+    {
+        $reflection = new ReflectionMethod(BalanceLookupService::class, 'getUserBalanceContact');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+
+        $this->assertSame(
+            'wallet_balance_read',
+            $instance->permission,
+            'getUserBalanceContact discloses per-contact balance; same disclosure shape as the total — same permission'
         );
     }
 }

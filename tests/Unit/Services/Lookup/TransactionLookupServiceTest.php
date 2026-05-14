@@ -171,6 +171,58 @@ class TransactionLookupServiceTest extends TestCase
     }
 
     // =========================================================================
+    // getByMemo / getStatusByMemo — per-memo lookups, demand-driven
+    // =========================================================================
+
+    public function testGetByMemoDelegates(): void
+    {
+        $row = ['txid' => 'tx', 'memo' => 'm', 'amount' => 1];
+        $this->repo->expects($this->once())->method('getByMemo')->with('m')->willReturn($row);
+        $this->assertSame($row, $this->svc->getByMemo('m'));
+    }
+
+    public function testGetStatusByMemoDelegates(): void
+    {
+        $this->repo->expects($this->once())->method('getStatusByMemo')->with('m')->willReturn('completed');
+        $this->assertSame('completed', $this->svc->getStatusByMemo('m'));
+    }
+
+    // =========================================================================
+    // getTransactionsBetweenPubkeys — between-counterparties enumerate
+    // =========================================================================
+
+    public function testGetTransactionsBetweenPubkeysAppliesMaxLimitOnZero(): void
+    {
+        // Repository semantics: limit=0 means unbounded. The plugin
+        // surface must clamp 0 / negative / oversized to MAX_PAGE_LIMIT
+        // so a single call can't pull arbitrary history.
+        $this->repo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with('p1', 'p2', TransactionLookupService::MAX_PAGE_LIMIT)
+            ->willReturn([]);
+        $this->svc->getTransactionsBetweenPubkeys('p1', 'p2', 0);
+    }
+
+    public function testGetTransactionsBetweenPubkeysClampsOversizedLimit(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with('p1', 'p2', TransactionLookupService::MAX_PAGE_LIMIT)
+            ->willReturn([]);
+        $this->svc->getTransactionsBetweenPubkeys('p1', 'p2', 1_000_000);
+    }
+
+    public function testGetTransactionsBetweenPubkeysPassesValidLimit(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with('p1', 'p2', 25)
+            ->willReturn([['txid' => 'tx1']]);
+        $r = $this->svc->getTransactionsBetweenPubkeys('p1', 'p2', 25);
+        $this->assertCount(1, $r);
+    }
+
+    // =========================================================================
     // Permission-gate annotation — both enumerate methods must gate on
     // `transaction_history_enumerate`; per-txid lookups must stay
     // core_services-only since the plugin needs to already know the txid.
@@ -178,7 +230,7 @@ class TransactionLookupServiceTest extends TestCase
 
     public function testEnumerateMethodsRequireTransactionHistoryPermission(): void
     {
-        foreach (['getReceivedUserTransactions', 'getSentUserTransactions'] as $method) {
+        foreach (['getReceivedUserTransactions', 'getSentUserTransactions', 'getTransactionsBetweenPubkeys'] as $method) {
             $reflection = new ReflectionMethod(TransactionLookupService::class, $method);
             $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
             $this->assertSame(
@@ -191,16 +243,16 @@ class TransactionLookupServiceTest extends TestCase
         }
     }
 
-    public function testPerTxidLookupsHaveNoPermissionRequirement(): void
+    public function testPerTxidAndPerMemoLookupsHaveNoPermissionRequirement(): void
     {
-        foreach (['getByTxid', 'getStatusByTxid', 'existingTxid', 'isCompletedByTxid'] as $method) {
+        foreach (['getByTxid', 'getStatusByTxid', 'existingTxid', 'isCompletedByTxid', 'getByMemo', 'getStatusByMemo'] as $method) {
             $reflection = new ReflectionMethod(TransactionLookupService::class, $method);
             $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
             $this->assertNull(
                 $instance->permission,
                 "{$method} must stay core_services-only — "
-                . 'per-txid lookups are demand-driven (plugin needs the txid '
-                . 'already, typically from an event), not enumeration'
+                . 'per-txid / per-memo lookups are demand-driven (plugin '
+                . 'needs the id already, typically from an event), not enumeration'
             );
         }
     }
@@ -217,12 +269,15 @@ class TransactionLookupServiceTest extends TestCase
     public static function pluginCallableMethodProvider(): array
     {
         return [
-            'getByTxid'                   => ['getByTxid'],
-            'getStatusByTxid'             => ['getStatusByTxid'],
-            'existingTxid'                => ['existingTxid'],
-            'isCompletedByTxid'           => ['isCompletedByTxid'],
-            'getReceivedUserTransactions' => ['getReceivedUserTransactions'],
-            'getSentUserTransactions'     => ['getSentUserTransactions'],
+            'getByTxid'                       => ['getByTxid'],
+            'getStatusByTxid'                 => ['getStatusByTxid'],
+            'existingTxid'                    => ['existingTxid'],
+            'isCompletedByTxid'               => ['isCompletedByTxid'],
+            'getByMemo'                       => ['getByMemo'],
+            'getStatusByMemo'                 => ['getStatusByMemo'],
+            'getReceivedUserTransactions'     => ['getReceivedUserTransactions'],
+            'getSentUserTransactions'         => ['getSentUserTransactions'],
+            'getTransactionsBetweenPubkeys'   => ['getTransactionsBetweenPubkeys'],
         ];
     }
 

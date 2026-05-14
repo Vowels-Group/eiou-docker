@@ -188,6 +188,64 @@ switch ($type) {
             foreach (Fortunes::LINES as $f) {
                 $items .= '<li>' . htmlspecialchars($f, ENT_QUOTES) . '</li>';
             }
+
+            // ----------------------------------------------------------
+            // Self-introspection demo: a real plugin can fail-fast at
+            // boot if a required permission isn't granted, or render
+            // "this app uses…" UI from its own manifest. Here we pull
+            // both surfaces and show them — useful as a reference for
+            // plugin authors who want to see how the calls land.
+            // No permission required for either method (scope is the
+            // calling plugin's own row), so this works regardless of
+            // what permissions the operator granted.
+            // ----------------------------------------------------------
+            $ownPerms = core_call('PluginLookupService', 'getOwnPermissions', [], $log);
+            $ownManifest = core_call('PluginLookupService', 'getOwnManifest', [], $log);
+            $permsRow = '';
+            if (is_array($ownPerms) && $ownPerms !== []) {
+                $permItems = '';
+                foreach ($ownPerms as $p) {
+                    $permItems .= '<li><code>' . htmlspecialchars((string) $p, ENT_QUOTES) . '</code></li>';
+                }
+                $permsRow = '<div class="plugin-hello-eiou-self">'
+                          . '<h3 style="font-size:0.95rem"><i class="fas fa-shield-alt"></i> Permissions granted to this plugin</h3>'
+                          . '<ul>' . $permItems . '</ul>'
+                          . '</div>';
+            }
+            $manifestRow = '';
+            if (is_array($ownManifest) && isset($ownManifest['version'])) {
+                $manifestRow = '<div class="plugin-hello-eiou-self text-muted">'
+                             . '<small>This plugin self-reports as <code>'
+                             . htmlspecialchars((string) ($ownManifest['name'] ?? ''), ENT_QUOTES)
+                             . '</code> v<code>'
+                             . htmlspecialchars((string) $ownManifest['version'], ENT_QUOTES)
+                             . '</code> (read from PluginLookupService.getOwnManifest).</small>'
+                             . '</div>';
+            }
+
+            // ----------------------------------------------------------
+            // Permission-gated demo: pick a random accepted contact via
+            // ContactLookupService.listAccepted and personalise one of
+            // the fortunes ("Hello, Alice!"). Requires the
+            // `contact_address_book_enumerate` permission — declared in
+            // plugin.json's `permissions` field. Falls back gracefully
+            // if the operator hasn't granted the permission (the
+            // gateway returns null and we just skip the personalised
+            // line) or if the wallet has no contacts yet.
+            // ----------------------------------------------------------
+            $personalised = '';
+            $accepted = core_call('ContactLookupService', 'listAccepted', [50, 0], $log);
+            if (is_array($accepted) && $accepted !== []) {
+                $row = $accepted[array_rand($accepted)];
+                $contactName = is_array($row) && isset($row['name']) ? (string) $row['name'] : '';
+                if ($contactName !== '') {
+                    $personalised = '<p class="plugin-hello-eiou-personalised"><em>Hello, '
+                                  . htmlspecialchars($contactName, ENT_QUOTES) . '! '
+                                  . htmlspecialchars(Fortunes::pick(), ENT_QUOTES)
+                                  . '</em></p>';
+                }
+            }
+
             // renderSection() is a host helper not reachable from the
             // sandboxed pool (it lives in the wallet's PHP namespace),
             // so we hand-roll the same chrome. Matches the legacy
@@ -202,7 +260,10 @@ switch ($type) {
                   . 'This list is rendered by hello-eiou\'s __dispatch.php inside its own '
                   . 'FPM pool, then forwarded to core via a render hook.</div>'
                   . '</details>'
+                  . $personalised
                   . '<div class="plugin-hello-eiou-tab"><ul>' . $items . '</ul></div>'
+                  . $permsRow
+                  . $manifestRow
                   . '</div>';
             respond(200, ['ok' => true, 'result' => $html], $log);
         }

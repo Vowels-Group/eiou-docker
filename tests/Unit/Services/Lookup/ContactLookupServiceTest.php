@@ -176,6 +176,93 @@ class ContactLookupServiceTest extends TestCase
     }
 
     // =========================================================================
+    // getOnlineStatus — per-hash online flag, demand-driven
+    // =========================================================================
+
+    public function testGetOnlineStatusReturnsTheStatusField(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with('h-a')
+            ->willReturn([
+                'name' => 'Alice', 'http' => 'h', 'https' => null,
+                'tor' => null, 'pubkey_hash' => 'h-a',
+                'online_status' => 'online',
+            ]);
+
+        $this->assertSame('online', $this->svc->getOnlineStatus('h-a'));
+    }
+
+    public function testGetOnlineStatusReturnsNullWhenContactMissing(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with('h-missing')
+            ->willReturn(null);
+
+        $this->assertNull($this->svc->getOnlineStatus('h-missing'));
+    }
+
+    public function testGetOnlineStatusShortCircuitsEmptyInput(): void
+    {
+        $this->repo->expects($this->never())->method('lookupByPubkeyHash');
+        $this->assertNull($this->svc->getOnlineStatus(''));
+        $this->assertNull($this->svc->getOnlineStatus('   '));
+    }
+
+    public function testGetOnlineStatusNormalisesCase(): void
+    {
+        // Symmetry with getByPubkeyHash — both normalise case
+        // defensively so a plugin passing a hash with mixed case
+        // doesn't appear as a missing contact.
+        $this->repo->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with('abc123')
+            ->willReturn([
+                'name' => 'Bob', 'http' => 'h', 'https' => null,
+                'tor' => null, 'pubkey_hash' => 'abc123',
+                'online_status' => 'offline',
+            ]);
+
+        $this->assertSame('offline', $this->svc->getOnlineStatus(' ABC123 '));
+    }
+
+    // =========================================================================
+    // listPending — pending-incoming enumerate with permission gate
+    // =========================================================================
+
+    public function testListPendingProjectsRows(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getPendingContactRequests')
+            ->willReturn([
+                ['name' => null, 'http' => 'h1', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h-p1'],
+                ['name' => 'Eve', 'http' => 'h2', 'https' => 's', 'tor' => null, 'pubkey_hash' => 'h-p2'],
+            ]);
+
+        $result = $this->svc->listPending();
+        $this->assertCount(2, $result);
+        foreach ($result as $row) {
+            $this->assertSame(
+                ['name', 'http', 'https', 'tor', 'pubkey_hash'],
+                array_keys($row)
+            );
+        }
+        // Null name is expected for incoming pending requests until
+        // the operator labels them on accept.
+        $this->assertNull($result[0]['name']);
+        $this->assertSame('Eve', $result[1]['name']);
+    }
+
+    public function testListPendingReturnsEmptyOnNoPending(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('getPendingContactRequests')
+            ->willReturn([]);
+        $this->assertSame([], $this->svc->listPending());
+    }
+
+    // =========================================================================
     // listAccepted — paging + cap behaviour
     // =========================================================================
 
@@ -261,7 +348,9 @@ class ContactLookupServiceTest extends TestCase
         return [
             'getByPubkeyHash' => ['getByPubkeyHash'],
             'getByName'       => ['getByName'],
+            'getOnlineStatus' => ['getOnlineStatus'],
             'listAccepted'    => ['listAccepted'],
+            'listPending'     => ['listPending'],
         ];
     }
 
@@ -320,6 +409,30 @@ class ContactLookupServiceTest extends TestCase
             $instance->permission,
             'getByName must stay core_services-only — name-based resolution '
             . 'with strict-match-or-null semantics doesn\'t enable enumeration'
+        );
+    }
+
+    public function testGetOnlineStatusHasNoPermissionRequirement(): void
+    {
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'getOnlineStatus');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+        $this->assertNull(
+            $instance->permission,
+            'getOnlineStatus is demand-driven per-hash — no enumeration risk, no permission gate'
+        );
+    }
+
+    public function testListPendingRequiresPendingEnumeratePermission(): void
+    {
+        // The pending queue is a separate disclosure shape from the
+        // accepted address book — distinct permission key. Pinned here
+        // so a future refactor doesn't quietly fold the two together.
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'listPending');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+        $this->assertSame(
+            'contact_pending_enumerate',
+            $instance->permission,
+            'listPending must gate on contact_pending_enumerate — pending requests reveal who wants to talk to the operator, distinct from who they already talk to'
         );
     }
 

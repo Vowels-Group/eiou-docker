@@ -87,6 +87,94 @@ final class PluginPermissionCatalog
                 . 'permission in the catalog — grant only to plugins '
                 . 'whose stated purpose involves spending.',
         ],
+
+        'transaction_history_aggregate' => [
+            'label' => 'Read aggregate transaction statistics',
+            'description'
+                => 'Lets the plugin read aggregated totals across the '
+                . 'wallet\'s transaction history (per-day, per-currency, '
+                . 'per-period counts and sums) — distinct from the '
+                . 'row-level transaction_history_enumerate permission '
+                . 'because aggregates disclose volume but not individual '
+                . 'counterparties or memos. Dashboard / daily-summary '
+                . 'plugins typically need aggregates only; granting this '
+                . 'lets the plugin compute totals without unlocking '
+                . 'row-level walks.',
+        ],
+
+        'contact_pending_enumerate' => [
+            'label' => 'List pending contact requests',
+            'description'
+                => 'Lets the plugin walk the wallet\'s pending contact '
+                . 'requests (people who have asked to connect but the '
+                . 'operator has not yet accepted or blocked). Distinct '
+                . 'from contact_address_book_enumerate because pending '
+                . 'requests reveal who wants to talk to the operator, '
+                . 'not who they\'ve already chosen to talk to — a '
+                . 'different operator decision shape. Trust-on-first-use '
+                . 'and auto-block-spam plugins typically need this.',
+        ],
+
+        'contact_credit_read' => [
+            'label' => 'Read your contact credit limits',
+            'description'
+                => 'Lets the plugin read per-contact credit policy '
+                . 'configured by the operator — credit limit and current '
+                . 'received/sent balance for a given contact and '
+                . 'currency. Auto-settle plugins use this to decide '
+                . 'whether a contact is within the operator\'s extended '
+                . 'credit before approving a transaction; reveals '
+                . 'operator-set financial policy that\'s normally not '
+                . 'visible to plugins.',
+        ],
+
+        'payment_request_enumerate' => [
+            'label' => 'List payment requests',
+            'description'
+                => 'Lets the plugin walk the wallet\'s pending-incoming '
+                . 'and outgoing payment-request lists (people who owe '
+                . 'the operator, people the operator owes). Per-request '
+                . 'lookups by id are not gated by this permission — a '
+                . 'plugin that minted a request via PaymentRequestService '
+                . 'already knows its id. Invoicing and dunning plugins '
+                . 'typically need the enumerate form.',
+        ],
+
+        'payback_method_read_own' => [
+            'label' => 'Read your own payback methods',
+            'description'
+                => 'Lets the plugin read the operator\'s configured '
+                . 'payback-method settings for the rail types this plugin '
+                . 'itself declared in `payback_method_types`. Strictly '
+                . 'scoped — a plugin granted this permission cannot read '
+                . 'payback methods belonging to other rail types it did '
+                . 'not declare. Rail-implementation plugins (BTC, PayPal, '
+                . 'etc.) need this to know how to settle.',
+        ],
+
+        'payback_method_read_contact' => [
+            'label' => 'Read contacts\' payback method preferences',
+            'description'
+                => 'Lets the plugin read which payback method a contact '
+                . 'has chosen, returned as a masked identifier (the full '
+                . 'value stays behind sensitive-access on the wallet '
+                . 'side). Distinct from payback_method_read_own because '
+                . 'this reveals contact-side configuration the operator '
+                . 'received from a counterparty, not the operator\'s own '
+                . 'rail settings.',
+        ],
+
+        'plugin_inventory_read' => [
+            'label' => 'List other enabled plugins',
+            'description'
+                => 'Lets the plugin enumerate which other plugins are '
+                . 'enabled on this node (plugin id + version). '
+                . 'Orchestration plugins use this to branch on whether a '
+                . 'companion plugin is installed (e.g. "send a Slack '
+                . 'message if notification-slack is enabled"). Mild '
+                . 'operator-environment disclosure — what software the '
+                . 'operator has installed alongside this plugin.',
+        ],
     ];
 
     /**

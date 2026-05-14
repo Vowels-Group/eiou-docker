@@ -106,6 +106,39 @@ class ContactLookupService
     }
 
     #[PluginCallable(
+        description: 'Read the current online_status flag for a contact by pubkey_hash. Returns one of "online", "partial", "offline", "unknown" — or null when no contact carries that hash. Plugins use this as a pre-flight check before attempting to message or send to a contact (skip work that\'s going to fail at the transport layer). Demand-driven — a plugin needs to already know the pubkey_hash, so no enumerate-permission is needed.',
+        ratePerMinute: 120
+    )]
+    public function getOnlineStatus(string $pubkeyHash): ?string
+    {
+        $hash = strtolower(trim($pubkeyHash));
+        if ($hash === '') {
+            return null;
+        }
+        $row = $this->repository->lookupByPubkeyHash($hash);
+        if ($row === null) {
+            return null;
+        }
+        $status = $row['online_status'] ?? null;
+        return is_string($status) ? $status : null;
+    }
+
+    #[PluginCallable(
+        description: 'List incoming pending contact requests (people who have asked to connect but the operator has not accepted or blocked yet). Returns rows of {name, http, https, tor, pubkey_hash}; `name` is null for incoming requests until the operator labels them on accept. Trust-on-first-use plugins and auto-block-spam plugins use this to react to the pending queue. Requires the contact_pending_enumerate permission — distinct from contact_address_book_enumerate because the pending queue reveals who wants to talk to the operator, not who they\'ve already chosen to talk to.',
+        ratePerMinute: 30,
+        permission: 'contact_pending_enumerate'
+    )]
+    public function listPending(): array
+    {
+        $rows = $this->repository->getPendingContactRequests();
+        $projected = [];
+        foreach ($rows as $row) {
+            $projected[] = $this->project($row);
+        }
+        return $projected;
+    }
+
+    #[PluginCallable(
         description: 'List accepted contacts as {name, http, https, tor, pubkey_hash} rows. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value; $offset is the zero-based page offset. Pending and blocked contacts are not exposed through this surface. Requires the contact_address_book_enumerate permission in the plugin manifest in addition to the core_services entry.',
         ratePerMinute: 30,
         permission: 'contact_address_book_enumerate'

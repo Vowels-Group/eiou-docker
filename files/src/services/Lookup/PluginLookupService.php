@@ -125,6 +125,31 @@ class PluginLookupService implements PluginCallerAware
         return $out;
     }
 
+    #[PluginCallable(
+        description: 'List the ids and versions of OTHER enabled plugins on this node (the calling plugin\'s own row is omitted from the result so the caller doesn\'t have to filter it out). Returns a list of {name, version} entries. Orchestration plugins use this to branch on whether a companion plugin is installed — e.g. "send a Slack notification only if notification-slack is enabled." Requires the plugin_inventory_read permission since it discloses which other software the operator has chosen to enable alongside this plugin.',
+        ratePerMinute: 30,
+        permission: 'plugin_inventory_read'
+    )]
+    public function listEnabledPluginIds(): array
+    {
+        $pluginId = $this->requireCallerId();
+        $out = [];
+        foreach ($this->loader->listAllPlugins() as $row) {
+            $name = $row['name'] ?? null;
+            if (!is_string($name) || $name === $pluginId) {
+                continue;
+            }
+            if (empty($row['enabled'])) {
+                continue;
+            }
+            $out[] = [
+                'name'    => $name,
+                'version' => isset($row['version']) ? (string) $row['version'] : '',
+            ];
+        }
+        return $out;
+    }
+
     /**
      * Resolve the plugin's own row from the loader. Returns null if
      * the gateway-resolved id doesn't appear in the loader's view —

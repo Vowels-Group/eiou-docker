@@ -61,6 +61,36 @@ class BalanceLookupService
     }
 
     #[PluginCallable(
+        description: 'Read the wallet\'s per-contact balance, grouped by currency. Pass the contact\'s pubkey_hash (the form plugins receive on transaction.received envelopes). Returns a list of {currency, balance} entries — same balance projection as getUserBalance, one entry per currency that contact has any history in. Empty list when no rows exist for that contact. Plugins use this for split-billing, per-customer accounting, and auto-settle "is this contact within their share" gating. Requires the wallet_balance_read permission in the plugin manifest in addition to the core_services entry.',
+        ratePerMinute: 60,
+        permission: 'wallet_balance_read'
+    )]
+    public function getUserBalanceContact(string $pubkeyHash): array
+    {
+        $hash = strtolower(trim($pubkeyHash));
+        if ($hash === '') {
+            return [];
+        }
+        $rows = $this->repository->getUserBalanceContactByPubkeyHash($hash);
+        if ($rows === null || $rows === []) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            $rowCurrency = isset($row['currency']) ? (string) $row['currency'] : '';
+            $totalBalance = $row['total_balance'] ?? null;
+            if ($rowCurrency === '' || !($totalBalance instanceof SplitAmount)) {
+                continue;
+            }
+            $out[] = [
+                'currency' => $rowCurrency,
+                'balance'  => $this->projectAmount($totalBalance),
+            ];
+        }
+        return $out;
+    }
+
+    #[PluginCallable(
         description: 'Read the wallet\'s total balance. With no $currency: returns a list of {currency, balance} entries, one per currency the wallet has history in. With $currency: returns a single {currency, balance} entry or null when the wallet has no rows in that currency. `balance` is {whole, frac, minor_units, display} — use minor_units for arithmetic (lossless integer), display for UI rendering. Negative balances (net-paid-out) carry whole < 0. Requires the wallet_balance_read permission in the plugin manifest in addition to the core_services entry.',
         ratePerMinute: 60,
         permission: 'wallet_balance_read'

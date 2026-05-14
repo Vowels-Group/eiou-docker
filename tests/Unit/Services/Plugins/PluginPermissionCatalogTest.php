@@ -74,10 +74,22 @@ class PluginPermissionCatalogTest extends TestCase
     public function knownKeysIncludesAllCatalogedEntries(): void
     {
         $keys = PluginPermissionCatalog::knownKeys();
-        $this->assertContains('contact_address_book_enumerate', $keys);
-        $this->assertContains('transaction_history_enumerate', $keys);
-        $this->assertContains('wallet_balance_read', $keys);
-        $this->assertContains('wallet_outbound_send', $keys);
+        $expected = [
+            'contact_address_book_enumerate',
+            'transaction_history_enumerate',
+            'wallet_balance_read',
+            'wallet_outbound_send',
+            'transaction_history_aggregate',
+            'contact_pending_enumerate',
+            'contact_credit_read',
+            'payment_request_enumerate',
+            'payback_method_read_own',
+            'payback_method_read_contact',
+            'plugin_inventory_read',
+        ];
+        foreach ($expected as $key) {
+            $this->assertContains($key, $keys, "catalog missing expected key: {$key}");
+        }
         // Every reported key must round-trip through isKnown — guards
         // against describe() and isKnown() drifting apart.
         foreach ($keys as $key) {

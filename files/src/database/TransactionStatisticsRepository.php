@@ -343,6 +343,55 @@ class TransactionStatisticsRepository extends AbstractRepository
     }
 
     /**
+     * Get aggregate statistics for a time period, optionally filtered
+     * by currency. Times are Unix epoch seconds — the plugin surface
+     * works in epoch ints rather than SQL DATETIME strings so there's
+     * no ambiguity about timezone or format.
+     *
+     * Returns { count, total_amount: SplitAmount } across live
+     * transactions in the window. Archive is not included — period
+     * queries that need archived history can be a follow-up if a
+     * plugin actually asks for it; today's archive policy moves rows
+     * past N months so most plugin-relevant windows are live-only.
+     *
+     * @param int $startTs Unix epoch seconds (inclusive)
+     * @param int $endTs Unix epoch seconds (exclusive)
+     * @param string|null $currency Optional currency filter
+     * @return array { count: int, total_amount: SplitAmount }
+     */
+    public function getStatisticsForPeriod(int $startTs, int $endTs, ?string $currency = null): array
+    {
+        $where = 'timestamp >= FROM_UNIXTIME(:start) AND timestamp < FROM_UNIXTIME(:end)';
+        $params = [':start' => $startTs, ':end' => $endTs];
+        if ($currency !== null) {
+            $where .= ' AND currency = :currency';
+            $params[':currency'] = $currency;
+        }
+        $query = "SELECT
+                    COUNT(*) as count,
+                    SUM(amount_whole) AS total_amount_whole, SUM(amount_frac) AS total_amount_frac
+                  FROM {$this->tableName}
+                  WHERE {$where}";
+
+        $stmt = $this->execute($query, $params);
+        if (!$stmt) {
+            return ['count' => 0, 'total_amount' => SplitAmount::zero()];
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$result) {
+            return ['count' => 0, 'total_amount' => SplitAmount::zero()];
+        }
+        return [
+            'count' => (int) $result['count'],
+            'total_amount' => self::sumCarry(
+                (int)($result['total_amount_whole'] ?? 0),
+                (int)($result['total_amount_frac'] ?? 0)
+            ),
+        ];
+    }
+
+    /**
      * Get transaction counts grouped by date
      *
      * @param int $days Number of days to look back
