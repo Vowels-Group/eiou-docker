@@ -111,8 +111,9 @@ class WalletOutboundService implements PluginCallerAware
      * @throws InvalidArgumentException On malformed arguments.
      */
     #[PluginCallable(
-        description: 'Send EIOU on behalf of the wallet to a recipient address or contact. Argument order matches the `eiou send` CLI: recipient, amount, currency, optional description. The plugin is responsible for its own authorisation and audit; the host only crosses the sandbox boundary into the existing sendEiou path (which auto-picks direct or P2P routing based on whether the recipient resolves to a known contact). Returns {ok:true, txid} on success or throws on downstream refusal.',
-        ratePerMinute: 60
+        description: 'Send EIOU on behalf of the wallet to a recipient address or contact. Argument order matches the `eiou send` CLI: recipient, amount, currency, optional description. The plugin is responsible for its own authorisation and audit; the host only crosses the sandbox boundary into the existing sendEiou path (which auto-picks direct or P2P routing based on whether the recipient resolves to a known contact). Returns {ok:true, txid} on success or throws on downstream refusal. Requires the wallet_outbound_send permission in the plugin manifest in addition to the core_services entry — the operator sees this as a distinct "may spend funds on your behalf" line in the plugin modal before enable.',
+        ratePerMinute: 60,
+        permission: 'wallet_outbound_send'
     )]
     public function send(string $recipientAddress, string $amount, string $currency, ?string $description = null): array
     {

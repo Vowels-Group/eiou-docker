@@ -108,6 +108,74 @@ class ContactLookupServiceTest extends TestCase
     }
 
     // =========================================================================
+    // getByName — strict-match semantics, null on ambiguity
+    // =========================================================================
+
+    public function testGetByNameProjectsTheUniqueMatch(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('lookupAllByName')
+            ->with('Alice')
+            ->willReturn([[
+                'name'        => 'Alice',
+                'http'        => 'http://alice.example/',
+                'https'       => 'https://alice.example/',
+                'tor'         => 'http://aliceabcd.onion/',
+                'pubkey_hash' => 'hash-a',
+                // Extra columns must not leak — same projection contract
+                // as getByPubkeyHash.
+                'pubkey'      => 'SECRET',
+                'status'      => 'accepted',
+            ]]);
+
+        $result = $this->svc->getByName('Alice');
+        $this->assertNotNull($result);
+        $this->assertSame(
+            ['name', 'http', 'https', 'tor', 'pubkey_hash'],
+            array_keys($result)
+        );
+        $this->assertSame('Alice', $result['name']);
+        $this->assertSame('hash-a', $result['pubkey_hash']);
+    }
+
+    public function testGetByNameReturnsNullOnNoMatch(): void
+    {
+        $this->repo->expects($this->once())
+            ->method('lookupAllByName')
+            ->with('Nobody')
+            ->willReturn([]);
+
+        $this->assertNull($this->svc->getByName('Nobody'));
+    }
+
+    public function testGetByNameReturnsNullOnAmbiguousMatch(): void
+    {
+        // Strict-match: returning the first row on an ambiguous name
+        // would let a downstream send call hit the wrong contact
+        // silently. The service must surface null so the plugin can
+        // ask the operator to disambiguate by pubkey hash instead.
+        $this->repo->expects($this->once())
+            ->method('lookupAllByName')
+            ->with('John')
+            ->willReturn([
+                ['name' => 'John', 'http' => 'a', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h1'],
+                ['name' => 'John', 'http' => 'b', 'https' => null, 'tor' => null, 'pubkey_hash' => 'h2'],
+            ]);
+
+        $this->assertNull($this->svc->getByName('John'));
+    }
+
+    public function testGetByNameTrimsAndShortCircuitsEmpty(): void
+    {
+        // Whitespace-only input gets normalised to empty — short-circuit
+        // before hitting the repository so a malformed call doesn't
+        // count against the per-minute rate cap unnecessarily.
+        $this->repo->expects($this->never())->method('lookupAllByName');
+        $this->assertNull($this->svc->getByName('   '));
+        $this->assertNull($this->svc->getByName(''));
+    }
+
+    // =========================================================================
     // listAccepted — paging + cap behaviour
     // =========================================================================
 
@@ -192,6 +260,7 @@ class ContactLookupServiceTest extends TestCase
     {
         return [
             'getByPubkeyHash' => ['getByPubkeyHash'],
+            'getByName'       => ['getByName'],
             'listAccepted'    => ['listAccepted'],
         ];
     }
@@ -235,6 +304,22 @@ class ContactLookupServiceTest extends TestCase
             'getByPubkeyHash must remain a routine core_services surface — '
             . 'per-hash lookups don\'t enumerate the address book, so they '
             . 'don\'t need the louder-consent permission tier'
+        );
+    }
+
+    public function testGetByNameHasNoPermissionRequirement(): void
+    {
+        // Symmetric with getByPubkeyHash — both are demand-driven
+        // single-row resolvers, and getByName's strict-match-or-null
+        // semantics mean it can't be used to walk the address book
+        // (a plugin can only resolve names it already knows).
+        $reflection = new ReflectionMethod(ContactLookupService::class, 'getByName');
+        $instance = $reflection->getAttributes(PluginCallable::class)[0]->newInstance();
+
+        $this->assertNull(
+            $instance->permission,
+            'getByName must stay core_services-only — name-based resolution '
+            . 'with strict-match-or-null semantics doesn\'t enable enumeration'
         );
     }
 

@@ -49,6 +49,44 @@ final class PluginPermissionCatalog
                 . 'if the plugin has a stated reason to walk the full '
                 . 'address book.',
         ],
+
+        'transaction_history_enumerate' => [
+            'label' => 'Read your transaction history',
+            'description'
+                => 'Lets the plugin walk the wallet\'s received- and '
+                . 'sent-transaction lists, including amounts, '
+                . 'currencies, descriptions, and counterparty pubkey '
+                . 'hashes. Distinct from per-txid lookups (which only '
+                . 'reveal transactions the plugin has already learned '
+                . 'about through events). Reconciliation, accounting-'
+                . 'export, and dashboard plugins typically need this; '
+                . 'event-driven auto-settle plugins typically do not.',
+        ],
+
+        'wallet_balance_read' => [
+            'label' => 'Read your wallet balance',
+            'description'
+                => 'Lets the plugin read the wallet\'s current balance '
+                . 'totals (overall and per-currency) and per-contact '
+                . 'balances. Useful for plugins that gate their '
+                . 'behaviour on available funds — auto-settle, '
+                . 'send-throttling, balance-on-dashboard. Discloses the '
+                . 'operator\'s net financial position, so grant only '
+                . 'when the plugin has a stated reason for it.',
+        ],
+
+        'wallet_outbound_send' => [
+            'label' => 'Send payments on your behalf',
+            'description'
+                => 'Lets the plugin spend funds from the wallet by '
+                . 'calling the outbound-send surface (same path as the '
+                . 'eiou send CLI). Every plugin call is attributable in '
+                . 'the wallet\'s transaction log and rate-capped, but '
+                . 'within the cap the plugin can move money to '
+                . 'addresses or named contacts. The most consequential '
+                . 'permission in the catalog — grant only to plugins '
+                . 'whose stated purpose involves spending.',
+        ],
     ];
 
     /**

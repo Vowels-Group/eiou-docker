@@ -78,10 +78,23 @@ class TransactionLookupService
         return $this->repository->isCompletedByTxid($txid);
     }
 
-    #[PluginCallable(description: 'List the most-recent received transactions for the wallet user, optionally filtered by currency. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value.')]
+    #[PluginCallable(
+        description: 'List the most-recent received transactions for the wallet user, optionally filtered by currency. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value. Requires the transaction_history_enumerate permission in the plugin manifest in addition to the core_services entry.',
+        permission: 'transaction_history_enumerate'
+    )]
     public function getReceivedUserTransactions(int $limit = 10, ?string $currency = null): array
     {
         $bounded = max(0, min($limit, self::MAX_PAGE_LIMIT));
         return $this->repository->getReceivedUserTransactions($bounded, $currency);
+    }
+
+    #[PluginCallable(
+        description: 'List the most-recent sent transactions for the wallet user, optionally filtered by currency. Mirrors getReceivedUserTransactions in shape and cap. Reconciliation and accounting plugins need this counterpart to walk what the operator has paid out, not just what they\'ve received. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value. Requires the transaction_history_enumerate permission in the plugin manifest in addition to the core_services entry.',
+        permission: 'transaction_history_enumerate'
+    )]
+    public function getSentUserTransactions(int $limit = 10, ?string $currency = null): array
+    {
+        $bounded = max(0, min($limit, self::MAX_PAGE_LIMIT));
+        return $this->repository->getSentUserTransactions($bounded, $currency);
     }
 }

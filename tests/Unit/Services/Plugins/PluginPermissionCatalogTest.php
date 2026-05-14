@@ -75,10 +75,26 @@ class PluginPermissionCatalogTest extends TestCase
     {
         $keys = PluginPermissionCatalog::knownKeys();
         $this->assertContains('contact_address_book_enumerate', $keys);
+        $this->assertContains('transaction_history_enumerate', $keys);
+        $this->assertContains('wallet_balance_read', $keys);
+        $this->assertContains('wallet_outbound_send', $keys);
         // Every reported key must round-trip through isKnown — guards
         // against describe() and isKnown() drifting apart.
         foreach ($keys as $key) {
             $this->assertTrue(PluginPermissionCatalog::isKnown($key));
+        }
+    }
+
+    #[Test]
+    public function eachCatalogedEntryHasNonEmptyLabelAndDescription(): void
+    {
+        // Defence against a future catalog addition that forgets to
+        // fill in the operator-facing copy — without these, the GUI
+        // would render an empty Permissions row.
+        foreach (PluginPermissionCatalog::knownKeys() as $key) {
+            $entry = PluginPermissionCatalog::get($key);
+            $this->assertNotSame('', $entry['label'] ?? '', "{$key} must have a non-empty label");
+            $this->assertNotSame('', $entry['description'] ?? '', "{$key} must have a non-empty description");
         }
     }
 }

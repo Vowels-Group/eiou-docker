@@ -495,7 +495,12 @@ What this means in practice:
 | ---- | ---------- |
 | Read recent transactions | `core_call('TransactionLookupService', 'getReceivedUserTransactions', …)` |
 | Look up a contact by pubkey hash | `core_call('ContactLookupService', 'getByPubkeyHash', …)` |
+| Look up a contact by name | `core_call('ContactLookupService', 'getByName', …)` |
 | List accepted contacts (paginated) | `core_call('ContactLookupService', 'listAccepted', …)` (also requires `permissions: ["contact_address_book_enumerate"]`) |
+| Read sent transactions | `core_call('TransactionLookupService', 'getSentUserTransactions', …)` (also requires `permissions: ["transaction_history_enumerate"]`) |
+| Read the wallet balance | `core_call('BalanceLookupService', 'getUserBalance', …)` (also requires `permissions: ["wallet_balance_read"]`) |
+| Read your own permissions / manifest | `core_call('PluginLookupService', 'getOwnPermissions', …)` / `'getOwnManifest'` |
+| Send EIOU on behalf of the wallet | `core_call('WalletOutboundService', 'send', …)` (also requires `permissions: ["wallet_outbound_send"]`) |
 | Bill a contact (mint a payment request) | `core_call('PaymentRequestService', 'create', …)` |
 | Stop your sidecar container on disable | `core_call('ContainerLifecycleService', 'stopSidecar', …)` |
 | React to a sync event | declare `subscribes_to: ["sync.completed"]` in the manifest |
@@ -2055,12 +2060,14 @@ small. As of this writing, the callable surface is:
 | Service                         | Methods                                                                                              |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `Logger`                        | `debug`, `info`, `warning`, `error`                                                                  |
-| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions`   |
-| `ContactLookupService`          | `getByPubkeyHash`, `listAccepted` (`listAccepted` requires `contact_address_book_enumerate` permission — see below) |
+| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions` (requires `transaction_history_enumerate`), `getSentUserTransactions` (requires `transaction_history_enumerate`) |
+| `ContactLookupService`          | `getByPubkeyHash`, `getByName`, `listAccepted` (`listAccepted` requires `contact_address_book_enumerate` permission — see below) |
+| `BalanceLookupService`          | `getUserBalance` (requires `wallet_balance_read`)                                                    |
+| `PluginLookupService`           | `getOwnPermissions`, `getOwnManifest` (self-introspection — no permission key, scope is the calling plugin's own row only) |
 | `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
 | `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
 | `PluginEventPublisher`          | `publish`                                                                                            |
-| `WalletOutboundService`         | `send`                                                                                               |
+| `WalletOutboundService`         | `send` (requires `wallet_outbound_send`)                                                             |
 | `PaymentRequestService`         | `create`                                                                                             |
 | `ContainerLifecycleService`     | `startSidecar`, `stopSidecar`                                                                        |
 
@@ -2125,6 +2132,9 @@ Catalogued keys (single source of truth: `PluginPermissionCatalog`):
 | Key | Granted when set | Required by |
 | --- | ---------------- | ----------- |
 | `contact_address_book_enumerate` | Plugin may list every accepted contact (operator-chosen labels + all transport addresses including `.onion`). Distinct from per-hash lookups, which only reveal contacts the plugin has already seen via events. | `ContactLookupService.listAccepted` |
+| `transaction_history_enumerate` | Plugin may walk the wallet's received- and sent-transaction lists (amounts, currencies, descriptions, counterparty pubkey hashes). Distinct from per-txid lookups, which only reveal transactions the plugin has already learned about through events. | `TransactionLookupService.getReceivedUserTransactions`, `TransactionLookupService.getSentUserTransactions` |
+| `wallet_balance_read` | Plugin may read the wallet's current balance totals (overall and per-currency). Discloses the operator's net financial position. | `BalanceLookupService.getUserBalance` |
+| `wallet_outbound_send` | Plugin may spend funds from the wallet (same path as the `eiou send` CLI). The most consequential permission in the catalog — every call is rate-capped and logged, but within the cap the plugin can move money. | `WalletOutboundService.send` |
 
 Adding a permission key is a deliberate act in both directions:
 

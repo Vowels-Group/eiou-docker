@@ -85,6 +85,27 @@ class ContactLookupService
     }
 
     #[PluginCallable(
+        description: 'Resolve a contact by operator-chosen name to {name, http, https, tor, pubkey_hash}. Returns null when no contact carries that name OR when the name is ambiguous (multiple contacts share it). Use when the plugin has a name from operator input and needs to convert it into a transport address; symmetric with the (recipient-name → addresses) surface of WalletOutboundService.send and PaymentRequestService.create. Strict-match semantics: returns null rather than guessing on ambiguity so a downstream send call can\'t hit the wrong contact silently.',
+        ratePerMinute: 120
+    )]
+    public function getByName(string $name): ?array
+    {
+        $trimmed = trim($name);
+        if ($trimmed === '') {
+            return null;
+        }
+        // Use the all-matches lookup rather than lookupByName's LIMIT 1
+        // path: returning the first match on an ambiguous name is the
+        // exact failure mode a plugin author needs the host to surface,
+        // not paper over. Empty list -> null; multiple matches -> null.
+        $rows = $this->repository->lookupAllByName($trimmed);
+        if (count($rows) !== 1) {
+            return null;
+        }
+        return $this->project($rows[0]);
+    }
+
+    #[PluginCallable(
         description: 'List accepted contacts as {name, http, https, tor, pubkey_hash} rows. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value; $offset is the zero-based page offset. Pending and blocked contacts are not exposed through this surface. Requires the contact_address_book_enumerate permission in the plugin manifest in addition to the core_services entry.',
         ratePerMinute: 30,
         permission: 'contact_address_book_enumerate'

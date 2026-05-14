@@ -501,6 +501,46 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get BalanceLookupService instance.
+     *
+     * Read-only facade exposing the wallet's own balance totals (overall
+     * and per-currency) to sandboxed plugins. Methods on this service
+     * carry the `wallet_balance_read` permission key — the plugin's
+     * manifest must declare that key in `permissions: [...]` in
+     * addition to the usual `core_services` entry. Same wrapper
+     * rationale as TransactionLookupService — the repository stays
+     * undecorated and is accessed only through RepositoryFactory.
+     */
+    public function getBalanceLookupService(): \Eiou\Services\Lookup\BalanceLookupService {
+        if (!isset($this->services['BalanceLookupService'])) {
+            $this->services['BalanceLookupService'] = new \Eiou\Services\Lookup\BalanceLookupService(
+                $this->getRepositoryFactory()->get(BalanceRepository::class)
+            );
+        }
+        return $this->services['BalanceLookupService'];
+    }
+
+    /**
+     * Get PluginLookupService instance.
+     *
+     * Self-introspection surface for sandboxed plugins (read your own
+     * granted permissions, read your own projected manifest). Uses
+     * PluginLoader as the source of truth — same row the gateway
+     * checks for core_services and permissions. No permission key
+     * required since the service can only ever return the calling
+     * plugin's own data.
+     */
+    public function getPluginLookupService(): \Eiou\Services\Lookup\PluginLookupService {
+        if (!isset($this->services['PluginLookupService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PluginLookupService'] = new \Eiou\Services\Lookup\PluginLookupService(
+                $app->pluginLoader
+            );
+        }
+        return $this->services['PluginLookupService'];
+    }
+
+    /**
      * Get IdentityLookupService instance.
      *
      * Read-only facade exposing a narrow slice of UserContext (public key,
