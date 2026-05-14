@@ -686,6 +686,61 @@ function switchTab(tabName, scrollToId) {
 }
 
 /**
+ * Plugins tab — swap the visible plugin panel.
+ *
+ * Each plugin that declares plugin_tab_panel renders a hidden body
+ * server-side; this just toggles which one is visible. Selection
+ * persists to localStorage so revisiting the Plugins tab restores
+ * the operator's last choice. A no-op when the plugin id doesn't
+ * have a matching panel — handles the case where a plugin was
+ * uninstalled while a stored selection still points at it.
+ */
+function switchPluginsTabPanel(pluginId) {
+    if (!pluginId) return;
+    var panels = document.querySelectorAll('#plugins-tab-root .plugins-tab-panel');
+    var found = false;
+    for (var i = 0; i < panels.length; i++) {
+        if (panels[i].getAttribute('data-plugin-id') === pluginId) {
+            panels[i].style.display = '';
+            found = true;
+        } else {
+            panels[i].style.display = 'none';
+        }
+    }
+    if (!found) return;
+    var selector = document.getElementById('plugins-tab-selector');
+    if (selector && selector.value !== pluginId) {
+        selector.value = pluginId;
+    }
+    safeStorageSet('eiou_plugins_tab_panel', pluginId);
+}
+
+/**
+ * Restore the operator's last-viewed plugin panel on page load.
+ * No-op when the Plugins tab isn't rendered (no plugin panels
+ * registered) or when the stored selection points at an uninstalled
+ * plugin.
+ */
+function initPluginsTabPanel() {
+    var stored = safeStorageGet('eiou_plugins_tab_panel');
+    if (!stored) return;
+    var selector = document.getElementById('plugins-tab-selector');
+    if (!selector) return;
+    // Verify the stored id is still a registered option — otherwise
+    // fall through and leave the first option active (set server-side).
+    var hasOption = false;
+    for (var i = 0; i < selector.options.length; i++) {
+        if (selector.options[i].value === stored) {
+            hasOption = true;
+            break;
+        }
+    }
+    if (hasOption) {
+        switchPluginsTabPanel(stored);
+    }
+}
+
+/**
  * Initializes tab navigation on page load.
  * Checks URL hash, then sessionStorage, then defaults to dashboard.
  */
@@ -747,6 +802,9 @@ window.addEventListener('hashchange', function() {
         }
         // Initialize tab navigation
         initTabNavigation();
+        // Restore last-viewed plugin panel inside the Plugins tab.
+        // No-op when no plugin panels are registered.
+        initPluginsTabPanel();
     });
 
 /**
@@ -8794,6 +8852,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             if (window.plugins) {
                 window.plugins.toggleFromModal(el.getAttribute('data-plugin'), el.checked);
             }
+        }
+        else if (action === 'switchPluginsTabPanel') {
+            switchPluginsTabPanel(el.value);
         }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the

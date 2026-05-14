@@ -1,0 +1,78 @@
+<?php
+/**
+ * Plugins tab body — registered as 'plugins' in TabRegistry.
+ *
+ * Renders a dropdown over PluginsTabPanelRegistry::all() and the
+ * selected plugin's render closure beneath it. JS persists the
+ * operator's selection to localStorage so revisiting the tab lands
+ * on the last viewed panel.
+ *
+ * Each panel's HTML is pre-rendered server-side and hidden via CSS
+ * until selected. Pre-render matches the cost shape of
+ * `gui.dashboard.after` (one IPC call per registered plugin per
+ * page load) — fine for the small-plugin-set common case, and
+ * cheap to switch to lazy-fetch later if a wallet starts carrying
+ * many panels.
+ *
+ * Empty-state copy shows when zero plugins have a panel registered.
+ *
+ * @var Eiou\Services\ServiceContainer $serviceContainer  (in scope from wallet.html)
+ */
+
+$pluginsTabPanelRegistry = $serviceContainer->getPluginsTabPanelRegistry();
+$pluginsTabPanels        = $pluginsTabPanelRegistry->all();
+?>
+
+<div class="form-container fade-in-up" id="plugins-tab-root">
+    <div class="section-header">
+        <h2><i class="fas fa-puzzle-piece"></i> Plugins</h2>
+    </div>
+
+    <?php if ($pluginsTabPanels === []): ?>
+        <div class="plugins-tab-empty text-muted" style="text-align:center; padding: 2.5rem 1rem;">
+            <i class="fas fa-puzzle-piece" style="font-size: 2.5rem; opacity: 0.4; display: block; margin-bottom: 0.75rem;"></i>
+            <p style="margin: 0 0 0.5rem 0;"><strong>No plugins installed yet.</strong></p>
+            <p style="margin: 0; font-size: 0.9rem;">
+                Upload a plugin from <a href="#" data-action="switchTab" data-tab="settings">Settings &rarr; Plugins</a>
+                to extend the wallet.
+            </p>
+        </div>
+    <?php else: ?>
+        <div class="plugins-tab-selector-row" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
+            <label for="plugins-tab-selector" class="text-muted" style="font-size:0.9rem; margin:0;">
+                Plugin:
+            </label>
+            <select id="plugins-tab-selector"
+                    data-action-change="switchPluginsTabPanel"
+                    style="flex:1; max-width:320px;">
+                <?php foreach ($pluginsTabPanels as $panel): ?>
+                    <option value="<?= htmlspecialchars($panel['plugin_id']) ?>">
+                        <?= htmlspecialchars($panel['label']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="plugins-tab-panels">
+            <?php
+            // Pre-render every registered panel server-side; CSS hides
+            // all but the active one. The active panel is the first
+            // registered entry on first paint; client-side JS reads
+            // localStorage and swaps if a different one was selected
+            // previously.
+            $activePluginId = $pluginsTabPanels[0]['plugin_id'];
+            foreach ($pluginsTabPanels as $panel):
+                $isActive = ($panel['plugin_id'] === $activePluginId);
+                $html = $pluginsTabPanelRegistry->renderPanel($panel['plugin_id']);
+            ?>
+                <div class="plugins-tab-panel"
+                     data-plugin-id="<?= htmlspecialchars($panel['plugin_id']) ?>"
+                     <?= $isActive ? '' : ' style="display:none"' ?>>
+                    <?= $html /* trusted: plugin render output already escaped by its dispatcher */ ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?= $hooks->doRender('gui.plugins.after', ['user' => $user]) ?>

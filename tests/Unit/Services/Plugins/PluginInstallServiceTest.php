@@ -447,6 +447,65 @@ class PluginInstallServiceTest extends TestCase
     }
 
     #[Test]
+    public function rejectsPluginTabPanelWithoutLabel(): void
+    {
+        // `plugin_tab_panel` is a single object (not a list) with label
+        // required. Missing label fails fast at install rather than
+        // landing on a row that produces an empty dropdown entry.
+        $zip = $this->buildZip([
+            'no-panel-label/plugin.json' => json_encode([
+                'name' => 'no-panel-label',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                'plugin_tab_panel' => ['icon' => 'fa-x'],
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/plugin_tab_panel\.label/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
+    public function rejectsPluginTabPanelOrderAsString(): void
+    {
+        $zip = $this->buildZip([
+            'bad-panel-order/plugin.json' => json_encode([
+                'name' => 'bad-panel-order',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                'plugin_tab_panel' => ['label' => 'Demo', 'order' => '100'],
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/plugin_tab_panel\.order/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
+    public function rejectsPluginTabPanelAsList(): void
+    {
+        // A list instead of an object is a common shape mistake (the
+        // sibling `tabs` field was a list). Fail closed.
+        $zip = $this->buildZip([
+            'panel-as-list/plugin.json' => json_encode([
+                'name' => 'panel-as-list',
+                'version' => '1.0.0',
+                'entryClass' => 'X',
+                'sandboxed' => true,
+                'plugin_tab_panel' => [['label' => 'Demo']],
+            ]),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/plugin_tab_panel.*must be an object|plugin_tab_panel\.label/');
+        $this->svc->installFromZip($zip);
+    }
+
+    #[Test]
     public function rejectsManifestMissingVersion(): void
     {
         $zip = $this->buildZip([

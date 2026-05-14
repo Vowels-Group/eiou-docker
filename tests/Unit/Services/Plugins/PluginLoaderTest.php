@@ -508,6 +508,36 @@ class PluginLoaderTest extends TestCase
         $this->assertSame([], $row['permissions']);
     }
 
+    public function testListAllPluginsPersistsPluginTabPanel(): void
+    {
+        $this->writePluginWithExtras('panel-full', [
+            'plugin_tab_panel' => ['label' => 'Hello', 'icon' => 'fa-x', 'order' => 80],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertSame(
+            ['label' => 'Hello', 'icon' => 'fa-x', 'order' => 80],
+            $row['plugin_tab_panel']
+        );
+    }
+
+    public function testListAllPluginsOmitsPluginTabPanelWhenNotDeclared(): void
+    {
+        $this->writePluginWithExtras('panel-none', []);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertArrayNotHasKey('plugin_tab_panel', $row);
+    }
+
+    public function testListAllPluginsDropsPluginTabPanelWithMissingLabel(): void
+    {
+        // Defence in depth: a row that pre-dates a schema change must
+        // not surface a panel without a label.
+        $this->writePluginWithExtras('panel-bad', [
+            'plugin_tab_panel' => ['icon' => 'fa-x'],
+        ]);
+        $row = $this->loader()->listAllPlugins()[0];
+        $this->assertArrayNotHasKey('plugin_tab_panel', $row);
+    }
+
     public function testListAllPluginsAcceptsValidCorsAllowedOrigins(): void
     {
         $this->writePluginWithExtras('pub-cors', [

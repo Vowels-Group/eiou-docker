@@ -5,6 +5,26 @@ All notable changes to the `hello-eiou` plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this plugin follows [Semantic Versioning](https://semver.org/).
 
+## 1.5.0
+
+### Changed
+- **Moved from a top-level Fortunes tab to a sub-panel under the host's
+  new Plugins tab.** The wallet GUI now owns a single "Plugins" tab
+  between Activity and Settings; each installed plugin registers a
+  sub-panel that's selectable from a dropdown at the top of that tab.
+  Manifest changes:
+  - Removed the `tabs: [{id:"hello-eiou-fortunes", ...}]` entry.
+  - Added `plugin_tab_panel: {label:"Hello eIOU", icon:"fas fa-cookie-bite"}`.
+- Dispatcher's `render` handler renames from `tab:hello-eiou-fortunes`
+  to `plugin_tab_panel` (fixed name — each plugin gets at most one
+  panel, no per-tab id needed). The host POSTs that name when it needs
+  the panel's HTML.
+- Panel chrome simplified: the host's Plugins tab provides the
+  outer container and tab title, so the dispatcher's body drops the
+  `form-container` wrapper and the duplicate `<h2>Fortunes</h2>` —
+  the panel renders a smaller `<h3>` sub-header inside the host's
+  shared container.
+
 ## 1.4.0
 
 ### Added
