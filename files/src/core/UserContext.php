@@ -475,7 +475,8 @@ class UserContext {
         // When EIOU_HOST is set, hostname is stored as https://. Derive the HTTP
         // version so contacts that only know the HTTP URL can still reach the
         // P2P /eiou endpoint — nginx redirects HTTP→HTTPS for everything except
-        // .onion hosts and /eiou (kept for P2P backward compatibility).
+        // .onion hosts, loopback hosts (localhost / 127.0.0.1 / ::1), and the
+        // /eiou endpoint (kept for P2P backward compatibility).
         if (!isset($locaters['http']) && isset($locaters['https'])) {
             $locaters['http'] = preg_replace('/^https:\/\//', 'http://', $locaters['https']);
         }
