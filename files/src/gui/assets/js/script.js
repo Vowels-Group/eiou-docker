@@ -8845,12 +8845,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
         else if (action === 'togglePlugin') {
             if (window.plugins) {
-                window.plugins.toggle(el.getAttribute('data-plugin'), el.checked);
+                window.plugins.toggleWithConsent(el.getAttribute('data-plugin'), el.checked, false);
             }
         }
         else if (action === 'togglePluginFromModal') {
             if (window.plugins) {
-                window.plugins.toggleFromModal(el.getAttribute('data-plugin'), el.checked);
+                window.plugins.toggleWithConsent(el.getAttribute('data-plugin'), el.checked, true);
             }
         }
         else if (action === 'switchPluginsTabPanel') {
@@ -10162,6 +10162,20 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             'success'
                         );
                     }
+                    // Plugins that declare `plugin_tab_panel` need the
+                    // host-rendered Plugins tab to refresh — the
+                    // dropdown + panel bodies come from a server-side
+                    // partial that the in-page DOM doesn't know how to
+                    // rebuild. Trigger a soft reload after a brief
+                    // delay so the operator sees the toast first. The
+                    // Plugins tab body changes (entry appears / vanishes)
+                    // become visible after the reload completes.
+                    if (r.data.has_plugin_tab_panel) {
+                        setTimeout(function() {
+                            try { window.location.reload(); }
+                            catch (e) { /* Tor strict mode: best-effort */ }
+                        }, 1200);
+                    }
                 } else {
                     // Revert the checkbox on failure so the UI matches truth.
                     var cb = document.querySelector('input[data-plugin="' + name.replace(/"/g, '') + '"]');
@@ -10174,6 +10188,111 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 if (cb) cb.checked = !enabled;
                 if (typeof showToast === 'function') showToast('Error', 'Network error', 'error');
             });
+        }
+
+        // -- Permission consent --------------------------------------------
+        // When the operator slides ENABLE on a plugin that requests
+        // permissions, intercept the toggle and require explicit
+        // consent in a modal first. Disable always proceeds without
+        // consent (the operator is reducing access, not granting it).
+        //
+        // Two call sites: the per-row toggle in Settings → Plugins
+        // (`togglePlugin` action) and the toggle inside the plugin
+        // detail modal (`togglePluginFromModal`). The consent gate
+        // sits in front of both — especially important for the row
+        // toggle since the operator may flip it without ever opening
+        // the modal that shows the permissions panel.
+        function toggleWithConsent(name, enabled, fromModal) {
+            if (!enabled) {
+                // Disable always passes through — no consent needed.
+                return fromModal ? toggleFromModal(name, enabled) : toggle(name, enabled);
+            }
+            var p = findByName(name);
+            var perms = (p && p.permissions_described) || [];
+            if (perms.length === 0) {
+                // No permissions requested — also passes through.
+                return fromModal ? toggleFromModal(name, enabled) : toggle(name, enabled);
+            }
+            openPermissionConsentModal(p, perms, function approved() {
+                if (fromModal) toggleFromModal(name, enabled);
+                else           toggle(name, enabled);
+            }, function cancelled() {
+                // Revert whichever toggle the operator flipped.
+                var rowCb = document.querySelector(
+                    'input[data-plugin="' + String(name).replace(/"/g, '') + '"]'
+                );
+                if (rowCb) rowCb.checked = false;
+                var modalCb = document.getElementById('plugin-modal-toggle');
+                if (modalCb) modalCb.checked = false;
+            });
+        }
+
+        function openPermissionConsentModal(plugin, perms, onApprove, onCancel) {
+            // Renders into a top-stack modal so it appears above the
+            // plugin detail modal when consent is triggered from there.
+            var overlay = document.createElement('div');
+            overlay.className = 'modal modal-stack-top';
+            overlay.setAttribute('role', 'dialog');
+            var permItems = '';
+            for (var i = 0; i < perms.length; i++) {
+                var perm = perms[i];
+                permItems +=
+                    '<li style="margin-bottom:0.75rem">' +
+                        '<strong>' + escapeHtml(perm.label || perm.key || '') + '</strong>' +
+                        '<div class="text-muted text-xs" style="margin-top:0.2rem">' +
+                            escapeHtml(perm.description || '') +
+                        '</div>' +
+                    '</li>';
+            }
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width: 520px;">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-shield-alt"></i> Grant permissions to ' + escapeHtml(plugin.name || '') + '?</h3>' +
+                        '<span class="close" data-perm-consent-close="1" title="Cancel">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1.25rem;">' +
+                        '<p style="margin:0 0 0.75rem 0; font-size:0.9rem;">' +
+                            'Enabling <strong>' + escapeHtml(plugin.name || '') + '</strong> grants the following permissions. ' +
+                            'Each one is a surface beyond the routine call list — review before turning on.' +
+                        '</p>' +
+                        '<ul style="margin:0 0 0.5rem 1rem; padding:0;">' + permItems + '</ul>' +
+                    '</div>' +
+                    '<div class="modal-footer" style="gap:0.5rem;">' +
+                        '<button type="button" class="btn btn-secondary" data-perm-consent-cancel="1">Cancel</button>' +
+                        '<button type="button" class="btn btn-primary" data-perm-consent-approve="1">' +
+                            '<i class="fas fa-check"></i> Grant &amp; enable' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+            var resolved = false;
+            function cleanup() {
+                document.removeEventListener('keydown', keyHandler);
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+            }
+            function approve() {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                onApprove();
+            }
+            function cancel() {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                onCancel();
+            }
+            function keyHandler(e) {
+                if (e.key === 'Escape' || e.keyCode === 27) cancel();
+                else if (e.key === 'Enter') approve();
+            }
+
+            overlay.querySelector('[data-perm-consent-approve]').onclick = approve;
+            overlay.querySelector('[data-perm-consent-cancel]').onclick = cancel;
+            overlay.querySelector('[data-perm-consent-close]').onclick = cancel;
+            overlay.onclick = function(e) { if (e.target === overlay) cancel(); };
+            document.addEventListener('keydown', keyHandler);
+            document.body.appendChild(overlay);
         }
 
         function ensureLoadedOnTab() {
@@ -10739,6 +10858,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             reload: function() { loaded = false; return refresh(); },
             toggle: toggle,
             toggleFromModal: toggleFromModal,
+            toggleWithConsent: toggleWithConsent,
             openModal: openModal,
             openUninstall: openUninstallModal,
             openChangelog: openChangelogModal,

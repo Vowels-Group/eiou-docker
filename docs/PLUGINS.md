@@ -2179,6 +2179,19 @@ description. Operators reviewing a plugin before flipping the toggle
 read the panel as a separate line of consent from the routine
 `core_services` list.
 
+**Consent gate on enable.** When the operator slides the Enabled
+toggle on for a plugin that declares any `permissions`, the GUI
+intercepts the toggle and opens a confirmation modal listing every
+requested permission with its full description. The toggle does not
+flip until the operator clicks **Grant & enable**; Cancel reverts
+the slider without firing the enable POST. The gate fires from both
+call sites — the Settings → Plugins row toggle AND the slider
+inside the plugin's detail modal — so an operator who flips the row
+without ever opening the detail surface still sees the same
+consent screen. Disable always passes through without a prompt
+(reducing access doesn't need confirmation), and plugins that
+request no permissions also bypass the modal entirely.
+
 ### Where plugin-owned state and code lives
 
 Sandboxed plugins are full PHP applications inside their own FPM pool.

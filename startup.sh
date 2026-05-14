@@ -3042,12 +3042,42 @@ plugin_routing_poller() {
                 continue
             fi
 
-            # Reload nginx (graceful) + reload PHP-FPM (graceful).
+            # Reload nginx (graceful).
             if ! nginx -s reload >/dev/null 2>&1; then
                 echo "$LOG_PREFIX nginx reload failed"
                 write_result "$res" "failed" "nginx reload"
                 continue
             fi
+
+            # Write the result file BEFORE signalling the FPM reload.
+            # The wallet pool's POST handler (the request that triggered
+            # this apply) is blocked in PluginPoolService::applyPool's
+            # `usleep(200000)` polling loop waiting for this file. Writing
+            # it now lets the wallet worker return up the call stack,
+            # call respond(), and flush its HTTP response to nginx before
+            # SIGUSR2 disrupts the FPM master. Without this ordering the
+            # FPM reload tears down the wallet worker's FastCGI socket
+            # mid-response and nginx surfaces a 502 to the operator's
+            # browser — even though the apply itself succeeded.
+            #
+            # Drop the backup files at the same point: the apply has
+            # taken effect from the wallet's perspective as soon as the
+            # result file is visible, so they're no longer needed for
+            # a rollback.
+            rm -f "${SNIPPET_PATH}.bak" "${ZONES_PATH}.bak" "${pool_path}.bak" 2>/dev/null
+            echo "$LOG_PREFIX $action complete for $plugin_id"
+            write_result "$res" "ok"
+
+            # Brief grace period — let the wallet worker's response
+            # finish reaching nginx before the FPM master gets the
+            # reload signal. The wait loop polls every 200ms, respond()
+            # serialises ~1KB of JSON, nginx forwards immediately, so
+            # 1 second is comfortably enough headroom. This delay only
+            # adds latency to the NEXT plugin enable / disable (the new
+            # FPM pool config picks up after the reload); it does not
+            # block the operator's response.
+            sleep 1
+
             # Find the FPM master and signal SIGUSR2 (graceful pool reload).
             # -f matches the full command line — `php-fpm: master` only
             # appears in argv[0]'s descriptor, not in comm (which is
@@ -3061,11 +3091,6 @@ plugin_routing_poller() {
             if [ -n "$fpm_master" ]; then
                 kill -USR2 "$fpm_master" 2>/dev/null || true
             fi
-
-            # Drop the backup files now that the new state is verified.
-            rm -f "${SNIPPET_PATH}.bak" "${ZONES_PATH}.bak" "${pool_path}.bak" 2>/dev/null
-            echo "$LOG_PREFIX $action complete for $plugin_id"
-            write_result "$res" "ok"
         done
     done
 }
