@@ -117,6 +117,83 @@ class PluginLoaderSandboxTest extends TestCase
     // ===================================================================
 
     #[Test]
+    public function enableFiresOnEnableLifecycleHookAfterStateCommit(): void
+    {
+        $this->writeManifest('demo', ['sandboxed' => true]);
+        $captured = [];
+        $this->loader->setLifecycleDispatcher(
+            function (string $pluginId, string $event) use (&$captured): ?array {
+                $captured[] = ['plugin' => $pluginId, 'event' => $event];
+                return ['ok' => true];
+            }
+        );
+
+        $this->assertTrue($this->loader->setEnabled('demo', true));
+
+        // Lifecycle hook fired exactly once with the right event name.
+        // Sandbox-model replacement for the pre-sandbox boot() method:
+        // plugins now get a one-shot dispatch they can hook to wire
+        // sidecars / verify providers / prime caches.
+        $this->assertSame([['plugin' => 'demo', 'event' => 'on_enable']], $captured);
+    }
+
+    #[Test]
+    public function disableDoesNotFireLifecycleHook(): void
+    {
+        // Disable's pool is dropped before we'd dispatch — the call
+        // would never reach a live worker, so we don't try.
+        $this->writeManifest('demo', ['sandboxed' => true]);
+        $this->loader->setEnabled('demo', true);
+
+        $captured = [];
+        $this->loader->setLifecycleDispatcher(
+            function (string $pluginId, string $event) use (&$captured): ?array {
+                $captured[] = ['plugin' => $pluginId, 'event' => $event];
+                return ['ok' => true];
+            }
+        );
+
+        $this->assertTrue($this->loader->setEnabled('demo', false));
+        $this->assertSame([], $captured);
+    }
+
+    #[Test]
+    public function lifecycleHookFailureDoesNotFailEnable(): void
+    {
+        // The plugin's pool is already alive by the time the hook
+        // fires — a throwing on_enable handler must not undo a
+        // successful enable. Operator can investigate the warning.
+        $this->writeManifest('demo', ['sandboxed' => true]);
+        $this->loader->setLifecycleDispatcher(
+            fn(string $p, string $e) => throw new \RuntimeException('boom')
+        );
+
+        $this->assertTrue($this->loader->setEnabled('demo', true));
+    }
+
+    #[Test]
+    public function lifecycleHookIsSkippedForNonSandboxedPlugins(): void
+    {
+        // Non-sandboxed plugins don't have a __dispatch.php to receive
+        // the call. Their pre-sandbox boot() runs in-process during
+        // discover() — dispatching IPC at them would 404.
+        $this->writeManifest('legacy-nonsandbox', ['sandboxed' => false]);
+        $captured = [];
+        $this->loader->setLifecycleDispatcher(
+            function (string $pluginId, string $event) use (&$captured): ?array {
+                $captured[] = ['plugin' => $pluginId, 'event' => $event];
+                return ['ok' => true];
+            }
+        );
+
+        // setEnabled refuses non-sandboxed plugins anyway, but the
+        // guard makes the dispatch path defensively correct even if
+        // a refusal regression slips in.
+        $this->loader->setEnabled('legacy-nonsandbox', true);
+        $this->assertSame([], $captured);
+    }
+
+    #[Test]
     public function enablingSandboxedPluginEnsuresUserThenAppliesPool(): void
     {
         $this->writeManifest('demo', ['sandboxed' => true]);

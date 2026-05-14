@@ -3359,6 +3359,67 @@ PLUGIN_USER_POLLER_PID=$!
 echo "$PLUGIN_USER_POLLER_PID" > /tmp/eiou_plugin_user_poller.pid
 echo "Plugin user poller started (PID: $PLUGIN_USER_POLLER_PID)"
 
+# Boot-time gateway-token reconcile. The wallet pool (www-data) can't
+# read /etc/eiou/plugins/<id>/.gateway-token (mode 0600, owned by the
+# plugin's pool user) so it has no way to detect or repair index drift
+# on its own. We do it here as root before the routing poller comes
+# up: walk every per-plugin token file, rebuild
+# /etc/eiou/config/plugin-gateway-tokens.json with the {token →
+# plugin_id} entries that are actually backed by an on-disk file. Any
+# entry the index claims but no file matches gets dropped; any file
+# the index didn't reflect gets added. After this, the central index
+# is exactly the union of valid per-plugin .gateway-token files.
+#
+# Catches drift from older builds where apply-pool wrote the index
+# before the supervisor confirmed the file write — if the supervisor
+# failed (or was skipped on a stale isPoolUpToDate check), the index
+# held a token no file contained and the dispatcher's bearer auth
+# stayed broken until someone manually re-aligned. With the in-PHP fix
+# (commit-after-supervisor-ok) drift can't be newly produced, but
+# existing installs may still carry it forward through a restart.
+reconcile_plugin_gateway_tokens() {
+    local index_path="/etc/eiou/config/plugin-gateway-tokens.json"
+    local plugin_root="/etc/eiou/plugins"
+
+    [ -d "$plugin_root" ] || return 0
+    mkdir -p "$(dirname "$index_path")" 2>/dev/null || true
+
+    # Build the JSON in a tmp file then atomic-rename. Empty object
+    # when nothing matches — preserves the "file exists, no plugins
+    # registered" state PluginGatewayController expects.
+    local tmp
+    tmp="${index_path}.boot-reconcile.$$"
+    local first=1
+    {
+        printf '{'
+        for token_file in "$plugin_root"/*/.gateway-token; do
+            [ -f "$token_file" ] || continue
+            local plugin_dir plugin_id token
+            plugin_dir=$(dirname "$token_file")
+            plugin_id=$(basename "$plugin_dir")
+            # Plugin id validation mirrors PluginUserService::PLUGIN_ID_PATTERN.
+            if [[ ! "$plugin_id" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+                continue
+            fi
+            token=$(tr -d '[:space:]' < "$token_file" 2>/dev/null | head -c 65)
+            if [[ ! "$token" =~ ^[a-f0-9]{64}$ ]]; then
+                continue
+            fi
+            if [ "$first" -eq 0 ]; then printf ','; fi
+            printf '\n  "%s": "%s"' "$token" "$plugin_id"
+            first=0
+        done
+        if [ "$first" -eq 0 ]; then printf '\n'; fi
+        printf '}\n'
+    } > "$tmp"
+
+    chmod 0640 "$tmp"
+    chown root:www-data "$tmp" 2>/dev/null || true
+    mv "$tmp" "$index_path"
+    echo "Plugin gateway-token index reconciled from per-plugin files"
+}
+reconcile_plugin_gateway_tokens
+
 # Start plugin-routing poller in background. Applies per-plugin FPM
 # pool config + nginx routing snippet atomically, with nginx -t
 # validation before reload so a malformed entry cannot take down the

@@ -120,6 +120,18 @@ class PluginCronService
                     continue;
                 }
 
+                // Per-entry timeout override (optional). Plugins that
+                // need to do more than fits in the default 5s cron
+                // budget can declare `timeout_ms` on the manifest
+                // entry; PluginIpcForwarder clamps the value to
+                // MAX_TIMEOUT_MS at resolve time. Re-registering on
+                // every tick is cheap and means a manifest edit takes
+                // effect on the next iteration without a host restart.
+                $perEntryTimeout = isset($entry['timeout_ms']) ? (int) $entry['timeout_ms'] : 0;
+                if ($perEntryTimeout > 0) {
+                    $this->forwarder->setEntryTimeout($pluginId, 'cron', $action, $perEntryTimeout);
+                }
+
                 $key = $this->stateKey($pluginId, $action);
                 $lastFired = $state[$key] ?? 0;
                 $elapsedMinutes = ($now - $lastFired) / 60;

@@ -68,61 +68,80 @@ class PluginGatewayTokenService
      * Returns the new token hex string. Throws on filesystem failure
      * (caller treats it like any pool-apply failure).
      *
+     * Sequencing matters: write the per-plugin file FIRST, then commit
+     * to the index. If the file write throws, the index is untouched
+     * and the plugin's old token (if any) remains valid for gateway
+     * auth. If the index commit throws, the file is left in place; the
+     * supervisor-mediated apply-pool path (and any later reconcile)
+     * will repair the drift. Either way we don't end up in the failure
+     * mode the old "index first" order produced: index holding a token
+     * the on-disk file doesn't contain, dispatcher sending the old
+     * token and getting 401-forever until someone manually realigns.
+     *
      * NOTE: under dev bind-mount layouts the plugin dir is often owned
      * by the host operator's uid (which collides with `eiou-p-<hash>`
      * inside the container) and the wallet pool (`www-data`) can't
-     * write to it directly. The supervisor-mediated path through
-     * `mintAndIndex()` + the apply-pool request handles that case;
-     * `rotate()` is retained for in-container CLI and test paths where
-     * www-data owns the plugin dir.
+     * write to it directly. The supervisor-mediated path in
+     * `PluginPoolService::applyPool()` handles that case; `rotate()`
+     * is retained for in-container CLI and test paths where www-data
+     * owns the plugin dir.
      */
     public function rotate(string $pluginId): string
     {
         $this->validatePluginId($pluginId);
 
-        $token = $this->mintAndIndex($pluginId);
+        $token = $this->mint();
 
-        // Persist the per-plugin file in the plugin's dir. The
-        // central index was updated first (inside mintAndIndex), so
-        // if this throws the operator sees a clean error — the index
-        // entry points at a token no plugin file contains yet, which
-        // surfaces as "unauthorized" on the plugin's first gateway
-        // call rather than as a silently-broken auth state.
+        // File first — if this throws the index hasn't moved, so the
+        // plugin keeps using its previous token without auth drift.
         $perPluginPath = $this->pluginRoot . '/' . $pluginId . '/' . self::PER_PLUGIN_TOKEN_FILENAME;
         $this->writeAtomic($perPluginPath, $token, 0600);
+
+        // Index second — now the on-disk file is the source of truth
+        // and the index is being brought into alignment with it.
+        $this->commitToken($pluginId, $token);
 
         return $token;
     }
 
     /**
-     * Mint a fresh token, update the central index, and return the
-     * token WITHOUT writing the per-plugin `.gateway-token` file. The
-     * caller is responsible for getting the token onto disk by some
-     * other means — typically by piping it through the supervisor's
-     * apply-pool request, which writes it as root and chowns it to
-     * the pool user.
-     *
-     * This separation matters in dev bind-mount layouts where the
-     * plugin dir is owned by `eiou-p-<hash>` (the host operator's uid
-     * inside the container) and the wallet pool can't write into it.
-     * The supervisor (running as root) always can.
-     *
-     * Returns the new token hex string. Throws on central-index
-     * filesystem failure.
+     * Mint a fresh token without touching any state. Returned to the
+     * caller; persistence (per-plugin file + central index) is handled
+     * separately so callers that go through the supervisor can defer
+     * the index commit until the supervisor confirms the file write
+     * succeeded. See `commitToken()` and `reconcileFromFile()`.
      */
-    public function mintAndIndex(string $pluginId): string
+    public function mint(): string
+    {
+        return bin2hex(random_bytes(self::TOKEN_BYTES));
+    }
+
+    /**
+     * Set the central index entry for a plugin to a specific token,
+     * replacing any previous entry for that plugin. Used in two paths:
+     *
+     *   - After the supervisor confirms the per-plugin `.gateway-token`
+     *     write succeeded — at that point the file is authoritative
+     *     and we bring the index into alignment with it.
+     *
+     *   - From `reconcileFromFile()`, which heals drift left behind
+     *     by an apply-pool that crashed or returned non-ok after a
+     *     pre-fix release wrote the index but not the file.
+     *
+     * Read-modify-write under the same flock discipline as before;
+     * the previous entry for this plugin is unconditionally removed.
+     *
+     * Throws on central-index filesystem failure (caller decides
+     * whether that's recoverable).
+     */
+    public function commitToken(string $pluginId, string $token): void
     {
         $this->validatePluginId($pluginId);
+        if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+            throw new InvalidArgumentException("Invalid token shape for plugin '{$pluginId}'");
+        }
 
-        $token = bin2hex(random_bytes(self::TOKEN_BYTES));
-
-        // Update the central index. Read-modify-write under a flock
-        // guard so concurrent rotates don't lose entries — both
-        // would race the JSON parse + serialize.
         $index = $this->readIndex();
-        // Remove the old token for this plugin (we don't keep history;
-        // any in-flight gateway call with the old token will fail auth
-        // and surface to the plugin as a 401, which it can retry).
         foreach ($index as $existingToken => $existingPluginId) {
             if ($existingPluginId === $pluginId) {
                 unset($index[$existingToken]);
@@ -130,7 +149,80 @@ class PluginGatewayTokenService
         }
         $index[$token] = $pluginId;
         $this->writeIndex($index);
+    }
 
+    /**
+     * Mint a fresh token, update the central index, and return the
+     * token WITHOUT writing the per-plugin `.gateway-token` file.
+     *
+     * Retained for backward compatibility — new code should call
+     * `mint()` to get a token, ship it through the supervisor for the
+     * on-disk write, and only then call `commitToken()`. The split
+     * order means a failed supervisor write doesn't leave the index
+     * holding a token no `.gateway-token` file contains.
+     */
+    public function mintAndIndex(string $pluginId): string
+    {
+        $token = $this->mint();
+        $this->commitToken($pluginId, $token);
+        return $token;
+    }
+
+    /**
+     * Heal index drift for a single plugin by treating its
+     * `.gateway-token` file as authoritative.
+     *
+     * Reads the per-plugin file; if it exists and contains a
+     * shape-valid token, ensures the central index maps that token to
+     * the plugin (replacing any other entry the plugin had). Returns
+     * the token if a reconcile happened (or was already correct) and
+     * null when there's no file to reconcile against.
+     *
+     * Only readable from a context that has access to the per-plugin
+     * file — in practice the supervisor or the plugin's own pool. The
+     * wallet pool (www-data) does NOT have permission to read it. So
+     * boot-time drift correction in startup.sh is the intended caller;
+     * tests reach in directly.
+     */
+    public function reconcileFromFile(string $pluginId): ?string
+    {
+        $this->validatePluginId($pluginId);
+
+        $perPluginPath = $this->pluginRoot . '/' . $pluginId . '/' . self::PER_PLUGIN_TOKEN_FILENAME;
+        if (!is_file($perPluginPath) || !is_readable($perPluginPath)) {
+            return null;
+        }
+        $token = trim((string) @file_get_contents($perPluginPath));
+        if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+            $this->log('warning', 'plugin_gateway_token_file_malformed', [
+                'plugin' => $pluginId,
+                'path'   => $perPluginPath,
+            ]);
+            return null;
+        }
+
+        $index = $this->readIndex();
+        // Fast path — index already matches, nothing to write.
+        if (($index[$token] ?? null) === $pluginId) {
+            // Confirm no other entry claims this plugin. Defensive
+            // pass: if a duplicate slipped in, this falls through to
+            // commitToken which rebuilds the entry exclusively.
+            $stale = false;
+            foreach ($index as $idxToken => $idxPlugin) {
+                if ($idxToken !== $token && $idxPlugin === $pluginId) {
+                    $stale = true;
+                    break;
+                }
+            }
+            if (!$stale) {
+                return $token;
+            }
+        }
+
+        $this->commitToken($pluginId, $token);
+        $this->log('info', 'plugin_gateway_token_reconciled', [
+            'plugin' => $pluginId,
+        ]);
         return $token;
     }
 

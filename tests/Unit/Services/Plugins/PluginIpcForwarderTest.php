@@ -50,9 +50,13 @@ class PluginIpcForwarderTest extends TestCase
         $this->svc = new PluginIpcForwarder(
             $this->loader,
             null,
-            function (string $url, string $body): array {
+            function (string $url, string $body, int $timeoutMs): array {
                 $decoded = json_decode($body, true);
-                $this->httpLog[] = ['url' => $url, 'body' => is_array($decoded) ? $decoded : []];
+                $this->httpLog[] = [
+                    'url'     => $url,
+                    'body'    => is_array($decoded) ? $decoded : [],
+                    'timeout' => $timeoutMs,
+                ];
                 return $this->nextResponse;
             }
         );
@@ -590,7 +594,7 @@ class PluginIpcForwarderTest extends TestCase
         $svc = new PluginIpcForwarder(
             $this->loader,
             $logger,
-            function (string $u, string $b): array {
+            function (string $u, string $b, int $timeoutMs): array {
                 return [
                     'ok' => true, 'status' => 200,
                     'body' => [
@@ -725,5 +729,115 @@ class PluginIpcForwarderTest extends TestCase
         $this->assertCount(1, $report['payback_method_types']);
         $this->assertSame('btc', $report['payback_method_types'][0]['id']);
         $this->assertFalse($registry->has('bank_wire'));
+    }
+
+    // ===================================================================
+    // Per-envelope timeout budgets
+    // ===================================================================
+
+    #[Test]
+    public function eventDispatchUsesTheUserBlockingDefaultTimeout(): void
+    {
+        // event / filter / render / action stay on the 500ms cap —
+        // these all park a user-blocking request on the plugin's
+        // reply, so a slow plugin must not extend the user's wait.
+        $this->loader->method('listAllPlugins')->willReturn([
+            $this->pluginRow('hello-eiou', ['subscribes_to' => ['sync.completed']]),
+        ]);
+        $this->svc->registerAll($this->hooks);
+        EventDispatcher::getInstance()->dispatch('sync.completed', []);
+
+        $this->assertSame(
+            PluginIpcForwarder::TIMEOUT_BY_TYPE_MS['event'],
+            $this->httpLog[0]['timeout']
+        );
+    }
+
+    #[Test]
+    public function cronDispatchUsesTheLongerCronTimeout(): void
+    {
+        // cron runs off the user path; the earlier 500ms cap forced
+        // plugins to narrow each tick artificially and logged
+        // `plugin_ipc_transport_failed` on dispatches that the
+        // plugin's worker actually completed within its FPM 30s
+        // ceiling. 5s aligns the host timeout with the cron cadence.
+        $this->svc->dispatchCron('hello-eiou', 'drain', time(), 1);
+
+        $this->assertCount(1, $this->httpLog);
+        $this->assertSame('cron', $this->httpLog[0]['body']['type']);
+        $this->assertSame(
+            PluginIpcForwarder::TIMEOUT_BY_TYPE_MS['cron'],
+            $this->httpLog[0]['timeout']
+        );
+    }
+
+    #[Test]
+    public function perEntryTimeoutOverridesEnvelopeTypeDefault(): void
+    {
+        // PluginCronService reads `timeout_ms` off a manifest's
+        // cron_actions entry and calls setEntryTimeout() before
+        // dispatching. The forwarder uses that value instead of the
+        // type default.
+        $this->svc->setEntryTimeout('hello-eiou', 'cron', 'long-drain', 12000);
+        $this->svc->dispatchCron('hello-eiou', 'long-drain', time(), 1);
+
+        $this->assertSame(12000, $this->httpLog[0]['timeout']);
+    }
+
+    #[Test]
+    public function perEntryTimeoutIsClampedAtMaxTimeoutMs(): void
+    {
+        // A misbehaving manifest can't reserve a worker beyond the
+        // FPM `request_terminate_timeout` ceiling. The clamp leaves
+        // a 5s gap so the host always times out first and logs the
+        // failure under our control.
+        $this->svc->setEntryTimeout('hello-eiou', 'cron', 'huge', 999999);
+        $this->svc->dispatchCron('hello-eiou', 'huge', time(), 1);
+
+        $this->assertSame(
+            PluginIpcForwarder::MAX_TIMEOUT_MS,
+            $this->httpLog[0]['timeout']
+        );
+    }
+
+    #[Test]
+    public function perEntryTimeoutDoesNotLeakAcrossActions(): void
+    {
+        // setEntryTimeout's key is (plugin, type, name). A long
+        // timeout on one action must not apply to a sibling action
+        // on the same plugin.
+        $this->svc->setEntryTimeout('hello-eiou', 'cron', 'slow', 8000);
+        $this->svc->dispatchCron('hello-eiou', 'slow', time(), 1);
+        $this->svc->dispatchCron('hello-eiou', 'fast', time(), 1);
+
+        $this->assertSame(8000, $this->httpLog[0]['timeout']);
+        $this->assertSame(
+            PluginIpcForwarder::TIMEOUT_BY_TYPE_MS['cron'],
+            $this->httpLog[1]['timeout']
+        );
+    }
+
+    #[Test]
+    public function constructorTimeoutOverrideStillWinsForTestSeams(): void
+    {
+        // Pre-refactor tests pinned timeoutMs via the constructor.
+        // That contract is preserved: a non-null constructor argument
+        // forces every dispatch to use that value, regardless of
+        // envelope type or per-entry override.
+        $log = [];
+        $svc = new PluginIpcForwarder(
+            $this->loader,
+            null,
+            function (string $u, string $b, int $tms) use (&$log): array {
+                $log[] = $tms;
+                return ['ok' => true, 'status' => 200, 'body' => ['ok' => true, 'result' => null]];
+            },
+            null,
+            123  // explicit timeoutMs
+        );
+        $svc->setEntryTimeout('plug', 'cron', 'name', 9999);
+        $svc->dispatchCron('plug', 'name', time(), 1);
+
+        $this->assertSame([123], $log);
     }
 }

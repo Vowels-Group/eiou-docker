@@ -480,6 +480,27 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get ContactLookupService instance.
+     *
+     * Read-only facade exposing the narrow {name, http, https, tor,
+     * pubkey_hash} contact surface to sandboxed plugins. The gateway
+     * resolves a service name to `get<ServiceName>()` on this container,
+     * so this getter is what makes "ContactLookupService.getByPubkeyHash"
+     * (and listAccepted) reachable from a plugin manifest's core_services
+     * allow-list. Same wrapper rationale as TransactionLookupService —
+     * the repository stays undecorated and is accessed only through
+     * RepositoryFactory.
+     */
+    public function getContactLookupService(): \Eiou\Services\Lookup\ContactLookupService {
+        if (!isset($this->services['ContactLookupService'])) {
+            $this->services['ContactLookupService'] = new \Eiou\Services\Lookup\ContactLookupService(
+                $this->getRepositoryFactory()->get(ContactRepository::class)
+            );
+        }
+        return $this->services['ContactLookupService'];
+    }
+
+    /**
      * Get IdentityLookupService instance.
      *
      * Read-only facade exposing a narrow slice of UserContext (public key,
@@ -582,6 +603,27 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->services['WalletOutboundService'];
+    }
+
+    /**
+     * Get ContainerLifecycleService instance.
+     *
+     * Sandbox bridge that lets a plugin record a desired state
+     * ("running"/"stopped") for its sidecar containers. The wallet
+     * itself does not invoke docker; the service writes
+     * /var/lib/eiou/plugin-sidecars-desired.json which the operator's
+     * orchestration reads and reconciles. See the class docblock for
+     * the trust model and why we don't run docker compose from the
+     * wallet pool ourselves.
+     */
+    public function getContainerLifecycleService(): \Eiou\Services\ContainerLifecycleService {
+        if (!isset($this->services['ContainerLifecycleService'])) {
+            $this->services['ContainerLifecycleService'] = new \Eiou\Services\ContainerLifecycleService(
+                null,
+                Logger::getInstance()
+            );
+        }
+        return $this->services['ContainerLifecycleService'];
     }
 
     /**
