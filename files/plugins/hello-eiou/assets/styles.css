@@ -30,21 +30,42 @@
     opacity: 0.85;
 }
 
-.plugin-hello-eiou-tab {
-    padding: 16px;
-}
-
-.plugin-hello-eiou-tab ul {
-    list-style: none;
-    padding: 0;
-    margin: 12px 0;
-}
-
-.plugin-hello-eiou-tab li {
-    padding: 10px 14px;
-    margin: 6px 0;
+/* "Show me a fortune" interactive section — button + live result. */
+.plugin-hello-eiou-pick {
+    margin: 1rem 0 1.25rem 0;
+    padding: 1rem 1.25rem;
     background: #fdf6e3;
+    border: 1px solid #e6d9b8;
+    border-radius: 8px;
+}
+
+.plugin-hello-eiou-pick-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.plugin-hello-eiou-fortune-output {
+    min-height: 1.5em;
+    padding: 0.5rem 0.75rem;
+    background: #fff8e1;
     border-left: 3px solid #d4a960;
     border-radius: 4px;
     font-style: italic;
+    color: #5a4a2a;
+}
+
+.plugin-hello-eiou-fortune-output:empty::before {
+    content: 'Click the button to draw one.';
+    color: #a18a55;
+    opacity: 0.7;
+}
+
+.plugin-hello-eiou-fortune-fade {
+    animation: plugin-hello-eiou-fade-in 0.35s ease-out;
+}
+
+@keyframes plugin-hello-eiou-fade-in {
+    from { opacity: 0; transform: translateY(-3px); }
+    to   { opacity: 1; transform: translateY(0); }
 }

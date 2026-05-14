@@ -11,7 +11,13 @@
 #   subscribes_to:    sync.completed       → log a fortune via Logger.info
 #   render_hooks:     gui.dashboard.after  → fortune widget HTML
 #   render:           plugin_tab_panel     → body for this plugin's panel
-#                                            inside the host's Plugins tab
+#                                            inside the host's Plugins tab.
+#                                            Panel ships an interactive
+#                                            "Draw a fortune" button wired
+#                                            up by assets/script.js, which
+#                                            POSTs the helloEiouFortune
+#                                            gui_action via XHR and renders
+#                                            the response in-panel.
 #   filter_hooks:     gui.dashboard.widgets → contribute a mini-tip widget
 #   filter_hooks:     gui.contact.actions  → add a Fortune action button
 #   gui_actions:      helloEiouFortune     → return a random fortune as JSON
@@ -189,11 +195,6 @@ switch ($type) {
         // plugin tabs were consolidated into the host's Plugins tab
         // with a per-plugin dropdown.)
         if ($name === 'plugin_tab_panel') {
-            $items = '';
-            foreach (Fortunes::LINES as $f) {
-                $items .= '<li>' . htmlspecialchars($f, ENT_QUOTES) . '</li>';
-            }
-
             // ----------------------------------------------------------
             // Self-introspection demo: a real plugin can fail-fast at
             // boot if a required permission isn't granted, or render
@@ -251,6 +252,30 @@ switch ($type) {
                 }
             }
 
+            // Interactive "Show me a fortune" section — button +
+            // live result area. The button is wired up client-side
+            // by assets/script.js (declared in gui_assets), which
+            // POSTs the helloEiouFortune gui_action via XHR and
+            // drops the returned fortune into the output div above.
+            // Demonstrates the round-trip plugin -> host gateway ->
+            // plugin dispatcher path with no full-page reload.
+            $pickSection = '<div class="plugin-hello-eiou-pick">'
+                         . '<h3 style="font-size:0.95rem;margin:0 0 0.5rem 0">'
+                         . '<i class="fas fa-cookie-bite"></i> Show me a fortune'
+                         . '</h3>'
+                         . '<div class="plugin-hello-eiou-pick-row">'
+                         . '<div id="plugin-hello-eiou-fortune-output"'
+                         . ' class="plugin-hello-eiou-fortune-output"'
+                         . ' role="status" aria-live="polite"></div>'
+                         . '<div>'
+                         . '<button type="button" class="btn btn-primary btn-sm"'
+                         . ' id="plugin-hello-eiou-fortune-btn">'
+                         . '<i class="fas fa-dice"></i> Draw a fortune'
+                         . '</button>'
+                         . '</div>'
+                         . '</div>'
+                         . '</div>';
+
             // The host's Plugins-tab partial already renders the
             // tab-level chrome (title, dropdown, container). This
             // body fills only the panel area — wrap in a section
@@ -260,14 +285,16 @@ switch ($type) {
                   . '<h3 style="font-size:1rem"><i class="fas fa-cookie-bite"></i> Fortunes</h3>'
                   . '</div>'
                   . '<details class="section-intro text-muted">'
-                  . '<summary><i class="fas fa-info-circle"></i> <span>About these fortunes</span></summary>'
+                  . '<summary><i class="fas fa-info-circle"></i> <span>About this panel</span></summary>'
                   . '<div class="section-intro-body">A demo of the sandboxed-plugin panel IPC. '
-                  . 'This list is rendered by hello-eiou\'s __dispatch.php inside its own '
-                  . 'FPM pool, then forwarded to the host\'s Plugins tab via the '
-                  . 'plugin_tab_panel render channel.</div>'
+                  . 'The button below POSTs the helloEiouFortune gui_action via XHR; the '
+                  . 'response is rendered by assets/script.js, which is loaded as a '
+                  . 'declarative gui_assets entry with the page\'s CSP nonce. Everything '
+                  . 'runs inside the plugin\'s own FPM pool and reaches the host only '
+                  . 'through the gateway.</div>'
                   . '</details>'
+                  . $pickSection
                   . $personalised
-                  . '<div class="plugin-hello-eiou-tab"><ul>' . $items . '</ul></div>'
                   . $permsRow
                   . $manifestRow
                   . '</div>';

@@ -1,6 +1,6 @@
 {
   "name": "hello-eiou",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the sandboxed eIOU plugin contract: declarative manifest surfaces, an in-pool __dispatch.php, event/filter/render/action handlers, REST + CLI dispatch, core_call into whitelisted core services, the manifest permissions tier for surfaces that warrant louder operator consent, and the plugin_tab_panel field for rendering inside the host's Plugins tab.",
   "author": {
     "name": "EIOU",
@@ -45,7 +45,8 @@
   ],
 
   "gui_assets": [
-    {"type": "css", "path": "assets/styles.css"}
+    {"type": "css", "path": "assets/styles.css"},
+    {"type": "js",  "path": "assets/script.js"}
   ],
 
   "plugin_tab_panel": {
