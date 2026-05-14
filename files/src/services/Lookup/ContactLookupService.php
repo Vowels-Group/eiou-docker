@@ -9,15 +9,15 @@ use Eiou\Database\ContactRepository;
 /**
  * ContactLookupService
  *
- * Read-only facade over ContactRepository, exposing the single
- * contact-resolution surface sandboxed plugins need to map a
- * pubkey_hash coming off the wire (e.g. inside a transaction.received
- * envelope) back to a human contact name / set of transport
- * addresses. Mirrors the gating + wrapper rationale of
- * TransactionLookupService — see that class for the broader rule
- * about why repository methods don't carry #[PluginCallable] directly.
+ * Read-only facade over ContactRepository, exposing the contact
+ * resolution surface sandboxed plugins need to map a pubkey_hash
+ * coming off the wire (e.g. inside a transaction.received envelope)
+ * back to a human contact name / set of transport addresses. Mirrors
+ * the gating + wrapper rationale of TransactionLookupService — see
+ * that class for the broader rule about why repository methods don't
+ * carry #[PluginCallable] directly.
  *
- * Returned shape is deliberately narrow:
+ * The shape returned by both methods is deliberately narrow:
  *   {name, http, https, tor, pubkey_hash}
  *
  * Other contact metadata (status, contact_id, credit limits, the
@@ -27,29 +27,20 @@ use Eiou\Database\ContactRepository;
  * later (rename a column, add a new status) without breaking the
  * plugin contract.
  *
- * Demand-driven only by design — no bulk enumeration:
- *
- *   The earlier shape of this service exposed both a per-hash lookup
- *   AND a `listAccepted()` bulk method. That mix turned the surface
- *   into a contact-graph exfiltration primitive: a plugin allow-
- *   listed for the "list" verb could enumerate the operator's
- *   entire address book (including .onion addresses and operator-
- *   private contact labels) regardless of whether it had any
- *   legitimate workflow involving those contacts. By contrast, a
- *   `transaction.received` subscriber learns about contacts
- *   incidentally — only those the plugin actually interacts with.
- *   The bulk surface was removed before any in-tree plugin
- *   depended on it. If a future plugin ships a genuine bulk-list
- *   use case, the right path is a new method with operator-
- *   visible manifest gating that distinguishes "I only resolve
- *   hashes I've already seen" from "I enumerate the address book."
- *
  * Anything mutating (accept/block/delete) belongs in a different
  * service with its own gating; this one is strictly read-only by
  * design.
  */
 class ContactLookupService
 {
+    /**
+     * Hard cap on listAccepted() page size. Aligns with the same
+     * "no bulk exfiltration via a single call" stance applied in
+     * TransactionLookupService::MAX_PAGE_LIMIT — a plugin that wants
+     * the full list paginates rather than asking for it at once.
+     */
+    public const MAX_PAGE_LIMIT = 500;
+
     private ContactRepository $repository;
 
     public function __construct(ContactRepository $repository)
@@ -58,7 +49,7 @@ class ContactLookupService
     }
 
     #[PluginCallable(
-        description: 'Resolve a contact by SHA-256 pubkey_hash to {name, http, https, tor, pubkey_hash}. Returns null when no contact carries that hash. Use when a plugin sees a pubkey_hash on an inbound envelope (e.g. transaction.received) and needs the human name or a transport address to relay back. The host does NOT expose a bulk-enumerate method — plugins are expected to learn pubkey_hashes through events rather than walk the address book.',
+        description: 'Resolve a contact by SHA-256 pubkey_hash to {name, http, https, tor, pubkey_hash}. Returns null when no contact carries that hash. Use when a plugin sees a pubkey_hash on an inbound envelope and needs the human name or a transport address to relay back.',
         ratePerMinute: 120
     )]
     public function getByPubkeyHash(string $pubkeyHash): ?array
@@ -76,6 +67,21 @@ class ContactLookupService
             return null;
         }
         return $this->project($row);
+    }
+
+    #[PluginCallable(
+        description: 'List accepted contacts as {name, http, https, tor, pubkey_hash} rows. $limit is hard-capped at MAX_PAGE_LIMIT regardless of caller value; $offset is the zero-based page offset. Pending and blocked contacts are not exposed through this surface.',
+        ratePerMinute: 30
+    )]
+    public function listAccepted(int $limit = 50, int $offset = 0): array
+    {
+        $bounded = max(0, min($limit, self::MAX_PAGE_LIMIT));
+        $rows = $this->repository->getAcceptedContactsPage($bounded, max(0, $offset));
+        $projected = [];
+        foreach ($rows as $row) {
+            $projected[] = $this->project($row);
+        }
+        return $projected;
     }
 
     /**
