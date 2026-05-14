@@ -316,8 +316,39 @@ class PluginLoader
             // the next reconcile pass.
             $this->metadata[$name]['enabled'] = false;
         }
-        if ($autoDisabled !== []) {
+        // Permission-drift auto-disable. A plugin whose manifest now
+        // declares a permission the operator hasn't approved (fresh
+        // install with no consent recorded, or an upgrade that grew
+        // the permission list) must not stay enabled — its gateway
+        // calls would either be silently denied or, worse if a future
+        // refactor weakens the gate, run un-consented. Flipping to
+        // disabled forces the operator back through the consent flow
+        // on the next enable.
+        //
+        // Drift is computed only for known sandboxed plugins so the
+        // legacy_unsupported pass above runs first and we don't
+        // double-warn the same plugin under two reasons.
+        $driftDisabled = [];
+        foreach ($this->metadata as $name => $meta) {
+            if (($meta['status'] ?? '') === 'legacy_unsupported') continue;
+            if (!array_key_exists($name, $state)) continue;
+            if (empty($state[$name]['enabled'])) continue;
+            $manifestPerms = self::manifestPermissionKeys($this->readManifestFromDisk($name));
+            if ($manifestPerms === []) continue;
+            $approved = is_array($state[$name]['approved_permissions'] ?? null)
+                ? array_values(array_filter($state[$name]['approved_permissions'], 'is_string'))
+                : [];
+            $missing = array_values(array_diff($manifestPerms, $approved));
+            if ($missing === []) continue;
+            $state[$name]['enabled'] = false;
+            $this->metadata[$name]['enabled'] = false;
+            $driftDisabled[$name] = $missing;
+        }
+
+        if ($autoDisabled !== [] || $driftDisabled !== []) {
             $this->writeState($state);
+        }
+        if ($autoDisabled !== []) {
             $this->logger->warning(
                 'plugin_legacy_auto_disabled',
                 [
@@ -327,6 +358,18 @@ class PluginLoader
                               . 'boot auto-flipped them to disabled. Operator should either '
                               . 'wait for the plugin author to ship a sandboxed migration, or '
                               . 'uninstall the plugin. See docs/PLUGINS.md.',
+                ]
+            );
+        }
+        if ($driftDisabled !== []) {
+            $this->logger->warning(
+                'plugin_permission_drift_auto_disabled',
+                [
+                    'plugins' => $driftDisabled,
+                    'reason' => 'Plugins requesting permissions the operator has not approved '
+                              . '(fresh install, or upgrade added a permission) were auto-disabled '
+                              . 'on this boot. Re-enable via the GUI consent modal or `eiou plugin '
+                              . 'enable <name> --grant-all` after reviewing the new permissions.',
                 ]
             );
         }
@@ -535,17 +578,25 @@ class PluginLoader
             // here against malformed-row drift even though the install
             // validator rejects unknown keys at upload time — a row
             // that pre-dates a key rename should fail closed.
-            $perms = $manifest['permissions'] ?? [];
-            if (is_array($perms)) {
-                $row['permissions'] = array_values(array_filter(
-                    $perms,
-                    fn($entry): bool => is_string($entry)
-                        && preg_match('/^[a-z][a-z0-9_]*$/', $entry) === 1
-                        && PluginPermissionCatalog::isKnown($entry)
-                ));
-            } else {
-                $row['permissions'] = [];
+            $row['permissions'] = self::manifestPermissionKeys($manifest);
+
+            // Operator-granted subset of the above, plus the
+            // grant timestamp. Drift = manifest keys not in the
+            // approved set; non-empty drift is the signal that the
+            // operator must re-consent before the gateway will route
+            // any permission-gated call. discover() auto-disables
+            // enabled-with-drift plugins on the next boot; the GUI
+            // renders the drift list so the operator sees what's
+            // new before clicking the consent modal.
+            $approved = is_array($state[$name]['approved_permissions'] ?? null)
+                ? array_values(array_filter($state[$name]['approved_permissions'], 'is_string'))
+                : [];
+            $row['approved_permissions'] = $approved;
+            $approvedAt = $state[$name]['approved_at'] ?? null;
+            if (is_string($approvedAt) && $approvedAt !== '') {
+                $row['approved_at'] = $approvedAt;
             }
+            $row['permission_drift'] = array_values(array_diff($row['permissions'], $approved));
 
             // Declarative surface fields. These tell the IPC forwarder
             // which events/filters/renders to bridge from in-process
@@ -789,8 +840,25 @@ class PluginLoader
      * DDL runs BEFORE the state flip so a failure leaves the flag at its
      * previous value and the operator can retry. Partial-success states
      * are healed by the boot-time reconciler on the next boot.
+     *
+     * Permission consent ($approvedPermissions, only meaningful on enable=true):
+     *
+     *   - non-null array → replaces the persisted approved set verbatim.
+     *     Must be a subset of the plugin's manifest `permissions` list;
+     *     mismatched keys are refused outright (stage=refused). Empty
+     *     array means "the operator explicitly granted nothing."
+     *   - null → re-enable path: keep whatever was previously approved.
+     *     If the manifest declares permissions and the state has no
+     *     approved set on file (first-time enable, or pre-consent
+     *     state-file from before this change), the call is refused —
+     *     the caller (CLI / GUI) must collect consent first.
+     *
+     * Disable (enabled=false) does NOT clear approvals — re-enabling
+     * later with an unchanged manifest skips the prompt. Use the
+     * uninstall flow (removeFromState) to wipe approvals entirely, or
+     * pass an explicit empty array on a future enable to revoke.
      */
-    public function setEnabled(string $name, bool $enabled): bool
+    public function setEnabled(string $name, bool $enabled, ?array $approvedPermissions = null): bool
     {
         $this->lastSetEnabledFailure = null;
 
@@ -798,6 +866,7 @@ class PluginLoader
         // sandboxing. Disabling a non-sandboxed plugin always
         // succeeds at the state-flip layer (operator wants to mark
         // it disabled even if it was never going to load anyway).
+        $manifest = null;
         if ($enabled) {
             $manifest = $this->readManifestFromDisk($name);
             if ($manifest !== null && empty($manifest['sandboxed'])) {
@@ -816,6 +885,29 @@ class PluginLoader
                 ];
                 return false;
             }
+        }
+
+        // Permission-consent gate. Runs before any isolation/sandbox
+        // side-effects so a refused-consent enable doesn't leave a
+        // half-applied pool behind.
+        $resolvedApprovals = null;
+        if ($enabled) {
+            $manifestPerms = self::manifestPermissionKeys($manifest);
+            $existingApprovals = $this->readApprovedPermissions($name);
+            $resolution = $this->resolveApprovalSet(
+                $name,
+                $manifestPerms,
+                $existingApprovals,
+                $approvedPermissions
+            );
+            if ($resolution['error'] !== null) {
+                $this->lastSetEnabledFailure = [
+                    'stage' => 'refused',
+                    'message' => $resolution['error'],
+                ];
+                return false;
+            }
+            $resolvedApprovals = $resolution['approvals'];
         }
 
         // Run the DDL side-effects first — if they fail, we don't flip
@@ -851,7 +943,15 @@ class PluginLoader
         }
 
         $state = $this->readState();
-        $state[$name] = ['enabled' => $enabled];
+        $entry = is_array($state[$name] ?? null) ? $state[$name] : [];
+        $entry['enabled'] = $enabled;
+        if ($enabled && $resolvedApprovals !== null) {
+            $entry['approved_permissions'] = $resolvedApprovals;
+            $entry['approved_at'] = gmdate('Y-m-d\TH:i:s\Z');
+        }
+        // Disable path: keep existing approvals so a future re-enable
+        // can skip the consent prompt if the manifest hasn't drifted.
+        $state[$name] = $entry;
         if ($this->writeState($state)) {
             // Lifecycle hook — sandbox-model replacement for the
             // pre-sandbox boot() method. Only fires on enable=true
@@ -916,6 +1016,166 @@ class PluginLoader
     public function getLastSetEnabledFailure(): ?array
     {
         return $this->lastSetEnabledFailure;
+    }
+
+    /**
+     * Return the operator-approved permission set for a plugin, drawn
+     * from the persisted state file. Empty list means "no approvals on
+     * record" — either the plugin has no manifest permissions, or the
+     * operator has not gone through the consent flow yet.
+     *
+     * @return list<string>
+     */
+    public function getApprovedPermissions(string $name): array
+    {
+        return $this->readApprovedPermissions($name);
+    }
+
+    /**
+     * Return the ISO8601 timestamp (UTC) of when the operator last
+     * granted permissions to this plugin, or null if no approval is on
+     * record. Surfaced in listAllPlugins so the GUI can render "granted
+     * on …" copy without re-prompting on every re-enable.
+     */
+    public function getApprovedAt(string $name): ?string
+    {
+        $state = $this->readState();
+        $ts = $state[$name]['approved_at'] ?? null;
+        return is_string($ts) && $ts !== '' ? $ts : null;
+    }
+
+    /**
+     * Permission keys declared in the plugin's manifest but NOT in the
+     * operator-approved set. Non-empty result is "manifest drift" — the
+     * plugin's author added a permission since the operator last
+     * consented, and the gateway must refuse the new surface until the
+     * operator re-approves. Used by both the discover-time auto-disable
+     * and the gateway as defense-in-depth.
+     *
+     * Approved-but-no-longer-in-manifest is the opposite direction and
+     * is not surfaced here: shrinking the manifest is always safe
+     * (fewer surfaces gated), the now-unused approval just sits inert.
+     *
+     * @return list<string>
+     */
+    public function manifestPermissionDrift(string $name): array
+    {
+        $manifest = $this->readManifestFromDisk($name);
+        $manifestPerms = self::manifestPermissionKeys($manifest);
+        $approved = $this->readApprovedPermissions($name);
+        return array_values(array_diff($manifestPerms, $approved));
+    }
+
+    /**
+     * Validate a caller-supplied approval set against the plugin's
+     * manifest, falling back to the previously-approved set when the
+     * caller passed null. Pure (no side effects); the result is the
+     * canonical approved list to persist plus an optional error string
+     * the caller should surface as a refused-stage failure.
+     *
+     * The "previously-approved drift detection" branch is the load-
+     * bearing one: a re-enable with no caller-supplied approvals
+     * succeeds when the manifest hasn't grown beyond what was last
+     * approved, and refuses when it has. This is how a plugin upgrade
+     * that adds a new permission stops the plugin from re-enabling
+     * silently.
+     *
+     * @param list<string> $manifestPerms
+     * @param list<string> $existingApprovals
+     * @return array{approvals: list<string>|null, error: string|null}
+     */
+    private function resolveApprovalSet(
+        string $name,
+        array $manifestPerms,
+        array $existingApprovals,
+        ?array $callerSupplied
+    ): array {
+        if ($callerSupplied !== null) {
+            // Caller passed an explicit set — validate every element is
+            // a known string and a subset of the manifest. No silent
+            // promotion of unknown / dropped keys; the operator's
+            // consent must match what the manifest actually requested.
+            $clean = [];
+            foreach ($callerSupplied as $k) {
+                if (!is_string($k) || $k === '') {
+                    return [
+                        'approvals' => [],
+                        'error' => "Plugin '{$name}': approved_permissions contains a non-string entry",
+                    ];
+                }
+                if (!in_array($k, $manifestPerms, true)) {
+                    return [
+                        'approvals' => [],
+                        'error' => "Plugin '{$name}': cannot approve '{$k}' — not in manifest 'permissions'",
+                    ];
+                }
+                if (!in_array($k, $clean, true)) {
+                    $clean[] = $k;
+                }
+            }
+            return ['approvals' => $clean, 'error' => null];
+        }
+
+        // Re-enable path: no caller approvals. Honour existing ones if
+        // they still cover the manifest; otherwise force re-consent.
+        // Plugins with no manifest permissions have nothing to record —
+        // return null so setEnabled() skips writing approved_permissions
+        // entirely and the state file stays clean.
+        if ($manifestPerms === []) {
+            return ['approvals' => null, 'error' => null];
+        }
+        $drift = array_values(array_diff($manifestPerms, $existingApprovals));
+        if ($drift !== []) {
+            return [
+                'approvals' => [],
+                'error' => "Plugin '{$name}' requests permissions the operator has not approved: "
+                         . implode(', ', $drift)
+                         . ". Re-enable with explicit consent (CLI: --grant-all / --grant; GUI: consent modal).",
+            ];
+        }
+        // Existing approvals fully cover the manifest — this is a
+        // no-op re-enable, not a fresh consent action. Return null so
+        // the setEnabled writeback leaves approved_permissions and
+        // approved_at untouched. The original grant timestamp keeps
+        // its "when did the operator first consent" meaning instead
+        // of degrading into "when was the plugin last toggled".
+        return ['approvals' => null, 'error' => null];
+    }
+
+    /**
+     * Persisted approved set for a plugin. Wraps readState so the rest
+     * of the loader can ask the question without re-implementing the
+     * key + type checks.
+     *
+     * @return list<string>
+     */
+    private function readApprovedPermissions(string $name): array
+    {
+        $state = $this->readState();
+        $list = $state[$name]['approved_permissions'] ?? null;
+        if (!is_array($list)) return [];
+        return array_values(array_filter($list, 'is_string'));
+    }
+
+    /**
+     * Extract the manifest's `permissions` list and filter to
+     * catalogued, well-shaped keys. Mirrors the defensive filter in
+     * listAllPlugins so the loader's two consumers see the same set.
+     *
+     * @param array<string,mixed>|null $manifest
+     * @return list<string>
+     */
+    private static function manifestPermissionKeys(?array $manifest): array
+    {
+        if ($manifest === null) return [];
+        $perms = $manifest['permissions'] ?? [];
+        if (!is_array($perms)) return [];
+        return array_values(array_filter(
+            $perms,
+            fn($entry): bool => is_string($entry)
+                && preg_match('/^[a-z][a-z0-9_]*$/', $entry) === 1
+                && PluginPermissionCatalog::isKnown($entry)
+        ));
     }
 
     /**

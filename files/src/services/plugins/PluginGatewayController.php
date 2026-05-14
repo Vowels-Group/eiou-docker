@@ -192,16 +192,28 @@ class PluginGatewayController
         $pluginCallable = $attributes[0]->newInstance();
 
         // Gate 3b: permission tier. When the attribute carries a
-        // permission key, require the plugin's manifest to also
-        // declare it in `permissions`. Two failure modes here:
+        // permission key, require the operator to have *approved* it
+        // (not just the manifest to declare it). Three failure modes:
         //
         //   - Unknown key: the attribute references a permission
         //     the host doesn't catalogue. Almost certainly a
         //     programmer error post-rename — fail closed with 503
         //     (server misconfiguration, not the plugin's fault).
-        //   - Not granted: the plugin's manifest is missing the
-        //     key. 403 with a message naming the key so the plugin
-        //     author can add it.
+        //   - Not in manifest: the plugin author forgot to declare
+        //     the permission their #[PluginCallable] requires. 403
+        //     naming the key so the author can add it.
+        //   - Not approved: the manifest declares it, but the
+        //     operator never went through the consent flow for it
+        //     (or the plugin upgraded and grew the manifest beyond
+        //     what the operator approved). 403 with a distinct
+        //     code so the GUI can prompt re-consent instead of
+        //     just surfacing a generic gateway error.
+        //
+        // Defense-in-depth: discover() already auto-disables plugins
+        // whose manifest grew beyond the approved set, so a
+        // drift-affected plugin shouldn't reach this point at all.
+        // The check stays here in case the gateway is hit before a
+        // restart picks up the auto-disable.
         if ($pluginCallable->permission !== null) {
             $permKey = $pluginCallable->permission;
             if (!PluginPermissionCatalog::isKnown($permKey)) {
@@ -213,12 +225,20 @@ class PluginGatewayController
                     "'{$allowKey}' carries permission '{$permKey}' which is not in the host catalog"
                 );
             }
-            $granted = $this->pluginPermissions($pluginId);
-            if (!in_array($permKey, $granted, true)) {
+            $declared = $this->pluginPermissions($pluginId);
+            if (!in_array($permKey, $declared, true)) {
                 return $this->errorResponse(
-                    403, 'permission_not_granted',
+                    403, 'permission_not_declared',
                     "plugin '{$pluginId}' did not declare permission '{$permKey}' "
                     . "in its manifest 'permissions' list (required for '{$allowKey}')"
+                );
+            }
+            $approved = $this->loader->getApprovedPermissions($pluginId);
+            if (!in_array($permKey, $approved, true)) {
+                return $this->errorResponse(
+                    403, 'permission_not_approved',
+                    "operator has not approved permission '{$permKey}' for plugin '{$pluginId}' "
+                    . "(required for '{$allowKey}'). Re-enable the plugin to consent."
                 );
             }
         }

@@ -307,16 +307,59 @@ class PluginController
 
         // Refuse to toggle a plugin that doesn't exist on disk — otherwise
         // the state file accumulates ghost entries.
-        $known = array_column($this->loader->listAllPlugins(), 'name');
-        if (!in_array($name, $known, true)) {
+        $rows = $this->loader->listAllPlugins();
+        $row = null;
+        foreach ($rows as $candidate) {
+            if (($candidate['name'] ?? null) === $name) {
+                $row = $candidate;
+                break;
+            }
+        }
+        if ($row === null) {
             $this->respondError('unknown_plugin', 'Plugin not found', 404);
         }
 
-        if (!$this->loader->setEnabled($name, $enabled)) {
+        // Permission approval from the consent modal. Only consulted on
+        // enable — disable always proceeds without re-asking. Accepted
+        // shapes from the client:
+        //   - approved_permissions[]=key1&approved_permissions[]=key2  (form array)
+        //   - approved_permissions=key1,key2                           (comma list)
+        //   - omitted                                                  (re-enable
+        //     path: PluginLoader uses the previously-approved set if it
+        //     still covers the manifest, otherwise refuses)
+        // The loader does the subset-of-manifest validation; the
+        // controller just normalises the wire shape.
+        $approvals = null;
+        if ($enabled && isset($_POST['approved_permissions'])) {
+            $raw = $_POST['approved_permissions'];
+            if (is_string($raw)) {
+                $raw = $raw === ''
+                    ? []
+                    : array_map('trim', explode(',', $raw));
+            }
+            if (!is_array($raw)) {
+                $this->respondError(
+                    'invalid_approved_permissions',
+                    'approved_permissions must be an array or comma-separated string',
+                    400
+                );
+            }
+            $approvals = array_values(array_filter(array_map(
+                fn($v): string => is_string($v) ? $v : '',
+                $raw
+            ), 'strlen'));
+        }
+
+        if (!$this->loader->setEnabled($name, $enabled, $approvals)) {
             $failure = $this->loader->getLastSetEnabledFailure();
             $message = $failure['message'] ?? 'Could not persist the new state';
             $code = isset($failure['stage']) ? ('plugin_' . $failure['stage'] . '_failed') : 'persist_failed';
-            $this->respondError($code, $message, 500);
+            // refused-stage failures are client-correctable (operator
+            // didn't consent, or sent a permission not in the manifest);
+            // surface as 400 so the GUI can show the message inline
+            // rather than treating it as a server-side fault.
+            $status = (($failure['stage'] ?? null) === 'refused') ? 400 : 500;
+            $this->respondError($code, $message, $status);
         }
 
         // Sandboxed plugins took effect immediately (applyPool reloaded
