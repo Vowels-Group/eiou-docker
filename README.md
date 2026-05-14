@@ -48,7 +48,8 @@ docker compose up -d --build
 docker compose logs -f
 
 # Open the web GUI
-# https://localhost (HTTP redirects to HTTPS by default — your browser will show a certificate warning for the self-signed cert, this is expected)
+# http://localhost  (preferred for local dev — loopback skips the HTTPS redirect since the connection never leaves the host)
+# https://localhost (also works — your browser shows a self-signed cert warning, which is expected for a locally-generated cert)
 # For Tor: use Tor Browser and navigate to your node's .onion address (no certificate warning)
 ```
 
