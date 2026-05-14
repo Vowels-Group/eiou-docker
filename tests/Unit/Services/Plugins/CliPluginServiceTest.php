@@ -165,6 +165,175 @@ class CliPluginServiceTest extends TestCase
     }
 
     // =========================================================================
+    // Permission-consent flag parsing — exercises --grant-all, --grant key,key
+    // and the no-flag non-TTY refusal. Uses a sandboxed fixture with declared
+    // permissions so the consent path actually fires (the legacy non-sandboxed
+    // fixture in writeFixturePlugin is refused before consent runs).
+    // =========================================================================
+
+    public function testEnableWithGrantAllPersistsApprovedPermissions(): void
+    {
+        $this->writeSandboxedPluginWithPerms('grantall', ['contact_address_book_enumerate']);
+        $loader = $this->loaderWithSandbox();
+
+        $captured = null;
+        $this->output->method('isJsonMode')->willReturn(true);
+        $this->output->expects($this->once())->method('success')
+            ->willReturnCallback(function (string $msg, $data) use (&$captured) {
+                $captured = $data;
+            });
+
+        (new CliPluginService($loader))
+            ->enablePlugin(['eiou','plugin','enable','grantall','--grant-all'], $this->output);
+
+        $this->assertTrue($captured['enabled']);
+        $this->assertSame(['contact_address_book_enumerate'], $captured['approved_permissions']);
+
+        $state = json_decode(file_get_contents($this->stateFile), true);
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $state['grantall']['approved_permissions']
+        );
+        $this->assertArrayHasKey('approved_at', $state['grantall']);
+    }
+
+    public function testEnableWithGrantSubsetApprovesOnlyNamedKeys(): void
+    {
+        $this->writeSandboxedPluginWithPerms('grantsubset', [
+            'contact_address_book_enumerate',
+            'wallet_balance_read',
+        ]);
+        $loader = $this->loaderWithSandbox();
+
+        $captured = null;
+        $this->output->method('isJsonMode')->willReturn(true);
+        $this->output->expects($this->once())->method('success')
+            ->willReturnCallback(function (string $msg, $data) use (&$captured) {
+                $captured = $data;
+            });
+
+        (new CliPluginService($loader))->enablePlugin(
+            ['eiou','plugin','enable','grantsubset','--grant','contact_address_book_enumerate'],
+            $this->output
+        );
+
+        $this->assertSame(['contact_address_book_enumerate'], $captured['approved_permissions']);
+    }
+
+    public function testEnableRejectsGrantKeyNotInManifest(): void
+    {
+        $this->writeSandboxedPluginWithPerms('refused', ['contact_address_book_enumerate']);
+        $loader = $this->loaderWithSandbox();
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('wallet_outbound_send'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        (new CliPluginService($loader))->enablePlugin(
+            ['eiou','plugin','enable','refused','--grant','wallet_outbound_send'],
+            $this->output
+        );
+
+        $state = file_exists($this->stateFile)
+            ? json_decode(file_get_contents($this->stateFile), true)
+            : [];
+        $this->assertArrayNotHasKey('refused', $state ?? []);
+    }
+
+    public function testEnableRejectsBothGrantAllAndGrant(): void
+    {
+        $this->writeSandboxedPluginWithPerms('both', ['contact_address_book_enumerate']);
+        $loader = $this->loaderWithSandbox();
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('either --grant-all or --grant'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        (new CliPluginService($loader))->enablePlugin(
+            ['eiou','plugin','enable','both','--grant-all','--grant','contact_address_book_enumerate'],
+            $this->output
+        );
+    }
+
+    public function testEnableNoFlagNonTtyRefusesWithGuidance(): void
+    {
+        // PHPUnit runs without a TTY on STDIN, so posix_isatty returns
+        // false and the no-flag path falls into the non-TTY refusal.
+        $this->writeSandboxedPluginWithPerms('ttyguard', ['contact_address_book_enumerate']);
+        $loader = $this->loaderWithSandbox();
+
+        $errMsg = '';
+        $this->output->expects($this->once())->method('error')
+            ->willReturnCallback(function (string $msg) use (&$errMsg) {
+                $errMsg = $msg;
+            });
+
+        (new CliPluginService($loader))
+            ->enablePlugin(['eiou','plugin','enable','ttyguard'], $this->output);
+
+        $this->assertStringContainsString('contact_address_book_enumerate', $errMsg);
+        $this->assertStringContainsString('--grant-all', $errMsg);
+    }
+
+    public function testEnableWithoutPermsAcceptsNoFlag(): void
+    {
+        // Plugin manifest declares no permissions — enable must succeed
+        // without flags and without prompting (consent path skipped).
+        $this->writeSandboxedPluginWithPerms('noperms', []);
+        $loader = $this->loaderWithSandbox();
+
+        $this->output->method('isJsonMode')->willReturn(true);
+        $this->output->expects($this->once())->method('success');
+
+        (new CliPluginService($loader))
+            ->enablePlugin(['eiou','plugin','enable','noperms'], $this->output);
+
+        $state = json_decode(file_get_contents($this->stateFile), true);
+        $this->assertTrue($state['noperms']['enabled']);
+        $this->assertArrayNotHasKey('approved_permissions', $state['noperms']);
+    }
+
+    private function writeSandboxedPluginWithPerms(string $name, array $permissions): void
+    {
+        $dir = $this->pluginRoot . '/' . $name;
+        mkdir($dir . '/src', 0777, true);
+        $manifest = [
+            'name' => $name,
+            'version' => '1.0.0',
+            'description' => 'sandboxed fixture',
+            'entryClass' => 'Eiou\\Tests\\Plugins\\Cli\\' . ucfirst($name) . '\\Plugin',
+            'autoload' => ['psr-4' => ['Eiou\\Tests\\Plugins\\Cli\\' . ucfirst($name) . '\\' => 'src/']],
+            'sandboxed' => true,
+        ];
+        if ($permissions !== []) {
+            $manifest['permissions'] = $permissions;
+        }
+        file_put_contents($dir . '/plugin.json', json_encode($manifest));
+    }
+
+    private function loaderWithSandbox(): PluginLoader
+    {
+        $loader = new PluginLoader($this->pluginRoot, null, $this->stateFile);
+        $userSvc = $this->createMock(\Eiou\Services\Plugins\PluginUserService::class);
+        $userSvc->method('ensureUser')->willReturn(true);
+        $userSvc->method('dropUser')->willReturn(true);
+        $userSvc->method('systemUsername')->willReturnCallback(
+            fn(string $id) => 'eiou-p-' . substr(hash('sha256', $id), 0, 8)
+        );
+        $poolSvc = $this->createMock(\Eiou\Services\Plugins\PluginPoolService::class);
+        $poolSvc->method('applyPool')->willReturn(true);
+        $poolSvc->method('dropPool')->willReturn(true);
+        $nginxSvc = $this->createMock(\Eiou\Services\Plugins\PluginNginxConfigService::class);
+        $nginxSvc->method('renderSnippet')->willReturn('');
+        $loader->setSandboxServices($userSvc, $poolSvc, $nginxSvc);
+        return $loader;
+    }
+
+    // =========================================================================
     // upgrade subcommand
     // =========================================================================
 

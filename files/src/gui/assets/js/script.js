@@ -10108,13 +10108,25 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             });
         }
 
-        function toggle(name, enabled) {
+        function toggle(name, enabled, approvedPermissions) {
             if (!name) return;
-            post({
+            // On enable, optionally carry the consent-modal's granted
+            // list. Format is comma-separated keys — keeps the form-
+            // encoded POST simple (no FormData / JSON body needed; Tor
+            // Browser-safe per [[feedback_tor_browser_compat]]). The
+            // backend also accepts the array form for callers that
+            // post via $.post({arr:[...]}).
+            // Omitted entirely on disable so the loader takes the
+            // "preserve existing approvals" branch.
+            var payload = {
                 action: 'pluginsToggle',
                 name: name,
                 enabled: enabled ? '1' : '0'
-            }).then(function(r) {
+            };
+            if (enabled && Array.isArray(approvedPermissions)) {
+                payload.approved_permissions = approvedPermissions.join(',');
+            }
+            post(payload).then(function(r) {
                 if (r.data && r.data.success) {
                     // Mirror the new flag into lastList so the banner and any
                     // follow-up toggle decisions see the current desired state.
@@ -10213,9 +10225,17 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 // No permissions requested — also passes through.
                 return fromModal ? toggleFromModal(name, enabled) : toggle(name, enabled);
             }
+            // Today's consent is all-or-nothing: the modal grants the
+            // full manifest list. Pass the keys explicitly so the
+            // server records exactly what the operator saw, not
+            // whatever the manifest happens to declare on a later
+            // re-read (defense against a TOCTOU between the modal
+            // render and the POST landing — manifest swap mid-flight
+            // shouldn't escalate approvals).
+            var grantedKeys = perms.map(function(p) { return p.key; });
             openPermissionConsentModal(p, perms, function approved() {
-                if (fromModal) toggleFromModal(name, enabled);
-                else           toggle(name, enabled);
+                if (fromModal) toggleFromModal(name, enabled, grantedKeys);
+                else           toggle(name, enabled, grantedKeys);
             }, function cancelled() {
                 // Revert whichever toggle the operator flipped.
                 var rowCb = document.querySelector(
@@ -10626,11 +10646,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             });
         }
 
-        function toggleFromModal(name, enabled) {
+        function toggleFromModal(name, enabled, approvedPermissions) {
             var rowCb = document.querySelector('#plugins-tbody input[data-plugin="' + String(name).replace(/"/g, '') + '"]');
             if (rowCb) rowCb.checked = enabled;
             closeModal();
-            toggle(name, enabled);
+            toggle(name, enabled, approvedPermissions);
         }
 
         // -- Upload flow ----------------------------------------------------

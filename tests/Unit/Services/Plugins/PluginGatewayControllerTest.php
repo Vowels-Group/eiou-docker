@@ -500,6 +500,9 @@ class PluginGatewayControllerTest extends TestCase
         // The default setUp() loader has `permissions => []`, so a
         // call into a permission-gated method must 403 even though
         // the method IS in core_services and DOES carry the attribute.
+        // Code is permission_not_declared (plugin author forgot to add
+        // the key to plugin.json) — distinct from permission_not_approved
+        // (operator didn't consent yet).
         $r = $this->svc->handle(
             json_encode([
                 'service' => 'TestableGatewayService',
@@ -509,7 +512,7 @@ class PluginGatewayControllerTest extends TestCase
             $this->bearerHeaders($this->token)
         );
         $this->assertSame(403, $r['status']);
-        $this->assertSame('permission_not_granted', $r['body']['error']['code']);
+        $this->assertSame('permission_not_declared', $r['body']['error']['code']);
         $this->assertStringContainsString(
             'contact_address_book_enumerate',
             $r['body']['error']['message'],
@@ -518,10 +521,44 @@ class PluginGatewayControllerTest extends TestCase
     }
 
     #[Test]
-    public function acceptsCalogedPermissionWhenGrantedInManifest(): void
+    public function rejectsCalogedPermissionWhenManifestDeclaresButOperatorNotApproved(): void
     {
-        // Same method, but this time the plugin row carries the
-        // matching permission key. Gate 3b is satisfied; the call
+        // Manifest declares the permission but the operator has not
+        // consented (approved_permissions empty). 403 with a distinct
+        // code so the GUI can prompt re-consent instead of treating
+        // it as a plugin-author bug.
+        $loader = $this->createMock(PluginLoader::class);
+        $loader->method('listAllPlugins')->willReturn([
+            [
+                'name' => 'demo',
+                'core_services' => ['TestableGatewayService.gatedByCatalogedPermission'],
+                'permissions' => ['contact_address_book_enumerate'],
+            ],
+        ]);
+        $loader->method('getApprovedPermissions')->with('demo')->willReturn([]);
+        $svc = new PluginGatewayController($this->tokenService, $loader, $this->container);
+
+        $r = $svc->handle(
+            json_encode([
+                'service' => 'TestableGatewayService',
+                'method' => 'gatedByCatalogedPermission',
+                'args' => [],
+            ]),
+            $this->bearerHeaders($this->token)
+        );
+        $this->assertSame(403, $r['status']);
+        $this->assertSame('permission_not_approved', $r['body']['error']['code']);
+        $this->assertStringContainsString(
+            'contact_address_book_enumerate',
+            $r['body']['error']['message']
+        );
+    }
+
+    #[Test]
+    public function acceptsCalogedPermissionWhenDeclaredAndApproved(): void
+    {
+        // Manifest declares the permission AND operator has approved
+        // it via the consent flow. Gate 3b is satisfied; the call
         // succeeds.
         $loader = $this->createMock(PluginLoader::class);
         $loader->method('listAllPlugins')->willReturn([
@@ -531,6 +568,8 @@ class PluginGatewayControllerTest extends TestCase
                 'permissions' => ['contact_address_book_enumerate'],
             ],
         ]);
+        $loader->method('getApprovedPermissions')->with('demo')
+            ->willReturn(['contact_address_book_enumerate']);
         $svc = new PluginGatewayController($this->tokenService, $loader, $this->container);
 
         $r = $svc->handle(

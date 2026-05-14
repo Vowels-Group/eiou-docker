@@ -1555,4 +1555,201 @@ PHP;
         }
         rmdir($path);
     }
+
+    // ===================================================================
+    // Permission-consent state — approved_permissions + approved_at
+    // persistence, drift detection, and the resolveApprovalSet
+    // refused-stage failure path. Sibling fixture writePluginWithExtras
+    // lets us inject the manifest's `permissions: [...]` list directly.
+    // ===================================================================
+
+    public function testEnablePersistsApprovedPermissionsAndTimestamp(): void
+    {
+        $this->writePluginWithExtras('beta-perm', [
+            'permissions' => ['contact_address_book_enumerate'],
+        ]);
+        // Tear down the auto-enabled state — writePluginWithExtras flips
+        // enabled=true on disk before consent is recorded. Tests of
+        // first-time enable must start from disabled.
+        file_put_contents($this->stateFile, json_encode([]));
+
+        $loader = $this->loader();
+        $this->assertTrue(
+            $loader->setEnabled('beta-perm', true, ['contact_address_book_enumerate']),
+            'setEnabled with matching approval must succeed'
+        );
+        $state = json_decode(file_get_contents($this->stateFile), true);
+        $this->assertTrue($state['beta-perm']['enabled']);
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $state['beta-perm']['approved_permissions']
+        );
+        $this->assertMatchesRegularExpression(
+            '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/',
+            $state['beta-perm']['approved_at']
+        );
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $loader->getApprovedPermissions('beta-perm')
+        );
+    }
+
+    public function testEnableRefusesWhenApprovalSupersetsManifest(): void
+    {
+        // Operator can't escalate via the approval set — must be a
+        // subset of what the manifest declares. wallet_outbound_send
+        // is a different permission key from what the manifest
+        // requests, so the loader refuses (stage=refused).
+        $this->writePluginWithExtras('escalate', [
+            'permissions' => ['contact_address_book_enumerate'],
+        ]);
+        file_put_contents($this->stateFile, json_encode([]));
+
+        $loader = $this->loader();
+        $this->assertFalse(
+            $loader->setEnabled('escalate', true, ['wallet_outbound_send']),
+            'must refuse approval set with keys outside the manifest'
+        );
+        $failure = $loader->getLastSetEnabledFailure();
+        $this->assertSame('refused', $failure['stage']);
+        $this->assertStringContainsString('wallet_outbound_send', $failure['message']);
+    }
+
+    public function testReEnableWithoutApprovalsUsesExistingApprovedSet(): void
+    {
+        // Plugin enabled with consent on a previous boot. A re-enable
+        // without a fresh approval list must succeed by re-using the
+        // recorded grant — the GUI / CLI shouldn't have to know the
+        // previously-approved set to re-toggle.
+        $this->writePluginWithExtras('reenable', [
+            'permissions' => ['contact_address_book_enumerate'],
+        ]);
+        file_put_contents($this->stateFile, json_encode([
+            'reenable' => [
+                'enabled' => false,
+                'approved_permissions' => ['contact_address_book_enumerate'],
+                'approved_at' => '2026-05-14T10:00:00Z',
+            ],
+        ]));
+
+        $loader = $this->loader();
+        $this->assertTrue($loader->setEnabled('reenable', true));
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $loader->getApprovedPermissions('reenable')
+        );
+    }
+
+    public function testEnableRefusesWhenManifestDriftedFromApprovedSet(): void
+    {
+        // Plugin was approved for one key. Manifest now requests two.
+        // A re-enable without explicit consent must refuse — operator
+        // must go through the CLI / GUI consent path for the new key.
+        $this->writePluginWithExtras('drift', [
+            'permissions' => ['contact_address_book_enumerate', 'wallet_balance_read'],
+        ]);
+        file_put_contents($this->stateFile, json_encode([
+            'drift' => [
+                'enabled' => false,
+                'approved_permissions' => ['contact_address_book_enumerate'],
+                'approved_at' => '2026-05-14T10:00:00Z',
+            ],
+        ]));
+
+        $loader = $this->loader();
+        $this->assertFalse($loader->setEnabled('drift', true));
+        $failure = $loader->getLastSetEnabledFailure();
+        $this->assertSame('refused', $failure['stage']);
+        $this->assertStringContainsString('wallet_balance_read', $failure['message']);
+    }
+
+    public function testDisablePreservesApprovedSet(): void
+    {
+        // Disable must not clear approvals — re-enabling later with
+        // an unchanged manifest can skip the prompt.
+        $this->writePluginWithExtras('keep', [
+            'permissions' => ['contact_address_book_enumerate'],
+        ]);
+        file_put_contents($this->stateFile, json_encode([
+            'keep' => [
+                'enabled' => true,
+                'approved_permissions' => ['contact_address_book_enumerate'],
+                'approved_at' => '2026-05-14T10:00:00Z',
+            ],
+        ]));
+
+        $loader = $this->loader();
+        $this->assertTrue($loader->setEnabled('keep', false));
+        $state = json_decode(file_get_contents($this->stateFile), true);
+        $this->assertFalse($state['keep']['enabled']);
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $state['keep']['approved_permissions']
+        );
+    }
+
+    public function testDiscoverAutoDisablesPluginsWithManifestDrift(): void
+    {
+        // Plugin enabled with consent for one key; manifest now
+        // requests an additional key the operator never approved.
+        // discover() must auto-flip enabled→false so the gateway can't
+        // route any call into the un-consented surface.
+        $this->writePluginWithExtras('drift-boot', [
+            'permissions' => ['contact_address_book_enumerate', 'wallet_balance_read'],
+        ]);
+        file_put_contents($this->stateFile, json_encode([
+            'drift-boot' => [
+                'enabled' => true,
+                'approved_permissions' => ['contact_address_book_enumerate'],
+                'approved_at' => '2026-05-14T10:00:00Z',
+            ],
+        ]));
+
+        $loader = $this->loader();
+        $loader->discover();
+
+        $state = json_decode(file_get_contents($this->stateFile), true);
+        $this->assertFalse(
+            $state['drift-boot']['enabled'],
+            'drift-affected plugin must be auto-disabled on discover()'
+        );
+        // Existing approvals stay on file so a future re-enable can
+        // diff against them and prompt only for the new key.
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $state['drift-boot']['approved_permissions']
+        );
+    }
+
+    public function testListAllPluginsSurfacesApprovalStateAndDrift(): void
+    {
+        $this->writePluginWithExtras('surfaced', [
+            'permissions' => ['contact_address_book_enumerate', 'wallet_balance_read'],
+        ]);
+        file_put_contents($this->stateFile, json_encode([
+            'surfaced' => [
+                'enabled' => false,
+                'approved_permissions' => ['contact_address_book_enumerate'],
+                'approved_at' => '2026-05-14T10:00:00Z',
+            ],
+        ]));
+
+        $loader = $this->loader();
+        $rows = array_values(array_filter(
+            $loader->listAllPlugins(),
+            fn($r) => ($r['name'] ?? null) === 'surfaced'
+        ));
+        $this->assertCount(1, $rows);
+        $row = $rows[0];
+        $this->assertSame(
+            ['contact_address_book_enumerate', 'wallet_balance_read'],
+            $row['permissions']
+        );
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $row['approved_permissions']
+        );
+        $this->assertSame('2026-05-14T10:00:00Z', $row['approved_at']);
+        $this->assertSame(['wallet_balance_read'], $row['permission_drift']);
+    }
 }

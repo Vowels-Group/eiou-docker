@@ -2169,7 +2169,7 @@ Adding a permission key is a deliberate act in both directions:
   the gateway returns 503 if an attribute references a key the catalog
   doesn't know about.
 - **In a manifest:** include the key in `permissions: [...]`. Missing the
-  key when the method requires it returns 403 with `permission_not_granted`
+  key when the method requires it returns 403 with `permission_not_declared`
   and a message naming the missing key.
 
 GUI surface: the plugin's modal in *Settings → Plugins* renders a
@@ -2179,18 +2179,65 @@ description. Operators reviewing a plugin before flipping the toggle
 read the panel as a separate line of consent from the routine
 `core_services` list.
 
-**Consent gate on enable.** When the operator slides the Enabled
-toggle on for a plugin that declares any `permissions`, the GUI
-intercepts the toggle and opens a confirmation modal listing every
-requested permission with its full description. The toggle does not
-flip until the operator clicks **Grant & enable**; Cancel reverts
-the slider without firing the enable POST. The gate fires from both
-call sites — the Settings → Plugins row toggle AND the slider
-inside the plugin's detail modal — so an operator who flips the row
-without ever opening the detail surface still sees the same
-consent screen. Disable always passes through without a prompt
-(reducing access doesn't need confirmation), and plugins that
-request no permissions also bypass the modal entirely.
+**Consent gate on enable — declared *and* approved.** The manifest
+declaring a permission is necessary but not sufficient. The gateway
+requires the calling plugin's `approved_permissions` (operator-recorded
+consent in `plugins.json`) to also include the key — 403
+`permission_not_approved` if not. This separation matters because a
+plugin upgrade can quietly grow the manifest's `permissions` list;
+without a record of operator consent, the new surface would be
+auto-allowed on the next call. The approved set is the load-bearing
+authority.
+
+Two paths to record consent:
+
+- **GUI.** Sliding the Enabled toggle on for a plugin that declares
+  any `permissions` opens a confirmation modal listing every requested
+  permission with its full description. **Grant & enable** records the
+  list to `approved_permissions` and proceeds; Cancel reverts the
+  slider without firing the enable POST. The gate fires from both
+  call sites — the Settings → Plugins row toggle AND the slider
+  inside the plugin's detail modal.
+
+- **CLI.** `eiou plugin enable <name>` for a permission-requesting
+  plugin takes one of three forms:
+  - `--grant-all` — approve every permission the manifest declares
+  - `--grant <key,key,…>` — approve a subset (must be a subset of
+    the manifest; unknown keys are refused)
+  - no flag on an interactive TTY — operator is prompted (`y/N`)
+  - no flag on a piped / non-TTY context — refused with a message
+    listing the permissions and the flag to add. Automation has to
+    declare its intent.
+
+Disable always passes through without a prompt (reducing access
+doesn't need confirmation) and **preserves** the approved set, so a
+routine off/on cycle doesn't re-prompt when the manifest hasn't
+changed. Plugins that request no permissions bypass the consent
+flow entirely.
+
+**Drift detection auto-disables.** On boot, `PluginLoader::discover()`
+walks every enabled plugin and computes the manifest-minus-approved
+difference. Non-empty difference (the plugin author added a permission
+since the operator last consented, or the operator never consented at
+all) flips the plugin's `enabled` flag to false and emits
+`plugin_permission_drift_auto_disabled` in the log. The operator must
+re-enable through the consent flow — the existing approvals stay on
+file so the GUI / CLI can show the diff between what was previously
+granted and what's newly requested.
+
+**State-file shape** (`/etc/eiou/config/plugins.json`):
+
+    {
+      "<plugin-name>": {
+        "enabled": true,
+        "approved_permissions": ["contact_address_book_enumerate", "wallet_balance_read"],
+        "approved_at": "2026-05-14T22:45:00Z"
+      }
+    }
+
+`approved_permissions` is absent on entries for plugins that declare
+no manifest permissions; `approved_at` is the UTC ISO8601 timestamp
+of the most recent grant.
 
 ### Where plugin-owned state and code lives
 
