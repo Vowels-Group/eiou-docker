@@ -215,7 +215,7 @@ switch ($type) {
                 }
                 $permsRow = '<div class="plugin-hello-eiou-self">'
                           . '<h3 style="font-size:0.95rem"><i class="fas fa-shield-alt"></i> Permissions granted to this plugin</h3>'
-                          . '<ul>' . $permItems . '</ul>'
+                          . '<ul style="margin:0.25rem 0 0 0; padding-left:1.5rem; list-style:disc;">' . $permItems . '</ul>'
                           . '</div>';
             }
             $manifestRow = '';
