@@ -494,7 +494,6 @@ What this means in practice:
 | ---- | ---------- |
 | Read recent transactions | `core_call('TransactionLookupService', 'getReceivedUserTransactions', …)` |
 | Look up a contact by pubkey hash | `core_call('ContactLookupService', 'getByPubkeyHash', …)` |
-| List accepted contacts (paginated) | `core_call('ContactLookupService', 'listAccepted', …)` |
 | Bill a contact (mint a payment request) | `core_call('PaymentRequestService', 'create', …)` |
 | Stop your sidecar container on disable | `core_call('ContainerLifecycleService', 'stopSidecar', …)` |
 | React to a sync event | declare `subscribes_to: ["sync.completed"]` in the manifest |
@@ -2055,7 +2054,7 @@ small. As of this writing, the callable surface is:
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `Logger`                        | `debug`, `info`, `warning`, `error`                                                                  |
 | `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getReceivedUserTransactions`   |
-| `ContactLookupService`          | `getByPubkeyHash`, `listAccepted`                                                                    |
+| `ContactLookupService`          | `getByPubkeyHash` (no bulk-enumerate by design — see class docblock)                                 |
 | `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
 | `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
 | `PluginEventPublisher`          | `publish`                                                                                            |
