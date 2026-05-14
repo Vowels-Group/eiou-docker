@@ -279,6 +279,76 @@ class CliPluginServiceTest extends TestCase
         $this->assertStringContainsString('--grant-all', $errMsg);
     }
 
+    public function testReEnableWithoutFlagSucceedsWhenPriorApprovalsCoverManifest(): void
+    {
+        // A previously-enabled plugin that was then disabled keeps its
+        // approved_permissions on file. A re-enable without any flag
+        // (and from a non-TTY context like PHPUnit) must succeed by
+        // re-using the existing approval set — operators shouldn't
+        // have to re-consent for a routine off/on cycle.
+        $this->writeSandboxedPluginWithPerms('reenable', ['contact_address_book_enumerate']);
+        file_put_contents($this->stateFile, json_encode([
+            'reenable' => [
+                'enabled' => false,
+                'approved_permissions' => ['contact_address_book_enumerate'],
+                'approved_at' => '2026-05-14T10:00:00Z',
+            ],
+        ]));
+        $loader = $this->loaderWithSandbox();
+
+        $this->output->method('isJsonMode')->willReturn(true);
+        $this->output->expects($this->once())->method('success');
+        $this->output->expects($this->never())->method('error');
+
+        (new CliPluginService($loader))
+            ->enablePlugin(['eiou','plugin','enable','reenable'], $this->output);
+
+        $state = json_decode(file_get_contents($this->stateFile), true);
+        $this->assertTrue($state['reenable']['enabled']);
+        $this->assertSame(
+            ['contact_address_book_enumerate'],
+            $state['reenable']['approved_permissions']
+        );
+        // approved_at must NOT have been refreshed — re-enable
+        // re-uses the existing approval, it doesn't re-grant.
+        $this->assertSame('2026-05-14T10:00:00Z', $state['reenable']['approved_at']);
+    }
+
+    public function testReEnableWithoutFlagRefusesWhenManifestDrifted(): void
+    {
+        // Previously approved one key; manifest now requests two.
+        // Non-TTY refusal must name the *new* key specifically so the
+        // operator's --grant flag can target just the addition.
+        $this->writeSandboxedPluginWithPerms('drift', [
+            'contact_address_book_enumerate', 'wallet_balance_read',
+        ]);
+        file_put_contents($this->stateFile, json_encode([
+            'drift' => [
+                'enabled' => false,
+                'approved_permissions' => ['contact_address_book_enumerate'],
+                'approved_at' => '2026-05-14T10:00:00Z',
+            ],
+        ]));
+        $loader = $this->loaderWithSandbox();
+
+        $errMsg = '';
+        $this->output->expects($this->once())->method('error')
+            ->willReturnCallback(function (string $msg) use (&$errMsg) {
+                $errMsg = $msg;
+            });
+
+        (new CliPluginService($loader))
+            ->enablePlugin(['eiou','plugin','enable','drift'], $this->output);
+
+        $this->assertStringContainsString('wallet_balance_read', $errMsg);
+        $this->assertStringContainsString('previously approved', $errMsg);
+        $this->assertStringNotContainsString(
+            'contact_address_book_enumerate',
+            $errMsg,
+            'already-approved keys must not be in the new-permission list'
+        );
+    }
+
     public function testEnableWithoutPermsAcceptsNoFlag(): void
     {
         // Plugin manifest declares no permissions — enable must succeed

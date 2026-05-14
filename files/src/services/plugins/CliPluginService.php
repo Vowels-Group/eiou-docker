@@ -285,14 +285,29 @@ class CliPluginService
             return $keys;
         }
 
-        // No flag — try interactive consent. Non-TTY (piped stdin,
-        // automation) must use a flag so the script never silently
-        // hangs waiting for input.
+        // No flag — re-enable shortcut first: if the operator
+        // previously approved a superset of the manifest, the loader
+        // will accept setEnabled($name, true, null) and re-use the
+        // existing approval set. Return null so the loader takes that
+        // branch — no prompt needed for a no-op re-enable.
+        $existing = $this->loader->getApprovedPermissions($name);
+        if ($existing !== [] && array_diff($manifestPerms, $existing) === []) {
+            return null;
+        }
+
+        // No flag and re-enable doesn't cover the manifest — try
+        // interactive consent. Non-TTY (piped stdin, automation) must
+        // use a flag so the script never silently hangs waiting for
+        // input. Drift on a non-TTY context tells the operator which
+        // keys are missing so they know what to put in --grant.
         $isTty = function_exists('posix_isatty') && @posix_isatty(STDIN);
         if (!$isTty) {
+            $missing = array_values(array_diff($manifestPerms, $existing));
+            $detail = $existing === []
+                ? "requests permissions: " . implode(', ', $manifestPerms)
+                : "requests new permissions not in the previously approved set: " . implode(', ', $missing);
             $output->error(
-                "Plugin '{$name}' requests permissions: " . implode(', ', $manifestPerms)
-                . ". Re-run with --grant-all to approve them all, "
+                "Plugin '{$name}' {$detail}. Re-run with --grant-all to approve them all, "
                 . "or --grant <key,key,...> to approve a subset.",
                 ErrorCodes::VALIDATION_ERROR
             );

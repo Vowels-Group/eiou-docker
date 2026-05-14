@@ -1133,7 +1133,13 @@ class PluginLoader
                          . ". Re-enable with explicit consent (CLI: --grant-all / --grant; GUI: consent modal).",
             ];
         }
-        return ['approvals' => $existingApprovals, 'error' => null];
+        // Existing approvals fully cover the manifest — this is a
+        // no-op re-enable, not a fresh consent action. Return null so
+        // the setEnabled writeback leaves approved_permissions and
+        // approved_at untouched. The original grant timestamp keeps
+        // its "when did the operator first consent" meaning instead
+        // of degrading into "when was the plugin last toggled".
+        return ['approvals' => null, 'error' => null];
     }
 
     /**
