@@ -3694,6 +3694,46 @@ ends up `root:www-data 0640` and the www-data-write path ends up
 Mirrors the multi-writer ownership pattern used elsewhere for plugin-gateway
 tokens.
 
+### Privileged writes into the plugin directory
+
+**Rule:** host code that needs to write a file under
+`/etc/eiou/plugins/<id>/` MUST route the write through the supervisor's
+`plugin_routing_poller` (via the `/tmp/eiou-routing-req-*.json` request-file
+protocol), not write directly from the wallet pool. The wallet pool runs as
+`www-data` and cannot reliably write into the per-plugin dir; the supervisor
+runs as root and can.
+
+**Why:** the directory's owner varies by install topology. Production
+zip-uploads land the dir owned by `www-data` (the wallet pool extracted the
+zip and chowned it that way), so a direct www-data write would actually
+succeed. Dev bind-mount layouts — where `/etc/eiou/plugins/` is mounted from
+the host filesystem — inherit the host operator's uid. On a typical host
+that uid is 1000, which inside the container collides with the
+`eiou-p-<8hex>` plugin pool user (also derived to land low) rather than
+with `www-data`. Direct writes from www-data into that dir then fail with
+EACCES, the failure surfaces as "plugin won't enable" with no obvious cause,
+and the operator's workaround (`usermod -aG eiou-p-<hash> www-data`) doesn't
+even work without a full container restart because FPM workers' supplementary
+groups are fixed at master start. Routing through the supervisor sidesteps
+the whole class of perm issues — root writes anywhere.
+
+**Reference implementation:** `PluginGatewayTokenService::mint()` generates
+the token in memory (no filesystem touch), `PluginPoolService::applyPool()`
+ships it through the `apply-pool` request payload as the `gateway_token`
+field, and `plugin_routing_poller` in `startup.sh` writes the per-plugin
+`.gateway-token` file as root with `chown <system_user>:<system_user>` plus
+mode `0600`. The request handler validates the token shape (`^[a-f0-9]{64}$`)
+as defence in depth against a corrupted-request write primitive against
+arbitrary paths.
+
+**Applies to future features too.** Anything that needs the host to write
+into the plugin dir — config snapshots, per-plugin certs, manifest
+overrides, generated assets — should extend the supervisor poller protocol
+with a new request type rather than try to write from the wallet pool
+directly. Doing so keeps the operational story consistent across production
+and dev bind-mount, and concentrates "wrote a privileged file" auditing in
+one place (the supervisor's stdout).
+
 ---
 
 ## Troubleshooting

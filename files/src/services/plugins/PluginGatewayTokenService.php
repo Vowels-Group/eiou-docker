@@ -110,6 +110,16 @@ class PluginGatewayTokenService
      * separately so callers that go through the supervisor can defer
      * the index commit until the supervisor confirms the file write
      * succeeded. See `commitToken()` and `reconcileFromFile()`.
+     *
+     * This split exists to honour the host-side rule that privileged
+     * writes into `/etc/eiou/plugins/<id>/` route through the
+     * supervisor's `plugin_routing_poller`, not directly from the
+     * wallet pool — see docs/PLUGINS.md "Privileged writes into the
+     * plugin directory" for the policy and why dev bind-mount layouts
+     * make the direct-write path unreliable. Future features that need
+     * the host to write into a plugin's dir should mirror this shape:
+     * generate in memory, ship via the supervisor request file, commit
+     * any local state only after the supervisor confirms success.
      */
     public function mint(): string
     {
