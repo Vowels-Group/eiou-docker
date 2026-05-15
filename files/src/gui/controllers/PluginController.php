@@ -518,12 +518,31 @@ class PluginController
         $originalName = (string) ($file['name'] ?? '');
         try {
             $result = $this->installService->installFromZip($tmpPath, $originalName);
+        } catch (\Eiou\Services\Plugins\PluginAlreadyInstalledException $e) {
+            // Surface both versions so the GUI can render a
+            // "Replace v{current} with v{new}?" confirmation modal and
+            // re-POST the same file through pluginsUploadAsUpgrade on
+            // operator consent. Returning these fields is what makes
+            // the two-step upgrade-from-zip flow usable; without them
+            // the operator just sees a generic "already installed"
+            // toast with no upgrade path from the UI.
+            $this->respondError(
+                'already_installed',
+                $e->getMessage(),
+                409,
+                [
+                    'plugin_id' => $e->pluginId,
+                    'new_version' => $e->newVersion,
+                    'current_version' => $e->currentVersion,
+                ]
+            );
         } catch (\InvalidArgumentException $e) {
-            // Two of the InvalidArgument cases ("already installed",
-            // "appeared during install") map to 409 — both mean a clash
-            // with existing on-disk state rather than malformed input.
+            // Other InvalidArgument cases ("appeared during install"
+            // race, malformed zip, manifest validation) — already
+            // narrowed by the install service. 409 for the race
+            // collision shape, 400 for the rest.
             $msg = $e->getMessage();
-            $code = (stripos($msg, 'already installed') !== false || stripos($msg, 'appeared during install') !== false)
+            $code = (stripos($msg, 'appeared during install') !== false)
                 ? 'already_installed'
                 : 'invalid_zip';
             $status = $code === 'already_installed' ? 409 : 400;

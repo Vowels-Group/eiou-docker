@@ -28,6 +28,45 @@ var operationTimeoutId = null;
 var countdownIntervalId = null;
 
 /**
+ * Returns the wallet's CSRF token string, skipping any empty-valued
+ * input[name="csrf_token"] placeholders that may sit earlier in the
+ * DOM.
+ *
+ * Why this is value-guarded rather than a plain
+ * `document.querySelector('input[name="csrf_token"]').value`:
+ * sandboxed plugins are free to render their own
+ * `<input type="hidden" name="csrf_token" value="">` placeholders
+ * inside their tab bodies and populate them client-side at submit
+ * time. When the plugin's tab content sits earlier in document
+ * order than the host modal that holds the wallet's filled token,
+ * a too-greedy selector returns the empty placeholder and every
+ * subsequent wallet AJAX POSTs `csrf_token=`, getting a 403 from
+ * Functions.php's CSRF gate. The visible symptom was "Could not
+ * load API keys" and "Could not load plugins" toasts on every page
+ * load when any plugin emitted empty CSRF placeholders.
+ *
+ * Strategy:
+ *   1. Attribute-based discovery: prefer an input whose `value`
+ *      attribute is present and non-empty. This is what
+ *      server-rendered tokens look like.
+ *   2. Property-value fallback: walk every `csrf_token` input and
+ *      return the first whose `.value` property is truthy. Catches
+ *      tokens populated post-render by JS that didn't update the
+ *      attribute.
+ *
+ * @returns {string} The CSRF token, or '' if none is available.
+ */
+function csrfTokenValue() {
+    var el = document.querySelector('input[name="csrf_token"][value]:not([value=""])');
+    if (el && el.value) return el.value;
+    var all = document.querySelectorAll('input[name="csrf_token"]');
+    for (var i = 0; i < all.length; i++) {
+        if (all[i].value) return all[i].value;
+    }
+    return '';
+}
+
+/**
  * Flag indicating whether sessionStorage is available.
  * Set to false in Tor Browser with strict privacy settings.
  * @type {boolean}
@@ -1568,8 +1607,8 @@ function openTransactionModalByTxid(txid) {
         modal.style.display = 'flex';
     }
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Could not load transaction: CSRF token missing.</div>'; }
         return;
     }
@@ -1577,7 +1616,7 @@ function openTransactionModalByTxid(txid) {
     var formData = new FormData();
     formData.append('action', 'getTransactionByTxid');
     formData.append('txid', txid);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -3708,8 +3747,7 @@ function runDatabaseSearch(cfg) {
     var tbody = document.getElementById(cfg.tbodyId);
     var banner = document.getElementById(cfg.bannerId);
     var bannerText = document.getElementById(cfg.bannerTextId);
-    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
-    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+    var csrfToken = csrfTokenValue();
 
     if (banner && bannerText) {
         banner.classList.remove('d-none');
@@ -4743,11 +4781,8 @@ function pingContact() {
     if (resultMsg) resultMsg.textContent = '';
 
     // Get CSRF token (try multiple selectors for compatibility)
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     if (!csrfToken) {
-        csrfToken = document.getElementById('csrf_token');
-    }
-    if (!csrfToken || !csrfToken.value) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -4760,7 +4795,7 @@ function pingContact() {
     var formData = new FormData();
     formData.append('action', 'pingContact');
     formData.append('contact_address', currentContactAddress);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     // Send AJAX request (Tor Browser compatible XMLHttpRequest)
     var xhr = new XMLHttpRequest();
@@ -5236,8 +5271,7 @@ function loadMoreContacts(inst) {
 var loadMoreCursors = {};
 
 function loadMoreViaGuiAction(action, key, inst) {
-    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
-    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+    var csrfToken = csrfTokenValue();
 
     var formData = new FormData();
     formData.append('action', action);
@@ -5326,8 +5360,8 @@ function proposeChainDrop() {
     if (btnText) btnText.textContent = 'Sending...';
     if (resultMsg) resultMsg.textContent = '';
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -5339,7 +5373,7 @@ function proposeChainDrop() {
     var formData = new FormData();
     formData.append('action', 'proposeChainDrop');
     formData.append('contact_pubkey_hash', currentContactPubkeyHash);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -5420,8 +5454,8 @@ function acceptChainDrop() {
     if (btnText) btnText.textContent = 'Accepting...';
     if (resultMsg) resultMsg.textContent = '';
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -5433,7 +5467,7 @@ function acceptChainDrop() {
     var formData = new FormData();
     formData.append('action', 'acceptChainDrop');
     formData.append('proposal_id', currentChainDropProposalId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -5505,8 +5539,8 @@ function rejectChainDrop() {
     if (btnText) btnText.textContent = 'Rejecting...';
     if (resultMsg) resultMsg.textContent = '';
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -5518,7 +5552,7 @@ function rejectChainDrop() {
     var formData = new FormData();
     formData.append('action', 'rejectChainDrop');
     formData.append('proposal_id', currentChainDropProposalId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7195,8 +7229,8 @@ document.addEventListener('click', function(e) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function retryDlqItem(dlqId, btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7216,7 +7250,7 @@ function retryDlqItem(dlqId, btn) {
     var formData = new FormData();
     formData.append('action',     'dlqRetry');
     formData.append('dlq_id',     dlqId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7267,8 +7301,8 @@ function retryDlqItem(dlqId, btn) {
  * badge get re-rendered.
  */
 function revokeRememberSession(sessionId, btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7276,7 +7310,7 @@ function revokeRememberSession(sessionId, btn) {
     var formData = new FormData();
     formData.append('action', 'revokeRememberSession');
     formData.append('session_id', sessionId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7304,15 +7338,15 @@ function revokeRememberSession(sessionId, btn) {
  * login page.
  */
 function revokeAllRememberSessions(btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
     if (btn) { btn.disabled = true; }
     var formData = new FormData();
     formData.append('action', 'revokeAllRememberSessions');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7356,8 +7390,8 @@ function abandonDlqItem(dlqId, btn) {
 }
 
 function abandonDlqItemConfirmed(dlqId, btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7371,7 +7405,7 @@ function abandonDlqItemConfirmed(dlqId, btn) {
     var formData = new FormData();
     formData.append('action',     'dlqAbandon');
     formData.append('dlq_id',     dlqId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7424,8 +7458,8 @@ function retryAllDlqItems(btn) {
 
 function retryAllDlqItemsConfirmed(btn) {
     var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7434,7 +7468,7 @@ function retryAllDlqItemsConfirmed(btn) {
 
     var formData = new FormData();
     formData.append('action',     'dlqRetryAll');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7500,8 +7534,8 @@ function abandonAllDlqItems(btn) {
 }
 
 function abandonAllDlqItemsConfirmed(btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7510,7 +7544,7 @@ function abandonAllDlqItemsConfirmed(btn) {
 
     var formData = new FormData();
     formData.append('action',     'dlqAbandonAll');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7616,8 +7650,8 @@ function submitAnalyticsConsent(enable) {
     var modal = document.getElementById('analyticsConsentModal');
     if (!modal) { return; }
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         // Fallback: hide modal even if CSRF is missing (shouldn't happen)
         modal.classList.add('d-none');
         return;
@@ -7630,7 +7664,7 @@ function submitAnalyticsConsent(enable) {
     var formData = new FormData();
     formData.append('action', 'analyticsConsent');
     formData.append('consent', enable ? '1' : '0');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7689,12 +7723,12 @@ function openWhatsNewModal(version) {
     modal.style.display = 'flex';
 
     // Fetch release notes via AJAX
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     var formData = new FormData();
     formData.append('action', 'whatsNewNotes');
     formData.append('version', version);
-    if (csrfToken && csrfToken.value) {
-        formData.append('csrf_token', csrfToken.value);
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
     }
 
     var xhr = new XMLHttpRequest();
@@ -7773,11 +7807,11 @@ function dismissWhatsNew() {
         setTimeout(function() { banner.remove(); }, 300);
     }
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     var formData = new FormData();
     formData.append('action', 'whatsNewDismiss');
-    if (csrfToken && csrfToken.value) {
-        formData.append('csrf_token', csrfToken.value);
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
     }
 
     var xhr = new XMLHttpRequest();
@@ -8159,9 +8193,9 @@ function approveP2pTransaction(hash, candidateId) {
     var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
     showConfirmModal(msg, { title: 'Approve transaction?', confirmText: 'Send' }).then(function (ok) {
         if (!ok) return;
-        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfTokenValue();
         if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
-        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken);
         if (candidateId) {
             body = body + '&candidate_id=' + encodeURIComponent(candidateId);
         }
@@ -8197,9 +8231,9 @@ function rejectP2pTransaction(hash) {
         icon: 'fa-exclamation-triangle'
     }).then(function (ok) {
         if (!ok) return;
-        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfTokenValue();
         if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
-        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken);
         var xhr = new XMLHttpRequest();
         xhr.open('POST', window.location.pathname, true);
         xhr.timeout = 60000;
@@ -8225,9 +8259,9 @@ function rejectP2pTransaction(hash) {
 }
 
 function loadP2pCandidates(hash, container) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     if (!csrfToken) { container.innerHTML = '<div class="text-danger">CSRF token not found</div>'; return; }
-    var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken);
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
     xhr.timeout = 60000;
@@ -8932,11 +8966,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         // Persistent order used when sort is cleared (server returns newest-first)
         var originalOrder = [];
 
-        function csrfToken() {
-            var el = document.querySelector('input[name="csrf_token"]');
-            return (el && el.value) ? el.value : '';
-        }
-
         function post(payload) {
             var body = new FormData();
             Object.keys(payload).forEach(function(k) {
@@ -8947,7 +8976,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     body.append(k, v);
                 }
             });
-            if (!body.has('csrf_token')) { body.append('csrf_token', csrfToken()); }
+            if (!body.has('csrf_token')) { body.append('csrf_token', csrfTokenValue()); }
             return fetch(window.location.pathname, {
                 method: 'POST',
                 body: body,
@@ -9831,11 +9860,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         var loaded = false;
         var lastList = [];
 
-        function csrfToken() {
-            var el = document.querySelector('input[name="csrf_token"]');
-            return (el && el.value) ? el.value : '';
-        }
-
         function escapeHtml(s) {
             if (s == null) return '';
             return String(s)
@@ -9853,7 +9877,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     body.append(k, payload[k]);
                 }
             });
-            if (!body.has('csrf_token')) body.append('csrf_token', csrfToken());
+            if (!body.has('csrf_token')) body.append('csrf_token', csrfTokenValue());
             return fetch(window.location.pathname, {
                 method: 'POST',
                 body: body,
@@ -10056,7 +10080,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 body: (function() {
                     var b = new FormData();
                     b.append('action', 'pluginsList');
-                    b.append('csrf_token', csrfToken());
+                    b.append('csrf_token', csrfTokenValue());
                     return b;
                 })(),
                 credentials: 'same-origin',
@@ -10755,8 +10779,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             '<li>Manifests without <code>"sandboxed": true</code> (in-process plugins are no longer supported)</li>' +
                             '<li>Path traversal (<code>..</code>, leading <code>/</code>, backslashes)</li>' +
                             '<li>Symlinks, hidden dotfiles, <code>.phar</code>, <code>.htaccess</code>, anything outside the allow-list</li>' +
-                            '<li>Plugins already installed (uninstall first to replace)</li>' +
                         '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Replacing an installed plugin</strong></p>' +
+                        '<p style="margin: 0 0 1rem 0;">Upload a newer version of an already-installed plugin and you\'ll be asked to confirm the replace. The plugin\'s installed data (database tables, credentials, gateway token) is preserved; the old version is kept on disk for rollback.</p>' +
                     '</div>' +
                     '<div class="modal-footer" style="gap: 0.5rem;">' +
                         '<button type="button" class="btn btn-secondary" data-plugin-upload-cancel="1">Cancel</button>' +
@@ -10828,9 +10853,18 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 showToast('Uploading…', file.name, 'info');
             }
 
+            postUploadFor(file, 'pluginsUpload');
+        }
+
+        // POST the file under either `pluginsUpload` (install) or
+        // `pluginsUploadAsUpgrade` (replace already-installed plugin).
+        // Split out so the two-step "upload → 409 → confirm → re-upload"
+        // flow can reuse the same File object without rerunning the
+        // .zip / size guards in submitUpload.
+        function postUploadFor(file, action) {
             var body = new FormData();
-            body.append('action', 'pluginsUpload');
-            body.append('csrf_token', csrfToken());
+            body.append('action', action);
+            body.append('csrf_token', csrfTokenValue());
             body.append('plugin_zip', file);
 
             fetch(window.location.pathname, {
@@ -10842,35 +10876,107 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 return res.json().then(function(data) { return { status: res.status, data: data }; });
             }).then(function(r) {
                 if (r.data && r.data.success) {
-                    var sig = r.data.signature || {};
-                    var sigLine = '';
-                    if (sig.status && sig.status !== 'not_checked') {
-                        sigLine = ' Signature: ' + sig.status
-                            + (sig.enforced ? ' (required)' : '');
-                    }
-                    if (typeof showToast === 'function') {
-                        showToast(
-                            'Plugin uploaded',
-                            r.data.plugin_id + ' v' + r.data.version
-                                + ' is staged disabled.' + sigLine
-                                + ' Enable it and restart the node to activate.',
-                            'success'
-                        );
-                    }
-                    // Refresh list so the new plugin shows up.
-                    refresh();
-                } else {
-                    var msg = (r.data && r.data.error) ||
-                              (r.data && r.data.message) ||
-                              'Upload failed';
-                    if (typeof showToast === 'function') {
-                        showToast('Upload failed', msg, 'error');
-                    }
+                    handleUploadSuccess(r.data, action);
+                    return;
+                }
+                // 409 already_installed with both versions surfaced →
+                // offer the upgrade flow. The backend's
+                // PluginAlreadyInstalledException carries plugin_id +
+                // new_version + current_version; we mirror them into a
+                // "Replace v{current} with v{new}?" confirm and re-POST
+                // the same File object through pluginsUploadAsUpgrade
+                // on consent. Only fires on the install path, not when
+                // a pluginsUploadAsUpgrade itself returns 409 (which
+                // shouldn't happen — that endpoint validates the same
+                // shape but throws different codes like same_version /
+                // downgrade_refused — so a 409 from it would mean a
+                // real race the operator can't resolve client-side).
+                if (action === 'pluginsUpload'
+                    && r.status === 409
+                    && r.data && r.data.error === 'already_installed'
+                    && r.data.plugin_id) {
+                    promptReplaceConfirm(file, r.data);
+                    return;
+                }
+                var msg = (r.data && r.data.message) ||
+                          (r.data && r.data.error) ||
+                          'Upload failed';
+                if (typeof showToast === 'function') {
+                    showToast(
+                        action === 'pluginsUploadAsUpgrade' ? 'Upgrade failed' : 'Upload failed',
+                        msg,
+                        'error'
+                    );
                 }
             }).catch(function() {
                 if (typeof showToast === 'function') {
-                    showToast('Upload failed', 'Network error during upload', 'error');
+                    showToast(
+                        action === 'pluginsUploadAsUpgrade' ? 'Upgrade failed' : 'Upload failed',
+                        'Network error during upload',
+                        'error'
+                    );
                 }
+            });
+        }
+
+        function handleUploadSuccess(data, action) {
+            if (action === 'pluginsUploadAsUpgrade') {
+                if (typeof showToast === 'function') {
+                    showToast(
+                        'Plugin upgraded',
+                        data.plugin_id + ' upgraded ' + data.old_version
+                            + ' → ' + data.new_version
+                            + '. Previous version preserved for rollback.',
+                        'success'
+                    );
+                }
+            } else {
+                var sig = data.signature || {};
+                var sigLine = '';
+                if (sig.status && sig.status !== 'not_checked') {
+                    sigLine = ' Signature: ' + sig.status
+                        + (sig.enforced ? ' (required)' : '');
+                }
+                if (typeof showToast === 'function') {
+                    showToast(
+                        'Plugin uploaded',
+                        data.plugin_id + ' v' + data.version
+                            + ' is staged disabled.' + sigLine
+                            + ' Enable it and restart the node to activate.',
+                        'success'
+                    );
+                }
+            }
+            refresh();
+        }
+
+        function promptReplaceConfirm(file, errData) {
+            var current = errData.current_version || '';
+            var incoming = errData.new_version || '';
+            var msg;
+            if (current && incoming) {
+                msg = 'Replace ' + errData.plugin_id
+                    + ' v' + current + ' with v' + incoming + '? '
+                    + 'The plugin\'s installed data (database tables, '
+                    + 'credentials, gateway token) is preserved. The old '
+                    + 'version is kept on disk for rollback.';
+            } else {
+                msg = 'Replace the installed ' + errData.plugin_id
+                    + ' with this upload? The plugin\'s installed data '
+                    + 'is preserved and the old version is kept on disk '
+                    + 'for rollback.';
+            }
+            showConfirmModal(msg, {
+                title: 'Replace installed plugin?',
+                confirmText: 'Replace',
+                confirmClass: 'btn-primary',
+                icon: 'fa-arrow-up-right-dots'
+            }).then(function(ok) {
+                if (!ok) return;
+                if (typeof showToast === 'function') {
+                    showToast('Upgrading…', file.name, 'info');
+                }
+                postUploadFor(file, 'pluginsUploadAsUpgrade');
             });
         }
 
@@ -10918,14 +11024,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
         function getType(id) { ensureCatalog(); return catalogTypesById[id] || null; }
 
-        function csrf() {
-            var el = document.querySelector('input[name="csrf_token"]');
-            return el ? el.value : '';
-        }
-
         function post(action, extra, cb) {
             var body = 'action=' + encodeURIComponent(action) +
-                       '&csrf_token=' + encodeURIComponent(csrf());
+                       '&csrf_token=' + encodeURIComponent(csrfTokenValue());
             Object.keys(extra || {}).forEach(function (k) {
                 body += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(extra[k]);
             });
@@ -12011,8 +12112,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             state.lastFetchAddress = address;
             state.loadedForPubkeyHash = pubkeyHash;
 
-            var csrfEl = document.querySelector('input[name="csrf_token"]');
-            var csrf = csrfEl ? csrfEl.value : '';
+            var csrf = csrfTokenValue();
             var body = 'action=paybackMethodsFetchFromContact' +
                        '&csrf_token=' + encodeURIComponent(csrf) +
                        '&address=' + encodeURIComponent(address);
@@ -12125,11 +12225,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         node.classList.add('d-none');
     }
 
-    function csrf() {
-        var input = document.querySelector('input[name="csrf_token"]');
-        return input ? input.value : '';
-    }
-
     function postAction(payload) {
         var body = new FormData();
         Object.keys(payload).forEach(function (k) {
@@ -12137,7 +12232,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 body.append(k, payload[k]);
             }
         });
-        if (!body.has('csrf_token')) body.append('csrf_token', csrf());
+        if (!body.has('csrf_token')) body.append('csrf_token', csrfTokenValue());
         return fetch(window.location.pathname, {
             method: 'POST',
             body: body,

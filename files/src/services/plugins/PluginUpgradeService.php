@@ -173,7 +173,7 @@ class PluginUpgradeService
     {
         $this->validatePluginId($pluginId);
 
-        $bundleDir = self::BUNDLED_PLUGINS_DIR . '/' . $pluginId;
+        $bundleDir = static::BUNDLED_PLUGINS_DIR . '/' . $pluginId;
         if (!is_dir($bundleDir)) {
             throw new InvalidArgumentException(
                 "No bundled version of '{$pluginId}' exists at {$bundleDir}"
@@ -239,15 +239,15 @@ class PluginUpgradeService
     public function availableBundledUpgrades(): array
     {
         $out = [];
-        if (!is_dir(self::BUNDLED_PLUGINS_DIR)) {
+        if (!is_dir(static::BUNDLED_PLUGINS_DIR)) {
             return $out;
         }
-        $entries = @scandir(self::BUNDLED_PLUGINS_DIR) ?: [];
+        $entries = @scandir(static::BUNDLED_PLUGINS_DIR) ?: [];
         foreach ($entries as $entry) {
             if ($entry === '.' || $entry === '..') continue;
             if (preg_match(PluginInstallService::PLUGIN_ID_PATTERN, $entry) !== 1) continue;
 
-            $bundleManifestPath = self::BUNDLED_PLUGINS_DIR . '/' . $entry . '/plugin.json';
+            $bundleManifestPath = static::BUNDLED_PLUGINS_DIR . '/' . $entry . '/plugin.json';
             $installedManifestPath = $this->pluginDir . '/' . $entry . '/plugin.json';
             if (!is_file($bundleManifestPath) || !is_file($installedManifestPath)) {
                 continue;

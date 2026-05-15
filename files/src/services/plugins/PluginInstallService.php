@@ -171,9 +171,25 @@ class PluginInstallService
             // present. Updates go through PluginUpgradeService so the
             // operator's existing plugin state (DB tables, credentials,
             // gateway token) is preserved across the version change.
+            // Carry both versions on the exception so the GUI can
+            // render a "Replace v{current} with v{new}?" confirmation
+            // and route the same upload through pluginsUploadAsUpgrade.
             if (is_dir($targetDir)) {
-                throw new InvalidArgumentException(
-                    "Plugin '{$pluginId}' is already installed. Use the upgrade flow to replace."
+                $currentVersion = '';
+                $installedManifestPath = $targetDir . '/plugin.json';
+                if (is_file($installedManifestPath)) {
+                    $installedRaw = @file_get_contents($installedManifestPath);
+                    if ($installedRaw !== false) {
+                        $installedDecoded = json_decode($installedRaw, true);
+                        if (is_array($installedDecoded)) {
+                            $currentVersion = (string) ($installedDecoded['version'] ?? '');
+                        }
+                    }
+                }
+                throw new PluginAlreadyInstalledException(
+                    $pluginId,
+                    (string) ($manifest['version'] ?? ''),
+                    $currentVersion
                 );
             }
             if (!@rename($stagedDir, $targetDir)) {

@@ -370,7 +370,49 @@ class PluginControllerTest extends TestCase
         $this->withCsrf();
 
         $this->installService->method('installFromZip')
-            ->willThrowException(new \InvalidArgumentException("Plugin 'foo' is already installed."));
+            ->willThrowException(new \Eiou\Services\Plugins\PluginAlreadyInstalledException(
+                'foo', '1.3.0', '1.2.0'
+            ));
+
+        $result = $this->dispatch();
+
+        $this->assertSame(409, $result['status']);
+        $this->assertSame('already_installed', $result['payload']['code']);
+        // The 409 carries both versions so the GUI can render a
+        // "Replace v{current} with v{new}?" confirm and re-POST through
+        // pluginsUploadAsUpgrade — without these fields the operator
+        // would just see a generic already-installed toast and have
+        // no in-GUI upgrade path.
+        $this->assertSame('foo', $result['payload']['plugin_id']);
+        $this->assertSame('1.3.0', $result['payload']['new_version']);
+        $this->assertSame('1.2.0', $result['payload']['current_version']);
+    }
+
+    #[Test]
+    public function pluginsUploadMapsRaceInstallCollisionTo409(): void
+    {
+        // The "appeared during install" race (another process created
+        // the target dir between the existence check and the rename)
+        // still maps to 409 via the plain-InvalidArgumentException
+        // fallback in the controller, since the install service throws
+        // a generic InvalidArgumentException for that case rather than
+        // the typed PluginAlreadyInstalledException (no manifest was
+        // available to populate the typed fields).
+        $_POST = ['action' => 'pluginsUpload', 'csrf_token' => 'x'];
+        $_FILES = [
+            'plugin_zip' => [
+                'name' => 'racey.zip',
+                'tmp_name' => $this->uploadTmpFile,
+                'error' => UPLOAD_ERR_OK,
+                'size' => 4,
+            ],
+        ];
+        $this->withCsrf();
+
+        $this->installService->method('installFromZip')
+            ->willThrowException(new \InvalidArgumentException(
+                "Plugin appeared during install — another upload won the race."
+            ));
 
         $result = $this->dispatch();
 

@@ -148,6 +148,31 @@ Plugins shipped inside the Docker image (currently just `hello-eiou`) live at
 boot via `cp -rn` — `-n` means "no clobber", so if an operator has removed or
 modified a bundled plugin, the change persists across container rebuilds.
 
+When the operator pulls a new image whose bundled plugin version is **newer**
+than the copy already on the plugins volume, `cp -rn` correctly leaves the
+old directory alone (operator state lives in MySQL + credentials JSON, and a
+raw overwrite would skip the migration ceremony that preserves it). The
+actual version bump happens inside `Application::boot` via
+`PluginUpgradeService::upgradeFromBundle` — see [Upgrading
+Plugins](#upgrading-plugins) for the full backup → `onUpgrade` → grant
+reconcile → pool reload chain. So:
+
+| Situation | What happens |
+| --- | --- |
+| Bundled plugin not yet on volume | `cp -rn` seeds it. Disabled by default per the safety stance. |
+| Bundled version == installed | No-op. |
+| Bundled version > installed | Auto-upgrade on next boot via the upgrade service (preserves operator state). |
+| Operator removed the bundled plugin | `cp -rn` skips (dir absent on the volume? — actually no: removal happens by deleting the dir, so subsequent boots will re-seed. To suppress re-seeding, operators uninstall via the GUI/CLI, which records the uninstall in the plugins-state file). |
+
+**Trust gate (deferred):** today the auto-upgrade path trusts anything under
+`/app/plugins/` because the operator already trusted the image they pulled.
+Once image-baked plugin signing is wired (build-time `plugin.sig` generation
++ a first-party `.pub` in `/app/eiou/plugins/trusted-keys/`), the
+auto-upgrade should reject bundles whose signature doesn't verify against
+the first-party key — same gate as third-party plugin installs, with the
+key-rotation cost called out in
+[`PluginSignatureVerifier`](../files/src/services/plugins/PluginSignatureVerifier.php).
+
 ### Volume persistence
 
 `/etc/eiou/plugins/` is mounted on a named Docker volume (`{node}-plugins`,
@@ -1250,9 +1275,13 @@ comes from the gates below.
 ### Service
 
 `Eiou\Services\Plugins\PluginInstallService` owns the validation and extraction
-pipeline. The GUI's `pluginsUpload` action delegates to it. The CLI does
-not yet expose this — operators with shell access can already drop files in
-directly, so a CLI form would just duplicate the existing path.
+pipeline. The GUI's `pluginsUpload` action and the CLI's `eiou plugin install
+<zip-path>` both delegate to it — same validation gates, same staging /
+atomic-publish ceremony, same `PLUGIN_INSTALLED` event. The CLI form is the
+scripted-rollout entry point (`docker cp` the zip into the container, then
+run the install command via `docker exec`); operators with shell access can
+still drop a plugin directory in by hand, but the install service is what
+the rest of the docs assume going forward.
 
 ### Validation pipeline
 
@@ -1274,7 +1303,7 @@ removed before the error returns.
 | Symlink rejection             | No `is_link()` paths in the extracted tree                                                           | Belt-and-suspenders: even if entry walk approved a name, an actual symlink on disk is anomalous. |
 | Extraction stays inside root  | `realpath()` of every extracted path is under the staging dir                                        | Cross-checks the entry walk against the post-extraction filesystem state.                        |
 | Manifest validation           | `plugin.json` parses, `name` matches directory, `version` and `entryClass` present                   | Catches corrupt manifests before the loader has to.                                              |
-| No overwrite                  | Target dir must not already exist                                                                    | Install is not update; refresh through uninstall → upload so the destructive step is explicit.   |
+| No overwrite                  | Target dir must not already exist                                                                    | Install is not update; the GUI then offers a confirm modal that re-routes the same zip through the upgrade flow, and the CLI surfaces `eiou plugin upgrade <zip-path>` as the replacement command. |
 | Signature (mode dependent)    | In `require` mode, the zip must include a valid `plugin.sig` against a trusted key                   | See [Enforcement modes](#enforcement-modes). `warn` and `off` modes accept the upload but report the verifier's verdict in the response. |
 
 The numeric limits and the allow-list are returned to the GUI by the
@@ -1381,14 +1410,16 @@ of that (DROP TABLE for every owned table, DROP USER, delete credential
 row), which is why upgrade is a separate flow with its own service and
 its own end-to-end test coverage.
 
-Two paths feed into the same engine:
+Four paths feed into the same engine:
 
 | Path                       | When it fires                                                                                          |
 | -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Zip upload (`pluginsUploadAsUpgrade` / GUI)** | Operator uploads a newer-version `.zip` of an already-installed plugin and confirms the replace.       |
-| **Bundled (`eiou plugin upgrade <name>` / `pluginsUpgrade`)** | The image (`/app/plugins/<name>/`) ships a newer version than the operator's plugins volume holds.    |
+| **GUI zip upload (`pluginsUploadAsUpgrade`)** | Operator uploads a newer-version `.zip` of an already-installed plugin and confirms the replace in the "Replace v{current} with v{new}?" modal. |
+| **CLI zip upgrade (`eiou plugin upgrade <zip-path>`)** | Operator runs the CLI with a path-shaped argument (anything that doesn't match the kebab-case plugin-name regex). Routes through `PluginUpgradeService::upgradeFromZip`. Same engine as the GUI zip upload, no confirmation modal — the verb itself is the confirmation. |
+| **Bundled (`eiou plugin upgrade <name>` / `pluginsUpgrade`)** | Operator explicitly triggers an upgrade to the image-baked version via CLI (with a name argument) or the GUI "Upgrade available" badge. |
+| **Auto on boot (`Application::autoUpgradeBundledPlugins`)** | The image (`/app/plugins/<name>/`) ships a newer version than the operator's plugins volume holds; runs before `discover()` so the rest of boot operates on the post-upgrade manifest. No operator action required — image swap → container restart → upgrade. |
 
-Both routes call the same `PluginUpgradeService` and produce the same
+All four routes call the same `PluginUpgradeService` and produce the same
 step-status envelope.
 
 ### What the upgrade flow does
@@ -1683,6 +1714,41 @@ For plugins that declare `database.user: true`, `enable` triggers
 are generated on first enable and persisted encrypted. See
 [Database Isolation](#database-isolation).
 
+### `eiou plugin install <zip-path>`
+
+Install a plugin from a `.zip` file on the container's filesystem. The
+CLI runs inside the wallet container, so operators usually `docker cp`
+the zip into `/tmp/` first:
+
+```bash
+docker cp my-plugin.zip alice:/tmp/my-plugin.zip
+docker exec alice eiou plugin install /tmp/my-plugin.zip
+```
+
+Runs the same validation pipeline the GUI's `pluginsUpload` uses —
+magic bytes, entry walk, manifest, signature verification per the
+configured mode — then atomic-renames the staged tree into
+`/etc/eiou/plugins/<name>/`. The plugin lands **disabled**; follow up
+with `eiou plugin enable <name>` and a node restart to activate.
+
+Refused for:
+
+- Missing or unreadable zip file (error includes a `docker cp` hint)
+- Plugin id already installed — error carries the on-disk version,
+  the would-be-installed version, and points at
+  `eiou plugin upgrade <zip-path>` for the replacement path. The CLI
+  deliberately does NOT auto-route to upgrade on collision (the GUI's
+  confirmation modal is what guards that path; the CLI's analog is
+  making the operator type a different verb)
+- Anything the install service rejects — malformed zip, manifest
+  validation, signature failure in `require` mode
+
+```bash
+eiou plugin install /tmp/my-plugin.zip
+eiou plugin enable my-plugin
+eiou restart
+```
+
 ### `eiou plugin uninstall <name>`
 
 Runs the full uninstall flow — `onUninstall()` hook, `REVOKE`, `DROP TABLE`
@@ -1699,12 +1765,26 @@ Per-step status is printed in the JSON response (`ok` / `skipped` /
 **permanent** action — a fresh install issues new credentials, new tables,
 and a new MySQL user.
 
-### `eiou plugin upgrade <name>`
+### `eiou plugin upgrade <name|zip-path>`
 
-Replaces the installed plugin code with the image-baked version under
-`/app/plugins/<name>/`. The plugin's state (MySQL tables, plugin
-user, credentials, gateway token) is preserved across the upgrade —
-the directory swap is atomic, the old version is snapshotted to
+Replaces the installed plugin code with a newer version. Two argument
+shapes feed into the same engine:
+
+- **`<name>` (strict kebab-case)**: upgrades to the image-baked version
+  under `/app/plugins/<name>/` via `PluginUpgradeService::upgradeFromBundle`.
+  Refused unless the bundled version is strictly newer than installed.
+- **`<zip-path>` (slashes, dots, anything else)**: upgrades to the
+  version inside the operator-supplied zip via
+  `PluginUpgradeService::upgradeFromZip`. Runs the same validation
+  pipeline the GUI upload uses before swapping. Operators usually
+  `docker cp` the zip into `/tmp/` first, then pass the in-container
+  path. Detection happens automatically — anything matching
+  `^[a-z0-9][a-z0-9-_]{0,63}$` is treated as a plugin name; anything
+  else is treated as a path.
+
+Either way the plugin's state (MySQL tables, plugin user, credentials,
+gateway token) is preserved across the upgrade — the directory swap
+is atomic, the old version is snapshotted to
 `<name>.backup-<oldver>-<ts>/` next to the live plugin, the plugin's
 `onUpgrade(...)` hook (if implemented) runs against the new code with
 the old grants still active, grants are reconciled against the new
@@ -1717,10 +1797,16 @@ Refused for:
 - Downgrades (`error: Refusing downgrade of '<name>' from A to B …`)
 - `min_upgradable_from` violations — the new manifest declares a
   floor and the installed version is below it
-- No bundled version on disk
+- Bundled path: no bundled version on disk
+- Zip path: missing / unreadable file (error includes a `docker cp` hint)
 
 ```bash
+# Bundled (image-baked) upgrade
 eiou plugin upgrade hello-eiou
+
+# Zip-based upgrade (operator-supplied)
+docker cp hello-eiou-1.6.zip alice:/tmp/hello-eiou-1.6.zip
+docker exec alice eiou plugin upgrade /tmp/hello-eiou-1.6.zip
 ```
 
 Backups are pruned automatically after 30 days by the boot reconcile.
@@ -1754,16 +1840,20 @@ fully-clean uninstall, and `200` with `success: false` + the per-step map
 if any step reported an error. See
 [Database Isolation → Uninstall](#uninstall) for the full step sequence.
 
-**Install and upgrade are GUI-only.** Uploading a `.zip` or driving a
-bundled upgrade goes through the `pluginsUpload`,
-`pluginsUploadAsUpgrade`, and `pluginsUpgrade` AJAX actions on the
-admin-authenticated GUI (see [Managing Plugins in the
-GUI](#managing-plugins-in-the-gui)). REST API-driven install / upgrade
-isn't exposed today — operators using the API can drop plugin files
-into `/etc/eiou/plugins/<name>/` over `docker cp` and then call the
-enable / disable endpoints above; the upgrade flow doesn't have a
-REST equivalent. CLI alternatives: `eiou plugin upgrade <name>` for
-the bundled-source path.
+**Install and zip-upgrade are GUI- and CLI-only today; the REST API does
+not expose them.** The GUI uses `pluginsUpload`, `pluginsUploadAsUpgrade`,
+and `pluginsUpgrade` AJAX actions against the admin-authenticated session
+(see [Managing Plugins in the GUI](#managing-plugins-in-the-gui)). The CLI
+offers `eiou plugin install <zip-path>` for fresh installs and
+`eiou plugin upgrade <name|zip-path>` for both bundled and zip upgrades
+(see [`eiou plugin install`](#eiou-plugin-install-zip-path) and
+[`eiou plugin upgrade`](#eiou-plugin-upgrade-namezip-path)). REST API
+install / upgrade is deferred pending the auth-scope decision —
+a compromised `admin`-scope key today can toggle existing plugins
+(matching what the CLI/GUI allow) but cannot introduce new plugin code,
+and widening the blast radius to "API can install arbitrary code"
+deserves its own scope (e.g. `plugin:install`) rather than slipping into
+the existing `admin` umbrella.
 
 ### Example
 
