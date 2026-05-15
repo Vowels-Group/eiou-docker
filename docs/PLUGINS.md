@@ -148,6 +148,31 @@ Plugins shipped inside the Docker image (currently just `hello-eiou`) live at
 boot via `cp -rn` — `-n` means "no clobber", so if an operator has removed or
 modified a bundled plugin, the change persists across container rebuilds.
 
+When the operator pulls a new image whose bundled plugin version is **newer**
+than the copy already on the plugins volume, `cp -rn` correctly leaves the
+old directory alone (operator state lives in MySQL + credentials JSON, and a
+raw overwrite would skip the migration ceremony that preserves it). The
+actual version bump happens inside `Application::boot` via
+`PluginUpgradeService::upgradeFromBundle` — see [Upgrading
+Plugins](#upgrading-plugins) for the full backup → `onUpgrade` → grant
+reconcile → pool reload chain. So:
+
+| Situation | What happens |
+| --- | --- |
+| Bundled plugin not yet on volume | `cp -rn` seeds it. Disabled by default per the safety stance. |
+| Bundled version == installed | No-op. |
+| Bundled version > installed | Auto-upgrade on next boot via the upgrade service (preserves operator state). |
+| Operator removed the bundled plugin | `cp -rn` skips (dir absent on the volume? — actually no: removal happens by deleting the dir, so subsequent boots will re-seed. To suppress re-seeding, operators uninstall via the GUI/CLI, which records the uninstall in the plugins-state file). |
+
+**Trust gate (deferred):** today the auto-upgrade path trusts anything under
+`/app/plugins/` because the operator already trusted the image they pulled.
+Once image-baked plugin signing is wired (build-time `plugin.sig` generation
++ a first-party `.pub` in `/app/eiou/plugins/trusted-keys/`), the
+auto-upgrade should reject bundles whose signature doesn't verify against
+the first-party key — same gate as third-party plugin installs, with the
+key-rotation cost called out in
+[`PluginSignatureVerifier`](../files/src/services/plugins/PluginSignatureVerifier.php).
+
 ### Volume persistence
 
 `/etc/eiou/plugins/` is mounted on a named Docker volume (`{node}-plugins`,
@@ -1381,12 +1406,13 @@ of that (DROP TABLE for every owned table, DROP USER, delete credential
 row), which is why upgrade is a separate flow with its own service and
 its own end-to-end test coverage.
 
-Two paths feed into the same engine:
+Three paths feed into the same engine:
 
 | Path                       | When it fires                                                                                          |
 | -------------------------- | ------------------------------------------------------------------------------------------------------ |
 | **Zip upload (`pluginsUploadAsUpgrade` / GUI)** | Operator uploads a newer-version `.zip` of an already-installed plugin and confirms the replace.       |
-| **Bundled (`eiou plugin upgrade <name>` / `pluginsUpgrade`)** | The image (`/app/plugins/<name>/`) ships a newer version than the operator's plugins volume holds.    |
+| **Bundled (`eiou plugin upgrade <name>` / `pluginsUpgrade`)** | Operator explicitly triggers an upgrade to the image-baked version via CLI or the GUI "Upgrade available" badge. |
+| **Auto on boot (`Application::autoUpgradeBundledPlugins`)** | The image (`/app/plugins/<name>/`) ships a newer version than the operator's plugins volume holds; runs before `discover()` so the rest of boot operates on the post-upgrade manifest. No operator action required — image swap → container restart → upgrade. |
 
 Both routes call the same `PluginUpgradeService` and produce the same
 step-status envelope.

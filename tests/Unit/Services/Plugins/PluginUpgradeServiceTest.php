@@ -344,6 +344,77 @@ class PluginUpgradeServiceTest extends TestCase
         $this->assertSame([], $result);
     }
 
+    public function testAvailableBundledUpgradesFiltersByVersionAndPresence(): void
+    {
+        // This is the production load-bearing path for the boot-time
+        // auto-upgrade flow (Application::autoUpgradeBundledPlugins
+        // iterates whatever this returns). Verify only plugins where
+        // bundled > installed are surfaced — equal versions, older
+        // bundled, and missing-counterpart cases must be excluded so
+        // the boot loop doesn't waste cycles on no-op upgrade calls
+        // that would just throw "already at version N".
+        //
+        // BUNDLED_PLUGINS_DIR is the literal `/app/plugins` path; in
+        // the Docker test runner it's writable, on a dev workstation
+        // it usually isn't. Skip with a clear message in the latter
+        // case — the empty-dir branch is already covered above.
+        $bundleRoot = PluginUpgradeService::BUNDLED_PLUGINS_DIR;
+        if (!is_dir($bundleRoot) && !@mkdir($bundleRoot, 0o755, true)) {
+            $this->markTestSkipped(
+                $bundleRoot . ' is not writable in this env. '
+                . 'The empty-dir branch is covered by '
+                . 'testAvailableBundledUpgradesReturnsEmptyWhenBundleDirAbsent.'
+            );
+        }
+
+        // Plugin A: bundled 1.2.0 > installed 1.1.0 → SHOULD be included
+        $this->installFixture('plugin-a', '1.1.0');
+        $this->writeBundle($bundleRoot, 'plugin-a', '1.2.0');
+
+        // Plugin B: bundled 1.0.0 == installed 1.0.0 → SHOULD NOT
+        $this->installFixture('plugin-b', '1.0.0');
+        $this->writeBundle($bundleRoot, 'plugin-b', '1.0.0');
+
+        // Plugin C: bundled 0.9.0 < installed 1.0.0 → SHOULD NOT
+        $this->installFixture('plugin-c', '1.0.0');
+        $this->writeBundle($bundleRoot, 'plugin-c', '0.9.0');
+
+        // Plugin D: bundled exists, never installed → SHOULD NOT (upgrade
+        // path is only for already-installed plugins)
+        $this->writeBundle($bundleRoot, 'plugin-d', '1.0.0');
+
+        // Plugin E: installed exists, never bundled → SHOULD NOT
+        $this->installFixture('plugin-e', '1.0.0');
+
+        try {
+            $result = $this->svc->availableBundledUpgrades();
+        } finally {
+            // Clean up the fixtures we wrote to the shared dir.
+            $this->rrmdir($bundleRoot . '/plugin-a');
+            $this->rrmdir($bundleRoot . '/plugin-b');
+            $this->rrmdir($bundleRoot . '/plugin-c');
+            $this->rrmdir($bundleRoot . '/plugin-d');
+        }
+
+        $this->assertArrayHasKey('plugin-a', $result);
+        $this->assertSame('1.1.0', $result['plugin-a']['installed_version']);
+        $this->assertSame('1.2.0', $result['plugin-a']['bundled_version']);
+        $this->assertArrayNotHasKey('plugin-b', $result);
+        $this->assertArrayNotHasKey('plugin-c', $result);
+        $this->assertArrayNotHasKey('plugin-d', $result);
+        $this->assertArrayNotHasKey('plugin-e', $result);
+    }
+
+    private function writeBundle(string $bundleRoot, string $name, string $version): void
+    {
+        $dir = $bundleRoot . '/' . $name;
+        if (!is_dir($dir)) mkdir($dir, 0o755, true);
+        file_put_contents(
+            $dir . '/plugin.json',
+            json_encode($this->minimalManifest($name, $version), JSON_PRETTY_PRINT)
+        );
+    }
+
     // =========================================================================
     // Backup retention
     // =========================================================================

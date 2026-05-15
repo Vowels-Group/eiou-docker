@@ -171,6 +171,27 @@ class Application {
                 $this->services->getPluginSignatureVerifier(),
                 \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
             );
+            // Auto-upgrade any bundled plugin whose image-baked version is
+            // newer than the copy on the operator's plugins volume. Runs
+            // BEFORE discover() so the subsequent reconcile passes operate
+            // on the post-upgrade manifest. Per-plugin failure logs but
+            // never aborts boot — a broken bundled upgrade must not lock
+            // the operator out of the wallet.
+            //
+            // Concurrency: PHP-FPM workers and CLI invocations may both
+            // hit Application::boot simultaneously after a container
+            // restart. A non-blocking flock serialises the upgrade pass
+            // (same pattern as reconcileSandbox); the winner does the
+            // work, losers skip — the result on disk is the same either
+            // way.
+            //
+            // TODO (deferred): gate this on first-party signature
+            // verification once image-baked plugin signing is wired up.
+            // The verifier exists (PluginSignatureVerifier); what's
+            // missing is the build-time signing step and a baked-in
+            // public key. Until then we trust that anything under
+            // /app/plugins/ was put there by the image build.
+            $this->autoUpgradeBundledPlugins();
             $this->pluginLoader->discover();
             // Reconcile MySQL users / grants against the on-disk manifest +
             // plugin_credentials table. Self-heals after a mysql-data volume
@@ -493,6 +514,73 @@ class Application {
                 ]);
             }
             // Don't throw - recovery failing shouldn't prevent app startup
+        }
+    }
+
+    /**
+     * Run the bundled-plugin upgrade pass. For each plugin where the
+     * image-baked version under /app/plugins/<id>/ is strictly newer
+     * than the installed version under /etc/eiou/plugins/<id>/, invoke
+     * PluginUpgradeService::upgradeFromBundle(). That service handles
+     * the backup → directory swap → onUpgrade() hook → grant
+     * reconcile → credential re-export → pool reload chain; we just
+     * iterate.
+     *
+     * Per-plugin failures are logged but never propagate — a broken
+     * upgrade for one bundled plugin must not block boot for the
+     * wallet itself. Operators see the failure in the structured log
+     * and the plugin stays at its previous version on disk.
+     *
+     * Concurrency: serialised by a non-blocking flock so simultaneous
+     * boots (multiple PHP-FPM workers waking after a container restart,
+     * or a CLI command racing the first HTTP request) don't try to
+     * swap the same directory twice.
+     */
+    private function autoUpgradeBundledPlugins(): void {
+        $lockPath = '/tmp/eiou-plugin-auto-upgrade.lock';
+        $lockFp = @fopen($lockPath, 'c');
+        if ($lockFp === false) {
+            // Lock file unwritable — proceed unlocked. Atomic rename
+            // inside commitUpgrade is still crash-safe; the lock is an
+            // optimisation against duplicate work, not a correctness
+            // boundary.
+        } elseif (!@flock($lockFp, LOCK_EX | LOCK_NB)) {
+            // Another process is mid-upgrade. Skip silently — when
+            // that process finishes, the on-disk state will be correct
+            // for our subsequent discover() pass.
+            fclose($lockFp);
+            return;
+        }
+
+        try {
+            $upgradeService = $this->services->getPluginUpgradeService($this->pluginLoader);
+            $available = $upgradeService->availableBundledUpgrades();
+            foreach ($available as $name => $info) {
+                try {
+                    $upgradeService->upgradeFromBundle($name);
+                    Logger::getInstance()->info('plugin_auto_upgraded_from_bundle', [
+                        'plugin' => $name,
+                        'old_version' => $info['installed_version'],
+                        'new_version' => $info['bundled_version'],
+                    ]);
+                } catch (Throwable $e) {
+                    Logger::getInstance()->warning('plugin_auto_upgrade_failed', [
+                        'plugin' => $name,
+                        'old_version' => $info['installed_version'],
+                        'new_version' => $info['bundled_version'],
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (Throwable $e) {
+            Logger::getInstance()->warning('plugin_auto_upgrade_scan_failed', [
+                'error' => $e->getMessage(),
+            ]);
+        } finally {
+            if (is_resource($lockFp)) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
         }
     }
 

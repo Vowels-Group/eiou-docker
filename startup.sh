@@ -888,8 +888,17 @@ chmod 755 /var/log/eiou
 chmod 640 /var/log/eiou/app.log
 
 # Seed bundled plugins (e.g. hello-eiou) into the plugin directory on a
-# Docker volume. Uses cp -rn so existing plugins are never overwritten —
-# users can remove or replace bundled plugins and the change persists.
+# Docker volume. Uses cp -rn so existing plugins are never overwritten
+# at the filesystem level — operator state (databases, credentials,
+# enable flags) lives across container boundaries and a raw overwrite
+# would skip the upgrade ceremony that preserves it.
+#
+# Version-aware upgrades for plugins that ARE already installed happen
+# inside Application::boot via PluginUpgradeService::upgradeFromBundle,
+# which runs onUpgrade() hooks, reconciles MySQL grants for the new
+# owned_tables, re-exports credentials, and reloads the FPM pool. So
+# this step handles "new plugins added by the image" and the in-app
+# pass handles "existing plugins whose image version got bumped."
 mkdir -p /etc/eiou/plugins
 if [ -d /app/plugins ]; then
     cp -rn /app/plugins/. /etc/eiou/plugins/ 2>/dev/null || true
