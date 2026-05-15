@@ -19,7 +19,7 @@ require_once("/app/eiou/src/gui/layout/walletSubParts/paybackMethodsSection.html
 // Different from gui.dashboard.after (raw render-hook concatenation):
 // each widget is an associative array {id, html, order} so future
 // hooks can sort / hide / decorate by id without re-parsing strings.
-// See docs/PLUGIN_GUI_HOOKS.md.
+// See docs/PLUGINS.md (Extending the GUI).
 $dashboardWidgets = $hooks->applyFilter('gui.dashboard.widgets', [], ['user' => $user]);
 if (!empty($dashboardWidgets) && is_array($dashboardWidgets)) {
     usort($dashboardWidgets, fn($a, $b) => (int)($a['order'] ?? 100) <=> (int)($b['order'] ?? 100));

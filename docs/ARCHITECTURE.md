@@ -982,6 +982,24 @@ chains. Operates in 5-minute cycles.
 - Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
 
+**Privacy: Tor-only by design (no transport fallback):**
+
+Pings deliberately use the contact's Tor address with no fallback to HTTPS or HTTP, even when the user's general-purpose `torFailureTransportFallback` setting is enabled. This is intentional and asymmetric with `TransportUtilityService::send()`, which does fall back.
+
+The address-priority chain in `ContactStatusService::pingContact()` is `tor > https > http`, and on Tor failure the method returns a structured `tor_unavailable` error rather than retrying over a clearer-text transport.
+
+The reason is metadata privacy. Ping payloads are E2E encrypted via ECDH + AES-256-GCM (`PayloadEncryption::encryptForRecipient()` — see `TransportUtilityService::signWithCapture()`, where only `type='create'` is excluded), so an HTTPS observer can't read the body. But pings are also small, frequent, and emit a recognizable timing/size pattern — exactly the kind of traffic that lets a network observer reconstruct the contact graph (who-pings-whom-and-how-often) from metadata alone:
+
+| Observer | Sees over HTTPS | Sees over Tor |
+|---|---|---|
+| Local ISP / coffee-shop net | Source IP, destination SNI hostname, packet sizes, timing | Encrypted Tor traffic to a guard relay; nothing about the actual peer |
+| Peer's ISP / hosting provider | Your real IP, connection times | Tor exit (or rendezvous, for `.onion`) — no link to you |
+| State-level adversary correlating both ends | The full contact graph with timing | Distributed across three relays; no single observer holds both ends |
+
+Because content is already encrypted, switching from Tor to HTTPS for ping doesn't restore content secrecy — it only weakens metadata privacy below what the user opted into when they enabled Tor. So `pingContact()` fails closed (returns `tor_unavailable`, suggests retry — see `SECURITY.md` Network Security for details), and the watchdog attempts a Tor restart within ~30 seconds via `/tmp/tor-restart-requested`.
+
+`TransportUtilityService::send()` (regular transactions) keeps fallback because the value tradeoff is different: a delivered transaction with weaker metadata privacy is usually preferable to a failed payment, and operators can opt out via the setting. Pings are a status-only operation where reliability matters less than the privacy guarantee.
+
 **Wallet Restore Contact Re-establishment:**
 
 When a wallet is restored from a seed phrase (empty database, same keys/address) and a former
@@ -2755,7 +2773,7 @@ review rather than being silently dropped.
 6. Wallet generation or restoration
    - RESTORE_FILE (file-based, most secure)
    - RESTORE (env var)
-   - QUICKSTART (new wallet with hostname)
+   - EIOU_HOST set (new wallet with HTTP/HTTPS hostname)
    - Default (new wallet, Tor only)
          |
          v
@@ -2952,9 +2970,13 @@ calls the handler. Tiers control what the registry enforces before dispatch:
 - `TIER_SENSITIVE` — `TIER_CSRF` + the session must hold a recent
   sensitive-access grant (auth-code re-prompt, several minutes).
 
-Core entries register at `TIER_AUTH` because each handler keeps its own
+Most core entries register at `TIER_AUTH` because each handler keeps its own
 inline rotating-vs-non-rotating CSRF semantics and its own legacy envelope
-shape (no behavior change vs the pre-migration if-ladder).
+shape (no behavior change vs the pre-migration if-ladder). The `updateSettings`
+core entry is the exception: it registers at `TIER_SENSITIVE` so the
+registry's pre-dispatch emits the canonical JSON `403 sensitive_access_required`
+envelope on a lapse, which the AJAX handler in `script.js` maps to the
+`apiKeysVerifyModal` and re-submits on successful unlock.
 
 Last-write-wins on collision. A plugin that registers an action with a
 core action's name overrides core. The dispatcher invokes whatever's
@@ -2994,8 +3016,8 @@ let plugins extend rendering without forking templates:
 
 `renderSection()` and `renderTable()` helpers in
 `WalletTemplateHelpers.php` give plugin-authored sections the same chrome
-as core sections. See `docs/PLUGIN_GUI_HOOKS.md` for the design and
-`docs/PLUGINS.md` "Extending the GUI" for the plugin-author reference.
+as core sections. See `docs/PLUGINS.md` "Extending the GUI" for the
+plugin-author reference.
 
 Optional `PLUGIN_HOOKS_TRACE=1` env flag logs every hook fire (kind,
 hook, listener count, errors) — useful for plugin authors discovering
@@ -3009,6 +3031,72 @@ class implements secure session handling:
 - Session cookies: `httponly`, `samesite=Strict`, `secure` (when HTTPS)
 - Auth code comparison with timing-safe equality check
 - Session regeneration on login to prevent fixation attacks
+
+### Alternate Auth Code
+
+The primary auth code is 20 hex characters derived deterministically from the BIP39
+seed (HMAC-SHA256 with context `'eiou-auth-code'`). It is strong (~80 bits) but not
+memorable, so operators typically read it from their seed-phrase backup or password
+manager. The **alternate auth code** is an optional user-chosen passphrase that
+authenticates GUI requests interchangeably with the primary at the login form and
+the sensitive-action re-auth gate.
+
+| Aspect | Primary | Alt |
+|---|---|---|
+| Source | Derived from BIP39 seed | User-chosen |
+| Entropy | ~80 bits | Variable; enforced floor via strength rules |
+| Storage | AES-256-GCM in `userconfig.json::authcode_encrypted` | Argon2id one-way hash in `userconfig.json::altcode_hash` |
+| Recoverable | Yes — re-derive from seed | No — primary always rotates it |
+| Recovers primary? | n/a | **No** — no path |
+
+Strength rules (enforced in `Eiou\Utils\AltCodeValidator`): ≥12 characters; at
+least one each of uppercase, lowercase, digit, symbol; no triple-repeated character
+(`aaa`); no monotonic ascending/descending run of length ≥4 (`abcd`, `4321`); not a
+substring match against the bundled common-password tripwire list.
+
+**Why Argon2id and not encryption (symmetric with the primary)?** The master key that
+would encrypt the alt code is derived from the seed and sits next to `userconfig.json`
+on the same volume. Encrypting with that key adds nothing against an attacker who
+reads the file. A slow memory-hard hash (Argon2id) forces real offline-attack cost
+even with full filesystem access — which matters because the alt code is user-chosen
+and therefore typically far lower entropy than the seed-derived primary.
+
+**Verification (single chokepoint, two physical callsites).** `Session::authenticate()`
+takes both the plaintext primary and the optional alt-code Argon2id hash. The primary
+check is `hash_equals` (constant-time string compare); the alt check delegates to
+`AltCodeVerifier::verify()`, which **always** runs `password_verify` — against a
+per-process placeholder hash (random plaintext, default Argon2id cost) when no real
+alt-code hash is configured. The placeholder is lazily initialised on first use and
+cached for the life of the process. This makes the auth path's wall-clock time
+identical regardless of whether an alt code is set, so a network observer cannot
+infer alt-code presence by timing failed logins. `ApiKeysController::verify()` (the
+sensitive-access gate that fronts payback methods, plugin management, settings
+mutations, and api-key CRUD) uses the same verifier. On success,
+`SessionKeys::AUTH_VIA_ALT` is set to `true` for alt-only authentications so
+downstream code can distinguish the two.
+
+**Self-rotation forbidden.** `AltCodeController::altCodeSet` and `altCodeClear`
+both refuse alt-authenticated sessions outright (`alt_session_forbidden`) and require
+the primary to be re-entered in-band — not via the session sensitive-access grant.
+This prevents an attacker who learns the alt code from rotating it and locking the
+legitimate operator out. The settings GUI mirrors this server-side gate with an
+`alert-warning` callout and `aria-disabled`-styled action buttons when the current
+session is alt-authenticated; clicking a locked button scrolls the callout into view
+and flashes it instead of silently no-op'ing.
+
+**Online resistance — two rate-limit buckets.** `gui_login` (10 attempts / 60 s
+window, 5-minute block on excess; defaults from `Constants.php`) caps online
+brute-force on the login form at ~876k attempts/year worst case. Combined with the
+12-character minimum and forced complexity, online cracking is infeasible.
+Independently, `gui_altcode_modify` (5 attempts / 5 min, 15-minute block) gates
+`altCodeSet` and `altCodeClear` so an attacker holding a stolen session cookie cannot
+probe primary candidates at unlimited rate on those endpoints. The two buckets are
+deliberately separate so attempts on one surface cannot drain the other. The
+modify-bucket check fires AFTER the `alt_session_forbidden` gate so an alt-code-only
+session can never burn the bucket and lock the legitimate operator out of rotating.
+Disabling rate limiting via `rate_limit_enabled=false` shifts the alt code's online
+resistance entirely onto password strength and Argon2id work factor — viable only
+with very strong passphrases.
 
 ### Remember-Me Login (Rotation Tokens)
 
@@ -3212,6 +3300,7 @@ TorKeyDerivation          +---------------------+
 |------|------------|------|
 | Private Key | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
 | Auth Code | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
+| Alt Code | Argon2id one-way hash (`password_hash`) | `/etc/eiou/config/userconfig.json` |
 | Mnemonic | AES-256-GCM | Displayed once, not stored |
 | Database credentials | AES-256-GCM with AAD | `/etc/eiou/config/dbconfig.json` |
 | All database files | MariaDB TDE (file_key_management) | `/var/lib/mysql/` (InnoDB, Aria, redo logs, temp tables, binlog) |
@@ -3315,7 +3404,7 @@ reconstructing from plaintext DB fields, which would produce a different hash.
 | Priority | Source | Configuration |
 |----------|--------|---------------|
 | 1 | External certificates | Mount to `/ssl-certs/` volume |
-| 2 | Let's Encrypt (certbot) | `LETSENCRYPT_EMAIL` env var; persistent `/etc/letsencrypt` volume |
+| 2 | Let's Encrypt (certbot) | `LETSENCRYPT_EMAIL` env var; certbot state persisted under the `ssl/letsencrypt/` subdirectory of the unified `ssl-cert` volume (symlinked to `/etc/letsencrypt`) |
 | 3 | CA-signed generation | Mount CA key/cert to `/ssl-ca/` volume |
 | 4 | Self-signed (fallback) | Auto-generated on startup |
 
@@ -3595,8 +3684,7 @@ public function testSearchContactsWithInvalidName(): void
 |----------|-------------|
 | [GUI_REFERENCE.md](GUI_REFERENCE.md) | Web interface documentation |
 | [GUI_QUICK_REFERENCE.md](GUI_QUICK_REFERENCE.md) | GUI quick reference card |
-| [PLUGIN_GUI_HOOKS.md](PLUGIN_GUI_HOOKS.md) | Plugin GUI hooks design (render slots, filter slots, asset registry, tab/action registries) |
-| [PLUGINS.md](PLUGINS.md) | Plugin authoring guide — see "Extending the GUI" for the day-to-day reference |
+| [PLUGINS.md](PLUGINS.md) | Plugin authoring guide — see "Extending the GUI" for plugin GUI hook usage (render slots, filter slots, asset registry, tab/action registries) |
 
 ### Configuration and Errors
 

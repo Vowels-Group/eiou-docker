@@ -394,7 +394,12 @@ class ContactStatusPayloadTest extends TestCase
         $creditByCurrency = ['USD' => 50000, 'EUR' => 30000];
         $result = json_decode($this->payload->buildResponse($request, false, $chainStatus, $creditByCurrency), true);
 
-        $this->assertCount(7, $result);
+        // Base ping response shape: status, version, senderAddress,
+        // senderPublicKey, chainValid, chainStatusByCurrency,
+        // availableCreditByCurrency, time. Optional processorsRunning,
+        // processorsTotal, peerKnownCurrencies are added only when the
+        // caller passes them — none here.
+        $this->assertCount(8, $result);
         $this->assertEquals('pong', $result['status']);
         $this->assertEquals(self::TEST_RESOLVED_ADDRESS, $result['senderAddress']);
         $this->assertEquals(self::TEST_PUBLIC_KEY, $result['senderPublicKey']);
@@ -779,14 +784,15 @@ class ContactStatusPayloadTest extends TestCase
     }
 
     /**
-     * Test buildResponse payload has exactly 7 keys
+     * Test buildResponse payload has exactly 8 keys (the base shape
+     * — no optional processorsRunning/processorsTotal/peerKnownCurrencies).
      */
-    public function testBuildResponsePayloadHasExactlySevenKeys(): void
+    public function testBuildResponsePayloadHasExactlyEightKeys(): void
     {
         $request = ['senderAddress' => self::TEST_HTTP_ADDRESS];
         $result = json_decode($this->payload->buildResponse($request), true);
 
-        $this->assertCount(7, $result);
+        $this->assertCount(8, $result);
     }
 
     /**
@@ -830,7 +836,7 @@ class ContactStatusPayloadTest extends TestCase
 
         $this->assertArrayNotHasKey('extraField', $result);
         $this->assertArrayNotHasKey('anotherField', $result);
-        $this->assertCount(7, $result);
+        $this->assertCount(8, $result);
     }
 
     /**

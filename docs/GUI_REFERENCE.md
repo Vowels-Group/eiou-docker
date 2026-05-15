@@ -318,6 +318,33 @@ Dispatched from `Functions.php` via an allowlist of action names. A new action m
 
 ---
 
+### AltCodeController
+
+Handles status / set / rotate / clear of the user-chosen **alternate auth code** that complements the seed-derived primary auth code. AJAX only; JSON responses. CSRF validated on every call via `Session::validateCSRFToken(..., false)` (non-rotating). Set and clear are additionally **rate-limited** per-IP (5 attempts / 5 min / 15-min block) via the `gui_altcode_modify` bucket, separate from `gui_login` so attempts on the two surfaces can't drain each other.
+
+| Method | Action Value | Description | Parameters |
+|--------|-------------|-------------|------------|
+| `status()` | `altCodeStatus` | Cheap presence probe — does an alt code exist on this node, was the current session authenticated via that alt code, and what is the minimum length the validator enforces. Used by the settings panel to decide whether to render the rotate / clear buttons and whether to lock them. | `csrf_token` |
+| `setAlt()` | `altCodeSet` | Set or rotate the alt code. Requires the **primary** auth code re-entered in band — *not* via the sensitive-access grant, and never accepted via the alt code itself. Validates strength through `AltCodeValidator` (≥12 chars; ≥1 each of upper/lower/digit/symbol; no triple-repeats; no monotonic runs ≥4; not a common-password substring). Refuses outright for alt-authenticated sessions with `alt_session_forbidden`. | `primary_authcode`, `new_alt_code`, `csrf_token` |
+| `clearAlt()` | `altCodeClear` | Remove the alt code. Same primary-required, alt-session-forbidden gating as `altCodeSet`. | `primary_authcode`, `csrf_token` |
+
+**Why primary-only for set/rotate/clear:**
+The alt code may not rotate or clear itself. Otherwise an attacker who learned the alt code (shoulder-surfing, leaked password manager, etc.) could overwrite it with one only they know and lock the legitimate operator out. The seed-derived primary always retains control; recovery from forgetting the alt code is "log in with the primary, rotate the alt." Recovery from forgetting the primary is the seed phrase, exactly as before this feature.
+
+**Constant-time verification (defense in depth):**
+The verifier the controller delegates to (`AltCodeVerifier::verify()`) always runs an Argon2id check, against a per-process placeholder hash when no real hash is configured. Combined with the equivalent change in `Session::authenticate()`, this prevents a network observer from inferring alt-code presence by timing failed-login responses (~50 ms with vs ~µs without otherwise).
+
+**Rate limit semantics:**
+The `alt_session_forbidden` refusal fires **before** the rate-limit gate, so an alt-code-only session can never exhaust the bucket and lock the legitimate operator out of rotating. Bucket is shared between `altCodeSet` and `altCodeClear` so attempts can't be laundered across endpoints.
+
+**Self-rotation lockout UX (when authenticated via alt):**
+The settings panel renders an `alert-warning` callout above the action row explaining the restriction. The Rotate / Remove buttons render with `aria-disabled="true"` and a `lock` icon (rather than HTML `disabled`, which suppresses clicks entirely), so clicks on them route to an `explainAltCodeLocked` handler that scrolls the warning into view and flashes it — silent dead clicks would be a worse UX than a visible "here's why".
+
+**Routing:**
+Same dispatcher allowlist as every other AJAX controller — registered with `GuiActionRegistry` at `TIER_AUTH`. Reachable only on an authenticated session; `index.html` short-circuits unauthenticated requests to the login form before the dispatcher runs.
+
+---
+
 ### PaybackMethodsController
 
 Handles every AJAX call the dashboard's Payback Methods section and the contact modal's Payback tab fire — CRUD for your own methods plus the synchronous E2E fetch used to pull a contact's shareable methods over the wire. JSON-only; CSRF is validated on every call.
@@ -690,7 +717,7 @@ Dashboard section rendering the user's own payback methods — the settlement ra
 
 **Header:**
 - `+ Add` button — opens the two-step Add/Edit modal (`paybackMethodForm.html`)
-- `🔓 Unlocked for N min` — status text shown after a sensitive-access grant; inherited from the same session-grant mechanism as API Keys
+- `🔓 Unlocked for N min` — full-width muted status row rendered above the section body when a sensitive-access grant is active (hidden when locked). Server-side initial state is rendered straight from `Session::sensitiveAccessSecondsRemaining()`, and a top-level `updateSensitiveAccessBadges()` helper in `script.js` keeps every visible row across the page in sync from a single source — unlocking from any verify modal refreshes all badges, not just the section that triggered the prompt
 
 **Header callout — "How payback methods work":** per-row encryption at rest (AES-256-GCM, keyed to the wallet), how each rail's masking differs (typed rails show last-4; `custom` shows the first 80 chars as a preview since it's user-authored free text), share policy behaviour.
 
@@ -704,7 +731,7 @@ Dashboard section rendering the user's own payback methods — the settlement ra
 
 View mode renders the same DOM with inputs set to `readonly` and a *"View only. Click Edit below to make changes"* banner; footer swaps to `Close · Edit`. Edit mode flips inputs to editable without refetch (title changes, banner hides, footer swaps to `Cancel · Delete · Save Method`).
 
-**Sensitive-access gate:** opening the modal for edit/view — and every mutation (`add`, `update`, `remove`, `share-policy`, `reveal`) — returns `401 sensitive_access_required` unless a short-lived grant is active. The client routes through the same `withSensitiveAccess(requestFn, onResponse, label)` helper that `apiKeysSection.html` uses, so a denied request opens `apiKeysVerifyModal` on top of the form and retries on successful unlock. Unlock persists for a few minutes; the chrome-level "Unlocked for N min" readout ticks down in the section header.
+**Sensitive-access gate:** opening the modal for edit/view — and every mutation (`add`, `update`, `remove`, `share-policy`, `reveal`) — returns `401 sensitive_access_required` unless a short-lived grant is active. The client routes through the same `withSensitiveAccess(requestFn, onResponse, label)` helper that `apiKeysSection.html` uses, so a denied request opens `apiKeysVerifyModal` on top of the form and retries on successful unlock. Unlock persists for a few minutes; the section's "Unlocked for N min" badge appears as a full-width muted row above the body content while the grant is active.
 
 **Per-rail "About <rail>" info panel** at the top of step 2, populated from the catalog entry's optional `info` HTML string. Starts collapsed so returning users who don't need the refresher see the compact form. Plugins opt-in by returning an `info` key from `getCatalogEntry()` — a BTC plugin can call out accepted address formats, a PayPal plugin can remind operators to link an active account, etc.
 
@@ -728,9 +755,39 @@ Client-side module (`script.js`, IIFE exported as `window.paybackMethods`) talks
 - **GUI Security** category hosts Session Timeout (moved here from the main grid), Remember Me Duration, Max Remembered Devices, and the Active Remembered Sessions list. The sessions list heading uses `settings-group-heading` for cross-category consistency, and the empty state uses the shared `.empty-panel` (dashed border + centered text) that also backs the API Keys empty state
 - **Data Retention** category has two subsections with distinct semantics: a **Cleanup** block (`cleanupDeliveryRetentionDays`, `cleanupDlqRetentionDays`, `cleanupHeldTxRetentionDays`, `cleanupRp2pRetentionDays`, `cleanupMetricsRetentionDays`) where rows past retention are **deleted**, and a separate **Archive** block (`paymentRequestsArchiveRetentionDays`, `paymentRequestsArchiveBatchSize`) where resolved payment requests past retention **move to the `payment_requests_archive` table** — they stay queryable in the history/search paths. The archive block carries its own inline warning ("nothing is deleted") so users don't confuse it with the cleanup retentions above it
 - **Reset to Defaults** category is a dedicated destructive-action surface — danger button opens `settingsResetToDefaultsModal` which requires typing `reset` into a confirmation input before the submit button enables. Submits to `SettingsController::handleResetToDefaults()` via a separate form (outside the main settings `<form>`, since a nested form isn't legal HTML)
-- Save / Reset buttons at the bottom — Save posts `updateSettings`; Reset is a plain `<button type="reset">` that rolls back unsaved form state
+- Save / Reset buttons at the bottom — Save posts `updateSettings` via XHR (the form's native submit is intercepted by `submitSettingsForm()` in `script.js`); Reset is a plain `<button type="reset">` that rolls back unsaved form state
+- **`🔓 Unlocked for N min`** — full-width muted status row above the form, in sync with the same row in API Keys and Payback Methods (every section that gates on a sensitive-access grant). Hidden when no grant is active
 
-The Settings tab additionally hosts **apiKeysSection.html** (API-key lifecycle, see below) and **debugSection.html** (debug logs, system info, debug report).
+**`updateSettings` is AJAX, not a full-page POST.** The action registers at `TIER_SENSITIVE` so the registry's pre-dispatch handles both the CSRF check and the sensitive-access gate as a JSON `403 sensitive_access_required` response. `submitSettingsForm()` catches that envelope, opens `apiKeysVerifyModal` for re-auth, and re-submits the same form once the user verifies — the user never loses their unsaved field edits to a session-grant lapse. Validation errors return `400` with `{success: false, errors: […]}` and surface as a toast; save success returns `{success: true}` and the page reloads to re-render any computed labels and rotate the page-load CSRF token. Pre-AJAX, the form was a full-page POST that on a sensitive-access lapse just redirected with a "Please re-enter your auth code" toast and no way for the user to actually re-enter it without abandoning the page.
+
+The Settings tab additionally hosts **altCodeSection.html** (alternate auth code management, see below), **apiKeysSection.html** (API-key lifecycle, see below), and **debugSection.html** (debug logs, system info, debug report).
+
+---
+
+#### altCodeSection.html
+
+Rendered on the **Settings** tab, between the main settings form and the API Keys section. Exposes status / set / rotate / clear for the user-chosen alternate auth code. All form submissions go through the controller surface documented under [AltCodeController](#altcodecontroller); this entry covers the user-facing components.
+
+**Status row (always shown):**
+- `An alternate auth code is currently configured.` (green check) — when `UserContext::hasAltCode()` is true
+- `No alternate auth code is set.` (muted dot) — otherwise
+
+**Action row:**
+- **Set alt code** (key icon, success-coloured) — opens `altCodeSetModal` (rendered as **Rotate alt code** when one already exists)
+- **Remove alt code** (trash icon, danger-coloured) — opens `altCodeClearModal`; only shown when an alt code is currently configured
+
+**Self-rotation lockout (when session was authenticated via the alt code itself):**
+- A full-width `.alert-warning` callout renders above the action row explaining the lockout in three parts: a bold "Locked this session" headline, the reason (preventing alt-code-holders from rotating to lock out the legitimate operator), and the recovery path ("log out, log in with the primary auth code")
+- The action buttons render with `aria-disabled="true"` (not the HTML `disabled` attribute) and a `lock` icon replacing the usual key/trash. Visual cues: `opacity: 0.55`, `cursor: not-allowed`, native `title` tooltip
+- Clicking a locked button does **not** silently fail — it routes through an `explainAltCodeLocked` data-action that scrolls the warning callout into view (`scrollIntoView({ behavior: 'smooth', block: 'center' })`, with a hard-jump fallback for older Tor Browser builds) and pulses a yellow box-shadow on it for 0.9 s. Repeated clicks always re-trigger
+- The server-side gate in `AltCodeController` enforces this independently — the UI lockout is UX-only; even a hand-crafted POST gets refused with `alt_session_forbidden`
+
+**Modals:**
+- `altCodeSetModal` — three fields: Primary auth code, New alt code, Confirm new alt code. Inline strength-meter beneath the new-code input mirrors the server-side rules in `AltCodeValidator` (length floor, character classes, triple-repeat / sequence detection). The meter is advisory only — the server is authoritative; this is so the user knows what's missing before submitting
+- `altCodeClearModal` — single field: Primary auth code. Both modals are minimal — no live status polling, no per-field reveal toggles, no remember-me on the primary input (this is a high-stakes one-shot, not a routine login)
+
+**Client-side glue:**
+Self-contained inline `<script nonce>` block at the bottom of the section file rather than an addition to `script.js` — keeps the initial cut localised; if the feature grows it'll be promoted out. Uses only vanilla DOM APIs (no `async/await`, no `fetch` shorthand) for Tor Browser "Safer" / "Safest" compatibility. CSRF token is read from the page-level hidden input on every submit; status code 200 with `{success: true}` reloads the page, anything else surfaces `r.data.error` (and `r.data.errors[]` for the validation-failure shape) into the modal's inline error slot.
 
 ---
 
@@ -758,7 +815,7 @@ Rendered on the **Settings** tab, between the settings form and the debug sectio
 - **Refresh** — re-fetches the list without a full page reload
 - **Disable all** — visible only when ≥1 key is enabled
 - **Delete all** — visible only when ≥1 key exists (enabled or disabled)
-- **"Edits unlocked for N min"** — status text shown while a sensitive-access grant is active
+- **`🔓 Unlocked for N min`** — full-width muted status row above the body content while a sensitive-access grant is active (hidden when locked). Same row treatment as Payback Methods and Wallet Settings; kept in sync across all three sections by the page-wide `updateSensitiveAccessBadges()` helper
 
 **List rows (one per key):**
 - Label (bold) + Active/Disabled badge
@@ -791,6 +848,7 @@ Rendered at the bottom of the **Settings** tab (below the settings form).
 | eIOU Log | `/var/log/eiou/app.log` |
 | PHP Logs | PHP error log |
 | nginx Logs | nginx error log |
+| Processes | PID-to-processor lookup table — friendly name + current PID + status (Running / Stale lockfile / Stopped) for the four long-running processors (Transaction, P2P, Cleanup, Contact Status). Each row is a `<details>` so the role description collapses on mobile; a top-level "About running processes" `<details>` collapses the cross-reference help. Status comes from `posix_kill($pid, 0)` against the PID in each processor's `/tmp/*.pid` lockfile. Short-lived `P2pWorker` forks are intentionally not listed (they exit in seconds). |
 | System Info | PHP version, extensions, config files, constants |
 
 **Debug Report:**

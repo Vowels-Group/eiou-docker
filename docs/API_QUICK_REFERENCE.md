@@ -2,6 +2,19 @@
 
 Quick lookup card for the eIOU REST API endpoints.
 
+## Table of Contents
+
+1. [Authentication](#authentication)
+2. [Endpoint Summary](#endpoint-summary)
+3. [Permissions](#permissions)
+4. [Common Query Parameters](#common-query-parameters)
+5. [Request Bodies](#request-bodies)
+6. [Response Format](#response-format)
+7. [HTTP Status Codes](#http-status-codes)
+8. [Quick Examples](#quick-examples)
+9. [Rate Limits](#rate-limits)
+10. [See Also](#see-also)
+
 ---
 
 ## Authentication

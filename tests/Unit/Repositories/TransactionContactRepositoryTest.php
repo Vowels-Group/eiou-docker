@@ -30,6 +30,19 @@ class TransactionContactRepositoryTest extends TestCase
         $this->pdo = $this->createMock(PDO::class);
         $this->stmt = $this->createMock(PDOStatement::class);
         $this->repository = new TransactionContactRepository($this->pdo);
+
+        // getContactBalance now sums live + archive in two directions —
+        // four prepare() calls total. The archive table is intentionally
+        // missing in this fixture, so prepare() throws on
+        // transactions_archive and the source's per-helper try/catch
+        // falls back to zero contribution from archive. Tests that
+        // exercise live-only behavior just override the live ->stmt.
+        $this->pdo->method('prepare')->willReturnCallback(function (string $sql) {
+            if (str_contains($sql, 'transactions_archive')) {
+                throw new PDOException('No archive table in this fixture');
+            }
+            return $this->stmt;
+        });
     }
 
     // =========================================================================
@@ -55,41 +68,18 @@ class TransactionContactRepositoryTest extends TestCase
 
     public function testGetContactBalanceCalculatesBalanceCorrectly(): void
     {
-        $userPubkey = 'user-pubkey-123';
-        $contactPubkey = 'contact-pubkey-456';
-
-        // First query returns sent amount
-        $sentStmt = $this->createMock(PDOStatement::class);
-        $sentStmt->expects($this->once())
-            ->method('execute')
-            ->with($this->callback(function($params) {
-                return count($params) === 2;
-            }));
-        $sentStmt->expects($this->once())
-            ->method('fetch')
-            ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['sum_whole' => 5000, 'sum_frac' => 0]);
-
-        // Second query returns received amount
-        $receivedStmt = $this->createMock(PDOStatement::class);
-        $receivedStmt->expects($this->once())
-            ->method('execute');
-        $receivedStmt->expects($this->once())
-            ->method('fetch')
-            ->with(PDO::FETCH_ASSOC)
-            ->willReturn(['sum_whole' => 8000, 'sum_frac' => 0]);
-
-        $callCount = 0;
-        $this->pdo->expects($this->exactly(2))
-            ->method('prepare')
-            ->willReturnCallback(function() use (&$callCount, $sentStmt, $receivedStmt) {
-                $callCount++;
-                return $callCount === 1 ? $sentStmt : $receivedStmt;
-            });
-
-        $result = $this->repository->getContactBalance($userPubkey, $contactPubkey);
+        // Two live prepare calls (sent + recv); archive throws
+        // courtesy of setUp's callback. fetch() returns the sent
+        // total then the recv total in order.
+        $this->stmt->method('fetch')
+            ->willReturnOnConsecutiveCalls(
+                ['sum_whole' => 5000, 'sum_frac' => 0],   // sent-live
+                ['sum_whole' => 8000, 'sum_frac' => 0],   // recv-live
+            );
 
         // Balance = received - sent = 8000 - 5000 = 3000
+        $result = $this->repository->getContactBalance('user-pubkey-123', 'contact-pubkey-456');
+
         $this->assertInstanceOf(SplitAmount::class, $result);
         $this->assertEquals(3000, $result->whole);
         $this->assertEquals(0, $result->frac);
@@ -97,27 +87,11 @@ class TransactionContactRepositoryTest extends TestCase
 
     public function testGetContactBalanceReturnsZeroWhenNoTransactions(): void
     {
-        $sentStmt = $this->createMock(PDOStatement::class);
-        $sentStmt->expects($this->once())
-            ->method('execute');
-        $sentStmt->expects($this->once())
-            ->method('fetch')
+        // setUp's prepare callback returns the same $this->stmt for live
+        // and throws for archive. With sent and received both summing
+        // to zero the resulting balance is zero.
+        $this->stmt->method('fetch')
             ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
-
-        $receivedStmt = $this->createMock(PDOStatement::class);
-        $receivedStmt->expects($this->once())
-            ->method('execute');
-        $receivedStmt->expects($this->once())
-            ->method('fetch')
-            ->willReturn(['sum_whole' => 0, 'sum_frac' => 0]);
-
-        $callCount = 0;
-        $this->pdo->expects($this->exactly(2))
-            ->method('prepare')
-            ->willReturnCallback(function() use (&$callCount, $sentStmt, $receivedStmt) {
-                $callCount++;
-                return $callCount === 1 ? $sentStmt : $receivedStmt;
-            });
 
         $result = $this->repository->getContactBalance('user', 'contact');
 
@@ -127,32 +101,19 @@ class TransactionContactRepositoryTest extends TestCase
 
     public function testGetContactBalanceReturnsNegativeBalance(): void
     {
-        // User sent more than received
-        $sentStmt = $this->createMock(PDOStatement::class);
-        $sentStmt->expects($this->once())
-            ->method('execute');
-        $sentStmt->expects($this->once())
-            ->method('fetch')
-            ->willReturn(['sum_whole' => 10000, 'sum_frac' => 0]);
+        // sumAmountsFromTable is called four times (sent-live, recv-
+        // live, sent-archive, recv-archive). The archive calls throw
+        // and contribute zero. We stub fetch() with consecutive return
+        // values so the two live calls land in the right buckets.
+        $this->stmt->method('fetch')
+            ->willReturnOnConsecutiveCalls(
+                ['sum_whole' => 10000, 'sum_frac' => 0],   // sent-live
+                ['sum_whole' => 3000,  'sum_frac' => 0],   // recv-live
+            );
 
-        $receivedStmt = $this->createMock(PDOStatement::class);
-        $receivedStmt->expects($this->once())
-            ->method('execute');
-        $receivedStmt->expects($this->once())
-            ->method('fetch')
-            ->willReturn(['sum_whole' => 3000, 'sum_frac' => 0]);
-
-        $callCount = 0;
-        $this->pdo->expects($this->exactly(2))
-            ->method('prepare')
-            ->willReturnCallback(function() use (&$callCount, $sentStmt, $receivedStmt) {
-                $callCount++;
-                return $callCount === 1 ? $sentStmt : $receivedStmt;
-            });
-
+        // Balance = received - sent = 3000 - 10000 = -7000
         $result = $this->repository->getContactBalance('user', 'contact');
 
-        // Balance = 3000 - 10000 = -7000
         $this->assertInstanceOf(SplitAmount::class, $result);
         $this->assertEquals(-7000, $result->whole);
         $this->assertEquals(0, $result->frac);
@@ -194,22 +155,19 @@ class TransactionContactRepositoryTest extends TestCase
             ]
         ];
 
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->with($this->stringContains('UNION ALL'))
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->once())
-            ->method('execute');
-
+        // setUp's callback already returns $this->stmt for live SQL and
+        // throws on archive — getAllContactBalances also queries the
+        // archive UNION-ALL view, so the same archive-throws contract
+        // applies. fetch() yields the balance rows for the live result
+        // set then `false` to terminate.
+        $this->stmt->method('execute');
         $fetchIndex = 0;
-        $this->stmt->expects($this->exactly(3))
-            ->method('fetch')
+        $this->stmt->method('fetch')
             ->with(PDO::FETCH_ASSOC)
             ->willReturnCallback(function() use (&$fetchIndex, $balanceData) {
-                $result = $balanceData[$fetchIndex] ?? false;
+                $row = $balanceData[$fetchIndex] ?? false;
                 $fetchIndex++;
-                return $result;
+                return $row;
             });
 
         $result = $this->repository->getAllContactBalances($userPubkey, $contactPubkeys);
@@ -229,12 +187,11 @@ class TransactionContactRepositoryTest extends TestCase
     {
         $contactPubkeys = ['contact1', 'contact2'];
 
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->willReturn($this->stmt);
-
-        $this->stmt->expects($this->once())
-            ->method('execute')
+        // setUp's callback returns $this->stmt for live; we make
+        // execute() throw to simulate the query failure mode. Archive
+        // throws too (callback above), so the result is empty arrays
+        // for every contact.
+        $this->stmt->method('execute')
             ->willThrowException(new PDOException('Query failed'));
 
         $result = $this->repository->getAllContactBalances('user', $contactPubkeys);
@@ -248,36 +205,46 @@ class TransactionContactRepositoryTest extends TestCase
 
     public function testGetContactBalanceQueryFiltersCompletedStatus(): void
     {
-        $sentStmt = $this->createMock(PDOStatement::class);
-        $sentStmt->method('execute');
-        $sentStmt->method('fetch')->willReturn(['sum_whole' => 5000, 'sum_frac' => 0]);
+        // Override setUp's callback so we can both verify the SQL
+        // contains the status filter AND keep the archive-throws
+        // contract.
+        $this->pdo = $this->createMock(PDO::class);
+        $this->stmt = $this->createMock(PDOStatement::class);
+        $this->repository = new TransactionContactRepository($this->pdo);
 
-        $receivedStmt = $this->createMock(PDOStatement::class);
-        $receivedStmt->method('execute');
-        $receivedStmt->method('fetch')->willReturn(['sum_whole' => 8000, 'sum_frac' => 0]);
-
-        $callCount = 0;
-        $this->pdo->expects($this->exactly(2))
-            ->method('prepare')
-            ->with($this->stringContains("status = 'completed'"))
-            ->willReturnCallback(function() use (&$callCount, $sentStmt, $receivedStmt) {
-                $callCount++;
-                return $callCount === 1 ? $sentStmt : $receivedStmt;
-            });
+        $this->pdo->method('prepare')->willReturnCallback(function (string $sql) {
+            $this->assertStringContainsString("status = 'completed'", $sql);
+            if (str_contains($sql, 'transactions_archive')) {
+                throw new PDOException('No archive table in this fixture');
+            }
+            return $this->stmt;
+        });
+        $this->stmt->method('fetch')
+            ->willReturnOnConsecutiveCalls(
+                ['sum_whole' => 5000, 'sum_frac' => 0],
+                ['sum_whole' => 8000, 'sum_frac' => 0],
+            );
 
         $this->repository->getContactBalance('user', 'contact');
     }
 
     public function testGetAllContactBalancesQueryFiltersCompletedStatus(): void
     {
-        $this->pdo->expects($this->once())
-            ->method('prepare')
-            ->with($this->logicalAnd(
-                $this->stringContains('UNION ALL'),
-                $this->stringContains("status = 'completed'")
-            ))
-            ->willReturn($this->stmt);
+        // Override setUp's callback so we can assert the SQL body
+        // contains both the UNION ALL and the completed-status filter,
+        // while keeping the archive-throws contract.
+        $this->pdo = $this->createMock(PDO::class);
+        $this->stmt = $this->createMock(PDOStatement::class);
+        $this->repository = new TransactionContactRepository($this->pdo);
 
+        $this->pdo->method('prepare')->willReturnCallback(function (string $sql) {
+            $this->assertStringContainsString('UNION ALL', $sql);
+            $this->assertStringContainsString("status = 'completed'", $sql);
+            if (str_contains($sql, 'transactions_archive')) {
+                throw new PDOException('No archive table in this fixture');
+            }
+            return $this->stmt;
+        });
         $this->stmt->method('execute');
         $this->stmt->method('fetch')->willReturn(false);
 

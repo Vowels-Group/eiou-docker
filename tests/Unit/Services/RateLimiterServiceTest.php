@@ -52,7 +52,14 @@ class RateLimiterServiceTest extends TestCase
         $_SERVER['HTTP_CF_CONNECTING_IP'] = '1.2.3.4';
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
 
-        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
+        // getClientIp() now only honors proxy headers when REMOTE_ADDR
+        // is in the configured TrustedProxies list — a deliberate
+        // hardening to keep arbitrary clients from spoofing their
+        // source IP. Tell AppConfig that 192.168.1.100 is trusted so
+        // the CF header is read.
+        $appConfig = \Eiou\Core\AppConfig::fromEnvironment()
+            ->withOverrides(['trustedProxies' => '192.168.1.100']);
+        $ip = RateLimiterService::getClientIp($appConfig);
 
         $_SERVER = $backup;
 
@@ -66,11 +73,15 @@ class RateLimiterServiceTest extends TestCase
     {
         $backup = $_SERVER;
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '10.0.0.1, 10.0.0.2, 10.0.0.3';
+        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
         unset($_SERVER['HTTP_CF_CONNECTING_IP']);
         unset($_SERVER['HTTP_CLIENT_IP']);
-        unset($_SERVER['REMOTE_ADDR']);
 
-        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
+        // Trust the loopback proxy so X-Forwarded-For is honored —
+        // see testGetClientIpPrefersCloudflareIp comment.
+        $appConfig = \Eiou\Core\AppConfig::fromEnvironment()
+            ->withOverrides(['trustedProxies' => '127.0.0.1']);
+        $ip = RateLimiterService::getClientIp($appConfig);
 
         $_SERVER = $backup;
 
@@ -102,12 +113,18 @@ class RateLimiterServiceTest extends TestCase
     public function testGetClientIpTrimsWhitespace(): void
     {
         $backup = $_SERVER;
-        $_SERVER['REMOTE_ADDR'] = '  192.168.1.1  ';
+        // The trim happens inside the trusted-proxy branch (X-Forwarded-For
+        // value parsing); the no-proxy fallback returns REMOTE_ADDR
+        // verbatim. Set a forwarded header with whitespace and mark
+        // REMOTE_ADDR trusted so the trimming code path runs.
+        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '  192.168.1.1  ';
         unset($_SERVER['HTTP_CF_CONNECTING_IP']);
         unset($_SERVER['HTTP_CLIENT_IP']);
-        unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 
-        $ip = RateLimiterService::getClientIp(\Eiou\Core\AppConfig::fromEnvironment());
+        $appConfig = \Eiou\Core\AppConfig::fromEnvironment()
+            ->withOverrides(['trustedProxies' => '127.0.0.1']);
+        $ip = RateLimiterService::getClientIp($appConfig);
 
         $_SERVER = $backup;
 

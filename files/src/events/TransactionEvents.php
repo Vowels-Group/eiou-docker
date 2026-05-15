@@ -72,10 +72,21 @@ class TransactionEvents
     public const TRANSACTION_SENT = 'transaction.sent';
 
     /**
-     * Dispatched when an inbound transaction arrives and is persisted locally.
+     * Dispatched when an inbound transaction arrives and is persisted locally,
+     * regardless of whether it arrived via the direct route or as the final
+     * hop of a P2P chain. Fired by both:
      *
-     * Emitted by TransactionProcessingService::processStandardIncoming() after
-     * the incoming tx has been inserted and acknowledged.
+     *   - TransactionProcessingService::processStandardIncoming() — direct
+     *     transaction with memo='standard'.
+     *   - TransactionProcessingService::processP2pIncoming() end-recipient
+     *     branch (alongside P2P_RECEIVED + P2P_COMPLETED, which carry the
+     *     P2P-specific relay/finalisation semantics).
+     *
+     * Plugins subscribed to `transaction.received` get a routing-agnostic
+     * "money arrived" signal — write one handler regardless of how the tx
+     * got here. Plugins that need to distinguish the P2P case (e.g.
+     * relay-fee analytics, hop tracing) subscribe to P2P_RECEIVED /
+     * P2P_COMPLETED instead.
      *
      * Event data:
      *   - txid: string          - Transaction ID

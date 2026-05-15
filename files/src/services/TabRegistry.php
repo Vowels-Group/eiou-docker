@@ -34,12 +34,12 @@ use Eiou\Utils\Logger;
  * returning HTML — used when the tab body is generated dynamically
  * by a plugin without a separate template file.
  *
- * The `gui.tabs` filter (added in Phase 5) lets plugins inject /
- * remove / reorder entries without a fork of the host. The registry
- * doesn't apply that filter itself — wallet.html does, so the
- * registry stays a pure data store.
+ * The `gui.tabs` filter lets plugins inject / remove / reorder
+ * entries without a fork of the host. The registry doesn't apply
+ * that filter itself — wallet.html does, so the registry stays a
+ * pure data store.
  *
- * See docs/PLUGIN_GUI_HOOKS.md.
+ * See docs/PLUGINS.md "Extending the GUI".
  */
 class TabRegistry
 {

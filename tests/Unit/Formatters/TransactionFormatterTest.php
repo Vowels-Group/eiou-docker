@@ -46,9 +46,19 @@ class TransactionFormatterTest extends TestCase
      */
     public function testFormatSimpleCreatesCorrectStructure(): void
     {
+        // Source extracts amount via extractAmount() which reads
+        // `amount_whole` + `amount_frac`; the legacy single `amount`
+        // column is ignored. Updating the fixture to the split shape
+        // makes the formatter call SplitAmount::toMajorUnits(), which
+        // requires bcmath — skip while the local PHP build lacks it.
+        if (!function_exists('bccomp')) {
+            $this->markTestSkipped('bcmath extension not loaded — toMajorUnits() needs bccomp().');
+        }
+
         $tx = [
             'timestamp' => '2025-01-30 10:00:00',
-            'amount' => 1000,
+            'amount_whole' => 10,
+            'amount_frac' => 0,
             'currency' => 'USD'
         ];
 
@@ -72,9 +82,14 @@ class TransactionFormatterTest extends TestCase
      */
     public function testFormatSimpleWithReceivedType(): void
     {
+        if (!function_exists('bccomp')) {
+            $this->markTestSkipped('bcmath extension not loaded — toMajorUnits() needs bccomp().');
+        }
+
         $tx = [
             'timestamp' => '2025-01-30 10:00:00',
-            'amount' => 500,
+            'amount_whole' => 5,
+            'amount_frac' => 0,
             'currency' => 'USD'
         ];
 
@@ -270,12 +285,17 @@ class TransactionFormatterTest extends TestCase
      */
     public function testFormatContactCreatesCorrectStructure(): void
     {
+        if (!function_exists('bccomp')) {
+            $this->markTestSkipped('bcmath extension not loaded — toMajorUnits() needs bccomp().');
+        }
+
         $tx = [
             'txid' => 'abc123',
             'tx_type' => 'standard',
             'status' => Constants::STATUS_COMPLETED,
             'timestamp' => '2025-01-30 10:00:00',
-            'amount' => 500,
+            'amount_whole' => 5,
+            'amount_frac' => 0,
             'currency' => 'USD',
             'sender_address' => 'http://me.example',
             'receiver_address' => 'http://contact.example',

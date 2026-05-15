@@ -2,9 +2,19 @@
 
 <!-- Settings Section -->
 <?php
+use Eiou\Core\Constants;
+use Eiou\Utils\AltCodeValidator;
+
 ob_start();
 ?>
-    <form method="POST">
+    <!-- AJAX-submitted form. The submit handler in script.js (look for
+         "settingsForm" / handleSettingsFormSubmit) intercepts the native
+         submit, posts via XHR, pops the auth-code modal on a 403
+         sensitive_access_required response, and reloads the page on
+         success. The method="POST" is left as a defensive default in case
+         JS fails to bind — but the server-side handler now emits JSON,
+         so a non-JS submission won't render meaningfully. -->
+    <form method="POST" id="settingsForm">
         <input type="hidden" name="action" value="updateSettings">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
@@ -825,7 +835,7 @@ ob_start();
                     <?php
                     try {
                         $rememberService = $serviceContainer->getRememberTokenService();
-                        $pubkeyHashForList = hash(\Eiou\Core\Constants::HASH_ALGORITHM, $user->getPublicKey());
+                        $pubkeyHashForList = hash(Constants::HASH_ALGORITHM, $user->getPublicKey());
                         $currentRawToken = $secureSession->getRememberCookie();
                         $activeSessions = $rememberService->listForUser($pubkeyHashForList, $currentRawToken);
                     } catch (\Throwable $e) {
@@ -870,6 +880,87 @@ ob_start();
                                     data-action="revokeAllRememberSessions"
                                     data-stop-propagation="true">
                                 <i class="fas fa-sign-out-alt"></i> Sign out everywhere
+                            </button>
+                        <?php endif; ?>
+                    </div>
+
+                    <!--
+                        Alternate Auth Code — block lives inside GUI
+                        Security because it's an auth-flow control
+                        (alongside session timeout and remember-me).
+                        The modals + data-config element are rendered
+                        from altCodeSection.html, which settingsTab.html
+                        still requires; only the user-visible body
+                        moved here.
+                    -->
+                    <?php
+                        $hasAltCode = $user->hasAltCode();
+                        $authViaAlt = $secureSession->authenticatedViaAlt();
+                    ?>
+                    <h5 class="settings-group-heading">
+                        <i class="fas fa-user-shield"></i> Alternate Auth Code
+                    </h5>
+                    <p class="settings-rate-desc">
+                        <i class="fas fa-info-circle"></i>
+                        Optional user-chosen passphrase (min <?php echo (int) AltCodeValidator::MIN_LENGTH; ?> chars, must include
+                        upper, lower, digit, symbol) that authenticates GUI requests
+                        interchangeably with the primary auth code. The primary is
+                        20 hex characters derived from your seed — strong but hard to
+                        memorise; the alt code is whatever you can actually recall.
+                        Set, rotate, or clear always requires re-entering the primary
+                        in-band, so an attacker who learns the alt code can't lock you
+                        out by overwriting it.
+                    </p>
+
+                    <div id="alt-code-status-row" class="alt-code-status-row" style="font-size: 0.95rem; padding: 0.25rem 0 0.5rem;">
+                        <?php if ($hasAltCode): ?>
+                            <i class="fas fa-check-circle" style="color: var(--success-color, #28a745);"></i>
+                            <span>An alternate auth code is currently configured.</span>
+                        <?php else: ?>
+                            <i class="fas fa-circle" style="color: var(--text-muted, #888);"></i>
+                            <span>No alternate auth code is set.</span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($authViaAlt): ?>
+                        <div class="alert alert-warning" role="alert" style="margin-bottom: 0.75rem;">
+                            <strong><i class="fas fa-exclamation-triangle"></i> Locked this session.</strong>
+                            You logged in with the alternate auth code, so rotating or removing the alt code is
+                            disabled until you re-authenticate with the primary auth code (from your seed phrase).
+                            This is intentional: it prevents an attacker who learns the alt code from locking you
+                            out by overwriting it.
+                            <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                                <strong>To manage the alt code:</strong> log out, then log in again using the
+                                primary auth code instead.
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="alt-code-actions" style="padding-top: 0.5rem;">
+                        <button type="button"
+                                id="altCodeSetBtn"
+                                class="btn btn-success btn-compact"
+                                data-action="<?php echo $authViaAlt ? 'explainAltCodeLocked' : 'openAltCodeSetModal'; ?>"
+                                <?php if ($authViaAlt): ?>
+                                    aria-disabled="true"
+                                    title="Disabled: log in with the primary auth code to manage the alt code."
+                                    style="opacity: 0.55; cursor: not-allowed;"
+                                <?php endif; ?>>
+                            <i class="fas fa-<?php echo $authViaAlt ? 'lock' : 'key'; ?>"></i>
+                            <?php echo $hasAltCode ? 'Rotate alt code' : 'Set alt code'; ?>
+                        </button>
+                        <?php if ($hasAltCode): ?>
+                            <button type="button"
+                                    id="altCodeClearBtn"
+                                    class="btn btn-danger btn-compact"
+                                    data-action="<?php echo $authViaAlt ? 'explainAltCodeLocked' : 'openAltCodeClearModal'; ?>"
+                                    <?php if ($authViaAlt): ?>
+                                        aria-disabled="true"
+                                        title="Disabled: log in with the primary auth code to manage the alt code."
+                                        style="opacity: 0.55; cursor: not-allowed;"
+                                    <?php endif; ?>>
+                                <i class="fas fa-<?php echo $authViaAlt ? 'lock' : 'trash'; ?>"></i>
+                                Remove alt code
                             </button>
                         <?php endif; ?>
                     </div>
@@ -1165,11 +1256,27 @@ ob_start();
 <?php
 $body = ob_get_clean();
 
+// Initial server-rendered state for the unlocked-for-X-min row.
+// Lives on its own line (full width, hidden when locked) instead of
+// the section header — narrow viewports broke when the badge shared a
+// row with the title and the inline action button.
+// updateSensitiveAccessBadges() in script.js keeps it in sync after.
+// $secureSession is in scope from gui/index.html.
+$settingsAccessSeconds = $secureSession->sensitiveAccessSecondsRemaining();
+$settingsAccessBadge   = $settingsAccessSeconds > 0
+    ? '<i class="fas fa-unlock-alt"></i> Unlocked for ' . (int) ceil($settingsAccessSeconds / 60) . ' min'
+    : '';
+$settingsAccessRow = '<div id="settings-access-state" class="section-access-state-row text-muted'
+    . ($settingsAccessSeconds > 0 ? '' : ' d-none')
+    . '" style="font-size: 0.85rem; padding: 0 0 0.5rem; text-align: right;">'
+    . $settingsAccessBadge
+    . '</div>';
+
 echo renderSection([
-    'id'         => 'settings',
-    'icon'       => 'fas fa-cog',
-    'title'      => 'Wallet Settings',
-    'introTitle' => 'How to change settings',
+    'id'           => 'settings',
+    'icon'         => 'fas fa-cog',
+    'title'        => 'Wallet Settings',
+    'introTitle'   => 'How to change settings',
     // Note: pre-migration this <details> lived inside the <form>. It
     // carries no form inputs, so moving it above the form (where
     // renderSection emits the section-intro) has zero functional
@@ -1187,7 +1294,7 @@ echo renderSection([
         . 'does <em>not</em> wipe your saved settings. To throw every saved '
         . 'setting back to the defaults this node ships with, pick '
         . '<strong>Reset to Defaults</strong> from the Section dropdown.',
-    'body' => $body,
+    'body' => $settingsAccessRow . $body,
 ]);
 ?>
 

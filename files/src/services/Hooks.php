@@ -40,7 +40,7 @@ use Eiou\Utils\Logger;
  * return values for their entire usefulness. Mixing the two would
  * surprise existing event subscribers.
  *
- * See docs/PLUGIN_GUI_HOOKS.md for the full design.
+ * See docs/PLUGINS.md "Extending the GUI" for the hook API reference.
  */
 class Hooks
 {

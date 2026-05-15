@@ -12,8 +12,13 @@ use Eiou\Cli\CliOutputManager;
  *
  * Extracted from CliService as part of the ARCH-04 refactor to decompose the
  * monolithic CliService into focused, single-responsibility service classes.
- * Contains the displayHelp(), showDetailedHelp(), showApiKeyDetailedHelp(),
- * and showChainDropDetailedHelp() methods verbatim from CliService.
+ *
+ * Owns the top-level overview (`eiou help`) and generic per-command detailed
+ * help (`eiou help info`, `eiou help send`, …) for verbs that don't have
+ * their own CLI handler. Namespaced commands that *do* own a handler —
+ * apikey / contact / chaindrop / payback — are routed by Eiou.php straight
+ * into that handler's own showHelp() so the help string lives in exactly
+ * one place per namespace and never drifts.
  */
 class CliHelpService
 {
@@ -43,88 +48,14 @@ class CliHelpService
                 ],
                 'note' => 'The auth code is never exposed in command output to prevent leaks via Docker logs, shell history, or screen sharing. With --show-auth, the code is stored in a memory-only temp file (/dev/shm/) that auto-deletes after 5 minutes.'
             ],
+            // Namespaced verb. `eiou help contact` is intercepted in
+            // Eiou.php and routed straight to ContactCliHandler::showHelp()
+            // — the single source of truth for the contact subcommand
+            // tree. Only description + usage live here so the top-level
+            // `eiou help` overview line still renders for this namespace.
             'contact' => [
                 'description' => 'Manage contacts and per-currency relationships (add, accept, apply, decline, list, view, update, delete, block/unblock, ping, search, currency …)',
                 'usage' => 'contact <subcommand> [args...]',
-                'arguments' => [
-                    'subcommand' => ['type' => 'required', 'description' => 'add | accept | apply | decline | list | pending | view | update | delete | block | unblock | ping | search | currency'],
-                ],
-                'actions' => [
-                    'add' => [
-                        'usage' => 'contact add <address> <name> [--fee F --credit C --currency CCY] [--requested-credit RC] [--message M]',
-                        'description' => 'Send an outbound contact request. Flags can appear in any order. --requested-credit RC asks the receiver to extend you a credit limit of RC in this currency (a suggestion sent over the wire — receiver chooses what to actually grant on accept).',
-                    ],
-                    'accept' => [
-                        'usage' => 'contact accept <pubkey-hash|address|name> --currency CCY --fee F --credit C [--currency CCY --fee F --credit C ...]',
-                        'description' => 'Accept an incoming contact request. Repeat the --currency/--fee/--credit triplet to accept several currencies in one call.',
-                    ],
-                    'apply' => [
-                        'usage' => 'contact apply <pubkey-hash|address|name> --from <file.json|->  |  [--accept CCY:fee:credit ...] [--decline CCY ...] [--defer CCY ...]',
-                        'description' => 'Apply a batched mix of accept / decline / defer decisions in one call. Mirrors the GUI batched-apply modal; pipe modal payload via --from -.',
-                    ],
-                    'decline' => [
-                        'usage' => 'contact decline <pubkey-hash|address|name>',
-                        'description' => 'Decline every pending currency on an incoming contact request.',
-                    ],
-                    'list' => [
-                        'usage' => 'contact list [--status accepted|pending|blocked]',
-                        'description' => 'List contacts grouped by status (omit --status to see all buckets).',
-                    ],
-                    'pending' => [
-                        'usage' => 'contact pending [--incoming|--outgoing]',
-                        'description' => 'Show pending contact requests. Each incoming row prints a paste-ready accept/decline command line.',
-                    ],
-                    'view' => [
-                        'usage' => 'contact view <name|address|pubkey-hash>',
-                        'description' => 'View detailed contact info: per-currency balances, fee/credit settings, your/their available credit (refreshed via ping/pong).',
-                    ],
-                    'update' => [
-                        'usage' => 'contact update <name|address> <name|fee|credit|all> <values…>',
-                        'description' => 'Local-only update. fee/credit require a trailing currency code; all takes <new-name> <fee> <credit> [<CCY>].',
-                    ],
-                    'delete' => [
-                        'usage' => 'contact delete <name|address>',
-                        'description' => 'Permanently remove the contact (transaction history is preserved).',
-                    ],
-                    'block' => [
-                        'usage' => 'contact block <name|address>',
-                        'description' => 'Block incoming transactions and P2P relay traffic from this contact.',
-                    ],
-                    'unblock' => [
-                        'usage' => 'contact unblock <name|address>',
-                        'description' => 'Restore the contact to its previous (accepted or pending) status.',
-                    ],
-                    'ping' => [
-                        'usage' => 'contact ping <name|address>',
-                        'description' => 'Check online status, exchange per-currency available credit, and verify chain heads. Mismatches trigger sync; unrecoverable gaps auto-propose a tx drop.',
-                    ],
-                    'search' => [
-                        'usage' => 'contact search [query]',
-                        'description' => 'Substring search by name (omit query to list all).',
-                    ],
-                    'currency' => [
-                        'usage' => 'contact currency <add|accept|decline|list|remove> <contact> [<currency>] [--fee F --credit C]',
-                        'description' => 'Per-currency operations on an already-accepted contact (add proposes a new currency, accept/decline/list/remove handle the remote-acked lifecycle).',
-                    ],
-                ],
-                'examples' => [
-                    'contact' => 'Show the full contact subcommand tree (same as `contact help`)',
-                    'contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD' => 'Send a contact request to Bob (USD)',
-                    'contact add http://bob Bob --fee 0.1 --credit 1000 --currency USD --requested-credit 500' => 'Same request, asking Bob to extend you a 500 USD credit limit',
-                    'contact pending --json | jq .data.incoming[0].pubkey_hash' => 'Pull the requester\'s pubkey-hash for accept',
-                    'contact accept abc123hash --currency USD --fee 0.1 --credit 1000' => 'Accept a single-currency incoming request',
-                    'contact accept abc123hash --currency USD --fee 0.1 --credit 1000 --currency EUR --fee 0.05 --credit 500' => 'Accept multiple currencies in one call',
-                    'contact apply abc123hash --accept USD:0.1:1000 --decline EUR --defer XRP' => 'Batched accept/decline/defer',
-                    'contact decline abc123hash' => 'Decline every pending currency on the request',
-                    'contact list --status accepted' => 'Show only accepted contacts',
-                    'contact view Bob' => 'View Bob\'s details by name',
-                    'contact update Bob name Robert' => 'Rename Bob locally',
-                    'contact update Bob fee 1.5 USD' => 'Change the fee percentage you charge to relay Bob\'s USD txs',
-                    'contact ping Bob' => 'Check Bob\'s online status + chain validity',
-                    'contact currency add Bob EUR --fee 0.05 --credit 500' => 'Propose a new currency on an accepted contact',
-                    'contact currency accept Bob EUR --fee 0.05 --credit 500' => 'Accept Bob\'s incoming per-currency proposal',
-                ],
-                'note' => 'Subcommand-specific help is served by `eiou contact` (or `eiou contact help`) and `eiou contact currency`. There is no `eiou help contact <subcmd>` form. The legacy top-level verbs (eiou add / delete / block / unblock / viewcontact / update / search / ping / pending / accept) were dropped in v0.1.14 — every contact operation lives under this namespace now. Rate limited: 20 contact ops per minute (the `contact` rate-limit bucket).'
             ],
             'send' => [
                 'description' => 'Send an eIOU transaction to a contact (direct or P2P relayed)',
@@ -321,7 +252,7 @@ class CliHelpService
                 'usage' => 'generate',
                 'arguments' => [],
                 'examples' => [],
-                'note' => 'Wallet creation is handled automatically by startup.sh during container initialization via Docker environment variables (QUICKSTART, EIOU_HOST, EIOU_NAME, RESTORE, RESTORE_FILE). This command cannot be used after the wallet has been created.'
+                'note' => 'Wallet creation is handled automatically by startup.sh during container initialization via Docker environment variables (EIOU_HOST, EIOU_NAME, RESTORE, RESTORE_FILE). This command cannot be used after the wallet has been created.'
             ],
             'sync' => [
                 'description' => 'Synchronize data with contacts (contacts, transactions, balances)',
@@ -355,128 +286,15 @@ class CliHelpService
                 ],
                 'note' => 'Requires EIOU_TEST_MODE=true. Processes held transactions that may have completed sync. Used for testing and debugging.'
             ],
+            // Namespaced verb. `eiou help apikey` is intercepted in
+            // Eiou.php and routed straight to ApiKeyService::showHelp() —
+            // the single source of truth (permissions list, REST API
+            // endpoints, HMAC signature format, …). Only description +
+            // usage live here so the top-level overview line still
+            // renders for this namespace.
             'apikey' => [
                 'description' => 'Manage API keys for external API access',
                 'usage' => 'apikey [action] ([args...])',
-                'arguments' => [
-                    'action' => ['type' => 'required', 'description' => 'Action: create, list, delete, disable, enable, help'],
-                    'args' => ['type' => 'optional', 'description' => 'Arguments for the action']
-                ],
-                'actions' => [
-                    'create' => [
-                        'usage' => 'apikey create <name> [permissions]',
-                        'description' => 'Create a new API key',
-                        'arguments' => [
-                            'name' => ['type' => 'required', 'description' => 'Name for the API key'],
-                            'permissions' => ['type' => 'optional', 'description' => 'Comma-separated permissions (default: wallet:read,contacts:read)']
-                        ]
-                    ],
-                    'list' => [
-                        'usage' => 'apikey list',
-                        'description' => 'List all API keys'
-                    ],
-                    'delete' => [
-                        'usage' => 'apikey delete <key_id>',
-                        'description' => 'Delete an API key permanently',
-                        'arguments' => [
-                            'key_id' => ['type' => 'required', 'description' => 'ID of the key to delete']
-                        ]
-                    ],
-                    'disable' => [
-                        'usage' => 'apikey disable <key_id>',
-                        'description' => 'Disable an API key (can be re-enabled)',
-                        'arguments' => [
-                            'key_id' => ['type' => 'required', 'description' => 'ID of the key to disable']
-                        ]
-                    ],
-                    'enable' => [
-                        'usage' => 'apikey enable <key_id>',
-                        'description' => 'Enable a disabled API key',
-                        'arguments' => [
-                            'key_id' => ['type' => 'required', 'description' => 'ID of the key to enable']
-                        ]
-                    ],
-                    'help' => [
-                        'usage' => 'apikey help',
-                        'description' => 'Show detailed API key help'
-                    ]
-                ],
-                'examples' => [
-                    'apikey help' => 'Show detailed API key help',
-                    'apikey create "My App"' => 'Create new API key with default permissions',
-                    'apikey create "My App" wallet:read,contacts:read' => 'Create key with specific permissions',
-                    'apikey list' => 'List all API keys',
-                    'apikey delete <key_id>' => 'Delete an API key permanently',
-                    'apikey disable <key_id>' => 'Disable an API key',
-                    'apikey enable <key_id>' => 'Enable a disabled API key'
-                ],
-                'permissions' => [
-                    'wallet:read' => 'Read wallet balance, info, and transactions',
-                    'wallet:send' => 'Send transactions, manage chain drops',
-                    'wallet:*' => 'Both wallet:read and wallet:send',
-                    'contacts:read' => 'List, view, search, and ping contacts',
-                    'contacts:write' => 'Add, update, delete, block/unblock contacts',
-                    'contacts:*' => 'Both contacts:read and contacts:write',
-                    'system:read' => 'View system status, metrics, and settings',
-                    'backup:read' => 'Read backup status/list, verify backups',
-                    'backup:write' => 'Create, restore, delete, enable/disable backups',
-                    'backup:*' => 'Both backup:read and backup:write',
-                    'payback:read' => 'List/read your own payback methods (sensitive fields redacted)',
-                    'payback:write' => 'Create/edit/delete payback methods, AND reveal plaintext via /payback-methods/:id/reveal (write-class because it returns secrets)',
-                    'payback:*' => 'Both payback:read and payback:write',
-                    'admin' => 'Full administrative access (settings, sync, shutdown/start/restart, keys, plugins). Implies every other scope.',
-                ],
-                'api_usage' => [
-                    'base_url' => 'http://your-node/api/v1/...',
-                    'required_headers' => [
-                        'X-API-Key' => '<key_id>',
-                        'X-API-Timestamp' => '<unix_timestamp>',
-                        'X-API-Signature' => '<hmac>'
-                    ],
-                    'signature_format' => 'HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)',
-                    'example_endpoints' => [
-                        'GET /api/v1/wallet/balance' => 'Get wallet balances',
-                        'GET /api/v1/wallet/info' => 'Wallet public key, addresses, fee earnings',
-                        'GET /api/v1/wallet/overview' => 'Wallet overview (balance + recent transactions)',
-                        'POST /api/v1/wallet/send' => 'Send transaction',
-                        'GET /api/v1/wallet/transactions' => 'Transaction history',
-                        'GET /api/v1/contacts' => 'List contacts',
-                        'POST /api/v1/contacts' => 'Add contact',
-                        'GET /api/v1/contacts/pending' => 'Pending contact requests',
-                        'GET /api/v1/contacts/search?q=' => 'Search contacts by name',
-                        'GET /api/v1/contacts/:address' => 'Get contact details',
-                        'PUT /api/v1/contacts/:address' => 'Update contact',
-                        'DELETE /api/v1/contacts/:address' => 'Delete contact',
-                        'POST /api/v1/contacts/block/:address' => 'Block contact',
-                        'POST /api/v1/contacts/unblock/:address' => 'Unblock contact',
-                        'POST /api/v1/contacts/ping/:address' => 'Ping contact',
-                        'GET /api/v1/system/status' => 'System status',
-                        'GET /api/v1/system/settings' => 'System settings',
-                        'PUT /api/v1/system/settings' => 'Update settings (admin)',
-                        'POST /api/v1/system/update-check' => 'Trigger update check',
-                        'POST /api/v1/system/sync' => 'Trigger sync (admin)',
-                        'POST /api/v1/system/shutdown' => 'Shutdown processors (admin)',
-                        'POST /api/v1/system/start' => 'Start processors (admin)',
-                        'GET /api/v1/chaindrop' => 'List chain drop proposals',
-                        'POST /api/v1/chaindrop/propose' => 'Propose chain drop',
-                        'POST /api/v1/chaindrop/accept' => 'Accept chain drop',
-                        'POST /api/v1/chaindrop/reject' => 'Reject chain drop',
-                        'GET /api/v1/backup/status' => 'Backup status',
-                        'GET /api/v1/backup/list' => 'List backups',
-                        'POST /api/v1/backup/create' => 'Create backup',
-                        'POST /api/v1/backup/restore' => 'Restore from backup',
-                        'POST /api/v1/backup/verify' => 'Verify backup integrity',
-                        'DELETE /api/v1/backup/:filename' => 'Delete backup',
-                        'POST /api/v1/backup/enable' => 'Enable auto backups',
-                        'POST /api/v1/backup/disable' => 'Disable auto backups',
-                        'POST /api/v1/backup/cleanup' => 'Cleanup old backups',
-                        'GET /api/v1/keys' => 'List API keys (admin)',
-                        'POST /api/v1/keys' => 'Create API key (admin)',
-                        'DELETE /api/v1/keys/:key_id' => 'Delete API key (admin)',
-                        'POST /api/v1/keys/enable/:key_id' => 'Enable API key (admin)',
-                        'POST /api/v1/keys/disable/:key_id' => 'Disable API key (admin)'
-                    ]
-                ]
             ],
             'updatecheck' => [
                 'description' => 'Check Docker Hub and GitHub for newer image versions',
@@ -519,11 +337,11 @@ class CliHelpService
                 'note' => 'SIGTERMs the processors (the watchdog respawns them within ~30s) and sends SIGUSR2 to the PHP-FPM master to gracefully recycle all worker processes. In-flight HTTP requests finish before workers exit. Required when toggling plugins, since event subscriptions bind during boot. Must run as root inside the container — the CLI does, calling from a PHP-FPM worker (GUI) does not.'
             ],
             'plugin' => [
-                'description' => 'Manage plugins: list installed ones and toggle their enabled flag',
-                'usage' => 'plugin [list|enable|disable] [name]',
+                'description' => 'Manage plugins: list installed ones, toggle enabled flag, uninstall, or upgrade to a newer bundled version',
+                'usage' => 'plugin [list|enable|disable|uninstall|upgrade] [name]',
                 'arguments' => [
-                    'subcommand' => ['type' => 'optional', 'description' => 'Subcommand: list (default), enable, disable'],
-                    'name' => ['type' => 'conditional', 'description' => 'Plugin name — required for enable/disable']
+                    'subcommand' => ['type' => 'optional', 'description' => 'Subcommand: list (default), enable, disable, uninstall, upgrade'],
+                    'name' => ['type' => 'conditional', 'description' => 'Plugin name — required for enable/disable/uninstall/upgrade']
                 ],
                 'actions' => [
                     'list' => [
@@ -538,64 +356,32 @@ class CliHelpService
                         'usage' => 'plugin disable <name>',
                         'description' => 'Persist the enabled flag as false for the named plugin',
                     ],
+                    'uninstall' => [
+                        'usage' => 'plugin uninstall <name>',
+                        'description' => 'Full uninstall: drop owned_tables, drop MySQL user, remove plugin dir, remove credentials. Plugin must be disabled first. Destructive — operator state is lost.',
+                    ],
+                    'upgrade' => [
+                        'usage' => 'plugin upgrade <name>',
+                        'description' => 'Replace the installed plugin code with the bundled version from /app/plugins/<name>/. Preserves the plugin\'s DB tables, user, credentials, and gateway token. Refuses same-version, downgrades, and floors below min_upgradable_from. Old dir kept at <name>.backup-<oldver>-<ts>/ for 30 days.',
+                    ],
                 ],
                 'examples' => [
                     'plugin' => 'List all plugins (table)',
                     'plugin list --json' => 'List all plugins (JSON with full metadata)',
                     'plugin enable hello-eiou' => 'Enable hello-eiou',
                     'plugin disable hello-eiou' => 'Disable hello-eiou',
+                    'plugin uninstall hello-eiou' => 'Permanently uninstall hello-eiou (destructive)',
+                    'plugin upgrade hello-eiou' => 'Upgrade hello-eiou to the image\'s bundled version (preserves state)',
                 ],
-                'note' => 'Enable/disable persists to /etc/eiou/config/plugins.json immediately but does NOT take effect until the next restart — event subscriptions bind during boot. Run `eiou restart` (or hit POST /api/v1/system/restart, or use the GUI restart button) once you are done toggling.'
+                'note' => 'Enable/disable persists to /etc/eiou/config/plugins.json immediately but does NOT take effect until the next restart — event subscriptions bind during boot. Run `eiou restart` (or hit POST /api/v1/system/restart, or use the GUI restart button) once you are done toggling. Upgrade applies the new code immediately for enabled plugins (FPM workers recycle) but disabled plugins pick it up on next enable.'
             ],
+            // Namespaced verb. `eiou help chaindrop` is intercepted in
+            // Eiou.php and routed straight to ChainDropService::showHelp().
+            // Only description + usage live here for the top-level
+            // overview line.
             'chaindrop' => [
                 'description' => 'Manage chain drop agreements for resolving transaction chain gaps',
                 'usage' => 'chaindrop [action] ([args...])',
-                'arguments' => [
-                    'action' => ['type' => 'required', 'description' => 'Action: propose, accept, reject, list, help'],
-                    'args' => ['type' => 'optional', 'description' => 'Arguments for the action']
-                ],
-                'actions' => [
-                    'propose' => [
-                        'usage' => 'chaindrop propose <contact_address>',
-                        'description' => 'Propose dropping a missing transaction from the chain (auto-detects the gap)',
-                        'arguments' => [
-                            'contact_address' => ['type' => 'required', 'description' => 'Address of the contact with the broken chain']
-                        ]
-                    ],
-                    'accept' => [
-                        'usage' => 'chaindrop accept <proposal_id>',
-                        'description' => 'Accept an incoming chain drop proposal',
-                        'arguments' => [
-                            'proposal_id' => ['type' => 'required', 'description' => 'ID of the proposal to accept']
-                        ]
-                    ],
-                    'reject' => [
-                        'usage' => 'chaindrop reject <proposal_id>',
-                        'description' => 'Reject an incoming chain drop proposal (transactions remain blocked)',
-                        'arguments' => [
-                            'proposal_id' => ['type' => 'required', 'description' => 'ID of the proposal to reject']
-                        ]
-                    ],
-                    'list' => [
-                        'usage' => 'chaindrop list [contact_address]',
-                        'description' => 'List pending chain drop proposals',
-                        'arguments' => [
-                            'contact_address' => ['type' => 'optional', 'description' => 'Filter by contact address (omit to list all incoming)']
-                        ]
-                    ],
-                    'help' => [
-                        'usage' => 'chaindrop help',
-                        'description' => 'Show chain drop help'
-                    ]
-                ],
-                'examples' => [
-                    'chaindrop propose https://bob' => 'Propose dropping a missing transaction with Bob',
-                    'chaindrop accept cdp-abc123...' => 'Accept an incoming proposal',
-                    'chaindrop reject cdp-abc123...' => 'Reject a proposal (chain stays broken)',
-                    'chaindrop list' => 'List all incoming pending proposals',
-                    'chaindrop list https://bob' => 'List proposals for a specific contact'
-                ],
-                'note' => 'While a chain gap exists, transactions with that contact are blocked. Rejecting a proposal leaves the gap unresolved.'
             ],
             'backup' => [
                 'description' => 'Manage encrypted database backups',
@@ -764,20 +550,13 @@ class CliHelpService
                 ],
                 'note' => 'The DLQ captures messages that could not be delivered after ' . Constants::DELIVERY_MAX_RETRIES . ' automatic attempts. All items originated from this node. Retry re-sends the original signed payload directly to the recipient.'
             ],
+            // Namespaced verb. `eiou help payback` is intercepted in
+            // Eiou.php and routed straight to PaybackMethodCliHandler::showHelp()
+            // — the full subcommand tree, encryption notes, plugin-rail
+            // detail. Only description + usage live here.
             'payback' => [
                 'description' => 'Manage your payback methods (settlement rails — bank wire, custom free-text, plugin-provided types).',
                 'usage' => 'payback <action> [args...]',
-                'arguments' => [
-                    'action' => ['type' => 'required', 'description' => 'list | add | show | edit | remove | share-policy | help'],
-                ],
-                'examples' => [
-                    'payback' => 'Run `eiou payback help` for the full subcommand tree.',
-                    'payback list' => 'List all enabled payback methods',
-                    'payback list --currency USD --all' => 'Filter by currency, include disabled',
-                    'payback add bank_wire "My Revolut" EUR' => 'Add a SEPA bank-wire method (prompts for type-specific fields)',
-                    'payback show pbm_abc123' => 'Reveal a method\'s decrypted plaintext fields',
-                ],
-                'note' => 'Run `eiou payback help` for full details. Sensitive fields are encrypted at rest per row; the CLI is treated as already-authenticated by virtue of shell access. Plugins can register additional rail types (btc, paypal, lightning, …) — see docs/PLUGINS.md.'
             ],
             'verify-chain' => [
                 'description' => 'Walk every bilateral chain end-to-end and verify each pair\'s archive hash against the stored checkpoint.',
@@ -843,15 +622,10 @@ class CliHelpService
      * @param array $definition The command definition from the $commands array
      */
     private function showDetailedHelp(string $command, array $definition): void {
-        // Commands with dedicated detailed help methods
-        if ($command === 'apikey') {
-            $this->showApiKeyDetailedHelp();
-            return;
-        }
-        if ($command === 'chaindrop') {
-            $this->showChainDropDetailedHelp();
-            return;
-        }
+        // Note: apikey / contact / chaindrop / payback are intercepted in
+        // Eiou.php and routed straight to their handler's showHelp(), so
+        // they never reach this method. Only commands that don't own a
+        // CLI handler (info, send, viewsettings, …) end up here.
 
         // Generic detailed help from command definition
         echo "\n";
@@ -908,145 +682,4 @@ class CliHelpService
         }
     }
 
-    /**
-     * Display detailed help for API key management commands
-     */
-    private function showApiKeyDetailedHelp(): void {
-        $help = <<<HELP
-
-API Key Management Commands
-===========================
-
-Create a new API key:
-  eiou apikey create <name> [permissions]
-
-  Example:
-    eiou apikey create "My Application" wallet:read,contacts:read
-
-  Available permissions:
-    - wallet:read     Read wallet balance and transactions
-    - wallet:send     Send transactions
-    - wallet:*        Both wallet:read and wallet:send
-    - contacts:read   List and view contacts
-    - contacts:write  Add, update, delete contacts
-    - contacts:*      Both contacts:read and contacts:write
-    - system:read     View system status, metrics, and settings
-    - backup:read     Read backup status/list, verify backups
-    - backup:write    Create, restore, delete, enable/disable backups
-    - backup:*        Both backup:read and backup:write
-    - payback:read    List/read your own payback methods (redacted)
-    - payback:write   Create/edit/delete + reveal plaintext (write-class)
-    - payback:*       Both payback:read and payback:write
-    - admin           Full administrative access (settings, sync, shutdown/start/restart, keys, plugins) — implies every other scope
-
-List all API keys:
-  eiou apikey list
-
-Delete an API key (permanent):
-  eiou apikey delete <key_id>
-
-Disable an API key (can be re-enabled):
-  eiou apikey disable <key_id>
-
-Enable a disabled API key:
-  eiou apikey enable <key_id>
-
-API Usage
-=========
-
-Once you have an API key, make requests to:
-  http://your-node/api/v1/...
-
-Required headers for each request:
-  X-API-Key: <key_id>
-  X-API-Timestamp: <unix_timestamp>
-  X-API-Signature: <hmac>
-
-The HMAC signature is calculated as:
-  HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)
-
-IMPORTANT: Never send the secret in requests - only the computed HMAC signature.
-The server retrieves and decrypts your secret to verify the signature.
-
-Example endpoints:
-  GET  /api/v1/wallet/balance       - Get wallet balances
-  GET  /api/v1/wallet/overview      - Wallet overview (balance + recent transactions)
-  POST /api/v1/wallet/send          - Send transaction
-  GET  /api/v1/wallet/transactions  - Transaction history
-  GET  /api/v1/contacts             - List contacts
-  GET  /api/v1/contacts/pending     - Pending contact requests
-  GET  /api/v1/contacts/search?q=   - Search contacts by name
-  POST /api/v1/contacts             - Add contact
-  POST /api/v1/contacts/ping/:addr  - Ping contact
-  GET  /api/v1/system/status        - System status
-  GET  /api/v1/system/settings      - System settings
-
-HELP;
-
-        echo $help;
-    }
-
-    /**
-     * Display detailed help for tx drop agreement commands
-     */
-    private function showChainDropDetailedHelp(): void {
-        $help = <<<HELP
-
-Chain Drop Agreement Commands
-=============================
-
-When both contacts are missing the same transaction in their shared chain,
-the chain cannot be repaired via sync. Chain drop resolves this by mutually
-agreeing to remove the missing transaction and relink the chain.
-
-IMPORTANT: While a chain gap exists, transactions with that contact are
-blocked. The send command verifies chain integrity before every transaction
-and will halt if a gap is detected.
-
-Propose dropping a missing transaction:
-  eiou chaindrop propose <contact_address>
-
-  Auto-detects the chain gap and sends a proposal to the contact.
-  Example:
-    eiou chaindrop propose https://bob
-
-Accept an incoming proposal:
-  eiou chaindrop accept <proposal_id>
-
-  Executes the chain drop, re-signs affected transactions, and
-  exchanges re-signed copies with the proposer.
-  Example:
-    eiou chaindrop accept cdp-2c3c26ba61ab4073...
-
-Reject an incoming proposal:
-  eiou chaindrop reject <proposal_id>
-
-  WARNING: Rejecting leaves the chain gap unresolved. Transactions
-  with this contact remain blocked until a new proposal is accepted.
-  Example:
-    eiou chaindrop reject cdp-2c3c26ba61ab4073...
-
-List pending proposals:
-  eiou chaindrop list [contact_address]
-
-  Without an address, lists all incoming pending proposals.
-  With an address, lists proposals for that specific contact.
-  Examples:
-    eiou chaindrop list
-    eiou chaindrop list https://bob
-
-Flow
-====
-
-1. Contact A runs: eiou chaindrop propose <contact_B_address>
-2. Contact B receives the proposal (visible via: eiou chaindrop list)
-3. Contact B runs: eiou chaindrop accept <proposal_id>
-4. Both chains are repaired and transactions can resume
-
-For multiple gaps, repeat the propose/accept cycle for each gap.
-
-HELP;
-
-        echo $help;
-    }
 }

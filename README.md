@@ -38,7 +38,7 @@ The `docker-compose.yml` file contains environment variables that configure the 
 
 ```bash
 # Clone the repository
-git clone https://github.com/eiou-org/eiou-docker.git
+git clone https://github.com/Vowels-Group/eiou-docker.git
 cd eiou-docker
 
 # Start the node
@@ -48,11 +48,12 @@ docker compose up -d --build
 docker compose logs -f
 
 # Open the web GUI
-# https://localhost (HTTP redirects to HTTPS by default — your browser will show a certificate warning for the self-signed cert, this is expected)
+# http://localhost  (preferred for local dev — loopback skips the HTTPS redirect since the connection never leaves the host)
+# https://localhost (also works — your browser shows a self-signed cert warning, which is expected for a locally-generated cert)
 # For Tor: use Tor Browser and navigate to your node's .onion address (no certificate warning)
 ```
 
-The container automatically generates a wallet, starts Tor, and initializes all services. With the default `QUICKSTART=eiou` setting, it also configures HTTP/HTTPS addresses and creates a self-signed SSL certificate — suitable for Docker-internal testing between containers on the same network. These addresses are not reachable from outside Docker. For production use (public IP, trusted SSL, custom domain), set `EIOU_HOST` and `EIOU_PORT` and configure proper SSL — see the [Configuration](#configuration) section below. The node is ready once the healthcheck passes (~2 minutes on first boot).
+The container automatically generates a wallet, starts Tor, and initializes all services. With the default `EIOU_HOST=eiou` setting, it also configures HTTP/HTTPS addresses and creates a self-signed SSL certificate — suitable for Docker-internal testing between containers on the same network. These addresses are not reachable from outside Docker. For production use (public IP, trusted SSL, custom domain), change `EIOU_HOST` to a real IP or FQDN and set `EIOU_PORT` if mapping to a non-standard port — see the [Configuration](#configuration) section below. The node is ready once the healthcheck passes (~2 minutes on first boot).
 
 ## Container Management
 
@@ -110,24 +111,22 @@ This creates container `my-wallet` with volumes `my-wallet-mysql-data`, `my-wall
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `QUICKSTART` | No | *(none)* | Container hostname for HTTP/HTTPS mode. Generates Docker-internal addresses (`http://<value>`) with a self-signed SSL certificate — **not reachable from outside the Docker network**. For external access, also set `EIOU_HOST` and `EIOU_PORT`. If omitted, the node runs in **Tor-only mode** (reachable only via its .onion address) |
-| `EIOU_NAME` | No | `QUICKSTART` | Display name shown in the local GUI header and logs. Cosmetic only — never sent to other nodes |
-| `EIOU_HOST` | No | `QUICKSTART` | Externally reachable address (IP or domain, with optional `:port`). **Required for access from outside Docker.** Use a real IP or FQDN with proper SSL (Let's Encrypt or CA-signed) for production. If `:port` is included (e.g., `192.168.1.100:8080`), it is used as `EIOU_PORT` unless `EIOU_PORT` is explicitly set |
-| `EIOU_PORT` | No | *(none)* | Port appended to URLs. Use when mapping to a non-standard external port (e.g., `8443`). Can also be embedded in `QUICKSTART` or `EIOU_HOST` as `:port` |
+| `EIOU_HOST` | No | *(none)* | Externally reachable address (IP, FQDN, or bare hostname for Docker-network use; optional `:port`). **Setting this enables HTTP/HTTPS mode** — the node is reachable at `http://<value>` and `https://<value>` with an auto-generated self-signed cert. If `:port` is embedded (e.g., `192.168.1.100:8080`), it's extracted as `EIOU_PORT` unless explicitly set. Omit entirely for **Tor-only mode** (reachable only via the auto-generated .onion address) |
+| `EIOU_NAME` | No | `EIOU_HOST` | Display name shown in the local GUI header and logs. Cosmetic only — never sent to other nodes |
+| `EIOU_PORT` | No | *(none)* | Port appended to URLs. Use when mapping to a non-standard external port (e.g., `8443`). Can also be embedded in `EIOU_HOST` as `:port` |
 
 **Example — production node with public IP:**
 
 ```yaml
 environment:
-  - QUICKSTART=mynode
-  - EIOU_NAME=My eIOU Node
   - EIOU_HOST=88.99.69.172
   - EIOU_PORT=8443
+  - EIOU_NAME=My eIOU Node
 ```
 
 This generates addresses `http://88.99.69.172:8443` and `https://88.99.69.172:8443`, with "My eIOU Node" as the local display name.
 
-**Priority:** Address: `EIOU_HOST` > `QUICKSTART` | Name: `EIOU_NAME` > `QUICKSTART` | SSL CN: `SSL_DOMAIN` > `EIOU_HOST` > `QUICKSTART`
+**Priority:** Name: `EIOU_NAME` > `EIOU_HOST` | SSL CN: `SSL_DOMAIN` > `EIOU_HOST`
 
 #### Wallet Restoration
 
@@ -142,7 +141,7 @@ To restore an existing wallet from a BIP39 24-word seed phrase, use one of these
 
 ```yaml
 environment:
-  - QUICKSTART=mynode
+  - EIOU_HOST=mynode
   - RESTORE_FILE=/restore/seed
 volumes:
   - /secure/path/seed.txt:/restore/seed:ro
@@ -158,12 +157,12 @@ The container auto-generates a self-signed certificate by default. Override with
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SSL_DOMAIN` | `EIOU_HOST` or `QUICKSTART` | Override the certificate Common Name (CN) |
+| `SSL_DOMAIN` | `EIOU_HOST` | Override the certificate Common Name (CN) |
 | `SSL_EXTRA_SANS` | *(none)* | Additional Subject Alternative Names. Format: `DNS:alt.local,IP:10.0.0.1` |
 | `LETSENCRYPT_EMAIL` | *(none)* | **Setting this enables Let's Encrypt.** Email for registration and expiry warnings. Requires a real FQDN and port 80 reachable from the internet |
 | `LETSENCRYPT_DOMAIN` | `SSL_DOMAIN` | Domain for the Let's Encrypt certificate |
 | `LETSENCRYPT_STAGING` | `false` | Use the staging server for testing (avoids rate limits, certs won't be browser-trusted) |
-| `P2P_SSL_VERIFY` | `true` | Verify SSL certificates on outbound P2P HTTPS connections. Self-signed certs (from QUICKSTART) are **rejected by default**. Set to `false` for dev/testing, or use `P2P_CA_CERT` with a shared CA |
+| `P2P_SSL_VERIFY` | `true` | Verify SSL certificates on outbound P2P HTTPS connections. Auto-generated self-signed certs are **rejected by default**. Set to `false` for dev/testing, or use `P2P_CA_CERT` with a shared CA |
 | `P2P_CA_CERT` | *(none)* | Path to a CA certificate inside the container for P2P verification. Requires a volume mount (e.g., `./ssl-ca:/ssl-ca:ro`). Lets nodes trust each other without disabling verification |
 
 **Certificate selection priority:**
@@ -217,7 +216,7 @@ These named volumes persist your data across container restarts and rebuilds. Vo
 | `{NODE_NAME}-config` | `/etc/eiou/config` | Wallet private keys, encryption keys, configuration | **Critical** |
 | `{NODE_NAME}-backups` | `/var/lib/eiou/backups` | Encrypted database backups (AES-256-GCM) | **Critical** |
 | `{NODE_NAME}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins are seeded from the image on first boot; operator-installed ones live only here | Important |
-| `{NODE_NAME}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if you will never use Let's Encrypt | Low |
+| `{NODE_NAME}-ssl-cert` | `/var/lib/eiou/ssl` | All SSL state on one logical volume, organised into subdirectories. `ssl/letsencrypt/` holds Let's Encrypt accounts and renewal config (symlinked to `/etc/letsencrypt` inside the container), `ssl/nginx/` holds the cert nginx actually presents on :443 (symlinked to `/etc/nginx/ssl`; persists self-signed certs across `docker rm` so clients don't see a fresh fingerprint on every rebuild). Operators can add subdirectories for additional SSL providers without touching the volumes section. Safe to comment out — fresh certs regenerate on next start. | Low |
 
 To completely reset and start fresh: `docker compose down -v`
 

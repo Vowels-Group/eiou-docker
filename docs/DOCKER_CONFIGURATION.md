@@ -24,13 +24,12 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
-| `QUICKSTART` | (none) | Yes* | Node hostname for HTTP/HTTPS addressing |
-| `EIOU_NAME` | `$QUICKSTART` | No | Display name for the node (shown in local UI) |
-| `EIOU_HOST` | `$QUICKSTART` | No | Externally reachable address (IP or domain) |
+| `EIOU_HOST` | (none) | No* | Hostname / address for HTTP/HTTPS addressing (IP, FQDN, or bare hostname; optional `:port`). Setting this enables HTTP/HTTPS mode |
+| `EIOU_NAME` | `$EIOU_HOST` | No | Display name for the node (shown in local UI) |
 | `EIOU_PORT` | (none) | No | Port for HTTP/HTTPS URLs (appended to addresses) |
 | `RESTORE` | (none) | No | 24-word seed phrase for wallet restoration |
 | `RESTORE_FILE` | (none) | No | Path to file containing seed phrase |
-| `SSL_DOMAIN` | `$EIOU_HOST` or `$QUICKSTART` | No | Primary domain for SSL certificate CN |
+| `SSL_DOMAIN` | `$EIOU_HOST` | No | Primary domain for SSL certificate CN |
 | `SSL_EXTRA_SANS` | (none) | No | Additional Subject Alternative Names |
 | `LETSENCRYPT_EMAIL` | (none) | No | Email for Let's Encrypt — enables automatic trusted certs |
 | `LETSENCRYPT_DOMAIN` | `$SSL_DOMAIN` | No | Domain for Let's Encrypt certificate |
@@ -52,7 +51,7 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 | `EIOU_ANALYTICS_ENABLED` | `false` | No | Share anonymous usage statistics, batched daily by a cron job (opt-in, not real-time). Sends only aggregate transaction counts and volume per currency — no personal data, amounts per transaction, contacts, or addresses |
 | `EIOU_VOLUME_KEY_FILE` | (none) | No | Path to file containing volume encryption passphrase (recommended) |
 | `EIOU_VOLUME_KEY` | (none) | No | Volume encryption passphrase as environment variable (less secure) |
-| `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with QUICKSTART nodes, use `P2P_CA_CERT` for a shared CA, or place nodes behind a reverse proxy with valid certificates |
+| `P2P_SSL_VERIFY` | `true` | No | Verify SSL certificates on outbound P2P HTTPS connections. When `true` (default), self-signed certs are rejected — set to `false` for dev/testing with auto-generated certs, use `P2P_CA_CERT` for a shared CA, or place nodes behind a reverse proxy with valid certificates |
 | `P2P_CA_CERT` | (none) | No | Path to a CA certificate file inside the container. When set, P2P SSL verification uses this CA instead of the system bundle — use with a volume mount (e.g., `./ssl-ca:/ssl-ca:ro`) |
 | `TRUSTED_PROXIES` | (none) | No | Comma-separated list of trusted reverse proxy IPs for `X-Forwarded-For` header parsing |
 | **Service Tuning** | | | |
@@ -75,54 +74,50 @@ Complete reference for environment variables and volume mounts used in eIOU Dock
 
 ### Detailed Descriptions
 
-#### QUICKSTART
+#### EIOU_HOST / EIOU_NAME / EIOU_PORT
 
-Sets the node's container hostname for HTTP/HTTPS addressing. When set, the node generates a self-signed SSL certificate and registers addresses based on the value.
+These variables configure the node's externally reachable identity. **Setting `EIOU_HOST` enables HTTP/HTTPS mode**; omitting it leaves the node Tor-only.
+
+`EIOU_NAME` is purely local — it is never broadcast to contacts or other nodes. It appears in the GUI wallet header, Docker startup logs, and any integration that reads the node's display name.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `EIOU_HOST` | Hostname / address (IP, FQDN, or bare hostname for Docker-network-only access; optional `:port`) | None — without it the node runs Tor-only |
+| `EIOU_NAME` | Display name (shown in local UI) | Falls back to `EIOU_HOST` |
+| `EIOU_PORT` | Port appended to HTTP/HTTPS URLs | Not appended if omitted. Can also be embedded in `EIOU_HOST` |
+
+`EIOU_HOST` accepts an optional `:port` suffix (e.g., `192.168.1.100:8080`). The port is automatically extracted and used as `EIOU_PORT` unless `EIOU_PORT` is explicitly set. Priority: explicit `EIOU_PORT` > embedded port from `EIOU_HOST`.
+
+**Example: Docker-internal (testing)**
 
 ```yaml
 environment:
-  - QUICKSTART=alice
+  - EIOU_HOST=alice   # Reachable as http://alice / https://alice on the Docker network
 ```
 
 The node will be accessible at:
 - `http://alice` (within Docker network)
 - `https://alice` (within Docker network, self-signed certificate)
 
-> **Important:** Addresses like `http://alice` are resolved by Docker's internal DNS and are **only reachable by other containers on the same Docker network**. They are not accessible from the host machine or the internet. For external access, set `EIOU_HOST` to a real IP address or domain name, `EIOU_PORT` to the mapped port, and use a trusted SSL certificate (Let's Encrypt or CA-signed) instead of the auto-generated self-signed one. See the `EIOU_HOST` / `EIOU_PORT` section below.
+> **Important:** A bare hostname like `alice` resolves only via Docker's internal DNS — **other containers on the same Docker network** can reach it, but the host machine and the internet cannot. For external access, set `EIOU_HOST` to a real IP address or domain name, `EIOU_PORT` to the mapped port, and use a trusted SSL certificate (Let's Encrypt or CA-signed) instead of the auto-generated self-signed one.
 >
-> **HTTPS with self-signed certs:** The auto-generated self-signed certificate allows HTTPS connections, but other nodes will **reject** these certificates by default because `P2P_SSL_VERIFY=true`. To send transactions over HTTPS between QUICKSTART nodes, either set `P2P_SSL_VERIFY=false` in all nodes (dev/testing only), use a shared CA via `P2P_CA_CERT`, place nodes behind a reverse proxy with valid certificates, or use proper trusted certificates. See [P2P SSL troubleshooting](#p2p-https-fails-between-docker-nodes-self-signed-certificates).
-
-#### EIOU_NAME / EIOU_HOST / EIOU_PORT
-
-These variables configure the node's externally reachable identity. When omitted, `QUICKSTART` provides backward-compatible behavior (hostname = display name = address), but the resulting addresses are Docker-internal only.
-
-`EIOU_NAME` is purely local — it is never broadcast to contacts or other nodes. It appears in the GUI wallet header, Docker startup logs, and any integration that reads the node's display name.
-
-| Variable | Purpose | Fallback |
-|----------|---------|----------|
-| `EIOU_NAME` | Display name (shown in local UI) | Falls back to `QUICKSTART` |
-| `EIOU_HOST` | Externally reachable address (IP or domain, optional `:port`) | Falls back to `QUICKSTART` |
-| `EIOU_PORT` | Port appended to HTTP/HTTPS URLs | Not appended if omitted. Can also be embedded in `QUICKSTART` or `EIOU_HOST` |
-
-Both `QUICKSTART` and `EIOU_HOST` accept an optional `:port` suffix (e.g., `192.168.1.100:8080`). The port is automatically extracted and used as `EIOU_PORT` unless `EIOU_PORT` is explicitly set. Priority: `EIOU_PORT` (explicit) > embedded port from `EIOU_HOST` > embedded port from `QUICKSTART`.
+> **HTTPS with self-signed certs:** The auto-generated self-signed certificate allows HTTPS connections, but other nodes will **reject** these certificates by default because `P2P_SSL_VERIFY=true`. To send transactions over HTTPS between auto-cert nodes, either set `P2P_SSL_VERIFY=false` in all nodes (dev/testing only), use a shared CA via `P2P_CA_CERT`, place nodes behind a reverse proxy with valid certificates, or use proper trusted certificates. See [P2P SSL troubleshooting](#p2p-https-fails-between-docker-nodes-self-signed-certificates).
 
 **Example: Production node with external IP**
 
 ```yaml
 environment:
-  - QUICKSTART=dave           # Still needed as container hostname
-  - EIOU_NAME=Dave            # Local display name
   - EIOU_HOST=88.99.69.172   # External IP address
   - EIOU_PORT=1133            # Custom port
+  - EIOU_NAME=Dave            # Local display name
 ```
 
 This is equivalent to:
 
 ```yaml
 environment:
-  - QUICKSTART=dave
-  - EIOU_NAME=Dave
   - EIOU_HOST=88.99.69.172:1133   # Port embedded in host
+  - EIOU_NAME=Dave
 ```
 
 This generates:
@@ -130,17 +125,9 @@ This generates:
 - `https://88.99.69.172:1133` (HTTPS address)
 - Display name: "Dave"
 
-**Example: Docker-to-Docker (testing)**
-
-```yaml
-environment:
-  - QUICKSTART=alice   # Works exactly as before - no other vars needed
-```
-
 **Priority:**
-- Address: `EIOU_HOST` > `QUICKSTART`
-- Name: `EIOU_NAME` > `QUICKSTART`
-- SSL CN: `SSL_DOMAIN` > `EIOU_HOST` > `QUICKSTART`
+- Name: `EIOU_NAME` > `EIOU_HOST`
+- SSL CN: `SSL_DOMAIN` > `EIOU_HOST`
 
 #### RESTORE / RESTORE_FILE
 
@@ -176,10 +163,10 @@ docker run -e "RESTORE=word1 word2 word3 ... word24" ...
 
 > **Security Note:** When using the `RESTORE` environment variable, the container will display a warning recommending `RESTORE_FILE` instead. The `RESTORE` variable is automatically unset after successful seed restoration to prevent the seed phrase from remaining in the environment during normal operation.
 
-> **Combining with QUICKSTART:** When both `RESTORE` (or `RESTORE_FILE`) and `QUICKSTART` are set, the wallet is first restored from the seed phrase (restoring keys and Tor address), and then the `QUICKSTART` hostname is automatically applied as the HTTP/HTTPS address. This allows a restored wallet to be reachable at both its original Tor address and the new HTTP/HTTPS hostname. Example:
+> **Combining with `EIOU_HOST`:** When both `RESTORE` (or `RESTORE_FILE`) and `EIOU_HOST` are set, the wallet is first restored from the seed phrase (restoring keys and Tor address), and then the `EIOU_HOST` hostname is automatically applied as the HTTP/HTTPS address. This allows a restored wallet to be reachable at both its original Tor address and the new HTTP/HTTPS hostname. Example:
 > ```yaml
 > environment:
->   - QUICKSTART=alice
+>   - EIOU_HOST=alice
 >   - RESTORE_FILE=/restore/seed
 > volumes:
 >   - /path/to/seed.txt:/restore/seed:ro
@@ -191,7 +178,7 @@ Override the primary domain used in the SSL certificate's Common Name (CN). Usef
 
 ```yaml
 environment:
-  - QUICKSTART=internal-name
+  - EIOU_HOST=internal-name
   - SSL_DOMAIN=public.example.com
 ```
 
@@ -221,7 +208,7 @@ Optional passphrase that encrypts the master encryption key at rest on the Docke
 services:
   alice:
     environment:
-      - QUICKSTART=alice
+      - EIOU_HOST=alice
       - EIOU_VOLUME_KEY_FILE=/run/secrets/volume_key
     volumes:
       - ./volume-key.txt:/run/secrets/volume_key:ro
@@ -405,7 +392,7 @@ All eIOU containers use named volumes for data persistence:
 | `{node}-config` | `/etc/eiou/config` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
 | `{node}-plugins` | `/etc/eiou/plugins` | Installed plugin directories. Bundled plugins (e.g. `hello-eiou`) are baked into the image at `/app/plugins/` and seeded into this volume on first boot via `startup.sh` with `cp -rn`, so operator-added plugins survive container rebuilds and removed bundled plugins stay removed across upgrades. | **IMPORTANT** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
-| `{node}-letsencrypt` | `/etc/letsencrypt` | Let's Encrypt certificates. Safe to comment out if not using Let's Encrypt | Low |
+| `{node}-ssl-cert` | `/var/lib/eiou/ssl` | All SSL state on one logical volume, organised into subdirectories. `startup.sh` creates `ssl/letsencrypt/` and `ssl/nginx/` on first boot and symlinks `/etc/letsencrypt` and `/etc/nginx/ssl` into them, so certbot and nginx see the canonical paths they expect while operators see one volume on disk. `ssl/letsencrypt/` holds certbot accounts, renewal configs, and live cert symlinks (mostly empty on nodes that never enable Let's Encrypt). `ssl/nginx/` holds the cert nginx actually presents on :443 — persists self-signed certs across `docker rm` + `docker run` (e.g. image updates) so clients don't see a new fingerprint on every rebuild, and also receives the copy of any Let's Encrypt cert. Operators can add subdirectories under `ssl/` for additional SSL providers without touching the volumes section. Safe to comment out — fresh cert regenerates on next start. | Low |
 
 **Example:**
 ```yaml
@@ -575,7 +562,7 @@ The container selects SSL certificates in this order:
 1. **External certificates** (`/ssl-certs/server.crt`) - Mounted externally-obtained certs
 2. **Let's Encrypt** (automatic) - When `LETSENCRYPT_EMAIL` is set with a valid FQDN
 3. **CA-signed** (`/ssl-ca/ca.crt`) - Self-generated, signed by mounted CA
-4. **Self-signed** - Generated automatically using SSL_DOMAIN or QUICKSTART
+4. **Self-signed** - Generated automatically using SSL_DOMAIN or EIOU_HOST
 
 > **Note on P2P verification:** The certificate priority above determines what certificate the node **presents** to incoming connections. Separately, `P2P_SSL_VERIFY` controls whether the node **verifies** certificates on outgoing connections to other nodes. With the default self-signed setup (option 4), other nodes will reject the certificate unless `P2P_SSL_VERIFY=false` is set or a shared CA is configured via `P2P_CA_CERT`. Options 1-3 use trusted certificates that pass verification automatically.
 
@@ -598,7 +585,7 @@ services:
     ports:
       - "127.0.0.1:8080:80"   # Only reachable from localhost
     environment:
-      - QUICKSTART=eiou
+      - EIOU_HOST=eiou
       - EIOU_HOST=node.example.com
       - EIOU_PORT=443
 ```
@@ -632,13 +619,13 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      - QUICKSTART=node.example.com
+      - EIOU_HOST=node.example.com
       - LETSENCRYPT_EMAIL=admin@example.com
       # - LETSENCRYPT_STAGING=true   # Uncomment to test first (avoids rate limits)
     volumes:
-      - eiou-letsencrypt:/etc/letsencrypt   # Persist certs across restarts
+      - ssl-cert:/var/lib/eiou/ssl   # Persist certs across restarts
 volumes:
-  eiou-letsencrypt:
+  ssl-cert:
 ```
 
 The container will:
@@ -655,7 +642,7 @@ The container will:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LETSENCRYPT_EMAIL` | (none) | Email for Let's Encrypt registration — enables LE when set |
-| `LETSENCRYPT_DOMAIN` | `$SSL_DOMAIN` | Domain for the certificate (falls back to SSL_DOMAIN → EIOU_HOST → QUICKSTART) |
+| `LETSENCRYPT_DOMAIN` | `$SSL_DOMAIN` | Domain for the certificate (falls back to SSL_DOMAIN → EIOU_HOST) |
 | `LETSENCRYPT_STAGING` | `false` | Use staging server for testing (certs won't be browser-trusted) |
 
 #### Multiple Nodes, Same Domain, Different Ports (Recommended)
@@ -691,7 +678,7 @@ services:
   node-1:
     ports: ["1153:443"]
     environment:
-      - QUICKSTART=wallet.example.com
+      - EIOU_HOST=wallet.example.com
       - EIOU_PORT=1153
     volumes:
       - ./letsencrypt-certs:/ssl-certs:ro    # Shared cert
@@ -699,7 +686,7 @@ services:
   node-2:
     ports: ["1154:443"]
     environment:
-      - QUICKSTART=wallet.example.com
+      - EIOU_HOST=wallet.example.com
       - EIOU_PORT=1154
     volumes:
       - ./letsencrypt-certs:/ssl-certs:ro    # Same cert
@@ -777,7 +764,7 @@ services:
   alice:
     ports: ["1154:443"]
     environment:
-      - QUICKSTART=alice.example.com
+      - EIOU_HOST=alice.example.com
       - EIOU_PORT=1154
     volumes:
       - ./letsencrypt-certs:/ssl-certs:ro
@@ -785,7 +772,7 @@ services:
   bob:
     ports: ["1155:443"]
     environment:
-      - QUICKSTART=bob.example.com
+      - EIOU_HOST=bob.example.com
       - EIOU_PORT=1155
     volumes:
       - ./letsencrypt-certs:/ssl-certs:ro
@@ -879,7 +866,7 @@ After installing the CA, mount it in docker-compose so containers generate CA-si
 services:
   eiou:
     environment:
-      - QUICKSTART=alice
+      - EIOU_HOST=alice
     volumes:
       - ./ssl-ca:/ssl-ca:ro
 ```
@@ -1274,7 +1261,7 @@ environment:
 
 #### P2P HTTPS Fails Between Docker Nodes (Self-Signed Certificates)
 
-**Cause:** SSL peer verification is enabled by default. Docker nodes using `QUICKSTART` generate self-signed certificates that are not trusted by other nodes.
+**Cause:** SSL peer verification is enabled by default. Docker nodes using auto-generated certs self-signed certificates that are not trusted by other nodes.
 
 **Error:** `HTTP request failed: SSL certificate problem: self-signed certificate`
 
@@ -1300,7 +1287,7 @@ volumes:
 
 3. **Use Let's Encrypt** for real trusted certificates (see SSL Certificate Configuration)
 
-> **Note:** Self-signed certificates generated by `QUICKSTART` will always be rejected by other nodes unless `P2P_SSL_VERIFY=false` is set or a shared CA is configured. This is intentional — P2P SSL verification is enabled by default for security.
+> **Note:** Auto-generated self-signed certificates will always be rejected by other nodes unless `P2P_SSL_VERIFY=false` is set or a shared CA is configured. This is intentional — P2P SSL verification is enabled by default for security.
 
 #### Let's Encrypt Certificate Request Failed
 

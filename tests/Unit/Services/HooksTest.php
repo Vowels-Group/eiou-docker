@@ -4,7 +4,7 @@
  *
  * Covers the WordPress-style render + filter registry that lets
  * plugins inject HTML and transform host-side values without
- * modifying core templates. See docs/PLUGIN_GUI_HOOKS.md for the
+ * modifying core templates. See docs/PLUGINS.md "Extending the GUI" for the
  * full design.
  */
 

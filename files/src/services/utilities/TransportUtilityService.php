@@ -452,8 +452,11 @@ class TransportUtilityService implements TransportServiceInterface
         // Remove TOR from candidates so we only try HTTP/HTTPS
         unset($contactAddresses['tor']);
 
-        // If torFallbackRequireEncrypted is enabled, also remove HTTP to preserve privacy
-        if (UserContext::getInstance()->isTorFallbackRequireEncrypted()) {
+        // If torFallbackRequireEncrypted is enabled, also remove HTTP to preserve privacy.
+        // Use the injected currentUser (not the singleton) so tests can flip the flag
+        // without writing to /etc/eiou/config — fixes a long-standing test gap where
+        // this branch was unreachable under any mock setup.
+        if ($this->currentUser->isTorFallbackRequireEncrypted()) {
             unset($contactAddresses['http']);
         }
 
@@ -525,8 +528,8 @@ class TransportUtilityService implements TransportServiceInterface
 
         // SSL options for HTTPS connections
         // SSL peer verification is enabled by default (H-8 security remediation).
-        // Self-signed certificates (e.g. Docker mesh nodes using QUICKSTART) will
-        // be rejected unless one of the following is configured:
+        // Self-signed certificates (e.g. Docker mesh nodes with bare-hostname
+        // EIOU_HOST values) will be rejected unless one of the following is configured:
         //   - P2P_SSL_VERIFY=false      → disables verification (development only)
         //   - P2P_CA_CERT=/path/to/ca   → custom CA for verification
         //   - EIOU_TEST_MODE=true        → disables verification (test suites)
@@ -644,23 +647,34 @@ class TransportUtilityService implements TransportServiceInterface
             ]);
 
             // Signal watchdog to restart Tor immediately on SOCKS5 proxy failure
-            // errno 7 = CURLE_COULDNT_CONNECT (proxy unreachable)
+            // errno 7 = CURLE_COULDNT_CONNECT (proxy unreachable).
+            //
+            // These two writes are best-effort UI/IPC hints, not critical state —
+            // the watchdog re-derives Tor health from process probes regardless.
+            // Errors are suppressed at the call site because both files live in
+            // /tmp (sticky bit) and may already be owned by a different user from
+            // an earlier write, producing EACCES we can't recover from in PHP
+            // without root + chown. ErrorHandler routes warnings to STDERR in CLI,
+            // so a surfaced warning here wouldn't break --json consumers — but it
+            // would still log noise the operator can't act on, so we suppress.
             if (str_contains($curlError, 'SOCKS5') || $curlErrno === 7) {
                 $signalFile = '/tmp/tor-restart-requested';
                 if (!file_exists($signalFile)) {
-                    file_put_contents($signalFile, (string)time());
-                    Logger::getInstance()->warning("SOCKS5 proxy failure detected, signaling watchdog for immediate Tor restart");
+                    if (@file_put_contents($signalFile, (string)time()) !== false) {
+                        Logger::getInstance()->warning("SOCKS5 proxy failure detected, signaling watchdog for immediate Tor restart");
+                    }
                 }
 
-                // Write GUI-readable status so the wallet UI can display a notification
-                // Use 0666 permissions so both www-data (PHP) and root (watchdog) can update
+                // GUI status hint. Permissions use 0666 so both www-data (PHP)
+                // and root (watchdog shell) can replace it on the next update.
                 $statusFile = '/tmp/tor-gui-status';
-                file_put_contents($statusFile, json_encode([
+                if (@file_put_contents($statusFile, json_encode([
                     'status' => 'issue',
                     'timestamp' => time(),
                     'message' => 'Tor connectivity issue detected — automatic restart in progress'
-                ]));
-                chmod($statusFile, 0666);
+                ])) !== false) {
+                    @chmod($statusFile, 0666);
+                }
             }
 
             // Return a structured error response that can be parsed

@@ -336,8 +336,9 @@ class CliServiceTest extends TestCase
             ->method('help')
             ->with(
                 $this->callback(function ($commands) {
+                    // Spot-check a few stable top-level commands.
                     return isset($commands['info'])
-                        && isset($commands['add'])
+                        && isset($commands['contact'])
                         && isset($commands['send'])
                         && isset($commands['help']);
                 }),
@@ -550,9 +551,13 @@ class CliServiceTest extends TestCase
         $this->outputManager->method('isJsonMode')
             ->willReturn(false);
 
+        // total_balance is a SplitAmount (CliService::displayOverview calls
+        // ->toMajorUnits() on it); transaction history rows have already
+        // been collapsed to floats via TransactionFormatter::convertAmount,
+        // so 'amount' stays a float here.
         $this->balanceRepository->method('getUserBalance')
             ->willReturn([
-                ['currency' => 'USD', 'total_balance' => 10000]
+                ['currency' => 'USD', 'total_balance' => \Eiou\Core\SplitAmount::from(10000)]
             ]);
         $this->transactionRepository->method('getRecentTransactions')
             ->willReturn([
@@ -651,7 +656,7 @@ class CliServiceTest extends TestCase
 
         $this->balanceRepository->method('getUserBalance')
             ->willReturn([
-                ['currency' => 'USD', 'total_balance' => 5000]
+                ['currency' => 'USD', 'total_balance' => \Eiou\Core\SplitAmount::from(5000)]
             ]);
         $this->contactRepository->method('getAllContacts')
             ->willReturn([
@@ -659,7 +664,7 @@ class CliServiceTest extends TestCase
             ]);
         $this->balanceRepository->method('getContactBalancesCurrency')
             ->willReturn([
-                ['currency' => 'USD', 'received' => 1000, 'sent' => 500]
+                ['currency' => 'USD', 'received' => \Eiou\Core\SplitAmount::from(1000), 'sent' => \Eiou\Core\SplitAmount::from(500)]
             ]);
         $this->userContext->method('getUserAddresses')
             ->willReturn(['http://me.test']);
@@ -1474,9 +1479,11 @@ class CliServiceTest extends TestCase
         $this->userContext->method('getMaxOutput')
             ->willReturn(50);
 
+        // total_balance must be a SplitAmount post-Money-split (CliService
+        // calls ->toMajorUnits() on it).
         $this->balanceRepository->method('getUserBalance')
             ->willReturn([
-                ['currency' => 'USD', 'total_balance' => 5000]
+                ['currency' => 'USD', 'total_balance' => \Eiou\Core\SplitAmount::from(5000)]
             ]);
         $this->transactionRepository->method('getReceivedUserTransactions')
             ->willReturn([]);

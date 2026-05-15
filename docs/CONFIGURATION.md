@@ -11,6 +11,16 @@ The eIOU node reads configuration from four layers, in priority order. Settings 
 
 The `Eiou\Core\AppConfig` value object is the typed seam over layers 1–2 for runtime code paths. Build it once at boot via `AppConfig::fromEnvironment()` (or read from `ServiceContainer::getAppConfig()`), then pass it explicitly — don't call `getenv()` in service code.
 
+## Table of Contents
+
+1. [Layer 1 — `Constants`](#layer-1--constants)
+2. [Layer 2 — environment variables](#layer-2--environment-variables)
+3. [Layer 3 — JSON config files](#layer-3--json-config-files)
+4. [Layer 4 — `UserContext` getters](#layer-4--usercontext-getters)
+5. [Plugins (read-only seam, not a layer)](#plugins-read-only-seam-not-a-layer)
+6. [Decision tree: where should this setting live?](#decision-tree-where-should-this-setting-live)
+7. [Startup validation](#startup-validation)
+
 ---
 
 ## Layer 1 — `Constants`
@@ -23,7 +33,7 @@ A handful of constants resolve via `getenv()` at construction time (`Constants::
 
 Set via `.env`, `docker-compose.yml`, or the host environment. The canonical list is `.env.example`. Examples by category:
 
-- **Identity:** `QUICKSTART`, `EIOU_NAME`, `EIOU_HOST`, `EIOU_PORT`
+- **Identity:** `EIOU_HOST`, `EIOU_NAME`, `EIOU_PORT`
 - **Wallet restore:** `RESTORE_FILE`, `RESTORE`
 - **TLS:** `SSL_DOMAIN`, `SSL_EXTRA_SANS`, `LETSENCRYPT_*`
 - **Tor:** `EIOU_HS_TIMEOUT`, `EIOU_TOR_TIMEOUT`
@@ -51,7 +61,7 @@ Live under `/etc/eiou/config/` inside the container:
 
 `files/src/core/UserContext.php`. Per-session view of the merged config. Service-layer reads should always go through `UserContext::getX()` rather than re-parsing the JSON files; the getter handles the layer-3 → layer-2 → layer-1 fallback for fields the user hasn't overridden.
 
-Plugins MAY read `UserContext` but must NOT mutate it. Plugin per-plugin state goes through `Eiou\Services\PluginSessionStore` (session-scoped) or `PluginPdoFactory` (DB-scoped) — never into the JSON config files.
+Plugins MAY read `UserContext` but must NOT mutate it. Plugin per-plugin state goes through `Eiou\Services\Plugins\PluginSessionStore` (session-scoped) or `PluginPdoFactory` (DB-scoped) — never into the JSON config files.
 
 ---
 

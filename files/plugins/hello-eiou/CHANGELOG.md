@@ -5,6 +5,110 @@ All notable changes to the `hello-eiou` plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this plugin follows [Semantic Versioning](https://semver.org/).
 
+## 1.6.0
+
+### Added
+- **Interactive "Draw a fortune" section in the Plugins-tab panel.**
+  Renders a button + live result area inside the plugin's panel body.
+  Clicking the button POSTs the existing `helloEiouFortune` gui_action
+  via XHR and drops the returned random fortune into the result area
+  with a small fade-in — no full page reload. Demonstrates the full
+  round-trip plugin → host gateway → plugin dispatcher → JSON →
+  in-page render path for plugin authors.
+- New `assets/script.js` bound via `gui_assets: [{type:"js",
+  path:"assets/script.js"}]` — declarative JS enqueue, served with
+  the page's CSP nonce by `PluginAssetRegistry`. Idempotent
+  bind-once-per-button guard via a `data-hello-eiou-bound` attribute.
+
+### Changed
+- Plugin manifest's `gui_assets` now declares both the CSS and JS
+  files (previously CSS only). styles.css picks up the new
+  `.plugin-hello-eiou-pick` / `.plugin-hello-eiou-fortune-output`
+  rules for the new section.
+- Panel body's "About this panel" copy rewritten to describe the
+  new XHR-based round-trip rather than the prior static-list demo.
+
+### Removed
+- Static list of all 15 fortunes from the Plugins-tab panel —
+  redundant now that the panel ships an interactive "Draw a fortune"
+  button that emits one at a time. The dead `.plugin-hello-eiou-tab`
+  CSS rules were dropped along with the list.
+
+## 1.5.0
+
+### Changed
+- **Moved from a top-level Fortunes tab to a sub-panel under the host's
+  new Plugins tab.** The wallet GUI now owns a single "Plugins" tab
+  between Activity and Settings; each installed plugin registers a
+  sub-panel that's selectable from a dropdown at the top of that tab.
+  Manifest changes:
+  - Removed the `tabs: [{id:"hello-eiou-fortunes", ...}]` entry.
+  - Added `plugin_tab_panel: {label:"Hello eIOU", icon:"fas fa-cookie-bite"}`.
+- Dispatcher's `render` handler renames from `tab:hello-eiou-fortunes`
+  to `plugin_tab_panel` (fixed name — each plugin gets at most one
+  panel, no per-tab id needed). The host POSTs that name when it needs
+  the panel's HTML.
+- Panel chrome simplified: the host's Plugins tab provides the
+  outer container and tab title, so the dispatcher's body drops the
+  `form-container` wrapper and the duplicate `<h2>Fortunes</h2>` —
+  the panel renders a smaller `<h3>` sub-header inside the host's
+  shared container.
+
+## 1.4.0
+
+### Added
+- **Self-introspection demo** in the Fortunes tab — fetches and renders the
+  plugin's own granted permissions via `PluginLookupService.getOwnPermissions`
+  and its own manifest fields via `PluginLookupService.getOwnManifest`. Useful
+  reference for plugin authors who want to fail-fast at boot if a required
+  permission isn't granted, or render their own "this app uses…" panel.
+  Neither method requires a permission key — scope is the calling plugin's
+  own row only.
+- **Permission-gated demo**: `ContactLookupService.listAccepted` is now in
+  `core_services` and `contact_address_book_enumerate` is declared in the
+  new top-level `permissions` manifest field. The Fortunes tab picks a
+  random accepted contact and personalises one of the fortunes
+  ("Hello, Alice! …"). Falls back gracefully when the operator hasn't
+  granted the permission (gateway returns null) or when the wallet has no
+  accepted contacts. Demonstrates the louder-consent permission tier that
+  sits on top of `core_services` — see `docs/PLUGINS.md` for the catalog.
+
+## 1.3.0
+
+### Changed
+- Migrated to the sandboxed plugin contract — `hello-eiou` now runs in its
+  own per-plugin PHP-FPM pool under a dedicated Unix user
+  (`eiou-p-<8-hex-sha256>`) with `open_basedir` + `disable_functions` and no
+  read access to the seed/master-key/userconfig files. All core-service
+  interactions go through the per-plugin bearer-authenticated gateway at
+  `/__plugin_gateway`; in-process `EventDispatcher::subscribe` /
+  `$container->getPluginCliRegistry()->register(…)` / direct
+  `Logger::getInstance()` calls are gone.
+- `plugin.json` now declares `sandboxed: true` and lists every previously
+  imperative surface declaratively:
+  - `subscribes_to: ["sync.completed"]` (was `EventDispatcher::subscribe`)
+  - `render_hooks: ["gui.dashboard.after"]` (was `RenderRegistry::register`)
+  - `filter_hooks: ["gui.dashboard.widgets", "gui.contact.actions"]`
+    (was `FilterRegistry::register`)
+  - `core_services: ["Logger.info", "Logger.warning", "Logger.error",
+    "Logger.debug"]` allow-list for core_call back through the gateway
+  - `gui_assets`, `tabs`, `gui_actions`, `api_routes`, `cli_commands`
+    (were imperative `enqueueStyle` / `TabRegistry` /
+    `GuiActionRegistry::register` / `PluginApiRegistry::register` /
+    `PluginCliRegistry::register` calls)
+- Real runtime is now `__dispatch.php` at the plugin root. The core calls
+  it over FastCGI on the plugin's FPM pool for events, render hooks,
+  filters, GUI actions, REST routes, and CLI commands. The dispatcher
+  reads the bundled bearer token from `/etc/eiou/plugins/hello-eiou/
+  .gateway-token` and uses it for any core_call back into the main node.
+
+### Removed
+- `src/HelloEiouPlugin.php`'s imperative `register()` / `boot()` lifecycle
+  is no longer wired up — the sandbox dispatcher is the entry point. The
+  file is kept for now as a metadata holder (`getName`, `getVersion`) but
+  none of its `->register` / `->subscribe` calls run anymore; they were
+  superseded by the manifest's declarative surfaces.
+
 ## 1.2.0
 
 ### Added

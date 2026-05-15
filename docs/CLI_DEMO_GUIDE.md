@@ -11,11 +11,11 @@ A step-by-step walkthrough for demonstrating eIOU CLI commands.
    - [Building from Source](#building-from-source-alternative)
    - [Loading from a .tar File](#loading-from-a-tar-file)
 3. [Creating Containers](#section-2-creating-containers)
-   - [QUICKSTART vs No QUICKSTART](#quickstart-vs-no-quickstart)
-   - [Creating a New Wallet (QUICKSTART)](#creating-a-new-wallet-quickstart)
+   - [HTTP/HTTPS Mode vs Tor-Only Mode](#httphttps-mode-vs-tor-only-mode)
+   - [Creating a New Wallet (HTTP/HTTPS Mode)](#creating-a-new-wallet-httphttps-mode)
    - [Restoring an Existing Wallet](#restoring-an-existing-wallet)
    - [Changing Hostname After Creation](#changing-hostname-after-creation)
-   - [Tor-Only Mode](#tor-only-mode-no-quickstart)
+   - [Tor-Only Mode](#tor-only-mode)
 4. [Basic Wallet Commands](#section-3-basic-wallet-commands)
    - [info](#31-info---wallet-information)
    - [overview](#32-overview---dashboard-summary)
@@ -145,7 +145,7 @@ If you need to customize the image or are contributing to development, build fro
 **Clone and build:**
 ```bash
 # Clone the repository
-git clone https://github.com/eiou-org/eiou-docker.git
+git clone https://github.com/Vowels-Group/eiou-docker.git
 cd eiou-docker
 
 # Build the image
@@ -199,23 +199,23 @@ docker save eiou/eiou:latest | gzip > eiou-image.tar.gz
 
 eIOU wallet generation and restoration happens at container startup via environment variables.
 
-### QUICKSTART vs No QUICKSTART
+### HTTP/HTTPS Mode vs Tor-Only Mode
 
 | Mode | Transport | Use Case |
 |------|-----------|----------|
-| With `QUICKSTART=<hostname>` | HTTP + HTTPS + Tor | Standard usage, demos, most deployments |
-| Without `QUICKSTART` | Tor only | Privacy-focused, no HTTP/HTTPS exposure |
+| `EIOU_HOST=<hostname>` set | HTTP + HTTPS + Tor | Standard usage, demos, most deployments |
+| `EIOU_HOST` omitted | Tor only | Privacy-focused, no HTTP/HTTPS exposure |
 
-- **With QUICKSTART**: The container starts with HTTP, HTTPS, and Tor addresses. The hostname you provide becomes the HTTP/HTTPS address.
-- **Without QUICKSTART**: The container starts with only a Tor (.onion) address. No HTTP or HTTPS is configured.
+- **With `EIOU_HOST` set**: The container starts with HTTP, HTTPS, and Tor addresses. The value you provide becomes the HTTP/HTTPS address.
+- **Without `EIOU_HOST`**: The container starts with only a Tor (.onion) address. No HTTP or HTTPS is configured.
 
 ---
 
-### Creating a New Wallet (QUICKSTART)
+### Creating a New Wallet (HTTP/HTTPS Mode)
 
-The `QUICKSTART` environment variable generates a new wallet with HTTP/HTTPS when the container starts.
+Setting the `EIOU_HOST` environment variable generates a new wallet with HTTP/HTTPS when the container starts.
 
-**What QUICKSTART does automatically:**
+**What setting `EIOU_HOST` does automatically:**
 1. Generates a new BIP39 seed phrase (24 words)
 2. Creates wallet keys from the seed phrase
 3. Configures the node hostname for HTTP and HTTPS
@@ -226,12 +226,12 @@ The `QUICKSTART` environment variable generates a new wallet with HTTP/HTTPS whe
 
 **Basic command:**
 ```bash
-docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice eiou/eiou
+docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e EIOU_HOST=alice eiou/eiou
 ```
 
 **With persistent volumes (recommended):**
 ```bash
-docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -v alice-mysql-data:/var/lib/mysql -v alice-config:/etc/eiou/config -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e EIOU_HOST=alice -v alice-mysql-data:/var/lib/mysql -v alice-config:/etc/eiou/config -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 **Volume descriptions:**
@@ -275,7 +275,7 @@ echo "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12
 ```
 
 ```bash
-docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e RESTORE_FILE=/restore/seed -v /tmp/seed.txt:/restore/seed:ro -v alice-mysql-data:/var/lib/mysql -v alice-config:/etc/eiou/config -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e EIOU_HOST=alice -e RESTORE_FILE=/restore/seed -v /tmp/seed.txt:/restore/seed:ro -v alice-mysql-data:/var/lib/mysql -v alice-config:/etc/eiou/config -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 After successful restoration, delete the seed file:
@@ -292,7 +292,7 @@ rm /tmp/seed.txt
 
 Pass the seed phrase directly as an environment variable:
 ```bash
-docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e "RESTORE=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" -v alice-mysql-data:/var/lib/mysql -v alice-config:/etc/eiou/config -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --restart unless-stopped --name alice -p 80:80 -p 443:443 -e EIOU_HOST=alice -e "RESTORE=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" -v alice-mysql-data:/var/lib/mysql -v alice-config:/etc/eiou/config -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 **Warning:** The `RESTORE` environment variable remains visible via `docker inspect`. Use `RESTORE_FILE` for production.
@@ -312,15 +312,15 @@ Setting the HTTP hostname automatically derives the HTTPS version (e.g., `http:/
 
 ---
 
-### Tor-Only Mode (No QUICKSTART)
+### Tor-Only Mode
 
-For privacy-focused deployments with only Tor access (no HTTP/HTTPS), omit the `QUICKSTART` variable:
+For privacy-focused deployments with only Tor access (no HTTP/HTTPS), omit the `EIOU_HOST` variable:
 
 ```bash
 docker run -d --restart unless-stopped --name alice-tor -v alice-mysql-data:/var/lib/mysql -v alice-config:/etc/eiou/config -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
-**Note:** Without `QUICKSTART`, the container:
+**Note:** Without `EIOU_HOST`, the container:
 - Generates a wallet with only a Tor (.onion) address
 - Has no HTTP or HTTPS hostname configured
 - Is only accessible via the Tor network
@@ -333,10 +333,10 @@ You can add an HTTP/HTTPS hostname later using `eiou changesettings hostname`.
 
 | Scenario | Environment Variables |
 |----------|----------------------|
-| New wallet (HTTP/HTTPS + Tor) | `QUICKSTART=<hostname>` |
-| New wallet (Tor only) | No `QUICKSTART` |
-| Restore wallet (secure) | `QUICKSTART=<hostname>` + `RESTORE_FILE=/restore/seed` |
-| Restore wallet (simple) | `QUICKSTART=<hostname>` + `RESTORE="24 word phrase"` |
+| New wallet (HTTP/HTTPS + Tor) | `EIOU_HOST=<hostname>` |
+| New wallet (Tor only) | No `EIOU_HOST` |
+| Restore wallet (secure) | `EIOU_HOST=<hostname>` + `RESTORE_FILE=/restore/seed` |
+| Restore wallet (simple) | `EIOU_HOST=<hostname>` + `RESTORE="24 word phrase"` |
 | Change hostname later | Use `eiou changesettings hostname <url>` |
 
 ---
@@ -512,22 +512,20 @@ docker exec alice eiou help changesettings
 docker exec alice eiou help sync
 ```
 
-**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to the contact handler's own help — so `eiou help contact` and `eiou contact` print **the exact same** subcommand tree (single source of truth). Same for `eiou help contact currency` → per-currency help.
+**Namespaced subcommand help.** Every namespace that owns a CLI subtree — `apikey`, `contact`, `chaindrop`, `payback` — delegates `eiou help <namespace>` straight into that namespace's own help. `eiou help <ns>` and `eiou <ns>` (or `eiou <ns> help`) print **the exact same** subcommand tree, so help lives in one place per namespace and never drifts.
 
 ```bash
-# These three print identical output (same subcommand tree):
-docker exec alice eiou contact
-docker exec alice eiou contact help
-docker exec alice eiou help contact
-# And these two print the per-currency tree:
-docker exec alice eiou contact currency
-docker exec alice eiou help contact currency
+# Each pair below prints identical output:
+docker exec alice eiou contact            ;  docker exec alice eiou help contact
+docker exec alice eiou apikey help        ;  docker exec alice eiou help apikey
+docker exec alice eiou chaindrop help     ;  docker exec alice eiou help chaindrop
+docker exec alice eiou payback help       ;  docker exec alice eiou help payback
 
-# Other namespaces are reached via the namespace itself:
+# Sub-namespace `contact currency` also delegates:
+docker exec alice eiou contact currency   ;  docker exec alice eiou help contact currency
+
+# Other discoverable namespaces:
 docker exec alice eiou backup help
-docker exec alice eiou apikey help
-docker exec alice eiou payback help
-docker exec alice eiou chaindrop help
 docker exec alice eiou request            # subcommand list for payment requests
 docker exec alice eiou p2p                # P2P approval list (also doubles as the syntax discoverer)
 docker exec alice eiou plugin             # plugin list (and via `--help` per registered plugin)

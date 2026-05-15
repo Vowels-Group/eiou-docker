@@ -2,6 +2,22 @@
 
 This document describes how to run tests for the eIOU Docker node.
 
+## Table of Contents
+
+1. [Quick Start](#quick-start)
+2. [Test Types](#test-types)
+3. [Unit Test Inventory](#unit-test-inventory)
+4. [Integration Test Inventory](#integration-test-inventory)
+5. [Running Unit Tests](#running-unit-tests)
+6. [Running Integration Tests](#running-integration-tests)
+7. [Test Structure](#test-structure)
+8. [Writing New Tests](#writing-new-tests)
+9. [Prerequisites](#prerequisites)
+10. [Troubleshooting](#troubleshooting)
+11. [Continuous Integration](#continuous-integration)
+
+---
+
 ## Quick Start
 
 ```bash
@@ -34,19 +50,14 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 Integration tests validate the complete system behavior using Docker containers.
 
-- **Location**: `tests/`
+- **Location**: `tests/testfiles/` (per-test scripts) and `tests/` (runners and benchmarks)
 - **Runner**: `./run-all-tests.sh`
-- **Coverage**: API endpoints, multi-node communication, transaction flows, P2P routing (fast and best-fee modes)
+- **Coverage**: contact lifecycle, transactions, P2P routing (fast and best-fee modes), sync & chain-integrity, REST API, CLI, backups, identity / wallet setup, process lifecycle, networking, security
+- **Inventory**: see [Integration Test Inventory](#integration-test-inventory) below for the per-file table
 
 **Topologies:**
 - `http4` / `https4` / `tor4` — 4-node linear chain (standard transaction and routing tests)
 - `collisions` — 12-node mesh topology with randomized fees and dead-end nodes (best-fee routing, path selection, deadlock prevention, cascade cancel)
-
-**Best-fee routing tests** (`bestFeeRoutingTest.sh`): 11 tests covering single-node, 4-node line, and 12-node collision topologies. Includes fast vs best-fee timing comparison, path analysis with randomized fee structures, and dead-end cascade cancel validation.
-
-**Route cancellation tests** (`routeCancellationTest.sh`): 13 tests covering route cancellation service wiring, capacity reservation table existence, hop budget distribution (deterministic-mode aware: accepts constant `maxHops` when `EIOU_HOP_BUDGET_RANDOMIZED=false`, requires variance when randomized), capacity reservation creation during relay, release after best-fee selection, originator downstream cancel via `broadcastFullCancelForHash`, multi-route safety with `full_cancel` flag propagation, cancel timing vs passive expiry, and relay status propagation. Best with collisions or collisionscluster topologies.
-
-**Payment request tests** (`paymentRequestTest.sh`): 10 tests covering the full payment request lifecycle via the REST API — baseline list, create, outgoing pending confirmation, incoming delivery (async-safe), decline, cancel, invalid-create error handling, a full **approve flow** (creates a request, polls until it arrives at the recipient, approves which triggers `sendEiou` internally, verifies the transaction landed and balance changes on both nodes), an **approve-with-payer-note flow** that confirms the on-chain description ends up as `"payment: <requester desc> | <payer note>"`, and an over-long payer-note rejection check. Permission-gated since v0.1.14: `wallet:read` for list/create/decline/cancel, `wallet:send` for approve. Included in the `all` and `api` test subsets.
 
 ## Unit Test Inventory
 
@@ -174,12 +185,27 @@ Integration tests validate the complete system behavior using Docker containers.
 | **P2pServiceTest.php** | 63 | P2P routing logic, fund availability via capacity reservations, matching, fee calculation |
 | **Rp2pServiceTest.php** | 46 | RP2P relay logic, fee calculation, two-phase relay selection, race condition coverage |
 | **RouteCancellationServiceTest.php** | 18 | Route cancellation for unselected candidates, partial route_cancel (multi-route safe acknowledge), full cancel (P2P cancel + reservation release + downstream propagation), hop budget (geometric distribution), capacity reservation release |
-| **PaymentRequestServiceTest.php** | 26 | Full lifecycle: `create` (amount/currency validation, contact lookup, address resolution, delivery failure non-fatal, tor address priority), `approve` (sendEiou integration, txid extraction, status update, response message), `decline`, `cancel`, `handleIncomingRequest` (idempotent, contact name lookup, invalid currency skip), `handleIncomingResponse` (approved with txid, declined), `getAllForDisplay`, `countPendingIncoming`. Note: 8 `create` tests skip when `bcmath` extension is not installed on the host (they run inside Docker). |
+| **PaymentRequestServiceTest.php** | 27 | Full lifecycle: `create` (amount/currency validation, contact lookup, address resolution, delivery failure non-fatal, tor address priority), `approve` (sendEiou integration, txid extraction, status update, response message), `decline`, `cancel`, `handleIncomingRequest` (idempotent, contact name lookup, invalid currency skip), `handleIncomingResponse` (approved with txid, declined), `getAllForDisplay`, `countPendingIncoming`, `#[PluginCallable]` attribute presence on `create`. Note: 8 `create` tests skip when `bcmath` extension is not installed on the host (they run inside Docker). |
 | **SendOperationServiceTest.php** | 20+ | Send operations with locking, message delivery |
 | **ServiceContainerTest.php** | 20+ | Singleton pattern, dependency management, lazy loading |
 | **SyncServiceTest.php** | 20+ | Synchronization operations, contact/transaction sync |
 | **TransactionProcessingServiceTest.php** | 20+ | Transaction processing, claiming, P2P handling |
 | **UpdateCheckServiceTest.php** | 32 | Version comparison (`isNewerVersion`), prerelease ordering, v-prefix handling, `getStatus` structure, cache-miss behavior, `markdownToHtml` (headings, lists, bold, italic, inline code, code blocks, links, XSS escaping, horizontal rules, paragraphs, mixed content, list type switching, unclosed code blocks), `shouldShowWhatsNew` (fresh install seeding, upgrade detection, post-dismissal), `dismissWhatsNew` (file structure), `getReleaseNotes` (graceful failure, v-prefix stripping, response structure). Note: filesystem-dependent tests (`shouldShowWhatsNew`, `dismissWhatsNew`) skip outside Docker when `/etc/eiou/config` is not writable; `getReleaseNotes` structure test skips when GitHub is unreachable. |
+| **WalletOutboundServiceTest.php** | 16 | Sandbox bridge `send(recipient, amount, currency, description?)` — argument-order matches the `eiou send` CLI. Caller-id requirement enforcement, argument validation (currency shape, amount positive/decimal, recipient pattern, description cap), happy-path `sendEiou` integration, null-txid case (P2P queued route), downstream refusal rewrap, exception rewrap, `PluginCallerAware` contract, `#[PluginCallable]` attribute presence, caller-id clearable between calls. Note: `description` is the free-form operator-facing text (the `[description]` arg on `eiou send`), distinct from the internal `transactions.memo` routing-hash field. |
+| **ContainerLifecycleServiceTest.php** | 14 | Sandbox bridge that records desired sidecar state to `/var/lib/eiou/plugin-sidecars-desired.json`. Caller-id requirement, service-name validation (rejects leading dash, shell metachar, spaces, over-64-char), `stopSidecar` / `startSidecar` state-file writes, idempotent overwrites, per-plugin namespace separation (one plugin can't address another's services), 0644 permissions for operator orchestration, `#[PluginCallable]` attribute presence, `PluginCallerAware` contract. |
+| **PluginsTabPanelRegistryTest.php** | 15 | Sub-panel registry that backs the host-owned Plugins tab. `register` validation (missing plugin_id / invalid shape / empty label / non-callable render / non-int order all rejected; sensible defaults for missing icon and order), last-write-wins on plugin_id collision, `all()` stable sort by `order` asc then `plugin_id` asc, `renderPanel` (returns closure output, swallows throws + returns empty rather than propagating, coerces non-string returns to empty, returns empty on unknown id), `isEmpty` reflects registration state (drives the empty-state UX in the Plugins tab). |
+
+### Services Lookup Tests (`tests/Unit/Services/Lookup/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ContactLookupServiceTest.php** | 25 | Read-only contact facade for sandboxed plugins. Projection contract (narrow `{name, http, https, tor, pubkey_hash}` shape — extra repository columns like `status`, `pubkey`, `contact_id` must NOT leak), `getByPubkeyHash` (null on missing, empty-input short-circuit, lowercase/trim normalization, null-preservation for missing transports), `getByName` (strict-match-or-null semantics — null on no match AND on ambiguous match, whitespace trim, short-circuit on empty), `getOnlineStatus` (returns the `online_status` field, null on missing contact, empty/whitespace short-circuit, case-normalised), `listAccepted` (default limit/offset, `MAX_PAGE_LIMIT` cap, negative-bounds clamp, per-row projection), `listPending` (projects pending-request rows, allows null name on incoming-before-accept), `#[PluginCallable]` attribute presence on all five methods, permission-tier annotations (`getByPubkeyHash` / `getByName` / `getOnlineStatus` carry no permission; `listAccepted` gates on `contact_address_book_enumerate`; `listPending` gates on `contact_pending_enumerate`). |
+| **BalanceLookupServiceTest.php** | 14 | Read-only balance facade gated on `wallet_balance_read`. `getUserBalance` currency-specific path (`{currency, balance}` row with `{whole, frac, minor_units, display}` projection, empty/whitespace short-circuit, zero-row for currencies with no history), currency-list path (per-row projection, empty list on null repo result, drops malformed rows), negative-balance encoding (`whole<0` with non-negative `frac`, `minor_units` carries lossless signed integer), `getUserBalanceContact` (multi-currency projection, null/empty repo handling, empty hash short-circuit, case normalisation, drops malformed rows), permission-key annotations on both methods. |
+| **PluginLookupServiceTest.php** | 16 | Self-introspection + cross-plugin inventory surface (`getOwnPermissions`, `getOwnManifest`, `listEnabledPluginIds`). `PluginCallerAware` contract (refuses without gateway-injected caller id on all three methods), per-plugin row resolution from `PluginLoader::listAllPlugins`, manifest projection allow-list (deliberately omits host-injected fields like gateway tokens, system-user names, runtime status flags), cross-plugin isolation regression (`setCallingPluginId` switches the row scope; no method arg can override it), `listEnabledPluginIds` self-exclusion regression (caller's own row never appears in the result, only enabled plugins returned), `#[PluginCallable]` attribute presence + per-method permission annotations (`getOwnPermissions` / `getOwnManifest` carry no permission; `listEnabledPluginIds` gates on `plugin_inventory_read`). |
+| **TransactionStatisticsLookupServiceTest.php** | 8 | Aggregate-statistics facade gated on `transaction_history_aggregate`. Happy-path projection (count + `{whole, frac, minor_units, display}` for total), optional currency parameter, bounds (zero-window / reversed-window short-circuit before repo, oversized window clamps to `MAX_PERIOD_SECONDS`, empty currency string short-circuits), defensive handling when repository returns a malformed shape, permission-key annotation. |
+| **ContactCreditLookupServiceTest.php** | 11 | Per-contact credit-state facade gated on `contact_credit_read`. Currency-specific path (projected row, null on no match, empty/whitespace short-circuit), all-currencies path (list projection, empty list on no rows, drops malformed rows), empty pubkey_hash short-circuits for both paths, case normalisation, permission-key annotation. |
+| **PaymentRequestLookupServiceTest.php** | 9 | Payment-request lookup facade. `getByRequestId` ungated (per-id, demand-driven) — projection drops sensitive `requester_address` / `signed_message_content` / `id`, null on missing, empty short-circuit. `listPendingIncoming` / `listOutgoing` gated on `payment_request_enumerate` — per-row projection, `MAX_PAGE_LIMIT` cap, negative-bound clamp, default limit of 50. Permission annotations verified per method. |
+| **PaybackMethodLookupServiceTest.php** | 12 | Capability-discovery facade for payback-rail plugins. `PluginCallerAware` contract (both methods refuse without caller id), type-scoping (plugin only sees rows whose `type` is in its own manifest's `payback_method_types` — plugin with no declared types gets `[]` without hitting the repository), sensitive-field omission regression (`encrypted_fields` / `fields_version` / `fields_json` never appear in the projection), currency filter passthrough, empty hash / empty currency short-circuits, permission-key annotations (`payback_method_read_own` and `payback_method_read_contact`). |
 
 ### Services Proxies Tests (`tests/Unit/Services/Proxies/`)
 
@@ -280,6 +306,129 @@ Integration tests validate the complete system behavior using Docker containers.
 | **TransactionPayloadTest.php** | 77 | Transaction payloads, all transaction types |
 | **UtilPayloadTest.php** | 77 | Utility/error payloads, acknowledgments |
 
+## Integration Test Inventory
+
+> The tables below are a curated overview of the shell-based integration
+> test suite under `tests/testfiles/`. The repo's actual count is the
+> authoritative number — `ls tests/testfiles/*.sh | wc -l` for files and
+> the `run-all-tests.sh` summary line for individual test counts. The
+> inventory may lag behind when new test files are added; the headings
+> always reflect the current categorization.
+
+### Contact Lifecycle (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **addContactsTest.sh** | Contact addition workflow between containers — request, accept, status transitions |
+| **mutualContactTest.sh** | Mutual-contact request auto-accept feature (both sides issue `add` simultaneously) |
+| **contactListTest.sh** | Contact list storage, ordering, and per-contact metadata verification |
+| **contactNameTest.sh** | Multi-part contact names and duplicate-name disambiguation across the API/CLI |
+
+### Transactions & Balances (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **transactionTestSuite.sh** | Consolidated transaction tests: history, inquiry response, contact-tx type, chain reorder under cancellations, held-tx for invalid `previous_txid`, self-send prevention |
+| **transactionRecoveryTest.sh** | Atomic transaction claiming and crash-recovery mechanisms |
+| **balanceTest.sh** | Balance queries and verification across all containers in the topology |
+| **sendMessageTest.sh** | Message sending between connected contacts |
+| **sendAllPeersTest.sh** | Transaction sending to all connected peers in the network |
+| **negativeFinancialTest.sh** | Negative / error paths for financial operations (over-credit, double-spend, malformed amounts) |
+
+### P2P Routing (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **routingTest.sh** | Multi-hop message routing and relay-fee calculation |
+| **bestFeeRoutingTest.sh** | Best-fee P2P route selection: single-node, 4-line, 12-collision topologies; fast-vs-best timing, path analysis with randomized fees, dead-end cascade cancel |
+| **routeCancellationTest.sh** | Route-cancellation service wiring, capacity-reservation table, hop-budget distribution (constant under `EIOU_HOP_BUDGET_RANDOMIZED=false`, variance when randomized), reservation create/release, originator downstream cancel via `broadcastFullCancelForHash`, multi-route safety with `full_cancel` |
+| **cascadeCancelTest.sh** | Cascade cancel / expire for dead-end P2P routes |
+| **maxLevelCancelTest.sh** | Nodes at the P2P max-level boundary immediately cancel and notify the originator |
+
+### Sync & Chain Integrity (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **syncTestSuite.sh** | Consolidated sync: basic sync command, transaction-chain recovery, signature-validation stop, multi-cycle resilience, cancelled-tx handling, `NULL previous_txid` edge cases |
+| **chainDropTestSuite.sh** | Tx-drop agreement protocol for resolving mutual chain gaps (propose / accept / reject; auto-propose; balance-guard) |
+| **chunkedSyncTest.sh** | Chunked transaction-sync protocol behavior at large chain lengths |
+
+### REST API & Payment Requests (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **apiEndpointsTest.sh** | REST API endpoints — happy-path coverage across the v1 surface |
+| **apiInputValidationTest.sh** | Missing-required-field 400s, invalid types, boundary values, special-character / encoding safety |
+| **paymentRequestTest.sh** | Full payment-request lifecycle via REST: list, create, outgoing-pending, incoming-delivery (async-safe), decline, cancel, invalid-create, full **approve flow** (request → poll → approve → sendEiou → balance verify), **approve-with-payer-note** (description shape `"payment: <req desc> \| <payer note>"`), over-long payer-note rejection. Permission-gated: `wallet:read` for list/create/decline/cancel, `wallet:send` for approve |
+
+### CLI (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **cliCommandsTest.sh** | CLI commands produce correct output in both regular and JSON modes |
+
+### Backup (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **backupTestSuite.sh** | Encrypted backup create / list / verify / restore / status; auto-backup toggle; retention per prefix |
+
+### Identity & Wallet Setup (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **nodeIdentityTest.sh** | `EIOU_NAME`, `EIOU_HOST`, `EIOU_PORT` environment-variable handling and userconfig effects |
+| **hostnameTest.sh** | Hostname configuration in `userconfig.json` matches expected values |
+| **seedphraseTestSuite.sh** | Seedphrase generate / restore, secure display, authcode restoration, restore + `EIOU_HOST` hostname application |
+| **sslCertificateTest.sh** | SSL certificate generation and HTTPS functionality |
+
+### Process & Lifecycle (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **gracefulShutdownTest.sh** | Graceful shutdown handling for eIOU Docker containers (processors stop cleanly, lockfiles cleared) |
+| **sigTermTest.sh** | SIGTERM graceful shutdown via `docker stop` |
+| **processorLockfileTest.sh** | Processor lockfile fix preventing random restart loops |
+| **performanceBaseline.sh** | Performance baseline: transaction processing time, batch throughput, API response times, DB query performance |
+
+### Networking & Messaging (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **messageDeliveryTest.sh** | `MessageDeliveryService` and Dead Letter Queue functionality |
+| **parallelBroadcastTest.sh** | `curl_multi` parallel-broadcast functionality in P2P and transport layers |
+| **pingTestSuite.sh** | Contact-status ping feature, online detection, response time, chain-head exchange |
+| **curlErrorHandlingTest.sh** | HTTP-client error handling and timeout behavior |
+
+### Tor (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **torTestSuite.sh** | Consolidated TOR: address verification, restart verification, key-file permissions, rapid-restart resilience |
+
+### Code Quality & Static Checks (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **circularDependencyCheck.sh** | Static analysis: parses PHP service files for constructor & setter-injection deps, builds a dependency graph, DFS-detects cycles |
+| **serviceExceptionTest.sh** | `ServiceException` hierarchy and error handling |
+| **serviceInterfaceTest.sh** | Verifies all services properly implement their declared interfaces |
+
+### Security (`tests/testfiles/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| **securityTestSuite.sh** | SQL-injection protection on API endpoints, XSS payload handling and sanitization, authentication-header manipulation, rate-limit enforcement |
+
+### Benchmarks (`tests/`)
+
+Standalone benchmark scripts in `tests/` (not run by `./run-all-tests.sh`):
+
+| Test File | Coverage |
+|-----------|----------|
+| **benchmark-routing.sh** | Routing throughput and latency measurements |
+| **benchmark-bestfee.sh** | Best-fee mode latency vs fast mode and route-fan-out cost |
+
 ## Running Unit Tests
 
 ### Configuration Files
@@ -332,6 +481,68 @@ docker run --rm -v "$(pwd)":/app -w /app php:8.3-cli ./files/vendor/bin/phpunit 
 # Run with verbose output
 docker run --rm -v "$(pwd)":/app -w /app php:8.3-cli ./files/vendor/bin/phpunit --configuration tests/phpunit.xml --testdox
 ```
+
+### Running the suite inside an eiou node (closes most env-gated skips)
+
+A handful of unit tests guard on environment state that only exists inside
+an eiou container — `php-bcmath` loaded, `/app/eiou/` populated, `/etc/eiou/config/`
+present and writable, the encryption-key file layout. Outside that
+environment they `markTestSkipped()` and **this is normal, expected
+behaviour** for host-side runs. To exercise that coverage:
+
+```bash
+# 1) Start a node (adds bcmath, /app/eiou, /etc/eiou/config, network)
+docker compose up -d --build
+
+# 2) Run the wrapper. Three modes; "all" runs them in sequence.
+tests/run-unit-tests-docker.sh all          # node + fresh + fresh-key
+tests/run-unit-tests-docker.sh node         # against running eiou-node only
+tests/run-unit-tests-docker.sh fresh        # empty /etc/eiou/config (first-boot path)
+tests/run-unit-tests-docker.sh fresh-key    # stub .master.key.enc for the volume-encryption presence path
+
+# Forwarded args go to phpunit:
+tests/run-unit-tests-docker.sh node --filter=ApplicationTest
+```
+
+Each mode covers a different class of skip:
+
+| Mode        | What it adds                                      | Tests it unlocks                                         |
+| ----------- | ------------------------------------------------- | -------------------------------------------------------- |
+| `node`      | bcmath + DB + populated `/etc/eiou/config`        | `ApplicationTest` (27), bcmath gates (~14), `UserContextTest` config tests (3), `UpdateCheckServiceTest` config tests (~16), the InputValidator-routed currency checks |
+| `fresh`     | empty `/etc/eiou/config` + clean `/dev/shm` tmpfs | `VolumeEncryptionTest` / `MariaDbEncryptionTest` / `KeyEncryptionTest` first-boot bootstrap paths (~9) |
+| `fresh-key` | stub `.master.key.enc` present in tmpfs config    | `VolumeEncryptionTest::testInitThrowsWhenEncryptedKeyExistsWithoutPassphrase` (the encrypted-key-present branch of the same suite) |
+
+#### Skips you'll still see — and why they're fine
+
+These never run on a plain host and shouldn't be treated as failures:
+
+- **bcmath gates** (`InputValidatorTest`, `ContactValidatorTest`,
+  `CurrencyUtilityServiceTest`, `SettlementPrecisionServiceTest`,
+  `PaymentRequestServiceTest`, `ContactDecisionServiceTest`,
+  `ContactManagementServiceTest`, `TransactionFormatterTest`) — skip
+  unless `bcmath` is loaded. Production and CI both have it.
+- **Docker-environment gates** (`ApplicationTest` × 27, `UserContextTest`
+  × 3, `UpdateCheckServiceTest` × ~16) — skip when `/app/eiou/` or
+  `/etc/eiou/config/` aren't present/writable.
+- **Encryption presence/absence** (`VolumeEncryptionTest`,
+  `MariaDbEncryptionTest`, `KeyEncryptionTest`) — split by intent:
+  some assert the *first-install* path (file absent), others the
+  *active-session* path (file present). Any single environment will
+  skip one of the two halves.
+- **PHP build features** (`PayloadEncryptionTest` × 2,
+  `E2eAllMessagesTest`, `E2eContactDescriptionTest`) — skip if the
+  linked OpenSSL lacks `secp256k1` or PHP lacks `openssl_pkey_derive` /
+  `hash_hkdf`. Production builds have both.
+- **Maintenance lockfile** (`MaintenanceCheckTest`) — only skips when
+  `/tmp/eiou_maintenance.lock` is present (loading the script during a
+  maintenance window would call `exit()`).
+- **Network** (`UpdateCheckServiceTest::testGetReleaseNotesReturnsExpectedKeysWhenAvailable`)
+  — needs to reach github.com.
+
+The wrapper above + a real network connection covers everything except the
+maintenance-lockfile guard. If you want a single number to track,
+`tests/run-unit-tests-docker.sh all` should bottom out at **≤ 5 skips**
+total — anything more means a new environment guard slipped in.
 
 ### Running Specific Tests
 

@@ -9,6 +9,7 @@ use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ApiKeyService;
 use Eiou\Services\GuiActionRegistry;
+use Eiou\Utils\AltCodeVerifier;
 use Eiou\Utils\Logger;
 use Eiou\Utils\Security;
 use Exception;
@@ -35,7 +36,7 @@ class ApiKeysController
      */
     public static function permissionGroups(): array
     {
-        return \Eiou\Services\ApiKeyService::permissionGroupsForDisplay();
+        return ApiKeyService::permissionGroupsForDisplay();
     }
 
     /**
@@ -46,7 +47,7 @@ class ApiKeysController
     public static function permissionPresets(): array
     {
         $readOnly = array_values(array_filter(
-            \Eiou\Services\ApiKeyService::PERMISSIONS,
+            ApiKeyService::PERMISSIONS,
             static fn (string $p) => str_ends_with($p, ':read')
         ));
         return [
@@ -181,6 +182,11 @@ class ApiKeysController
 
     /**
      * Verify the user's auth code and grant sensitive-action access.
+     *
+     * Either the primary BIP39-derived auth code or, when configured, the
+     * user-chosen alternate code is accepted. Both are evaluated even on
+     * primary match so timing observers cannot tell which credential was
+     * presented (or whether an alt code is set at all).
      */
     private function verify(): void
     {
@@ -191,8 +197,15 @@ class ApiKeysController
 
         $user = UserContext::getInstance();
         $expected = $user->getAuthCode();
+        $altHash = $user->getAltCodeHash();
 
-        if ($expected === null || !hash_equals($expected, $authCode)) {
+        $primaryOk = $expected !== null && hash_equals($expected, $authCode);
+        // Constant-time alt check — AltCodeVerifier always runs Argon2id
+        // work (against a placeholder when no hash is configured) so the
+        // re-auth path doesn't reveal alt-code presence via latency.
+        $altOk = AltCodeVerifier::verify($authCode, $altHash);
+
+        if (!$primaryOk && !$altOk) {
             // Same generic failure message the login form uses — don't
             // confirm whether the user has an auth code set.
             $this->respondError('invalid_authcode', 'Auth code is invalid', 401);

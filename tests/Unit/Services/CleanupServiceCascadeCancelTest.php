@@ -113,7 +113,7 @@ class CleanupServiceCascadeCancelTest extends TestCase
                     P2pRelayedContactRepository::class => $this->createMock(P2pRelayedContactRepository::class),
                     CapacityReservationRepository::class => $this->createMock(CapacityReservationRepository::class),
                     RouteCancellationRepository::class => $this->createMock(RouteCancellationRepository::class),
-                    default => null,
+                    default => $this->createMock($class),
                 };
             });
 

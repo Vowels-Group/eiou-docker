@@ -274,9 +274,9 @@ echo "     node-1:"
 echo "       ports: [\"1153:443\"]"
 echo "       environment:"
 if [ "$WILDCARD" = true ]; then
-    echo "         - QUICKSTART=alice.${DOMAIN}"
+    echo "         - EIOU_HOST=alice.${DOMAIN}"
 else
-    echo "         - QUICKSTART=${DOMAIN}"
+    echo "         - EIOU_HOST=${DOMAIN}"
     echo "         - EIOU_PORT=1153"
 fi
 echo "       volumes:"

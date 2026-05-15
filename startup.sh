@@ -21,7 +21,6 @@
 #   12. Keep container running while handling signals
 #
 # Environment Variables:
-#   QUICKSTART          - Hostname for quickstart mode (e.g., "alice", "192.168.1.100:8080")
 #   RESTORE             - 24-word seed phrase for wallet restoration
 #   RESTORE_FILE        - Path to file containing seed phrase (more secure)
 #   SSL_DOMAIN          - Primary domain for SSL certificate CN
@@ -93,6 +92,8 @@ CLEANUP_PID=""
 CONTACT_STATUS_PID=""
 WATCHDOG_PID=""
 RESTART_POLLER_PID=""
+PLUGIN_USER_POLLER_PID=""
+PLUGIN_ROUTING_POLLER_PID=""
 
 # -----------------------------------------------------------------------------
 # graceful_shutdown() - Signal handler for clean container termination
@@ -127,6 +128,26 @@ graceful_shutdown() {
         echo "[Shutdown] Stopping restart poller (PID: $RESTART_POLLER_PID)"
         kill "$RESTART_POLLER_PID" 2>/dev/null
         wait "$RESTART_POLLER_PID" 2>/dev/null || true
+    fi
+
+    # Stop plugin sandbox pollers — they're bash subshells servicing
+    # plugin enable/disable request files. Killing them before nginx
+    # + FPM shutdown prevents a half-applied plugin pool from racing
+    # the reload sequence.
+    if [ -n "$PLUGIN_USER_POLLER_PID" ] && kill -0 "$PLUGIN_USER_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin user poller (PID: $PLUGIN_USER_POLLER_PID)"
+        kill "$PLUGIN_USER_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_USER_POLLER_PID" 2>/dev/null || true
+    fi
+    if [ -n "$PLUGIN_ROUTING_POLLER_PID" ] && kill -0 "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin routing poller (PID: $PLUGIN_ROUTING_POLLER_PID)"
+        kill "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_ROUTING_POLLER_PID" 2>/dev/null || true
+    fi
+    if [ -n "$PLUGIN_CREDENTIALS_POLLER_PID" ] && kill -0 "$PLUGIN_CREDENTIALS_POLLER_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping plugin credentials poller (PID: $PLUGIN_CREDENTIALS_POLLER_PID)"
+        kill "$PLUGIN_CREDENTIALS_POLLER_PID" 2>/dev/null
+        wait "$PLUGIN_CREDENTIALS_POLLER_PID" 2>/dev/null || true
     fi
 
     echo ""
@@ -193,12 +214,33 @@ graceful_shutdown() {
         pids_to_wait="$pids_to_wait $CONTACT_STATUS_PID"
     fi
 
-    # Also check for any PHP processors by their lockfiles
+    # Also signal each processor's PHP child via its lockfile.
+    #
+    # Each processor is spawned as `runuser -u www-data -- php …`. The
+    # watchdog tracks the runuser PARENT PID (P2P_PID, TRANSACTION_PID,
+    # etc. — set when the runuser process was forked). The PHP process
+    # inside writes its OWN PID — the child of runuser — to its
+    # lockfile. So the lockfile PID and the watchdog-tracked PID are
+    # always different processes in the same spawn chain: signalling
+    # the parent propagates to the child, signalling the lockfile PID
+    # hits the child directly. Both reach the same PHP process; the
+    # double-send is just belt-and-braces in case runuser ever fails
+    # to propagate.
+    #
+    # Skip lockfiles whose PID is already in $pids_to_wait — that means
+    # we somehow ended up tracking the child PID directly (would be a
+    # bug elsewhere, but we don't want to double-list it in waits).
     for lockfile in /tmp/p2pmessages_lock.pid /tmp/transactionmessages_lock.pid /tmp/cleanupmessages_lock.pid /tmp/contact_status.pid; do
         if [ -f "$lockfile" ]; then
             local pid=$(cat "$lockfile" 2>/dev/null)
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                echo "[Shutdown] Found additional processor from lockfile (PID: $pid)"
+                # Already tracked as parent? Skip silently.
+                if echo " $pids_to_wait " | grep -q " $pid "; then
+                    continue
+                fi
+                local proc_name
+                proc_name=$(basename "$lockfile" .pid)
+                echo "[Shutdown] Signalling PHP child of ${proc_name} (PID: $pid)"
                 kill -TERM "$pid" 2>/dev/null
                 pids_to_wait="$pids_to_wait $pid"
             fi
@@ -261,10 +303,33 @@ graceful_shutdown() {
     echo "[Shutdown] Stopping MariaDB..."
     timeout 5 service mariadb stop 2>/dev/null || true
 
-    # Tor's init script may report "failed" with a PID mismatch warning —
-    # this is a known quirk of the Tor service script and is harmless.
+    # Stop Tor by SIGTERM'ing its PID directly. The Debian init.d
+    # script's identity check reads /proc/<pid>/exe — which Tor blocks
+    # for anyone other than the process owner (debian-tor) by setting
+    # itself non-dumpable. Inside this container the init.d script
+    # runs as root but still can't readlink the exe symlink, so it
+    # fails with "Is <pid> not tor?  Is /usr/bin/tor a different
+    # binary now?" and refuses to stop. Bypassing the broken identity
+    # check and signalling the PID directly avoids the noise + the
+    # 3-second wasted timeout.
     echo "[Shutdown] Stopping Tor..."
-    timeout 3 service tor stop 2>/dev/null || true
+    if [ -f /run/tor/tor.pid ]; then
+        tor_pid=$(cat /run/tor/tor.pid 2>/dev/null)
+        if [ -n "$tor_pid" ] && kill -0 "$tor_pid" 2>/dev/null; then
+            kill -TERM "$tor_pid" 2>/dev/null
+            # Tor's graceful shutdown advertises the descriptor as
+            # going away first; capped at 2s so the container stop
+            # doesn't drag.
+            for _ in 1 2 3 4; do
+                kill -0 "$tor_pid" 2>/dev/null || break
+                sleep 0.5
+            done
+            # SIGKILL anything that's still around — Docker will
+            # do the same when the container stops; we just want
+            # the log line to say we asked nicely first.
+            kill -KILL "$tor_pid" 2>/dev/null || true
+        fi
+    fi
 
     echo "[Shutdown] Stopping Cron..."
     timeout 2 service cron stop 2>/dev/null || true
@@ -275,6 +340,16 @@ graceful_shutdown() {
     rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
     rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
     rm -f /tmp/contact_status.pid 2>/dev/null
+    # Supervisor poller lockfiles (written by the bash subshells that
+    # service plugin enable/disable). The pollers themselves were
+    # SIGTERM'd above; this removes the now-stale PID files so the
+    # next boot doesn't see them as live processes.
+    rm -f /tmp/eiou_watchdog.pid 2>/dev/null
+    rm -f /tmp/eiou_restart_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_user_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_routing_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_credentials_poller.pid 2>/dev/null
+    rm -f /tmp/eiou_plugin_cron_poller.pid 2>/dev/null
     rm -f "$SHUTDOWN_FLAG" 2>/dev/null
     rm -f "$MAINTENANCE_LOCKFILE" 2>/dev/null
 
@@ -291,12 +366,20 @@ graceful_shutdown() {
 # Register signal handlers for graceful shutdown
 trap graceful_shutdown SIGTERM SIGINT SIGHUP
 
-# Check for quickstart flag
-QUICKSTART=${QUICKSTART:-false}
+# Reject QUICKSTART up-front — removed in favour of EIOU_HOST + EIOU_NAME.
+# Failing loudly is much kinder than silently falling back to Tor-only mode
+# (which is what happens to a config that doesn't set any of these vars).
+if [ -n "${QUICKSTART:-}" ]; then
+    echo "ERROR: QUICKSTART is no longer supported."
+    echo "       Replace 'QUICKSTART=<hostname>' with 'EIOU_HOST=<hostname>'"
+    echo "       (and optionally 'EIOU_NAME=<display-name>' if you want a"
+    echo "       display name different from the hostname)."
+    echo "       See CHANGELOG.md for the migration notes."
+    exit 1
+fi
 
-# New optional env vars for address/name separation (issue #579)
-# These allow separating the node's display name from its network address.
-# When omitted, QUICKSTART provides backward-compatible behavior.
+# Address/name vars. Setting EIOU_HOST enables HTTP/HTTPS mode; with none of
+# these set, the node runs Tor-only.
 EIOU_NAME=${EIOU_NAME:-false}
 EIOU_HOST=${EIOU_HOST:-false}
 EIOU_PORT=${EIOU_PORT:-false}
@@ -322,7 +405,6 @@ validate_name() {
     fi
 }
 
-validate_hostname "$QUICKSTART" "QUICKSTART"
 validate_hostname "$EIOU_HOST" "EIOU_HOST"
 validate_name "$EIOU_NAME" "EIOU_NAME"
 if [ "$EIOU_PORT" != "false" ] && ! echo "$EIOU_PORT" | grep -qE '^[0-9]+$'; then
@@ -330,7 +412,7 @@ if [ "$EIOU_PORT" != "false" ] && ! echo "$EIOU_PORT" | grep -qE '^[0-9]+$'; the
     exit 1
 fi
 
-# Extract embedded port from QUICKSTART or EIOU_HOST (e.g., "192.168.1.100:8080")
+# Extract embedded port from EIOU_HOST (e.g., "192.168.1.100:8080")
 # The embedded port is used when EIOU_PORT is not explicitly set.
 extract_host_port() {
     local val="$1"
@@ -339,41 +421,26 @@ extract_host_port() {
     fi
 }
 
-if [ "$QUICKSTART" != "false" ] && echo "$QUICKSTART" | grep -qE ':[0-9]+$'; then
-    QUICKSTART_PORT=$(extract_host_port "$QUICKSTART")
-    QUICKSTART="${QUICKSTART%:*}"
-fi
 if [ "$EIOU_HOST" != "false" ] && echo "$EIOU_HOST" | grep -qE ':[0-9]+$'; then
     EIOU_HOST_PORT=$(extract_host_port "$EIOU_HOST")
     EIOU_HOST="${EIOU_HOST%:*}"
 fi
 
-# Resolve the effective address host:
-# Priority: EIOU_HOST > QUICKSTART (for address construction)
-if [ "$EIOU_HOST" != "false" ]; then
-    EFFECTIVE_HOST="$EIOU_HOST"
-elif [ "$QUICKSTART" != "false" ]; then
-    EFFECTIVE_HOST="$QUICKSTART"
-else
-    EFFECTIVE_HOST="false"
-fi
+# Resolve the effective address host
+EFFECTIVE_HOST="$EIOU_HOST"
 
 # Resolve the effective port:
-# Priority: EIOU_PORT (explicit) > embedded port from EIOU_HOST > embedded port from QUICKSTART
-if [ "$EIOU_PORT" = "false" ]; then
-    if [ -n "${EIOU_HOST_PORT:-}" ]; then
-        EIOU_PORT="$EIOU_HOST_PORT"
-    elif [ -n "${QUICKSTART_PORT:-}" ]; then
-        EIOU_PORT="$QUICKSTART_PORT"
-    fi
+# Priority: EIOU_PORT (explicit) > embedded port from EIOU_HOST
+if [ "$EIOU_PORT" = "false" ] && [ -n "${EIOU_HOST_PORT:-}" ]; then
+    EIOU_PORT="$EIOU_HOST_PORT"
 fi
 
 # Resolve the effective display name:
-# Priority: EIOU_NAME > QUICKSTART
+# Priority: EIOU_NAME > EIOU_HOST
 if [ "$EIOU_NAME" != "false" ]; then
     EFFECTIVE_NAME="$EIOU_NAME"
-elif [ "$QUICKSTART" != "false" ]; then
-    EFFECTIVE_NAME="$QUICKSTART"
+elif [ "$EIOU_HOST" != "false" ]; then
+    EFFECTIVE_NAME="$EIOU_HOST"
 else
     EFFECTIVE_NAME="false"
 fi
@@ -448,7 +515,7 @@ fi
 # SSL CERTIFICATE SETUP
 # =============================================================================
 # Environment Variables:
-#   SSL_DOMAIN          - Primary domain for certificate CN (default: QUICKSTART value or localhost)
+#   SSL_DOMAIN          - Primary domain for certificate CN (default: EIOU_HOST value or localhost)
 #   SSL_EXTRA_SANS      - Additional SANs in format "DNS:name,IP:addr" (comma-separated)
 #   LETSENCRYPT_EMAIL   - Email for Let's Encrypt registration (enables automatic LE certs)
 #   LETSENCRYPT_DOMAIN  - Domain for Let's Encrypt cert (default: SSL_DOMAIN)
@@ -462,6 +529,30 @@ fi
 #
 # Priority: 1. External (/ssl-certs/) 2. Let's Encrypt 3. CA-signed (/ssl-ca/) 4. Self-signed
 # =============================================================================
+
+# --- Unified ssl-cert volume layout ---
+# All SSL state (certbot bookkeeping, the cert nginx serves on :443, room for
+# future providers) lives under /var/lib/eiou/ssl/<provider>/. The canonical
+# container paths /etc/letsencrypt and /etc/nginx/ssl are symlinks into that
+# tree, so certbot/nginx see the paths they expect while operators see one
+# logical volume on disk. Idempotent: re-symlinks existing symlinks, replaces
+# any stray real directory left over from older images.
+mkdir -p /var/lib/eiou/ssl/letsencrypt /var/lib/eiou/ssl/nginx
+for src_target in "/var/lib/eiou/ssl/letsencrypt:/etc/letsencrypt" "/var/lib/eiou/ssl/nginx:/etc/nginx/ssl"; do
+    src="${src_target%%:*}"
+    target="${src_target##*:}"
+    if [ -L "$target" ]; then
+        ln -sfn "$src" "$target"
+    elif [ -d "$target" ]; then
+        # Real directory from an older image layout — migrate any contents in,
+        # then replace with the symlink.
+        cp -an "$target/." "$src/" 2>/dev/null || true
+        rm -rf "$target"
+        ln -sfn "$src" "$target"
+    else
+        ln -sfn "$src" "$target"
+    fi
+done
 
 SSL_CERT_INSTALLED=false
 
@@ -488,7 +579,8 @@ fi
 # --- Priority 2: Let's Encrypt automatic certificate ---
 # Requires LETSENCRYPT_EMAIL to be set and a valid FQDN domain.
 # Uses HTTP-01 challenge via certbot standalone mode (port 80 must be reachable).
-# Certs persist in /etc/letsencrypt/ volume across container restarts.
+# Certs persist across container restarts via the unified ssl-cert volume
+# (/etc/letsencrypt is a symlink into /var/lib/eiou/ssl/letsencrypt).
 if [ "$SSL_CERT_INSTALLED" = "false" ] && [ -n "${LETSENCRYPT_EMAIL:-}" ]; then
     LE_DOMAIN="${LETSENCRYPT_DOMAIN:-${SSL_DOMAIN:-${EFFECTIVE_HOST:-}}}"
 
@@ -561,7 +653,7 @@ if [ "$SSL_CERT_INSTALLED" = "false" ] && [ ! -f /etc/nginx/ssl/server.crt ]; th
     echo "Generating SSL certificate..."
 
     # Determine primary CN
-    # Priority: SSL_DOMAIN env var > QUICKSTART hostname > localhost
+    # Priority: SSL_DOMAIN env var > EIOU_HOST > localhost
     SSL_DOMAIN=${SSL_DOMAIN:-${EFFECTIVE_HOST:-localhost}}
     if [ "$SSL_DOMAIN" = "false" ]; then
         SSL_DOMAIN="localhost"
@@ -796,8 +888,17 @@ chmod 755 /var/log/eiou
 chmod 640 /var/log/eiou/app.log
 
 # Seed bundled plugins (e.g. hello-eiou) into the plugin directory on a
-# Docker volume. Uses cp -rn so existing plugins are never overwritten —
-# users can remove or replace bundled plugins and the change persists.
+# Docker volume. Uses cp -rn so existing plugins are never overwritten
+# at the filesystem level — operator state (databases, credentials,
+# enable flags) lives across container boundaries and a raw overwrite
+# would skip the upgrade ceremony that preserves it.
+#
+# Version-aware upgrades for plugins that ARE already installed happen
+# inside Application::boot via PluginUpgradeService::upgradeFromBundle,
+# which runs onUpgrade() hooks, reconciles MySQL grants for the new
+# owned_tables, re-exports credentials, and reloads the FPM pool. So
+# this step handles "new plugins added by the image" and the in-app
+# pass handles "existing plugins whose image version got bumped."
 mkdir -p /etc/eiou/plugins
 if [ -d /app/plugins ]; then
     cp -rn /app/plugins/. /etc/eiou/plugins/ 2>/dev/null || true
@@ -1021,11 +1122,256 @@ if [ -f /var/lib/mysql/ibdata1 ] && [ ! -f /var/lib/mysql/ib_logfile0 ]; then
 fi
 
 
+# -----------------------------------------------------------------------------
+# Tor hidden-service descriptor publication watcher
+# -----------------------------------------------------------------------------
+# Subscribes to Tor's ControlPort HS_DESC events and counts successful UPLOADED
+# events to HSDirs. After the configured threshold (default 3) is reached, the
+# descriptor is practically reachable from any Tor client; we surface this to
+# the GUI via /tmp/tor-gui-status so the existing notification banner can show
+# "Tor descriptor publishing — N/3 HSDirs confirmed" → "Tor descriptor
+# published" instead of operators staring at a "starting up" screen for 1–3
+# minutes wondering if anything is happening.
+#
+# Runs in the background; never blocks startup. Exits when the threshold is
+# reached, when the timeout elapses (leaving partial-status in place — peers
+# may still reach us via HSDirs that did succeed), or when the ControlPort
+# connection drops. Tor restarts are handled by the watchdog independently;
+# this watcher is intentionally one-shot and only covers the first-boot
+# publish window.
+#
+# Authenticates via the cookie file Tor writes on startup (default
+# /run/tor/control.authcookie or /var/lib/tor/control_auth_cookie depending on
+# Debian version). Cookie auth is the canonical Tor mechanism; cookie file is
+# 0600 owned by debian-tor and intentionally NOT made group-readable, so
+# only root (this watcher) can authenticate.
+# -----------------------------------------------------------------------------
+watch_hs_descriptor_publication() {
+    local target_uploads="${1:-3}"
+    local total_timeout="${2:-300}"
+    local cookie_file=""
+    local control_host="127.0.0.1"
+    local control_port="9051"
+    local status_file="/tmp/tor-gui-status"
+
+    # Find cookie file (location varies by Debian/Tor version)
+    local candidate
+    for candidate in /run/tor/control.authcookie /var/lib/tor/control_auth_cookie /var/run/tor/control.authcookie; do
+        if [ -r "$candidate" ]; then
+            cookie_file="$candidate"
+            break
+        fi
+    done
+
+    # Wait briefly for cookie to appear (Tor just started)
+    if [ -z "$cookie_file" ]; then
+        local cwait=0
+        while [ $cwait -lt 30 ]; do
+            for candidate in /run/tor/control.authcookie /var/lib/tor/control_auth_cookie /var/run/tor/control.authcookie; do
+                if [ -r "$candidate" ]; then
+                    cookie_file="$candidate"
+                    break 2
+                fi
+            done
+            sleep 1
+            cwait=$((cwait + 1))
+        done
+    fi
+
+    if [ -z "$cookie_file" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file not found after 30s, descriptor watch disabled (Tor publication is unaffected)"
+        return 1
+    fi
+
+    # Hex-encode cookie for AUTHENTICATE (od is in coreutils, always available)
+    local cookie_hex
+    cookie_hex=$(od -An -tx1 < "$cookie_file" 2>/dev/null | tr -d ' \n')
+    if [ -z "$cookie_hex" ] || [ ${#cookie_hex} -ne 64 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cookie file invalid (expected 32 bytes / 64 hex chars), descriptor watch disabled"
+        return 1
+    fi
+
+    # Open bidirectional TCP connection on FD 3 via bash's /dev/tcp.
+    # `service tor start` returns once the daemon is launched, but the
+    # ControlPort socket can take another second or two to start accepting.
+    # Retry briefly to absorb that race.
+    local connect_attempts=0
+    local connected=false
+    while [ $connect_attempts -lt 15 ]; do
+        if exec 3<>/dev/tcp/${control_host}/${control_port} 2>/dev/null; then
+            connected=true
+            break
+        fi
+        connect_attempts=$((connect_attempts + 1))
+        sleep 1
+    done
+    if [ "$connected" != true ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: cannot connect to Tor ControlPort ${control_host}:${control_port} after ${connect_attempts}s, descriptor watch disabled"
+        return 1
+    fi
+
+    # AUTHENTICATE
+    printf 'AUTHENTICATE %s\r\n' "$cookie_hex" >&3
+    local auth_reply
+    if ! IFS= read -r -t 5 auth_reply <&3; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort auth read timed out"
+        exec 3<&-
+        return 1
+    fi
+    case "$auth_reply" in
+        '250 OK'*) ;;
+        *)
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: AUTHENTICATE failed: $auth_reply"
+            exec 3<&-
+            return 1
+            ;;
+    esac
+
+    # Subscribe to HS_DESC events
+    printf 'SETEVENTS HS_DESC\r\n' >&3
+    local sub_reply
+    if ! IFS= read -r -t 5 sub_reply <&3; then
+        exec 3<&-
+        return 1
+    fi
+    case "$sub_reply" in
+        '250 OK'*) ;;
+        *)
+            exec 3<&-
+            return 1
+            ;;
+    esac
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: watching for descriptor publication (target: $target_uploads HSDirs, timeout: ${total_timeout}s)"
+
+    # Initial publishing status
+    rm -f "$status_file" 2>/dev/null
+    echo "{\"status\":\"publishing\",\"uploads\":0,\"target\":$target_uploads,\"timestamp\":$(date +%s),\"message\":\"Tor descriptor publishing — 0/$target_uploads HSDirs confirmed\"}" > "$status_file" 2>/dev/null
+    chmod 666 "$status_file" 2>/dev/null
+    chown www-data:www-data "$status_file" 2>/dev/null
+
+    local upload_count=0
+    local fail_count=0
+    local connection_dropped=false
+    local start_time
+    start_time=$(date +%s)
+    local now elapsed line read_rc
+
+    while [ $upload_count -lt $target_uploads ]; do
+        now=$(date +%s)
+        elapsed=$((now - start_time))
+        if [ $elapsed -ge $total_timeout ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: timed out after ${elapsed}s with ${upload_count}/${target_uploads} uploads ($fail_count failures observed)"
+            break
+        fi
+
+        # 5s read timeout lets us re-check elapsed periodically.
+        # Distinguish three read outcomes:
+        #   rc=0    — got a line, parse it
+        #   rc>128  — read timed out (no event in 5s), retry the elapsed check
+        #   rc=1    — EOF on the FD, meaning Tor closed the connection
+        #             (Tor restart or daemon exit). Exit the loop cleanly so
+        #             we don't keep ticking elapsed and don't fire a spurious
+        #             restart-requested signal. The watchdog handles Tor
+        #             restarts; a fresh watcher will be launched there.
+        if IFS= read -r -t 5 line <&3; then
+            read_rc=0
+        else
+            read_rc=$?
+        fi
+
+        if [ $read_rc -eq 0 ]; then
+            case "$line" in
+                650*HS_DESC*UPLOADED*)
+                    upload_count=$((upload_count + 1))
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC UPLOADED ${upload_count}/${target_uploads}"
+                    rm -f "$status_file" 2>/dev/null
+                    echo "{\"status\":\"publishing\",\"uploads\":$upload_count,\"target\":$target_uploads,\"timestamp\":$now,\"message\":\"Tor descriptor publishing — $upload_count/$target_uploads HSDirs confirmed\"}" > "$status_file" 2>/dev/null
+                    chmod 666 "$status_file" 2>/dev/null
+                    chown www-data:www-data "$status_file" 2>/dev/null
+                    ;;
+                650*HS_DESC*FAILED*)
+                    fail_count=$((fail_count + 1))
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC FAILED: $line"
+                    ;;
+            esac
+        elif [ $read_rc -le 128 ]; then
+            # EOF — Tor closed the control connection
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: ControlPort connection closed (likely Tor restart), exiting watcher"
+            connection_dropped=true
+            break
+        fi
+        # rc > 128: read timeout, retry loop
+    done
+
+    # Cleanly close
+    printf 'QUIT\r\n' >&3 2>/dev/null
+    exec 3<&-
+
+    if [ $upload_count -ge $target_uploads ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: descriptor published successfully ($upload_count uploads, ${elapsed}s)"
+        # Mark "published" briefly, then clear (the GUI banner only shows
+        # publishing/issue/restarting; "published" status fires the
+        # "Tor Restored" toast via the recovered branch).
+        rm -f "$status_file" 2>/dev/null
+        echo "{\"status\":\"recovered\",\"timestamp\":$(date +%s),\"message\":\"Tor descriptor published\"}" > "$status_file" 2>/dev/null
+        chmod 666 "$status_file" 2>/dev/null
+        chown www-data:www-data "$status_file" 2>/dev/null
+        return 0
+    elif [ "$connection_dropped" = true ]; then
+        # ControlPort connection dropped mid-watch (Tor restart was already
+        # underway from another path — watchdog or setup-time regeneration).
+        # Don't signal another restart; the in-flight one will produce its
+        # own telemetry, and the watchdog will relaunch this watcher after
+        # the new Tor instance comes up.
+        return 1
+    else
+        # Timed out without enough uploads. Some HSDirs may have failed and
+        # others may not have responded; in either case the right recovery
+        # is to ask the watchdog to bounce Tor — the same signal path
+        # TransportUtilityService::sendByTor uses on SOCKS5 failure. Watchdog
+        # will pick up /tmp/tor-restart-requested in its next 30s sweep,
+        # restart Tor, and then (per the watchdog patch below) relaunch
+        # this watcher so the next publish attempt gets fresh telemetry.
+        local signal_file="/tmp/tor-restart-requested"
+        if [ ! -f "$signal_file" ]; then
+            echo "$(date +%s)" > "$signal_file" 2>/dev/null
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] HS_DESC: partial publish ($upload_count/$target_uploads), signaling watchdog for Tor restart"
+        fi
+
+        # Leave status as 'publishing' with whatever we got. The watchdog
+        # will write 'restarting' when it kicks Tor, then 'issue' or
+        # 'recovered' as the new attempt progresses, so the user sees a
+        # coherent story.
+        return 1
+    fi
+}
+
+# Launch / relaunch the HS_DESC publication watcher.
+#
+# Single entry point so the target-uploads count (3) and timeout (300s) live
+# in exactly one place: changing the budget here updates every site.
+#
+# Used at boot for the initial launch, after each boot-time Tor restart
+# (wallet generation, address-mismatch regeneration), and after every
+# watchdog-initiated Tor restart. The previous watcher exits on its own when
+# its ControlPort connection drops (the connection_dropped branch above), so
+# we don't kill it explicitly; if the old one somehow hasn't noticed yet,
+# both watchers race their AUTHENTICATE — at worst a few duplicate UPLOADED
+# log lines, no functional impact.
+start_hs_desc_watcher() {
+    watch_hs_descriptor_publication 3 300 &
+    HS_DESC_WATCHER_PID=$!
+}
+
 # Start services
 service cron start
 service tor start
 service "$PHP_FPM_SERVICE" start
 service nginx start
+
+# Background descriptor-publication watcher (logs to startup.sh stdout/stderr)
+start_hs_desc_watcher
 
 # Helper: wait for MariaDB with timeout, returns 0 on success, 1 on timeout
 wait_for_mariadb() {
@@ -1051,14 +1397,19 @@ if [ "$MARIADB_VERSION_CHANGED" = "true" ]; then
     echo "Starting MariaDB with innodb_force_recovery=1 to bypass stale redo logs..."
     printf '[mysqld]\ninnodb_force_recovery=1\n' > /etc/mysql/conf.d/zz-force-recovery.cnf
 
-    service mariadb start
+    # Silence the Debian init script's per-line `Starting MariaDB...mariadbd`
+    # banner + progress dots — we already log "Starting MariaDB..." above and
+    # wait_for_mariadb reports its own per-10s progress. Without the redirect
+    # the init dots interleave with concurrently-firing watcher output (e.g.
+    # the HS_DESC watcher) and surface as stray "." lines mid-boot.
+    service mariadb start >/dev/null 2>&1
     if wait_for_mariadb "MariaDB force-recovery" 60; then
         echo "Force-recovery succeeded. Performing clean shutdown to regenerate redo logs..."
-        service mariadb stop
+        service mariadb stop >/dev/null 2>&1
         sleep 2
         rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
         echo "Restarting MariaDB in normal mode..."
-        service mariadb start
+        service mariadb start >/dev/null 2>&1
         if wait_for_mariadb "MariaDB normal restart" 60; then
             MARIADB_STARTED=true
             echo "MariaDB version upgrade completed successfully."
@@ -1072,7 +1423,8 @@ if [ "$MARIADB_VERSION_CHANGED" = "true" ]; then
     fi
 else
     # Normal startup (no version change)
-    service mariadb start
+    echo "Starting MariaDB database server..."
+    service mariadb start >/dev/null 2>&1
     if wait_for_mariadb "MariaDB" 60; then
         MARIADB_STARTED=true
     else
@@ -1093,16 +1445,16 @@ if [ "$MARIADB_STARTED" = "false" ] && [ "$MARIADB_VERSION_CHANGED" = "false" ];
     sleep 2
 
     printf '[mysqld]\ninnodb_force_recovery=1\n' > /etc/mysql/conf.d/zz-force-recovery.cnf
-    service mariadb start
+    service mariadb start >/dev/null 2>&1
     MARIADB_UPGRADE_NEEDED=true
 
     if wait_for_mariadb "MariaDB force-recovery" 60; then
         echo "Force-recovery succeeded. Clean shutdown to regenerate redo logs..."
-        service mariadb stop
+        service mariadb stop >/dev/null 2>&1
         sleep 2
         rm -f /etc/mysql/conf.d/zz-force-recovery.cnf
         echo "Restarting MariaDB in normal mode..."
-        service mariadb start
+        service mariadb start >/dev/null 2>&1
         if wait_for_mariadb "MariaDB normal restart" 60; then
             MARIADB_STARTED=true
             echo "MariaDB recovery completed successfully."
@@ -1154,7 +1506,7 @@ if [ "$MARIADB_STARTED" = "false" ]; then
     mysql_install_db --user=mysql --datadir=/var/lib/mysql --skip-test-db 2>/dev/null
 
     # Start MariaDB on the fresh database
-    service mariadb start
+    service mariadb start >/dev/null 2>&1
     if wait_for_mariadb "MariaDB fresh init" 60; then
         MARIADB_STARTED=true
         echo "MariaDB started on fresh database."
@@ -1242,9 +1594,25 @@ if [ "$REDO_LOG_RECOVERY" = "true" ] && [ -f /etc/eiou/config/dbconfig.json ]; t
     # and cannot be restored until TDE is active on the new database).
 fi
 
+# Ensure the app DB user holds the privileges required by the plugin
+# isolation feature (CREATE USER on *.* and GRANT OPTION on eiou.*).
+# Idempotent and safe to run on every boot. No-ops on truly fresh installs
+# (no dbconfig.json yet) and when the master key isn't loadable. Fresh
+# installs receive the same grants directly in DatabaseSetup::freshInstall;
+# this step exists so upgrades from versions that pre-date the feature, and
+# self-healing after manual REVOKEs, don't leave the app user under-granted.
+if [ -f /etc/eiou/config/dbconfig.json ]; then
+    GRANT_RESULT=$(php /app/eiou/scripts/grant-app-user-plugin-privileges.php 2>&1)
+    GRANT_EXIT=$?
+    echo "$GRANT_RESULT"
+    if [ $GRANT_EXIT -ne 0 ]; then
+        echo "WARNING: plugin-isolation grant step exited $GRANT_EXIT — plugin enable will fail until resolved"
+    fi
+fi
+
 # Check if config/userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
-    # RESTORE_FILE takes priority over RESTORE, which takes priority over QUICKSTART
+    # RESTORE_FILE takes priority over RESTORE, which takes priority over EIOU_HOST mode
     if [ "$RESTORE_FILE" != "false" ]; then
         # Method 1: File-based restore (most secure)
         # The seedphrase is read from a mounted file, never exposed in environment
@@ -1284,7 +1652,7 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
 
         # Apply hostname to restored wallet if set
-        # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
+        # Restore only configures Tor address; EIOU_HOST adds HTTP/HTTPS addressing
         if [ "$EFFECTIVE_URL" != "false" ]; then
             echo "Applying hostname ($EFFECTIVE_URL) to restored wallet..."
             HOSTNAME_RESULT=$(eiou changesettings hostname "$EFFECTIVE_URL" 2>&1)
@@ -1298,17 +1666,6 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
             if [ "$EFFECTIVE_NAME" != "false" ]; then
                 eiou changesettings name "$EFFECTIVE_NAME" 2>&1
                 echo "Display name configured: $EFFECTIVE_NAME"
-            fi
-        elif [ "$QUICKSTART" != "false" ]; then
-            echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
-            HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
-            HOSTNAME_EXIT_CODE=$?
-            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
-                echo "WARNING: Failed to apply hostname ($QUICKSTART) to restored wallet:"
-                echo "$HOSTNAME_RESULT"
-                echo "You can set it manually later with: eiou changesettings hostname https://$QUICKSTART"
-            else
-                echo "HTTP/HTTPS hostname configured: https://$QUICKSTART"
             fi
         fi
 
@@ -1379,7 +1736,7 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "NOTE: RESTORE environment variable has been cleared from this shell."
 
         # Apply hostname to restored wallet if set
-        # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
+        # Restore only configures Tor address; EIOU_HOST adds HTTP/HTTPS addressing
         if [ "$EFFECTIVE_URL" != "false" ]; then
             echo "Applying hostname ($EFFECTIVE_URL) to restored wallet..."
             HOSTNAME_RESULT=$(eiou changesettings hostname "$EFFECTIVE_URL" 2>&1)
@@ -1394,21 +1751,10 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
                 eiou changesettings name "$EFFECTIVE_NAME" 2>&1
                 echo "Display name configured: $EFFECTIVE_NAME"
             fi
-        elif [ "$QUICKSTART" != "false" ]; then
-            echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
-            HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
-            HOSTNAME_EXIT_CODE=$?
-            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
-                echo "WARNING: Failed to apply hostname ($QUICKSTART) to restored wallet:"
-                echo "$HOSTNAME_RESULT"
-                echo "You can set it manually later with: eiou changesettings hostname https://$QUICKSTART"
-            else
-                echo "HTTP/HTTPS hostname configured: https://$QUICKSTART"
-            fi
         fi
 
     elif [ "$EFFECTIVE_URL" != "false" ]; then
-        echo "Quickstart mode enabled. Running generate command with address: $EFFECTIVE_URL"
+        echo "HTTP/HTTPS mode enabled. Running generate command with address: $EFFECTIVE_URL"
         # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)
         if [ "$EFFECTIVE_NAME" != "false" ]; then
             GENERATE_RESULT=$(eiou generate "$EFFECTIVE_URL" "$EFFECTIVE_NAME" 2>&1)
@@ -1518,6 +1864,14 @@ if [[ $(php -r 'require_once "/app/eiou/src/startup/ConfigCheck.php"; echo $run;
             echo "Recent Tor log entries:"
             tail -10 /var/log/tor/log 2>/dev/null || true
         fi
+    else
+        # The boot-time watcher launched before wallet generation was
+        # tracking Tor's first-boot random keys; its ControlPort dropped
+        # when we killed Tor above and it has already exited. Relaunch
+        # against the fresh Tor instance so the GUI's "Tor Descriptor
+        # Publishing — N/3 HSDirs confirmed" banner reflects publication
+        # of the new wallet's .onion address.
+        start_hs_desc_watcher
     fi
 else
     # Wallet already exists (volume restart) — check if Tor hidden service files need regeneration
@@ -1590,6 +1944,13 @@ else
                 sleep 3
                 if pgrep -x "tor" > /dev/null 2>&1; then
                     echo "Tor restarted with correct hidden service keys."
+                    # The boot-time watcher was tracking the wrong address
+                    # (Tor's first-boot random keys before this regen). It
+                    # exited when we pkilled Tor above; relaunch so the GUI
+                    # banner reflects publication of the correct seed-derived
+                    # .onion address instead of staying frozen at 0/3 and
+                    # eventually vanishing on UI-side staleness.
+                    start_hs_desc_watcher
                 else
                     echo "WARNING: Tor process not running after restart"
                 fi
@@ -1735,9 +2096,24 @@ while true; do
     fi
 done
 
-# Wait for Tor to be ready and connected
-echo "Waiting for Tor to establish connection with container..."
-# WSL2 environments have slower network; use EIOU_TOR_TIMEOUT env var to override
+# Wait for Tor SOCKS5 to be ready (self-reachability check).
+#
+# IMPORTANT: this only proves "the Tor daemon is running and our SOCKS5
+# proxy is responsive". It does NOT prove peers can reach us — the curl
+# below targets our OWN .onion through OUR OWN SOCKS5, and Tor's client
+# code resolves own-service .onions from the local descriptor cache
+# (the cache the service-side just populated), bypassing the HSDir
+# round-trip that real peer traffic requires. Cross-mesh reachability
+# is a separate concern handled by:
+#   - watch_hs_descriptor_publication() — counts HS_DESC UPLOADED
+#     events from Tor's control protocol; surfaces "Tor descriptor
+#     publishing — N/3 HSDirs confirmed" → "Tor descriptor published"
+#     in the GUI banner.
+#   - The watchdog's periodic Tor self-check + restart cycle.
+#   - tests/baseconfig/config.sh::wait_for_tor_mesh — explicit cross-
+#     container reachability probe for tests.
+# WSL2 environments have slower network; use EIOU_TOR_TIMEOUT env var to override.
+echo "Waiting for Tor SOCKS5 self-test (daemon-up check, not cross-peer reachability)..."
 TOR_MAX_WAIT=${EIOU_TOR_TIMEOUT:-120}  # Maximum wait time in seconds
 TOR_START_TIME=$(date +%s)
 TOR_TEST_URL="${tor}"
@@ -1756,8 +2132,8 @@ while true; do
         break
     fi
 
-    # Try to access the .onion address through Tor's SOCKS proxy
-    # Reduced --max-time from 10 to 8 to allow faster iteration
+    # Self-curl through our own SOCKS5 — see comment block above.
+    # Reduced --max-time from 10 to 8 to allow faster iteration.
     if curl --socks5-hostname 127.0.0.1:9050 \
             --connect-timeout 5 \
             --max-time 8 \
@@ -1765,14 +2141,14 @@ while true; do
             --fail \
             --output /dev/null \
             "$TOR_TEST_URL" 2>/dev/null; then
-        echo "Tor connected successfully (${TOR_ELAPSED}s)"
+        echo "Tor SOCKS5 self-test passed (${TOR_ELAPSED}s) — daemon up; descriptor publication to HSDirs runs in background (see HS_DESC log lines)"
         TOR_CONNECTED=true
         break
     fi
 
     # Show waiting message on first attempt only
     if [ "$TOR_FIRST_ATTEMPT" = true ]; then
-        echo "Waiting for Tor connection (timeout: ${TOR_MAX_WAIT}s)..."
+        echo "Waiting for Tor SOCKS5 self-test (timeout: ${TOR_MAX_WAIT}s)..."
         TOR_FIRST_ATTEMPT=false
     fi
 
@@ -1780,9 +2156,9 @@ while true; do
     sleep 2
 done
 
-# Check if Tor connection was established
+# Check if Tor SOCKS5 self-test succeeded
 if [ "$TOR_CONNECTED" = false ]; then
-    echo "WARNING: Tor connection could not be verified after ${TOR_MAX_WAIT}s"
+    echo "WARNING: Tor SOCKS5 self-test could not be verified after ${TOR_MAX_WAIT}s — daemon may not be running, or local routing is broken"
     echo "Continuing startup anyway. Tor-dependent features may not work."
 fi
 
@@ -1955,7 +2331,11 @@ watchdog() {
 
     local WAS_SHUTDOWN=false  # Track shutdown-to-normal transitions
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs and Tor health"
+    # No "Watchdog started" log here — the launcher already prints
+    # "Watchdog started (PID: <n>)" before fork. Emitting it from
+    # inside the watchdog body raced with the poller-startup banner
+    # lines (the watchdog ran concurrently with the polling forks)
+    # and surfaced as out-of-order log salad in the boot sequence.
 
     while true; do
         sleep $WATCHDOG_INTERVAL
@@ -2133,6 +2513,11 @@ watchdog() {
                         TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
                         # Update GUI status to indicate Tor is restarting
                         write_tor_gui_status "{\"status\":\"restarting\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor service restarted — verifying connectivity\"}"
+                        # Relaunch the HS_DESC publication watcher against the
+                        # fresh Tor instance. The boot-time watcher's connection
+                        # dropped when we pkilled Tor; this gives the operator a
+                        # progress signal again as the new descriptor publishes.
+                        start_hs_desc_watcher
                     else
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart via signal failed — process not running after start"
                         write_tor_gui_status "{\"status\":\"issue\",\"timestamp\":$CURRENT_TIME,\"message\":\"Tor restart failed — connectivity may be limited\"}"
@@ -2202,6 +2587,8 @@ watchdog() {
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~90s"
                             # Schedule a follow-up self-check in 90s to allow descriptor propagation (typically 60-120s)
                             TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
+                            # Relaunch HS_DESC publication watcher against the fresh Tor instance
+                            start_hs_desc_watcher
                         else
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                         fi
@@ -2236,6 +2623,8 @@ watchdog() {
                             if pgrep -x "tor" > /dev/null 2>&1; then
                                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restarted successfully — verifying hidden service in ~90s"
                                 TOR_LAST_CHECK=$((CURRENT_TIME - TOR_CHECK_INTERVAL + 90))
+                                # Relaunch HS_DESC publication watcher against the fresh Tor instance
+                                start_hs_desc_watcher
                             else
                                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Tor restart failed — process not running after start"
                             fi
@@ -2314,15 +2703,792 @@ restart_poller() {
     done
 }
 
-# Start watchdog in background
+# =============================================================================
+# plugin_user_poller() — root-side hook for the plugin sandboxing user
+# lifecycle. See docs/PLUGINS.md (Sandboxing) for the broader trust model.
+#
+# www-data PHP cannot call useradd/userdel directly, so PluginUserService
+# writes /tmp/eiou-pluser-req-<id>.json with shape:
+#
+#   { "ts": <unix>, "action": "create"|"remove", "system_user": "eiou-p-<hex>" }
+#
+# This loop polls every 100 ms (matching the PHP-side wait granularity),
+# runs the requested useradd/userdel as root, and writes the result to
+# /tmp/eiou-pluser-res-<id>.json with shape:
+#
+#   { "ts": <unix>, "status": "ok"|"failed", "error": "..." }
+#
+# Validation matches the service's PluginUserService::looksLikePluginUsername:
+# only `eiou-p-<8 hex>` usernames are touched. Anything else is rejected
+# even before useradd is invoked — defence-in-depth so a corrupted
+# request file can't be used to drop www-data or root.
+# =============================================================================
+plugin_user_poller() {
+    # Poll once a second — plugin enable/disable is operator-driven
+    # and infrequent. Faster polling burns container PIDs (each sleep
+    # spawns a child process) without buying meaningful latency.
+    local POLL_INTERVAL=1
+    local REQ_GLOB="/tmp/eiou-pluser-req-*.json"
+    local LOG_PREFIX="[PLUGIN USER POLLER]"
+
+    write_result() {
+        local res_path="$1"
+        local status="$2"
+        local error="${3:-}"
+        local now
+        now=$(date +%s)
+        # Atomic via temp-file + rename so the PHP side never sees a
+        # partial write. Mode 644 (world-readable) so www-data can read
+        # what root wrote.
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$error" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        # `compgen -G` returns 0 only if any path matches the glob, which
+        # avoids the `[ -f "$req" ]` race against an empty for-loop when
+        # nothing matches.
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+
+            # Derive the result path from the request path so they pair
+            # 1:1 regardless of how many concurrent requests exist.
+            local res="${req/-req-/-res-}"
+
+            # Read request body. jq is in the image (used by other parts
+            # of startup.sh already); fall back to a grep-based parse if
+            # jq is missing for some reason.
+            local action system_user
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty'      "$req" 2>/dev/null)
+                system_user=$(jq -r '.system_user // empty' "$req" 2>/dev/null)
+            else
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z]+' "$req" 2>/dev/null | head -1)
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" 2>/dev/null | head -1 | sed 's|\\/|/|g')
+            fi
+
+            # Delete the request BEFORE acting, so a crash inside
+            # useradd/userdel doesn't loop us forever on the same line.
+            rm -f "$req"
+
+            # Validation pass — refuse anything outside the eiou-p-<hex> shape.
+            if [[ ! "$system_user" =~ ^eiou-p-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected unsafe system_user='$system_user'"
+                write_result "$res" "failed" "invalid system_user shape"
+                continue
+            fi
+
+            case "$action" in
+                create)
+                    if id "$system_user" >/dev/null 2>&1; then
+                        # Already exists — useradd is idempotent at this layer.
+                        write_result "$res" "ok"
+                    elif useradd -M -s /usr/sbin/nologin "$system_user" >/dev/null 2>&1; then
+                        echo "$LOG_PREFIX created user $system_user"
+                        write_result "$res" "ok"
+                    else
+                        echo "$LOG_PREFIX useradd failed for $system_user"
+                        write_result "$res" "failed" "useradd failed"
+                    fi
+                    ;;
+                remove)
+                    if ! id "$system_user" >/dev/null 2>&1; then
+                        write_result "$res" "ok"
+                    elif userdel "$system_user" >/dev/null 2>&1; then
+                        echo "$LOG_PREFIX removed user $system_user"
+                        write_result "$res" "ok"
+                    else
+                        echo "$LOG_PREFIX userdel failed for $system_user"
+                        write_result "$res" "failed" "userdel failed"
+                    fi
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action' for $system_user"
+                    write_result "$res" "failed" "unknown action: $action"
+                    ;;
+            esac
+        done
+    done
+}
+
+# =============================================================================
+# plugin_routing_poller() — applies per-plugin FPM pool config + the
+# shared nginx snippet that routes plugin traffic.
+#
+# Applies per-plugin FPM pool config + the shared nginx snippet that
+# routes /gui/plugin/<id>/* to each plugin's socket. www-data PHP cannot
+# write to /etc/php/*/fpm/pool.d/ or /etc/nginx/snippets/ (root-only),
+# so PluginPoolService writes /tmp/eiou-routing-req-<id>.json with the
+# rendered content and this loop applies it.
+#
+# Transactional shape: nginx -t verifies the new snippet BEFORE reload.
+# If verification fails, the previous snippet is restored from backup
+# and the result file reports the failure — the wallet's routes stay
+# intact. Same protection on the FPM pool file (a malformed pool would
+# fail-init on reload; we write a backup first so we can restore).
+#
+# Request schema:
+#   { ts, action: "apply-pool" | "drop-pool",
+#     plugin_id, system_user (apply only), pool_path, pool_config (apply only),
+#     nginx_snippet }
+# =============================================================================
+plugin_routing_poller() {
+    # Poll once a second — see plugin_user_poller for why we don't
+    # spin tighter. Operator-driven traffic; FPM/nginx reload cost
+    # dwarfs the poll interval.
+    local POLL_INTERVAL=1
+    local REQ_GLOB="/tmp/eiou-routing-req-*.json"
+    local LOG_PREFIX="[PLUGIN ROUTING POLLER]"
+    local SNIPPET_PATH="/etc/nginx/snippets/eiou-plugins.conf"
+    # http{}-scope file holding limit_req_zone declarations for
+    # public-route rate limiting. Lives in conf.d so nginx picks
+    # it up at http{} level; the snippet above lives in snippets/
+    # and is included from inside server{}.
+    local ZONES_PATH="/etc/nginx/conf.d/eiou-plugin-zones.conf"
+
+    write_result() {
+        local res_path="$1"; local status="$2"; local error="${3:-}"
+        local now; now=$(date +%s)
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            # Escape double-quotes in the error so the JSON stays valid.
+            local esc; esc=${error//\"/\\\"}
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$esc" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    # Atomic file write — content from the heredoc-style $2 string,
+    # restorable via the .bak we leave behind on every overwrite.
+    apply_file() {
+        local path="$1"
+        local content="$2"
+        if [ -f "$path" ]; then
+            cp -p "$path" "${path}.bak"
+        fi
+        local tmp="${path}.tmp"
+        printf '%s' "$content" > "$tmp"
+        chmod 644 "$tmp"
+        mv "$tmp" "$path"
+    }
+
+    restore_backup() {
+        local path="$1"
+        if [ -f "${path}.bak" ]; then
+            mv "${path}.bak" "$path"
+        else
+            rm -f "$path"
+        fi
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+            local res="${req/-req-/-res-}"
+
+            # Parse — grep fallback like plugin_user_poller, since jq
+            # isn't in the base image.
+            local action plugin_id system_user pool_path pool_config nginx_snippet zones_config gateway_token
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty' "$req" 2>/dev/null)
+                plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
+                system_user=$(jq -r '.system_user // empty' "$req" 2>/dev/null)
+                pool_path=$(jq -r '.pool_path // empty' "$req" 2>/dev/null)
+                pool_config=$(jq -r '.pool_config // empty' "$req" 2>/dev/null)
+                nginx_snippet=$(jq -r '.nginx_snippet // empty' "$req" 2>/dev/null)
+                zones_config=$(jq -r '.zones_config // empty' "$req" 2>/dev/null)
+                gateway_token=$(jq -r '.gateway_token // empty' "$req" 2>/dev/null)
+            else
+                # Single-line JSON fields. Multi-line content (pool_config
+                # / nginx_snippet / zones_config) is JSON-encoded into the
+                # request with \n escapes; we decode after extraction.
+                # Slashes can arrive escaped (`\/`) when an upstream encoder
+                # doesn't set JSON_UNESCAPED_SLASHES; un-escape them so the
+                # path validators below match.
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
+                plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                system_user=$(grep -oP '"system_user"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                pool_path=$(grep -oP '"pool_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                pool_config=$(grep -oP '"pool_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                nginx_snippet=$(grep -oP '"nginx_snippet"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                zones_config=$(grep -oP '"zones_config"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+                gateway_token=$(grep -oP '"gateway_token"\s*:\s*"\K[a-f0-9]+' "$req" | head -1)
+            fi
+
+            rm -f "$req"
+
+            # Plugin-id and system-user validation — defence in depth so a
+            # corrupted request file can't be used to write arbitrary
+            # paths into /etc/php/*/fpm/pool.d/ or /etc/nginx/snippets/.
+            if [[ ! "$plugin_id" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid plugin_id='$plugin_id'"
+                write_result "$res" "failed" "invalid plugin_id"
+                continue
+            fi
+            if [ "$action" = "apply-pool" ] && [[ ! "$system_user" =~ ^eiou-p-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid system_user='$system_user'"
+                write_result "$res" "failed" "invalid system_user"
+                continue
+            fi
+            # Refuse pool paths outside /etc/php/*/fpm/pool.d/. Hard-pin
+            # the prefix here; the supervisor never writes anywhere else.
+            if [[ ! "$pool_path" =~ ^/etc/php/[0-9]\.[0-9]+/fpm/pool\.d/eiou-plugin-[a-z0-9_-]+\.conf$ ]]; then
+                echo "$LOG_PREFIX rejected unsafe pool_path='$pool_path'"
+                write_result "$res" "failed" "invalid pool_path"
+                continue
+            fi
+
+            case "$action" in
+                apply-pool)
+                    apply_file "$pool_path" "$pool_config"
+                    apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # zones_config is empty when the public-routes feature
+                    # flag is off OR no plugin declared any public_routes;
+                    # write an empty placeholder anyway so a stale zones
+                    # file from a previous boot doesn't continue declaring
+                    # references the snippet no longer makes.
+                    apply_file "$ZONES_PATH" "$zones_config"
+                    # Per-plugin writable scratch dir referenced in the
+                    # pool's open_basedir. Must exist + be owned by the
+                    # plugin user, otherwise the plugin can't write
+                    # anywhere. Created idempotently on every apply.
+                    local scratch="/var/lib/eiou/plugin-scratch/${system_user}"
+                    mkdir -p "$scratch"
+                    chown "$system_user:$system_user" "$scratch"
+                    chmod 700 "$scratch"
+                    # The .gateway-token file is written by THIS poller
+                    # (as root) so the dir's ownership doesn't matter —
+                    # in production the dir is www-data-owned, in dev
+                    # bind-mount it's typically the host operator's uid
+                    # (which collides with eiou-p-<hash> inside the
+                    # container, leaving www-data unable to write).
+                    # Routing through the supervisor avoids that whole
+                    # class of perm issues.
+                    #
+                    # gateway_token is empty on reconcile-mint-if-missing
+                    # paths where the existing file is still valid; in
+                    # that case we leave the file alone (chown + chmod
+                    # to normalise ownership in case it drifted).
+                    local token_file="/etc/eiou/plugins/${plugin_id}/.gateway-token"
+                    if [ -n "$gateway_token" ]; then
+                        # Validate token shape — defence in depth so a
+                        # corrupted request file can't be used to write
+                        # arbitrary content into a plugin's token file.
+                        # The minter (PluginGatewayTokenService) generates
+                        # bin2hex(random_bytes(32)) → 64 lowercase hex chars.
+                        if [[ "$gateway_token" =~ ^[a-f0-9]{64}$ ]]; then
+                            local token_tmp="${token_file}.tmp"
+                            : > "$token_tmp"
+                            chmod 0600 "$token_tmp"
+                            printf '%s' "$gateway_token" > "$token_tmp"
+                            chown "$system_user:$system_user" "$token_tmp" 2>/dev/null || true
+                            mv "$token_tmp" "$token_file"
+                            echo "$LOG_PREFIX wrote gateway-token for $plugin_id"
+                        else
+                            echo "$LOG_PREFIX rejected malformed gateway_token for $plugin_id"
+                        fi
+                    elif [ -f "$token_file" ]; then
+                        # No rotation requested but file exists — keep
+                        # ownership/mode in sync (handles a prior write
+                        # that didn't reach the chown, or an operator
+                        # who manually edited the file).
+                        chown "$system_user:$system_user" "$token_file"
+                        chmod 600 "$token_file"
+                    fi
+                    ;;
+                drop-pool)
+                    if [ -f "$pool_path" ]; then
+                        cp -p "$pool_path" "${pool_path}.bak"
+                        rm -f "$pool_path"
+                    fi
+                    apply_file "$SNIPPET_PATH" "$nginx_snippet"
+                    # Rewrite zones to reflect the post-drop state — a
+                    # plugin being dropped means its routes (and zone
+                    # declarations) disappear, so refresh the file to
+                    # avoid stale `limit_req_zone` entries referring to
+                    # zone names no `limit_req` line uses anymore.
+                    apply_file "$ZONES_PATH" "$zones_config"
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action'"
+                    write_result "$res" "failed" "unknown action: $action"
+                    continue
+                    ;;
+            esac
+
+            # Verify nginx config — REFUSE to reload if -t fails. Restore
+            # the previous snippet + zones + pool file so the wallet keeps
+            # serving.
+            if ! nginx -t >/dev/null 2>&1; then
+                local nginx_err
+                nginx_err=$(nginx -t 2>&1 | tr '\n' ' ' | tr -d '\r')
+                echo "$LOG_PREFIX nginx -t FAILED: $nginx_err"
+                restore_backup "$SNIPPET_PATH"
+                restore_backup "$ZONES_PATH"
+                [ "$action" = "apply-pool" ] && restore_backup "$pool_path"
+                # Roll back the per-plugin scratch dir if we just created
+                # it. Without this it lingers as cosmetic cruft (next
+                # retry's mkdir -p is idempotent, but leaving it across
+                # FAILED applies makes /var/lib/eiou/plugin-scratch/ fill
+                # with abandoned dirs over time).
+                if [ "$action" = "apply-pool" ] && [ -n "$system_user" ]; then
+                    local scratch="/var/lib/eiou/plugin-scratch/${system_user}"
+                    # Only remove if EMPTY — preserve any plugin state
+                    # that might already exist from a previous successful
+                    # apply (this same apply could be a retry).
+                    if [ -d "$scratch" ] && [ -z "$(ls -A "$scratch" 2>/dev/null)" ]; then
+                        rmdir "$scratch" 2>/dev/null || true
+                    fi
+                fi
+                # Still verify the restore was clean.
+                if ! nginx -t >/dev/null 2>&1; then
+                    echo "$LOG_PREFIX RESTORE ALSO FAILED — manual intervention required"
+                fi
+                write_result "$res" "failed" "nginx -t: $nginx_err"
+                continue
+            fi
+
+            # Reload nginx (graceful).
+            if ! nginx -s reload >/dev/null 2>&1; then
+                echo "$LOG_PREFIX nginx reload failed"
+                write_result "$res" "failed" "nginx reload"
+                continue
+            fi
+
+            # Write the result file BEFORE signalling the FPM reload.
+            # The wallet pool's POST handler (the request that triggered
+            # this apply) is blocked in PluginPoolService::applyPool's
+            # `usleep(200000)` polling loop waiting for this file. Writing
+            # it now lets the wallet worker return up the call stack,
+            # call respond(), and flush its HTTP response to nginx before
+            # SIGUSR2 disrupts the FPM master. Without this ordering the
+            # FPM reload tears down the wallet worker's FastCGI socket
+            # mid-response and nginx surfaces a 502 to the operator's
+            # browser — even though the apply itself succeeded.
+            #
+            # Drop the backup files at the same point: the apply has
+            # taken effect from the wallet's perspective as soon as the
+            # result file is visible, so they're no longer needed for
+            # a rollback.
+            rm -f "${SNIPPET_PATH}.bak" "${ZONES_PATH}.bak" "${pool_path}.bak" 2>/dev/null
+            echo "$LOG_PREFIX $action complete for $plugin_id"
+            write_result "$res" "ok"
+
+            # Brief grace period — let the wallet worker's response
+            # finish reaching nginx before the FPM master gets the
+            # reload signal. The wait loop polls every 200ms, respond()
+            # serialises ~1KB of JSON, nginx forwards immediately, so
+            # 1 second is comfortably enough headroom. This delay only
+            # adds latency to the NEXT plugin enable / disable (the new
+            # FPM pool config picks up after the reload); it does not
+            # block the operator's response.
+            sleep 1
+
+            # Find the FPM master and signal SIGUSR2 (graceful pool reload).
+            # -f matches the full command line — `php-fpm: master` only
+            # appears in argv[0]'s descriptor, not in comm (which is
+            # truncated to `php-fpm8.2`), so omitting -f silently returns
+            # no match and FPM never reloads to pick up the new pool.
+            # -o = oldest match = master process; pgrep with -f returns
+            # both the master and any per-pool processes that have already
+            # spawned, but the master is always the oldest.
+            local fpm_master
+            fpm_master=$(pgrep -fo "php-fpm: master" 2>/dev/null)
+            if [ -n "$fpm_master" ]; then
+                kill -USR2 "$fpm_master" 2>/dev/null || true
+            fi
+        done
+    done
+}
+
+# =============================================================================
+# plugin_credentials_poller() — root-side hook for writing per-plugin MySQL
+# credential files that operator-deployed sibling containers can mount.
+#
+# PluginCredentialsExportService writes
+# /tmp/eiou-creds-req-<id>.json with shape:
+#
+#   { "ts": <unix>, "action": "apply-credentials"|"drop-credentials",
+#     "plugin_id": "<id>",
+#     "target_path": "/etc/eiou/credentials/plugin-<id>.json",
+#     "group_name":  "eiou-pc-<8hex>",
+#     "body": "<JSON string with host/port/database/username/password>" }
+#
+# This loop creates the per-plugin group (groupadd -f), writes the body
+# atomically to the target path with mode 0640 and owner root:<group>,
+# then deletes the request. drop-credentials removes the file AND
+# groupdel's the per-plugin group so a long-running node doesn't
+# accumulate stale groups for uninstalled plugins. Result file shape
+# mirrors the other pollers:
+#
+#   { "ts": <unix>, "status": "ok"|"failed", "error": "..." }
+#
+# Target path is hard-pinned to /etc/eiou/credentials/plugin-<id>.json so
+# a malformed request can't be used to write outside the credentials dir.
+# =============================================================================
+plugin_credentials_poller() {
+    local POLL_INTERVAL=1
+    local REQ_GLOB="/tmp/eiou-creds-req-*.json"
+    local LOG_PREFIX="[PLUGIN CREDENTIALS POLLER]"
+    local CRED_DIR="/etc/eiou/credentials"
+
+    # mkdir on first iteration. Mode 0711 root:root: traverse-only,
+    # no list. A sibling container bind-mounts a specific
+    # plugin-<id>.json by absolute path so it doesn't need to list the
+    # dir; the wallet never reads these files (it has the master key
+    # and decrypts credentials in memory), so it doesn't need access
+    # either. Mode 0711 keeps unprivileged users on the host from
+    # enumerating which plugins exist while still allowing the
+    # per-file group on each plugin's credentials file to govern
+    # actual reads.
+    if [ ! -d "$CRED_DIR" ]; then
+        mkdir -p "$CRED_DIR"
+        chown root:root "$CRED_DIR" 2>/dev/null || true
+        chmod 0711 "$CRED_DIR"
+    fi
+
+    write_result() {
+        local res_path="$1"; local status="$2"; local error="${3:-}"
+        local now; now=$(date +%s)
+        local tmp="${res_path}.tmp"
+        if [ -n "$error" ]; then
+            local esc; esc=${error//\"/\\\"}
+            printf '{"ts":%d,"status":"%s","error":"%s"}' "$now" "$status" "$esc" > "$tmp"
+        else
+            printf '{"ts":%d,"status":"%s"}' "$now" "$status" > "$tmp"
+        fi
+        chmod 644 "$tmp"
+        mv "$tmp" "$res_path"
+    }
+
+    while true; do
+        sleep $POLL_INTERVAL
+        compgen -G "$REQ_GLOB" > /dev/null 2>&1 || continue
+        for req in $REQ_GLOB; do
+            [ -f "$req" ] || continue
+            local res="${req/-req-/-res-}"
+
+            local action plugin_id target_path group_name body
+            if command -v jq >/dev/null 2>&1; then
+                action=$(jq -r '.action // empty' "$req" 2>/dev/null)
+                plugin_id=$(jq -r '.plugin_id // empty' "$req" 2>/dev/null)
+                target_path=$(jq -r '.target_path // empty' "$req" 2>/dev/null)
+                group_name=$(jq -r '.group_name // empty' "$req" 2>/dev/null)
+                # `.body` is itself a JSON string (the credentials envelope).
+                # Pull it through jq -r so we get the decoded inner JSON.
+                body=$(jq -r '.body // empty' "$req" 2>/dev/null)
+            else
+                action=$(grep -oP '"action"\s*:\s*"\K[a-z-]+' "$req" | head -1)
+                plugin_id=$(grep -oP '"plugin_id"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                target_path=$(grep -oP '"target_path"\s*:\s*"\K[^"]+' "$req" | head -1 | sed 's|\\/|/|g')
+                group_name=$(grep -oP '"group_name"\s*:\s*"\K[^"]+' "$req" | head -1)
+                body=$(grep -oP '"body"\s*:\s*"\K(\\.|[^"\\])*' "$req" | head -1 | sed 's/\\n/\n/g; s/\\"/"/g; s|\\/|/|g; s/\\\\/\\/g')
+            fi
+
+            # Delete request BEFORE acting — same defence as the other
+            # pollers, so a crash inside the write doesn't replay forever.
+            # The request body carries a plaintext password; remove it from
+            # /tmp as soon as we've read it.
+            rm -f "$req"
+
+            # Defence in depth: plugin_id shape + target path hard-pin to
+            # /etc/eiou/credentials/plugin-<id>.json. Both must hold or
+            # we refuse — a corrupted request file mustn't be a write
+            # primitive against arbitrary paths.
+            if [[ ! "$plugin_id" =~ ^[a-z][a-z0-9-]{0,63}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid plugin_id='$plugin_id'"
+                write_result "$res" "failed" "invalid plugin_id"
+                continue
+            fi
+            local expected_path="${CRED_DIR}/plugin-${plugin_id}.json"
+            if [ "$target_path" != "$expected_path" ]; then
+                echo "$LOG_PREFIX rejected target_path='$target_path' (expected '$expected_path')"
+                write_result "$res" "failed" "target_path mismatch"
+                continue
+            fi
+            # Group-name hard-pin to `eiou-pc-<8hex>` — same defence as
+            # plugin_user_poller's `eiou-p-<8hex>` validator. A corrupted
+            # request file mustn't be a primitive to create / delete
+            # arbitrary system groups.
+            if [[ ! "$group_name" =~ ^eiou-pc-[a-f0-9]{8}$ ]]; then
+                echo "$LOG_PREFIX rejected invalid group_name='$group_name'"
+                write_result "$res" "failed" "invalid group_name"
+                continue
+            fi
+
+            # Derive the plugin's pool user from its id, identical to
+            # PluginUserService::systemUserFor(): sha256(pluginId) →
+            # first 8 hex chars, prefixed with `eiou-p-`. Deriving
+            # rather than trusting a request field means a corrupted
+            # request can't direct gpasswd at an arbitrary system user.
+            local sys_user_hash sys_user
+            sys_user_hash=$(printf '%s' "$plugin_id" | sha256sum | cut -c1-8)
+            sys_user="eiou-p-${sys_user_hash}"
+
+            case "$action" in
+                apply-credentials)
+                    if [ -z "$body" ]; then
+                        write_result "$res" "failed" "missing body"
+                        continue
+                    fi
+                    # Per-plugin group is created idempotently before the
+                    # file write so chown can target it. -f makes
+                    # groupadd a no-op when the group already exists
+                    # rather than exiting non-zero. -r reserves a
+                    # system-range GID so the group sits below 1000 and
+                    # doesn't collide with regular operator users an
+                    # admin might add later.
+                    if ! groupadd -rf "$group_name" 2>/dev/null; then
+                        echo "$LOG_PREFIX groupadd failed for $group_name"
+                        write_result "$res" "failed" "groupadd failed"
+                        continue
+                    fi
+
+                    # Atomic write: create the temp file with 0600 BEFORE
+                    # writing the body so the plaintext password is never
+                    # readable by other unprivileged processes even briefly.
+                    local tmp="${target_path}.tmp"
+                    : > "$tmp"
+                    chmod 0600 "$tmp"
+                    printf '%s' "$body" > "$tmp"
+                    # Now relax to the production mode and per-plugin
+                    # group. The pool user (`eiou-p-<hash>`) gets added
+                    # to the group right after so the plugin can open
+                    # its own MySQL connection directly from inside its
+                    # FPM pool without bouncing through the wallet pool.
+                    # Operator-deployed sibling containers also opt into
+                    # this group with their own uid; one group, two
+                    # consumers, same file.
+                    chown "root:${group_name}" "$tmp" 2>/dev/null || true
+                    chmod 0640 "$tmp"
+                    mv "$tmp" "$target_path"
+
+                    # Add the pool user to the credentials group. The
+                    # user is created by plugin_user_poller from a
+                    # separate request file; PluginLoader serialises
+                    # those calls so the user exists by the time we
+                    # arrive here. If it somehow doesn't (race during
+                    # boot reconcile, manual operator intervention),
+                    # log and continue — the next reconcile pass will
+                    # rerun apply-credentials and pick it up. We don't
+                    # fail the apply because the file is already written
+                    # and is still useful to operator sibling containers
+                    # that join the group manually.
+                    if id "$sys_user" >/dev/null 2>&1; then
+                        if ! gpasswd -a "$sys_user" "$group_name" >/dev/null 2>&1; then
+                            echo "$LOG_PREFIX gpasswd -a failed for $sys_user → $group_name"
+                        fi
+                    else
+                        echo "$LOG_PREFIX pool user $sys_user not yet created; group-join deferred to next reconcile"
+                    fi
+
+                    echo "$LOG_PREFIX wrote credentials for $plugin_id (group $group_name)"
+                    write_result "$res" "ok"
+                    ;;
+                drop-credentials)
+                    rm -f "$target_path"
+                    # Remove the pool user from the group BEFORE groupdel
+                    # so groupdel doesn't refuse with "members present"
+                    # purely because of us. `gpasswd -d` is idempotent at
+                    # the "not a member" level — error is silent. Operator
+                    # sibling-container uids the operator added themselves
+                    # stay in the group, and groupdel correctly refuses
+                    # if any of those remain.
+                    if id "$sys_user" >/dev/null 2>&1 && getent group "$group_name" >/dev/null 2>&1; then
+                        gpasswd -d "$sys_user" "$group_name" >/dev/null 2>&1 || true
+                    fi
+                    # Tear down the group too. `groupdel` exits non-zero
+                    # if the group has live members (operator deliberately
+                    # added a uid to it) — that's a sign the operator's
+                    # sibling container is still mounted, so refuse to
+                    # remove and log; a follow-up uninstall after the
+                    # operator detaches will succeed.
+                    if getent group "$group_name" >/dev/null 2>&1; then
+                        if ! groupdel "$group_name" 2>/dev/null; then
+                            echo "$LOG_PREFIX groupdel refused for $group_name (members present?)"
+                        fi
+                    fi
+                    echo "$LOG_PREFIX removed credentials for $plugin_id"
+                    write_result "$res" "ok"
+                    ;;
+                *)
+                    echo "$LOG_PREFIX unknown action '$action'"
+                    write_result "$res" "failed" "unknown action: $action"
+                    ;;
+            esac
+        done
+    done
+}
+
+# =============================================================================
+# plugin_cron_poller() — once-per-minute scheduler tick for sandboxed plugins.
+#
+# Calls `eiou plugin cron-tick` which evaluates each enabled plugin's
+# manifest cron entries against the persisted last-fire state file and
+# fires due entries by POSTing a cron-typed envelope to the plugin's
+# __dispatch.php via the IPC forwarder. No-op if no enabled plugin has
+# cron entries; idempotent if no entry is due.
+#
+# The CLI invocation runs as root (the supervisor's uid). Inside, the
+# PluginIpcForwarder makes a loopback HTTP request to the plugin's FPM
+# pool which executes as the plugin's own eiou-p-<hash> user — so the
+# cron handler still runs sandboxed even though the tick itself
+# originates from root.
+#
+# Sleep granularity is one minute; the tick is cheap when nothing is
+# due (one PluginLoader::listAllPlugins + a state file read). A stalled
+# previous tick is detected by `pgrep -f` and skipped this round to
+# prevent overlap.
+# =============================================================================
+plugin_cron_poller() {
+    local POLL_INTERVAL=60
+    local LOG_PREFIX="[PLUGIN CRON POLLER]"
+
+    while true; do
+        sleep "$POLL_INTERVAL"
+
+        # Skip this round if the previous tick is still running.
+        # `eiou plugin cron-tick` should take well under 60s; if it's
+        # still going, something inside (a slow plugin handler, a stuck
+        # IPC connection) is hanging and stacking more invocations on
+        # top would just make it worse.
+        if pgrep -f "eiou plugin cron-tick" >/dev/null 2>&1; then
+            echo "$LOG_PREFIX previous tick still running, skipping this round"
+            continue
+        fi
+
+        # CLI output is discarded; activity surfaces in /var/log/app.log
+        # via the cron service's Logger calls. Stderr captured so a
+        # parse error or autoload failure shows up.
+        eiou plugin cron-tick >/dev/null 2>&1 || \
+            echo "$LOG_PREFIX tick exit code $?"
+    done
+}
+
+# Start watchdog in background. PID lockfile mirrors the pattern the
+# message processors use so the GUI's Debug → Processes panel can
+# discover supervisor pollers via the same lockfile-and-posix_kill
+# detection as the long-running PHP daemons.
 watchdog &
 WATCHDOG_PID=$!
+echo "$WATCHDOG_PID" > /tmp/eiou_watchdog.pid
 echo "Watchdog started (PID: $WATCHDOG_PID)"
 
 # Start restart-request poller in background
 restart_poller &
 RESTART_POLLER_PID=$!
+echo "$RESTART_POLLER_PID" > /tmp/eiou_restart_poller.pid
 echo "Restart poller started (PID: $RESTART_POLLER_PID)"
+
+# Start plugin-user poller in background. www-data PHP cannot call
+# useradd/userdel directly (root required), so PluginUserService writes
+# /tmp/eiou-pluser-req-<id>.json and this loop turns those into
+# useradd/userdel invocations as the root supervisor. See
+# docs/PLUGINS.md (Sandboxing).
+plugin_user_poller &
+PLUGIN_USER_POLLER_PID=$!
+echo "$PLUGIN_USER_POLLER_PID" > /tmp/eiou_plugin_user_poller.pid
+echo "Plugin user poller started (PID: $PLUGIN_USER_POLLER_PID)"
+
+# Boot-time gateway-token reconcile. The wallet pool (www-data) can't
+# read /etc/eiou/plugins/<id>/.gateway-token (mode 0600, owned by the
+# plugin's pool user) so it has no way to detect or repair index drift
+# on its own. We do it here as root before the routing poller comes
+# up: walk every per-plugin token file, rebuild
+# /etc/eiou/config/plugin-gateway-tokens.json with the {token →
+# plugin_id} entries that are actually backed by an on-disk file. Any
+# entry the index claims but no file matches gets dropped; any file
+# the index didn't reflect gets added. After this, the central index
+# is exactly the union of valid per-plugin .gateway-token files.
+#
+# Catches drift from older builds where apply-pool wrote the index
+# before the supervisor confirmed the file write — if the supervisor
+# failed (or was skipped on a stale isPoolUpToDate check), the index
+# held a token no file contained and the dispatcher's bearer auth
+# stayed broken until someone manually re-aligned. With the in-PHP fix
+# (commit-after-supervisor-ok) drift can't be newly produced, but
+# existing installs may still carry it forward through a restart.
+reconcile_plugin_gateway_tokens() {
+    local index_path="/etc/eiou/config/plugin-gateway-tokens.json"
+    local plugin_root="/etc/eiou/plugins"
+
+    [ -d "$plugin_root" ] || return 0
+    mkdir -p "$(dirname "$index_path")" 2>/dev/null || true
+
+    # Build the JSON in a tmp file then atomic-rename. Empty object
+    # when nothing matches — preserves the "file exists, no plugins
+    # registered" state PluginGatewayController expects.
+    local tmp
+    tmp="${index_path}.boot-reconcile.$$"
+    local first=1
+    {
+        printf '{'
+        for token_file in "$plugin_root"/*/.gateway-token; do
+            [ -f "$token_file" ] || continue
+            local plugin_dir plugin_id token
+            plugin_dir=$(dirname "$token_file")
+            plugin_id=$(basename "$plugin_dir")
+            # Plugin id validation mirrors PluginUserService::PLUGIN_ID_PATTERN.
+            if [[ ! "$plugin_id" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+                continue
+            fi
+            token=$(tr -d '[:space:]' < "$token_file" 2>/dev/null | head -c 65)
+            if [[ ! "$token" =~ ^[a-f0-9]{64}$ ]]; then
+                continue
+            fi
+            if [ "$first" -eq 0 ]; then printf ','; fi
+            printf '\n  "%s": "%s"' "$token" "$plugin_id"
+            first=0
+        done
+        if [ "$first" -eq 0 ]; then printf '\n'; fi
+        printf '}\n'
+    } > "$tmp"
+
+    chmod 0640 "$tmp"
+    chown root:www-data "$tmp" 2>/dev/null || true
+    mv "$tmp" "$index_path"
+    echo "Plugin gateway-token index reconciled from per-plugin files"
+}
+reconcile_plugin_gateway_tokens
+
+# Start plugin-routing poller in background. Applies per-plugin FPM
+# pool config + nginx routing snippet atomically, with nginx -t
+# validation before reload so a malformed entry cannot take down the
+# wallet's routes.
+plugin_routing_poller &
+PLUGIN_ROUTING_POLLER_PID=$!
+echo "$PLUGIN_ROUTING_POLLER_PID" > /tmp/eiou_plugin_routing_poller.pid
+echo "Plugin routing poller started (PID: $PLUGIN_ROUTING_POLLER_PID)"
+
+# Start plugin-credentials poller in background. Writes per-plugin
+# MySQL credential files at /etc/eiou/credentials/plugin-<id>.json
+# (mode 0640 root:www-data) so operator-deployed sibling containers
+# can mount the file and authenticate as the plugin's MySQL user.
+plugin_credentials_poller &
+PLUGIN_CREDENTIALS_POLLER_PID=$!
+echo "$PLUGIN_CREDENTIALS_POLLER_PID" > /tmp/eiou_plugin_credentials_poller.pid
+echo "Plugin credentials poller started (PID: $PLUGIN_CREDENTIALS_POLLER_PID)"
+
+# Start plugin-cron poller in background. Per-minute tick that fires
+# sandboxed plugins' manifest cron entries when their interval has
+# elapsed. Idempotent and cheap when no entries are due.
+plugin_cron_poller &
+PLUGIN_CRON_POLLER_PID=$!
+echo "$PLUGIN_CRON_POLLER_PID" > /tmp/eiou_plugin_cron_poller.pid
+echo "Plugin cron poller started (PID: $PLUGIN_CRON_POLLER_PID)"
 
 echo ""
 echo "=========================================="

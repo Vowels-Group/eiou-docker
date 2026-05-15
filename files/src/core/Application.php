@@ -9,7 +9,7 @@ use Eiou\Utils\Security;
 use Eiou\Security\KeyEncryption;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
-use Eiou\Services\PluginLoader;
+use Eiou\Services\Plugins\PluginLoader;
 use Eiou\Services\NodeRestartService;
 use Eiou\Services\RateLimiterService;
 use Eiou\Processors\CleanupMessageProcessor;
@@ -147,6 +147,22 @@ class Application {
                 $this->services->getPluginCredentialService(),
                 $this->services->getPluginDbUserService()
             );
+            // Wire the sibling-container credentials exporter. When set,
+            // enable / reconcile write /etc/eiou/credentials/plugin-<id>.json
+            // for each enabled plugin so an operator-deployed sibling
+            // container can mount the file and share state with the
+            // plugin's MySQL user. Disable / uninstall remove the file.
+            $this->pluginLoader->setCredentialsExportService(
+                $this->services->getPluginCredentialsExportService()
+            );
+            // Sandbox services — when wired, plugins whose manifest
+            // declares "sandboxed": true get their own Unix user + FPM
+            // pool on enable. See docs/PLUGINS.md (Sandboxing).
+            $this->pluginLoader->setSandboxServices(
+                $this->services->getPluginUserService(),
+                $this->services->getPluginPoolService(),
+                $this->services->getPluginNginxConfigService()
+            );
             // Wire the signature verifier with the configured mode. Default
             // 'off' keeps backwards compat; operators opt in via Constants
             // (will move to userconfig.json in a follow-up once other
@@ -155,6 +171,27 @@ class Application {
                 $this->services->getPluginSignatureVerifier(),
                 \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
             );
+            // Auto-upgrade any bundled plugin whose image-baked version is
+            // newer than the copy on the operator's plugins volume. Runs
+            // BEFORE discover() so the subsequent reconcile passes operate
+            // on the post-upgrade manifest. Per-plugin failure logs but
+            // never aborts boot — a broken bundled upgrade must not lock
+            // the operator out of the wallet.
+            //
+            // Concurrency: PHP-FPM workers and CLI invocations may both
+            // hit Application::boot simultaneously after a container
+            // restart. A non-blocking flock serialises the upgrade pass
+            // (same pattern as reconcileSandbox); the winner does the
+            // work, losers skip — the result on disk is the same either
+            // way.
+            //
+            // TODO (deferred): gate this on first-party signature
+            // verification once image-baked plugin signing is wired up.
+            // The verifier exists (PluginSignatureVerifier); what's
+            // missing is the build-time signing step and a baked-in
+            // public key. Until then we trust that anything under
+            // /app/plugins/ was put there by the image build.
+            $this->autoUpgradeBundledPlugins();
             $this->pluginLoader->discover();
             // Reconcile MySQL users / grants against the on-disk manifest +
             // plugin_credentials table. Self-heals after a mysql-data volume
@@ -162,12 +199,59 @@ class Application {
             // plugins.json. Runs before registerAll() so plugins needing DB
             // access during register() find their user ready.
             $this->pluginLoader->reconcileIsolation();
+            // Sandbox reconcile — self-heals after a missed enable/disable
+            // (e.g. supervisor restart mid-transition, or a manual edit of
+            // plugins.json). Idempotent. See docs/PLUGINS.md (Sandboxing).
+            $this->pluginLoader->reconcileSandbox();
+            // Sweep .backup-<oldver>-<ts> dirs older than the retention
+            // window so a long-running node doesn't accumulate stale
+            // upgrade backups on the plugins volume. Idempotent; absent
+            // dirs / no aged-out entries are a no-op. Best-effort: a
+            // failure here logs but never aborts boot.
+            try {
+                $this->services
+                    ->getPluginUpgradeService($this->pluginLoader)
+                    ->pruneOldBackups();
+            } catch (Throwable $e) {
+                Logger::getInstance()->warning('plugin_backup_prune_failed', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
             $this->pluginLoader->registerAll($this->services);
             // Wire circular dependencies between services
             $this->services->wireAllServices();
             // Plugin boot() runs after wiring so all core services are available
             // when plugins subscribe to events or decorate services.
             $this->pluginLoader->bootAll($this->services);
+
+            // Register IPC forwarders for every sandboxed, enabled
+            // plugin's declared events / filter hooks / render hooks.
+            // Done AFTER bootAll() so in-process subscribers register
+            // first and sandboxed forwarders register alongside them
+            // — both fire when an event dispatches.
+            $ipcForwarder = $this->services->getPluginIpcForwarder($this->pluginLoader);
+            $ipcForwarder->registerAll(
+                $this->services->getHooks(),
+                $this->services->getAssetRegistry(),
+                $this->services->getTabRegistry(),
+                $this->services->getActionRegistry(),
+                $this->services->getPluginApiRegistry(),
+                $this->services->getPluginCliRegistry(),
+                $this->services->getPaybackMethodTypeRegistry(),
+                $this->services->getPluginsTabPanelRegistry()
+            );
+
+            // Wire the lifecycle dispatcher so PluginLoader::setEnabled()
+            // can fire an `on_enable` envelope at sandboxed plugins on
+            // first-time enable (the sandbox-model replacement for the
+            // pre-sandbox boot() method). Done AFTER ipcForwarder exists
+            // because the forwarder depends on the loader at construction
+            // — this is the one-way wiring that closes the loop without
+            // a circular constructor dep.
+            $this->pluginLoader->setLifecycleDispatcher(
+                fn(string $pluginId, string $event): ?array
+                    => $ipcForwarder->dispatchLifecycle($pluginId, $event)
+            );
 
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)
             // This prevents unnecessary recovery runs and potential race conditions on every API call
@@ -264,6 +348,20 @@ class Application {
             return; // Already encrypted — nothing to do
         }
 
+        // First-boot guard: on a fresh install, freshInstall() writes plaintext
+        // credentials before the wallet seed exists, so the master key file
+        // doesn't exist yet either. KeyEncryption::encrypt() would throw a
+        // scary-looking "Master key not found" error in this case, which reads
+        // like a real failure but is actually the expected pre-wallet-setup
+        // state. Wallet::generateWallet() / Wallet::restoreWallet() run the
+        // migration themselves immediately after initMasterKeyFromSeed().
+        if (!KeyEncryption::isMasterKeyAvailable()) {
+            if ($this->loggerLoaded()) {
+                $this->getLogger()->debug("dbconfig.json encryption deferred until wallet generation/restore");
+            }
+            return;
+        }
+
         try {
             // Encrypt dbPass (if still plaintext)
             if ($hasPlaintextPass) {
@@ -303,13 +401,10 @@ class Application {
                 $this->getLogger()->info("Migrated dbconfig.json: database credentials encrypted");
             }
         } catch (Exception $e) {
-            // Non-fatal on first boot: the master key doesn't exist yet because
-            // the wallet hasn't been generated. Wallet::generateWallet() and
-            // Wallet::restoreWallet() handle this migration immediately after
-            // initMasterKeyFromSeed(), so the plaintext credentials are encrypted
-            // before the container becomes operational.
+            // Master key exists but encryption still failed — genuinely abnormal,
+            // worth a warning so an operator notices.
             if ($this->loggerLoaded()) {
-                $this->getLogger()->warning("dbconfig.json encryption migration deferred — will complete during wallet setup", [
+                $this->getLogger()->warning("dbconfig.json encryption migration failed", [
                     'error' => $e->getMessage()
                 ]);
             }
@@ -419,6 +514,73 @@ class Application {
                 ]);
             }
             // Don't throw - recovery failing shouldn't prevent app startup
+        }
+    }
+
+    /**
+     * Run the bundled-plugin upgrade pass. For each plugin where the
+     * image-baked version under /app/plugins/<id>/ is strictly newer
+     * than the installed version under /etc/eiou/plugins/<id>/, invoke
+     * PluginUpgradeService::upgradeFromBundle(). That service handles
+     * the backup → directory swap → onUpgrade() hook → grant
+     * reconcile → credential re-export → pool reload chain; we just
+     * iterate.
+     *
+     * Per-plugin failures are logged but never propagate — a broken
+     * upgrade for one bundled plugin must not block boot for the
+     * wallet itself. Operators see the failure in the structured log
+     * and the plugin stays at its previous version on disk.
+     *
+     * Concurrency: serialised by a non-blocking flock so simultaneous
+     * boots (multiple PHP-FPM workers waking after a container restart,
+     * or a CLI command racing the first HTTP request) don't try to
+     * swap the same directory twice.
+     */
+    private function autoUpgradeBundledPlugins(): void {
+        $lockPath = '/tmp/eiou-plugin-auto-upgrade.lock';
+        $lockFp = @fopen($lockPath, 'c');
+        if ($lockFp === false) {
+            // Lock file unwritable — proceed unlocked. Atomic rename
+            // inside commitUpgrade is still crash-safe; the lock is an
+            // optimisation against duplicate work, not a correctness
+            // boundary.
+        } elseif (!@flock($lockFp, LOCK_EX | LOCK_NB)) {
+            // Another process is mid-upgrade. Skip silently — when
+            // that process finishes, the on-disk state will be correct
+            // for our subsequent discover() pass.
+            fclose($lockFp);
+            return;
+        }
+
+        try {
+            $upgradeService = $this->services->getPluginUpgradeService($this->pluginLoader);
+            $available = $upgradeService->availableBundledUpgrades();
+            foreach ($available as $name => $info) {
+                try {
+                    $upgradeService->upgradeFromBundle($name);
+                    Logger::getInstance()->info('plugin_auto_upgraded_from_bundle', [
+                        'plugin' => $name,
+                        'old_version' => $info['installed_version'],
+                        'new_version' => $info['bundled_version'],
+                    ]);
+                } catch (Throwable $e) {
+                    Logger::getInstance()->warning('plugin_auto_upgrade_failed', [
+                        'plugin' => $name,
+                        'old_version' => $info['installed_version'],
+                        'new_version' => $info['bundled_version'],
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (Throwable $e) {
+            Logger::getInstance()->warning('plugin_auto_upgrade_scan_failed', [
+                'error' => $e->getMessage(),
+            ]);
+        } finally {
+            if (is_resource($lockFp)) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
         }
     }
 

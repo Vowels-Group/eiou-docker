@@ -69,9 +69,16 @@ class SettingsController
      */
     public function registerActions(GuiActionRegistry $registry): void
     {
+        // updateSettings is now AJAX-driven — the form's submit is
+        // intercepted client-side and POSTed via XHR so the auth-code
+        // modal can pop on a 403 sensitive_access_required response.
+        // TIER_SENSITIVE wires the registry's pre-dispatch CSRF + sensitive-
+        // access gates, both of which emit the canonical JSON envelope on
+        // failure (matching what the AJAX handler expects).
+        $registry->register('updateSettings',     [$this, 'handleUpdateSettings'],     GuiActionRegistry::TIER_SENSITIVE, 'core');
+
         // HTML-redirect actions — TIER_AUTH preserves rotate-on-success
         // and the plain-text 403 failure response.
-        $registry->register('updateSettings',     [$this, 'handleUpdateSettings'],     GuiActionRegistry::TIER_AUTH, 'core');
         $registry->register('resetToDefaults',    [$this, 'handleResetToDefaults'],    GuiActionRegistry::TIER_AUTH, 'core');
         $registry->register('clearDebugLogs',     [$this, 'handleClearDebugLogs'],     GuiActionRegistry::TIER_AUTH, 'core');
         $registry->register('sendDebugReport',    [$this, 'handleSendDebugReport'],    GuiActionRegistry::TIER_AUTH, 'core');
@@ -190,16 +197,11 @@ class SettingsController
      */
     public function handleUpdateSettings(): void
     {
-        // CSRF Protection: Verify token before processing
-        $this->session->verifyCSRFToken();
-
-        // Sensitive-access gate. Settings span the wallet's most
-        // privileged knobs (auth-code rotation, fee defaults, network
-        // basics) so a stolen session cookie shouldn't be enough to
-        // mutate them — the user must re-enter their auth code via
-        // the sensitive-access modal first. Mirrors what ApiKeys-
-        // Controller already does for its mutating actions.
-        $this->requireSensitiveAccessForRedirect();
+        // Registry tier TIER_SENSITIVE handles BOTH the CSRF check and the
+        // sensitive-access gate before this handler runs, both as JSON 403s
+        // — matches what the AJAX submit on the settings form expects.
+        // No inline verifyCSRFToken() / requireSensitiveAccess* calls here.
+        header('Content-Type: application/json');
 
         // Import validation and security classes
 
@@ -611,7 +613,13 @@ class SettingsController
 
         // Check for errors
         if (!empty($errors)) {
-            MessageHelper::redirectMessage(implode('; ', $errors), 'error');
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error'   => 'validation_failed',
+                'message' => implode('; ', $errors),
+                'errors'  => $errors,
+            ]);
             return;
         }
 
@@ -660,9 +668,17 @@ class SettingsController
                 self::triggerInitialAnalytics();
             }
 
-            MessageHelper::redirectMessage('Settings updated successfully', 'success');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Settings updated successfully',
+            ]);
         } catch (Exception $e) {
-            MessageHelper::redirectMessage('Failed to save settings: ' . $e->getMessage(), 'error');
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error'   => 'save_failed',
+                'message' => 'Failed to save settings: ' . $e->getMessage(),
+            ]);
         }
     }
 

@@ -165,6 +165,54 @@ eIOU containers persist critical data in Docker volumes. Loss of these volumes m
 - The `torFailureTransportFallback` setting can be disabled for Tor-only operation where privacy is paramount
 - The `torFallbackRequireEncrypted` setting (default: enabled) ensures Tor fallback only goes to HTTPS, never plain HTTP. Disable only if you explicitly need HTTP fallback in a trusted local network
 
+#### Why HTTPS Alone Doesn't Equal Tor (Metadata Privacy)
+
+eIOU encrypts all contact-message bodies end-to-end (ECDH + AES-256-GCM); HTTPS adds another transport-layer wrapper on top of that. Even so, HTTPS alone leaves observable metadata that Tor hides:
+
+| What an HTTPS observer sees | What an HTTPS observer cannot see |
+|---|---|
+| Source + destination IP addresses | Request body / response body |
+| TLS SNI hostname (cleartext in `ClientHello` until ECH is widely deployed) | URL path, headers, cookies (after handshake) |
+| Connection frequency (who-talks-to-whom-and-how-often) | — |
+| Packet sizes and timing — sufficient for traffic-fingerprinting message types | — |
+
+For a financial system, that metadata is itself sensitive. An observer at either ISP can reconstruct the network graph of who-pays-whom from timing patterns alone, link IPs to identities via the ISP, and correlate on-chain activity with specific peers. Tor's three-hop circuit structure means no single relay sees both endpoints, so the metadata never reassembles into the network-graph view that pure HTTPS exposes.
+
+**Ping is Tor-only by design.** `ContactStatusService::pingContact()` does NOT fall back to HTTPS when Tor is unavailable. It returns a structured `tor_unavailable` error and lets the watchdog attempt to restart Tor (~30 seconds). Pings are small, frequent, and emit recognizable timing patterns — exactly the signal an HTTPS observer needs to build the contact graph — so silently weakening transport privacy on Tor failure would degrade the privacy posture below what the user opted into. `TransportUtilityService::send()` (regular transactions) does have configurable fallback (`torFailureTransportFallback`) because reliability matters more than metadata privacy for the act of delivering a payment, but the operator can disable it with the same setting. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → ContactStatusProcessor → "Privacy: Tor-only by design" for the full rationale.
+
+#### VPN Is Not a Substitute for Tor
+
+A VPN can be a useful additional layer, but it does not replace Tor for eIOU's threat model:
+
+| Observer | HTTPS-only | HTTPS-over-VPN | Tor (or HTTPS-over-Tor) |
+|---|---|---|---|
+| Your local ISP | Sees destination | Sees only the VPN endpoint ✓ | Sees only the Tor guard relay ✓ |
+| Peer's ISP / host | Sees your IP | Sees the VPN exit IP | Sees a Tor exit (or nothing for `.onion`) ✓ |
+| **The VPN provider itself** | Not in path | **Sees both your real IP AND every destination** | Not in path ✓ |
+| State-level adversary correlating both ends | Trivial | Possible via traffic analysis on low-volume VPN exits | Distributed across three independently-operated relays |
+
+Three structural reasons VPN is weaker than Tor here:
+
+1. **Trust shifts to a single operator.** A VPN provider sees the full who-talks-to-whom for every eIOU user on that VPN. Tor distributes that trust across relays operated by different (mostly unrelated) volunteers, with no single party seeing both endpoints.
+2. **VPN doesn't hide the destination IP.** Connecting to `https://nodeB.example.com` over a VPN still requires resolving and routing to that IP — visible to the VPN provider. Connecting to `*.onion` over Tor uses rendezvous points inside the Tor network; there is no destination IP to leak.
+3. **Anonymity-set is small.** A VPN with low eIOU usage provides almost no cover traffic; timing/size correlation attacks can identify a single user's pings within the VPN's mixed traffic. Tor multiplexes hundreds of users' traffic per circuit.
+
+**Where VPN does help meaningfully**: hiding destinations from your local ISP or workplace network. That's a real win against a casual local observer, but it is not equivalent to Tor's metadata properties. Do **not** disable Tor on the assumption that "I have a VPN, so I'm covered."
+
+##### Operational Issue: VPN ↔ Tor Interactions
+
+Running eIOU on a host that is itself behind a VPN (or inside WSL2 on a VPN'd Windows host) sometimes causes Tor bootstrap or restart to fail. In observed cases, the proximate cause is one of:
+
+| Symptom | Likely cause | Mitigation |
+|---|---|---|
+| Tor never bootstraps; directory authority connections time out | VPN provider blocks Tor entry guards or the directory authority IP range (some commercial VPNs and most corporate/university VPNs do this proactively) | Use a different VPN, configure Tor bridges (`obfs4`), or run eIOU on a host outside the VPN |
+| Tor bootstraps but hidden service descriptor publish fails / clients can't reach the `.onion` | VPN tunnel MTU is below Tor's directory-fetch needs, causing PMTUD blackholing on larger handshakes | Lower the VPN client MTU explicitly (e.g., 1380 for OpenVPN), or switch to a VPN protocol that handles MTU better (WireGuard) |
+| Tor works briefly then stops; circuits keep rebuilding | VPN is reconnecting (kill-switch reconnects, idle disconnects, server changes) and invalidating Tor's existing circuits | Disable VPN's auto-reconnect/server-rotation while running an eIOU node, or use a VPN with stable tunnel-up guarantees |
+| Tor self-check fails immediately after container start | VPN kill-switch blocked the initial DNS/TCP attempt during VPN renegotiation | Wait for VPN to fully establish before starting the eIOU container, or disable the kill-switch during testing |
+| `/tmp/tor-restart-requested` keeps firing in a loop | The watchdog's restart attempts succeed locally but Tor immediately fails again because VPN-side issues persist | Resolve the VPN-side issue first (logs in `journalctl -u tor` inside the container give Tor's view) |
+
+If VPN+Tor produces persistent issues, the cleanest answer is to run the eIOU container on a host *not* behind the VPN, since Tor itself already provides the metadata properties most operators reach for VPNs to get. If VPN is required for reasons unrelated to privacy (e.g., reaching an internal LAN where the eIOU node lives), expose just the eIOU port via SSH or WireGuard rather than putting the whole container behind the VPN.
+
 ### Running Behind an External Reverse Proxy
 
 The built-in nginx provides connection-level rate limiting, connection limits, and timeouts — so the container is safe to expose directly. However, if you already run a reverse proxy (Traefik, Caddy, nginx, HAProxy) for centralized SSL management, domain routing, or multiple services on the same host, you can place the eIOU container behind it.
@@ -221,6 +269,22 @@ If your reverse proxy handles SSL and forwards plain HTTP to the container, poin
 | Built-in nginx | Application-specific rate limiting (30r/s general, 10r/s API, 20r/s P2P), per-IP connection limits (50), timeouts (10s), PHP-FPM routing, static file serving |
 
 The two layers complement each other. The external proxy handles infrastructure concerns; the built-in nginx handles application-level protections. Both rate limiters operate independently — the external proxy may enforce its own limits before traffic reaches the container.
+
+### Tor ControlPort Security
+
+The container exposes Tor's control protocol on `127.0.0.1:9051` for first-boot HS-descriptor publication monitoring (see `startup.sh::watch_hs_descriptor_publication`). The bind is **localhost-only** and cookie-authenticated; no externally-reachable surface is added.
+
+**Hard rules — do not change without re-evaluating the threat model:**
+
+1. **Never bind ControlPort to anything other than `127.0.0.1`.** The line in `eiou.dockerfile`'s torrc setup is `ControlPort 127.0.0.1:9051`. Binding to `0.0.0.0` or any external interface exposes a control surface that lets an attacker list circuits, change exit policies, signal shutdown, or in some Tor configurations modify hidden-service settings. The bind is the security boundary; auth is defense-in-depth.
+
+2. **Never set `CookieAuthFileGroupReadable 1`.** The cookie file is intentionally `0600` owned by `debian-tor`. Only root processes inside the container (the descriptor watcher, the watchdog) need to authenticate to ControlPort. Making the cookie group-readable would let any process that joins the `debian-tor` group authenticate.
+
+3. **Never add `www-data` to the `debian-tor` group.** PHP-FPM workers, the eIOU CLI, and (especially) plugins all run as `www-data`. Granting them group access to `debian-tor`-owned files would let plugin code talk to ControlPort and the Tor data directory directly. The current model — plugins access nothing Tor-related — is a critical isolation boundary.
+
+4. **Never use `HashedControlPassword` instead of cookie auth.** The hash would have to live in `/etc/tor/torrc` (or a similar config file), making the credential discoverable by any reader of that file. Cookie auth uses a per-restart random cookie that is not stored anywhere persistent.
+
+The threat model is documented at length above in [Why HTTPS Alone Doesn't Equal Tor (Metadata Privacy)](#why-https-alone-doesnt-equal-tor-metadata-privacy); ControlPort access does not in itself break that model (Tor cells are still onion-routed), but it does let a local attacker enumerate connections and circuits, which is information leakage of its own.
 
 ### Container Security
 
@@ -348,7 +412,7 @@ When set:
 services:
   alice:
     environment:
-      - QUICKSTART=alice
+      - EIOU_HOST=alice
     volumes:
       - ./volume-key.txt:/run/secrets/volume_key:ro
     environment:
@@ -447,6 +511,7 @@ State is file-based in `/tmp/tor-circuit-health/` (clears on container restart).
 | Rate limiting | Per-key limits (default: 100 requests/minute) via `RateLimiterService` |
 | Security headers | `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` on all responses; CSP with per-request nonces at the application layer |
 | Secure logging | Automatic masking of passwords, auth codes, API keys, and mnemonics in log output |
+| Plugin zip upload validation | `PluginInstallService` rejects zip uploads on magic-byte mismatch, path traversal (`..`, absolute paths, `\`), multiple top-level directories, disallowed file extensions, hidden dotfiles, oversized files (>15 MiB / file or >50 MiB total), suspicious compression ratios (>100:1), >500-file archives, or extracted symlinks. Uploaded plugins land disabled and never auto-execute. See [PLUGINS.md → Installing Plugins](docs/PLUGINS.md#installing-plugins). |
 
 ### Transport Security
 
@@ -508,6 +573,7 @@ The following are known security limitations of the current alpha release.
 | No multi-factor authentication | API access relies on HMAC-SHA256 key-based authentication without a second factor |
 | Seed phrase is the single root of trust | Compromise of the 24-word seed phrase grants full control over the wallet, Tor identity, and backup decryption |
 | Contact request messages are not E2E encrypted | Initial contact requests (`type: create`) cannot be E2E encrypted because the recipient's public key is not yet known. The optional message/description included with a contact request is protected only by transport-level encryption (Tor or HTTPS). Avoid including sensitive information in contact request messages when using plain HTTP transport |
+| Plugins run at PHP-FPM privilege | A plugin you trust enough to enable can do anything the PHP runtime can do, including reading every file in `/etc/eiou/config/`. The zip-upload validation pipeline mechanically rejects malformed and oversized archives, but cannot judge whether a syntactically valid plugin's code is safe — trust is a human decision. Plugin signatures (when enforced) prove only that an upload was signed by a key in `trusted-keys/`, not that the code is benign. Review the manifest and changelog before enabling any plugin. |
 
 These limitations will be addressed as the project matures toward a production release.
 

@@ -234,7 +234,7 @@ class ServiceContainer implements ContainerInterface {
      * Get the GUI hook registry. Plugins use this in their boot() to
      * register render + filter listeners; templates and controllers
      * call doRender() / applyFilter() at hook fire sites. See
-     * docs/PLUGIN_GUI_HOOKS.md for the full API + slot list.
+     * docs/PLUGINS.md "Extending the GUI" for the full API + slot list.
      */
     public function getHooks(): Hooks
     {
@@ -272,7 +272,7 @@ class ServiceContainer implements ContainerInterface {
      * Get the GUI tab registry. Core tabs are registered by
      * Functions.php on each request; plugins register their tabs in
      * boot(). wallet.html iterates the registry to build the tab nav
-     * + panels. See docs/PLUGIN_GUI_HOOKS.md.
+     * + panels. See docs/PLUGINS.md "Extending the GUI".
      */
     public function getTabRegistry(): TabRegistry
     {
@@ -283,16 +283,31 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get the registry of sub-panels rendered inside the host's
+     * Plugins tab. Each enabled plugin that declares
+     * `plugin_tab_panel` in its manifest gets one entry here; the
+     * Plugins tab renders a dropdown over `all()` and the selected
+     * plugin's render closure. See docs/PLUGINS.md "Extending the GUI".
+     */
+    public function getPluginsTabPanelRegistry(): PluginsTabPanelRegistry
+    {
+        if (!isset($this->services['PluginsTabPanelRegistry'])) {
+            $this->services['PluginsTabPanelRegistry'] = new PluginsTabPanelRegistry();
+        }
+        return $this->services['PluginsTabPanelRegistry'];
+    }
+
+    /**
      * Get the plugin asset registry. Plugins call enqueueStyle /
      * enqueueScript in boot(); the registry's renderStyles /
      * renderScripts are drained by the host render listeners attached
      * to gui.head.styles / gui.head.scripts / gui.footer.scripts. See
-     * docs/PLUGIN_GUI_HOOKS.md.
+     * docs/PLUGINS.md "Extending the GUI".
      */
-    public function getAssetRegistry(): PluginAssetRegistry
+    public function getAssetRegistry(): \Eiou\Services\Plugins\PluginAssetRegistry
     {
         if (!isset($this->services['PluginAssetRegistry'])) {
-            $this->services['PluginAssetRegistry'] = new PluginAssetRegistry();
+            $this->services['PluginAssetRegistry'] = new \Eiou\Services\Plugins\PluginAssetRegistry();
         }
         return $this->services['PluginAssetRegistry'];
     }
@@ -301,7 +316,7 @@ class ServiceContainer implements ContainerInterface {
      * Get the GUI action registry. Plugins call register() in boot()
      * to add new POST handlers; Functions.php dispatches via has() +
      * the per-tier gates the registry exposes. See
-     * docs/PLUGIN_GUI_HOOKS.md.
+     * docs/PLUGINS.md "Extending the GUI".
      */
     public function getActionRegistry(): GuiActionRegistry
     {
@@ -316,7 +331,7 @@ class ServiceContainer implements ContainerInterface {
      * under `plugin_<id>_*` so plugins can't accidentally (or
      * deliberately) write to core session fields like
      * SessionKeys::AUTHENTICATED or SessionKeys::CSRF_TOKEN. See
-     * `Eiou\Services\PluginSessionStore` for the supported API and
+     * `Eiou\Services\Plugins\PluginSessionStore` for the supported API and
      * the trust-boundary discussion.
      *
      * Stores are memoised per plugin id — repeat calls with the same
@@ -325,11 +340,11 @@ class ServiceContainer implements ContainerInterface {
      * @param string $pluginId Plugin id (kebab-case, must match
      *                         plugin.json's name field).
      */
-    public function getPluginSessionStore(string $pluginId): PluginSessionStore
+    public function getPluginSessionStore(string $pluginId): \Eiou\Services\Plugins\PluginSessionStore
     {
         $cacheKey = 'PluginSessionStore.' . $pluginId;
         if (!isset($this->services[$cacheKey])) {
-            $this->services[$cacheKey] = new PluginSessionStore($pluginId);
+            $this->services[$cacheKey] = new \Eiou\Services\Plugins\PluginSessionStore($pluginId);
         }
         return $this->services[$cacheKey];
     }
@@ -457,6 +472,291 @@ class ServiceContainer implements ContainerInterface {
             $this->services['TransactionService']->setLockingService($this->getLockingService());
         }
         return $this->services['TransactionService'];
+    }
+
+    /**
+     * Get TransactionLookupService instance.
+     *
+     * Read-only facade exposing a curated subset of TransactionRepository
+     * methods to sandboxed plugins via the plugin gateway. The gateway
+     * resolves a service name to `get<ServiceName>()` on this container,
+     * so this getter is what makes "TransactionLookupService.getByTxid"
+     * (and siblings) reachable from a plugin manifest's core_services
+     * allow-list. The repository itself stays undecorated and accessed
+     * only through RepositoryFactory.
+     */
+    public function getTransactionLookupService(): \Eiou\Services\Lookup\TransactionLookupService {
+        if (!isset($this->services['TransactionLookupService'])) {
+            $this->services['TransactionLookupService'] = new \Eiou\Services\Lookup\TransactionLookupService(
+                $this->getRepositoryFactory()->get(TransactionRepository::class)
+            );
+        }
+        return $this->services['TransactionLookupService'];
+    }
+
+    /**
+     * Get ContactLookupService instance.
+     *
+     * Read-only facade exposing the narrow {name, http, https, tor,
+     * pubkey_hash} contact surface to sandboxed plugins. The gateway
+     * resolves a service name to `get<ServiceName>()` on this container,
+     * so this getter is what makes "ContactLookupService.getByPubkeyHash"
+     * (and listAccepted) reachable from a plugin manifest's core_services
+     * allow-list. Same wrapper rationale as TransactionLookupService —
+     * the repository stays undecorated and is accessed only through
+     * RepositoryFactory.
+     */
+    public function getContactLookupService(): \Eiou\Services\Lookup\ContactLookupService {
+        if (!isset($this->services['ContactLookupService'])) {
+            $this->services['ContactLookupService'] = new \Eiou\Services\Lookup\ContactLookupService(
+                $this->getRepositoryFactory()->get(ContactRepository::class)
+            );
+        }
+        return $this->services['ContactLookupService'];
+    }
+
+    /**
+     * Get BalanceLookupService instance.
+     *
+     * Read-only facade exposing the wallet's own balance totals (overall
+     * and per-currency) to sandboxed plugins. Methods on this service
+     * carry the `wallet_balance_read` permission key — the plugin's
+     * manifest must declare that key in `permissions: [...]` in
+     * addition to the usual `core_services` entry. Same wrapper
+     * rationale as TransactionLookupService — the repository stays
+     * undecorated and is accessed only through RepositoryFactory.
+     */
+    public function getBalanceLookupService(): \Eiou\Services\Lookup\BalanceLookupService {
+        if (!isset($this->services['BalanceLookupService'])) {
+            $this->services['BalanceLookupService'] = new \Eiou\Services\Lookup\BalanceLookupService(
+                $this->getRepositoryFactory()->get(BalanceRepository::class)
+            );
+        }
+        return $this->services['BalanceLookupService'];
+    }
+
+    /**
+     * Get TransactionStatisticsLookupService instance.
+     *
+     * Aggregate stats facade for sandboxed plugins (count + total for
+     * a time period, optionally filtered by currency). Gated on the
+     * `transaction_history_aggregate` permission — separate from the
+     * row-level `transaction_history_enumerate` because aggregates
+     * leak volume but not counterparties or memos.
+     */
+    public function getTransactionStatisticsLookupService(): \Eiou\Services\Lookup\TransactionStatisticsLookupService {
+        if (!isset($this->services['TransactionStatisticsLookupService'])) {
+            $this->services['TransactionStatisticsLookupService'] = new \Eiou\Services\Lookup\TransactionStatisticsLookupService(
+                $this->getRepositoryFactory()->get(TransactionStatisticsRepository::class)
+            );
+        }
+        return $this->services['TransactionStatisticsLookupService'];
+    }
+
+    /**
+     * Get ContactCreditLookupService instance.
+     *
+     * Per-contact available-credit facade for sandboxed plugins. Gated
+     * on `contact_credit_read` — credit limits are operator-set
+     * financial policy distinct from contact identity and from the
+     * wallet's own balance.
+     */
+    public function getContactCreditLookupService(): \Eiou\Services\Lookup\ContactCreditLookupService {
+        if (!isset($this->services['ContactCreditLookupService'])) {
+            $this->services['ContactCreditLookupService'] = new \Eiou\Services\Lookup\ContactCreditLookupService(
+                $this->getRepositoryFactory()->get(ContactCreditRepository::class)
+            );
+        }
+        return $this->services['ContactCreditLookupService'];
+    }
+
+    /**
+     * Get PaymentRequestLookupService instance.
+     *
+     * Read-only payment-request facade for sandboxed plugins. Per-id
+     * lookups are demand-driven and ungated; the enumerate forms
+     * (pending-incoming / outgoing) require the
+     * `payment_request_enumerate` permission since they reveal the
+     * operator's pending-debts / receivables lists.
+     */
+    public function getPaymentRequestLookupService(): \Eiou\Services\Lookup\PaymentRequestLookupService {
+        if (!isset($this->services['PaymentRequestLookupService'])) {
+            $this->services['PaymentRequestLookupService'] = new \Eiou\Services\Lookup\PaymentRequestLookupService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaymentRequestRepository::class)
+            );
+        }
+        return $this->services['PaymentRequestLookupService'];
+    }
+
+    /**
+     * Get PaybackMethodLookupService instance.
+     *
+     * Capability-discovery facade for plugins implementing payback
+     * rails. PluginCallerAware-backed so the plugin's declared
+     * `payback_method_types` is the scope authority — a plugin only
+     * sees methods of rail types it itself declared. Two methods:
+     * one for the operator's own configured methods
+     * (`payback_method_read_own`), one for contact-side preferences
+     * received over the wire (`payback_method_read_contact`). Both
+     * project to capability metadata only — encrypted_fields /
+     * fields_json are not exposed.
+     */
+    public function getPaybackMethodLookupService(): \Eiou\Services\Lookup\PaybackMethodLookupService {
+        if (!isset($this->services['PaybackMethodLookupService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PaybackMethodLookupService'] = new \Eiou\Services\Lookup\PaybackMethodLookupService(
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodRepository::class),
+                $this->getRepositoryFactory()->get(\Eiou\Database\PaybackMethodReceivedRepository::class),
+                $app->pluginLoader
+            );
+        }
+        return $this->services['PaybackMethodLookupService'];
+    }
+
+    /**
+     * Get PluginLookupService instance.
+     *
+     * Self-introspection surface for sandboxed plugins (read your own
+     * granted permissions, read your own projected manifest). Uses
+     * PluginLoader as the source of truth — same row the gateway
+     * checks for core_services and permissions. No permission key
+     * required since the service can only ever return the calling
+     * plugin's own data.
+     */
+    public function getPluginLookupService(): \Eiou\Services\Lookup\PluginLookupService {
+        if (!isset($this->services['PluginLookupService'])) {
+            $app = \Eiou\Core\Application::getInstance();
+            $this->services['PluginLookupService'] = new \Eiou\Services\Lookup\PluginLookupService(
+                $app->pluginLoader
+            );
+        }
+        return $this->services['PluginLookupService'];
+    }
+
+    /**
+     * Get IdentityLookupService instance.
+     *
+     * Read-only facade exposing a narrow slice of UserContext (public key,
+     * public-key hash, display name) to sandboxed plugins via the gateway.
+     * Secrets and the mnemonic stay unreachable. Same wrapper rationale as
+     * TransactionLookupService: a curated service-layer surface keeps the
+     * gateway's `get<Name>()` resolution working without exposing the full
+     * UserContext API to plugins.
+     */
+    public function getIdentityLookupService(): \Eiou\Services\Lookup\IdentityLookupService {
+        if (!isset($this->services['IdentityLookupService'])) {
+            $this->services['IdentityLookupService'] = new \Eiou\Services\Lookup\IdentityLookupService(
+                \Eiou\Core\UserContext::getInstance()
+            );
+        }
+        return $this->services['IdentityLookupService'];
+    }
+
+    /**
+     * Get NodeInfoLookupService instance.
+     *
+     * Read-only facade exposing the small slice of AppConfig + UserContext
+     * network identifiers that sandboxed plugins are allowed to inspect.
+     * Plugin pools can't reach `/etc/eiou/config/` directly (open_basedir
+     * restriction), and reaching into env vars from inside a plugin's
+     * runtime is brittle — this service is the supported path for plugins
+     * that need to know the runtime environment and the operator's
+     * customer-facing addresses.
+     */
+    public function getNodeInfoLookupService(): \Eiou\Services\Lookup\NodeInfoLookupService {
+        if (!isset($this->services['NodeInfoLookupService'])) {
+            $this->services['NodeInfoLookupService'] = new \Eiou\Services\Lookup\NodeInfoLookupService(
+                $this->getAppConfig(),
+                \Eiou\Core\UserContext::getInstance()
+            );
+        }
+        return $this->services['NodeInfoLookupService'];
+    }
+
+    /**
+     * Get PluginEventPublisher instance.
+     *
+     * Lets a sandboxed plugin publish a namespaced event that other
+     * plugins or in-process subscribers can react to. The gateway
+     * injects the calling plugin's id (via PluginCallerAware) so the
+     * dispatched event name is host-controlled: subscribers can rely on
+     * `plugin.<source>.<event>` to identify the origin and a plugin
+     * cannot spoof another plugin's id.
+     */
+    public function getPluginEventPublisher(): \Eiou\Services\Plugins\PluginEventPublisher {
+        if (!isset($this->services['PluginEventPublisher'])) {
+            $this->services['PluginEventPublisher'] = new \Eiou\Services\Plugins\PluginEventPublisher(
+                \Eiou\Events\EventDispatcher::getInstance(),
+                Logger::getInstance()
+            );
+        }
+        return $this->services['PluginEventPublisher'];
+    }
+
+    /**
+     * Get PluginCronService instance.
+     *
+     * Host-driven scheduler for sandboxed plugins' manifest-declared
+     * cron entries. Constructed lazily because it depends on PluginLoader
+     * + PluginIpcForwarder (both already lazy on this container) and is
+     * only invoked from the CLI tick command (`eiou plugin cron-tick`)
+     * driven by startup.sh's plugin_cron_poller — no HTTP request path
+     * needs it.
+     */
+    public function getPluginCronService(\Eiou\Services\Plugins\PluginLoader $loader): \Eiou\Services\Plugins\PluginCronService {
+        if (!isset($this->services['PluginCronService'])) {
+            $this->services['PluginCronService'] = new \Eiou\Services\Plugins\PluginCronService(
+                $loader,
+                $this->getPluginIpcForwarder($loader),
+                Logger::getInstance()
+            );
+        }
+        return $this->services['PluginCronService'];
+    }
+
+    /**
+     * Get WalletOutboundService instance.
+     *
+     * Sandbox bridge: lets a plugin reach `TransactionService::sendEiou()`
+     * from inside its FPM pool, where direct access is blocked by
+     * `open_basedir`. The plugin gateway resolves this service from
+     * a plugin manifest's `core_services` allow-list and injects the
+     * calling plugin's id via PluginCallerAware. The service itself
+     * does NOT enforce spending caps or write an audit table — that's
+     * the plugin's responsibility, in the plugin's own DB schema.
+     * Operators who don't trust a plugin to honour its own caps
+     * shouldn't allow-list it at all (the safer path is the
+     * event-publish + operator-approval flow).
+     */
+    public function getWalletOutboundService(): \Eiou\Services\WalletOutboundService {
+        if (!isset($this->services['WalletOutboundService'])) {
+            $this->services['WalletOutboundService'] = new \Eiou\Services\WalletOutboundService(
+                $this->getTransactionService(),
+                Logger::getInstance()
+            );
+        }
+        return $this->services['WalletOutboundService'];
+    }
+
+    /**
+     * Get ContainerLifecycleService instance.
+     *
+     * Sandbox bridge that lets a plugin record a desired state
+     * ("running"/"stopped") for its sidecar containers. The wallet
+     * itself does not invoke docker; the service writes
+     * /var/lib/eiou/plugin-sidecars-desired.json which the operator's
+     * orchestration reads and reconciles. See the class docblock for
+     * the trust model and why we don't run docker compose from the
+     * wallet pool ourselves.
+     */
+    public function getContainerLifecycleService(): \Eiou\Services\ContainerLifecycleService {
+        if (!isset($this->services['ContainerLifecycleService'])) {
+            $this->services['ContainerLifecycleService'] = new \Eiou\Services\ContainerLifecycleService(
+                null,
+                Logger::getInstance()
+            );
+        }
+        return $this->services['ContainerLifecycleService'];
     }
 
     /**
@@ -761,9 +1061,9 @@ class ServiceContainer implements ContainerInterface {
      * Registry for plugin-owned CLI subcommands. Plugins grab this in
      * boot() and call ->register() to expose `eiou <plugin> ...` verbs.
      */
-    public function getPluginCliRegistry(): PluginCliRegistry {
+    public function getPluginCliRegistry(): \Eiou\Services\Plugins\PluginCliRegistry {
         if (!isset($this->services['PluginCliRegistry'])) {
-            $this->services['PluginCliRegistry'] = new PluginCliRegistry();
+            $this->services['PluginCliRegistry'] = new \Eiou\Services\Plugins\PluginCliRegistry();
         }
         return $this->services['PluginCliRegistry'];
     }
@@ -772,9 +1072,9 @@ class ServiceContainer implements ContainerInterface {
      * Registry for plugin-owned REST endpoints under
      * /api/v1/plugins/{plugin}/{action}. Plugins register in boot().
      */
-    public function getPluginApiRegistry(): PluginApiRegistry {
+    public function getPluginApiRegistry(): \Eiou\Services\Plugins\PluginApiRegistry {
         if (!isset($this->services['PluginApiRegistry'])) {
-            $this->services['PluginApiRegistry'] = new PluginApiRegistry();
+            $this->services['PluginApiRegistry'] = new \Eiou\Services\Plugins\PluginApiRegistry();
         }
         return $this->services['PluginApiRegistry'];
     }
@@ -1021,13 +1321,32 @@ class ServiceContainer implements ContainerInterface {
      * Generates and stores the encrypted MySQL password for each plugin's
      * isolated DB user. See docs/PLUGINS.md (Database Isolation).
      */
-    public function getPluginCredentialService(): \Eiou\Services\PluginCredentialService {
+    public function getPluginCredentialService(): \Eiou\Services\Plugins\PluginCredentialService {
         if (!isset($this->services['PluginCredentialService'])) {
-            $this->services['PluginCredentialService'] = new \Eiou\Services\PluginCredentialService(
+            $this->services['PluginCredentialService'] = new \Eiou\Services\Plugins\PluginCredentialService(
                 $this->getRepositoryFactory()->get(\Eiou\Database\PluginCredentialRepository::class)
             );
         }
         return $this->services['PluginCredentialService'];
+    }
+
+    /**
+     * Get PluginCredentialsExportService instance.
+     *
+     * Writes per-plugin MySQL credentials to /etc/eiou/credentials/
+     * plugin-<id>.json so operator-deployed sibling containers can
+     * mount the file and authenticate as the plugin's isolated DB
+     * user. Called by PluginLoader on enable/reconcile and by
+     * PluginUninstallService on uninstall. See the class docblock
+     * for the full trust model.
+     */
+    public function getPluginCredentialsExportService(): \Eiou\Services\Plugins\PluginCredentialsExportService {
+        if (!isset($this->services['PluginCredentialsExportService'])) {
+            $this->services['PluginCredentialsExportService'] = new \Eiou\Services\Plugins\PluginCredentialsExportService(
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginCredentialsExportService'];
     }
 
     /**
@@ -1038,9 +1357,9 @@ class ServiceContainer implements ContainerInterface {
      * /etc/eiou/plugins/trusted-keys/ (operator-added). See
      * docs/PLUGINS.md (Plugin Signatures) for the trust model.
      */
-    public function getPluginSignatureVerifier(): \Eiou\Services\PluginSignatureVerifier {
+    public function getPluginSignatureVerifier(): \Eiou\Services\Plugins\PluginSignatureVerifier {
         if (!isset($this->services['PluginSignatureVerifier'])) {
-            $this->services['PluginSignatureVerifier'] = new \Eiou\Services\PluginSignatureVerifier();
+            $this->services['PluginSignatureVerifier'] = new \Eiou\Services\Plugins\PluginSignatureVerifier();
         }
         return $this->services['PluginSignatureVerifier'];
     }
@@ -1055,9 +1374,9 @@ class ServiceContainer implements ContainerInterface {
      *
      * See docs/PLUGINS.md (Database Isolation).
      */
-    public function getPluginDbUserService(): \Eiou\Services\PluginDbUserService {
+    public function getPluginDbUserService(): \Eiou\Services\Plugins\PluginDbUserService {
         if (!isset($this->services['PluginDbUserService'])) {
-            $this->services['PluginDbUserService'] = new \Eiou\Services\PluginDbUserService(
+            $this->services['PluginDbUserService'] = new \Eiou\Services\Plugins\PluginDbUserService(
                 $this->getPdo()
             );
         }
@@ -1076,13 +1395,74 @@ class ServiceContainer implements ContainerInterface {
      *
      * See docs/PLUGINS.md (Database Isolation).
      */
-    public function getPluginPdoFactory(): \Eiou\Services\PluginPdoFactory {
+    public function getPluginPdoFactory(): \Eiou\Services\Plugins\PluginPdoFactory {
         if (!isset($this->services['PluginPdoFactory'])) {
-            $this->services['PluginPdoFactory'] = new \Eiou\Services\PluginPdoFactory(
+            $this->services['PluginPdoFactory'] = new \Eiou\Services\Plugins\PluginPdoFactory(
                 $this->getPluginCredentialService()
             );
         }
         return $this->services['PluginPdoFactory'];
+    }
+
+    /**
+     * Get PluginIpcForwarder. Bridges in-process firing of events /
+     * filters / render hooks to sandboxed plugins' __dispatch.php
+     * endpoints.
+     *
+     * The PluginLoader has to be passed in because this getter is
+     * sometimes called from inside Application::__construct (during
+     * the boot wiring step). At that point `Application::getInstance()`
+     * sees a null singleton and recurses into another `new self()` —
+     * which opens a fresh PDO, leaks it, and infinite-recurses until
+     * MySQL refuses new connections. Passing the loader explicitly
+     * avoids any second visit to Application's bootstrap.
+     */
+    public function getPluginIpcForwarder(\Eiou\Services\Plugins\PluginLoader $loader): \Eiou\Services\Plugins\PluginIpcForwarder {
+        if (!isset($this->services['PluginIpcForwarder'])) {
+            $this->services['PluginIpcForwarder'] = new \Eiou\Services\Plugins\PluginIpcForwarder(
+                $loader,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginIpcForwarder'];
+    }
+
+    /**
+     * Get PluginUserService. Manages the per-plugin Unix-user
+     * lifecycle (eiou-p-<hash>) that a sandboxed plugin's FPM pool
+     * runs as. See docs/PLUGINS.md (Sandboxing).
+     */
+    public function getPluginUserService(): \Eiou\Services\Plugins\PluginUserService {
+        if (!isset($this->services['PluginUserService'])) {
+            $this->services['PluginUserService'] = new \Eiou\Services\Plugins\PluginUserService();
+        }
+        return $this->services['PluginUserService'];
+    }
+
+    /**
+     * Get PluginPoolService. Renders + applies per-plugin PHP-FPM
+     * pool config so a sandboxed plugin runs in its own pool, as its
+     * own UID, with open_basedir and disable_functions restricted.
+     */
+    public function getPluginPoolService(): \Eiou\Services\Plugins\PluginPoolService {
+        if (!isset($this->services['PluginPoolService'])) {
+            $this->services['PluginPoolService'] = new \Eiou\Services\Plugins\PluginPoolService();
+        }
+        return $this->services['PluginPoolService'];
+    }
+
+    /**
+     * Get PluginNginxConfigService. Renders the per-plugin nginx
+     * location-block snippet that PluginPoolService bundles into its
+     * supervisor request.
+     */
+    public function getPluginNginxConfigService(): \Eiou\Services\Plugins\PluginNginxConfigService {
+        if (!isset($this->services['PluginNginxConfigService'])) {
+            $this->services['PluginNginxConfigService'] = new \Eiou\Services\Plugins\PluginNginxConfigService(
+                $this->getAppConfig()->publicPluginRoutes
+            );
+        }
+        return $this->services['PluginNginxConfigService'];
     }
 
     /**
@@ -1093,18 +1473,83 @@ class ServiceContainer implements ContainerInterface {
      * The plugin must be disabled first — the service refuses to uninstall
      * an enabled plugin.
      */
-    public function getPluginUninstallService(): \Eiou\Services\PluginUninstallService {
+    public function getPluginUninstallService(): \Eiou\Services\Plugins\PluginUninstallService {
         if (!isset($this->services['PluginUninstallService'])) {
             $app = \Eiou\Core\Application::getInstance();
-            $this->services['PluginUninstallService'] = new \Eiou\Services\PluginUninstallService(
+            $this->services['PluginUninstallService'] = new \Eiou\Services\Plugins\PluginUninstallService(
                 $app->pluginLoader,
                 $this->getPluginCredentialService(),
                 $this->getPluginDbUserService(),
                 $this->getPluginPdoFactory(),
-                $this->getPdo()
+                $this->getPdo(),
+                $this->getLogger(),
+                '/etc/eiou/plugins',
+                $this->getPluginCredentialsExportService()
             );
         }
         return $this->services['PluginUninstallService'];
+    }
+
+    /**
+     * Get PluginInstallService instance.
+     *
+     * Handles operator-uploaded plugin zips: validates them, extracts to
+     * a staging directory under /etc/eiou/plugins/, atomically renames
+     * into place, and emits the PLUGIN_INSTALLED event. The new plugin
+     * sits DISABLED on disk — discover() picks it up on the next boot
+     * but won't register/boot it until the operator toggles it on.
+     *
+     * Mirrors the signature verifier + mode the PluginLoader uses, so an
+     * operator who has signature mode set to 'require' can't sidestep
+     * verification through the upload path.
+     */
+    public function getPluginInstallService(): \Eiou\Services\Plugins\PluginInstallService {
+        if (!isset($this->services['PluginInstallService'])) {
+            $this->services['PluginInstallService'] = new \Eiou\Services\Plugins\PluginInstallService(
+                '/etc/eiou/plugins',
+                $this->getPluginSignatureVerifier(),
+                \Eiou\Core\Constants::PLUGIN_SIGNATURE_MODE
+            );
+        }
+        return $this->services['PluginInstallService'];
+    }
+
+    /**
+     * Get PluginUpgradeService instance.
+     *
+     * Drives the upgrade flow for an already-installed plugin: validates
+     * the new bundle (zip or image-baked), atomically swaps the on-disk
+     * directory, runs the plugin's onUpgrade hook if implemented,
+     * reconciles MySQL grants against the new manifest, re-exports
+     * credentials, and reloads the FPM pool. The plugin's existing DB
+     * tables, user, credentials, and gateway token are preserved
+     * across the upgrade — install-then-uninstall would lose all of
+     * them, which is why this is a separate service.
+     *
+     * The PluginLoader is passed in explicitly rather than fetched via
+     * `Application::getInstance()->pluginLoader` because this getter is
+     * called from inside `Application::__construct` (during boot's
+     * pruneOldBackups step). At that point the static Application
+     * instance is still null — fetching via getInstance() would recurse
+     * into another `new self()`, open a fresh PDO, and infinite-loop
+     * until MariaDB rejects further connections. Same pattern (and
+     * same reasoning) as `getPluginIpcForwarder`.
+     */
+    public function getPluginUpgradeService(\Eiou\Services\Plugins\PluginLoader $loader): \Eiou\Services\Plugins\PluginUpgradeService {
+        if (!isset($this->services['PluginUpgradeService'])) {
+            $this->services['PluginUpgradeService'] = new \Eiou\Services\Plugins\PluginUpgradeService(
+                $this->getPluginInstallService(),
+                $loader,
+                $this->getPluginPoolService(),
+                $this->getPluginUserService(),
+                $this->getPluginDbUserService(),
+                $this->getPluginCredentialService(),
+                $this->getPluginCredentialsExportService(),
+                $this,
+                $this->getLogger()
+            );
+        }
+        return $this->services['PluginUpgradeService'];
     }
 
     /**
@@ -1398,7 +1843,7 @@ class ServiceContainer implements ContainerInterface {
      *
      * Used by the `eiou verify-chain` CLI command to audit bilateral chains
      * end-to-end (live + archive) and compare each pair's archive hash
-     * against the stored checkpoint — Phase 2's safety net against archive
+     * against the stored checkpoint — a safety net against archive
      * tampering. Distinct from ChainVerificationService above which runs
      * pre-send chain-integrity checks.
      */

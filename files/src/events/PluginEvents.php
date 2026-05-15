@@ -34,6 +34,25 @@ class PluginEvents
     public const PLUGIN_REGISTERED = 'plugin.registered';
 
     /**
+     * Dispatched after a plugin's files have been written to
+     * /etc/eiou/plugins/<name>/ by PluginInstallService. Fires once per
+     * successful install; not fired for plugins seeded from the Docker
+     * image at first boot (those are present before the event dispatcher
+     * is wired anyway).
+     *
+     * The plugin is staged as DISABLED at this point — register() / boot()
+     * have not run, and won't until the operator toggles it on and
+     * restarts. Subscribers that want to observe activation should listen
+     * for PLUGIN_REGISTERED / PLUGIN_BOOTED instead.
+     *
+     * Event data:
+     *   - name: string    - Plugin name (matches manifest + directory)
+     *   - version: string - Plugin version from the manifest
+     *   - source: string  - Where the install came from (e.g. 'zip_upload')
+     */
+    public const PLUGIN_INSTALLED = 'plugin.installed';
+
+    /**
      * Dispatched after a plugin's boot() phase completes successfully.
      *
      * Event data:
@@ -79,4 +98,24 @@ class PluginEvents
      *   - steps: array    - Per-step status map: 'ok' / 'skipped' / 'error:<msg>'
      */
     public const PLUGIN_UNINSTALLED = 'plugin.uninstalled';
+
+    /**
+     * Dispatched after a successful plugin upgrade. The new plugin
+     * directory is in place, the onUpgrade hook (if implemented) has
+     * run, MySQL grants have been reconciled against the new manifest's
+     * owned_tables, and the FPM pool has been reloaded if the plugin
+     * was enabled at upgrade time. The old plugin directory is
+     * preserved at `<pluginDir>.backup-<oldver>-<ts>/` for rollback.
+     *
+     * NOT dispatched for partial / rolled-back upgrades — those throw
+     * before reaching the dispatch site so subscribers never observe a
+     * "half upgraded" state.
+     *
+     * Event data:
+     *   - name: string         — Plugin name
+     *   - old_version: string  — Version recorded in the previous manifest
+     *   - new_version: string  — Version in the new manifest
+     *   - source: string       — Origin of the new bundle: 'zip_upload' or 'bundled'
+     */
+    public const PLUGIN_UPGRADED = 'plugin.upgraded';
 }

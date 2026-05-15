@@ -13,18 +13,21 @@ default until the operator explicitly enables them.
 4. [Database Isolation](#database-isolation)
 5. [Plugin Signatures](#plugin-signatures)
 6. [Lifecycle](#lifecycle)
-7. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
-8. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
-9. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
-10. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
-11. [Writing a Plugin](#writing-a-plugin)
-12. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
-13. [Extending the GUI](#extending-the-gui)
-14. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
-15. [Testing a Plugin](#testing-a-plugin)
-16. [Safety Model and Limitations](#safety-model-and-limitations)
-17. [Troubleshooting](#troubleshooting)
-18. [Related Documentation](#related-documentation)
+7. [Installing Plugins](#installing-plugins)
+8. [Upgrading Plugins](#upgrading-plugins)
+9. [Managing Plugins in the GUI](#managing-plugins-in-the-gui)
+10. [Managing Plugins from the CLI](#managing-plugins-from-the-cli)
+11. [Managing Plugins over the REST API](#managing-plugins-over-the-rest-api)
+12. [Sandboxed Plugin Authoring](#sandboxed-plugin-authoring)
+13. [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to)
+14. [Writing a Plugin](#writing-a-plugin)
+15. [Extending the CLI and REST API](#extending-the-cli-and-rest-api)
+16. [Extending the GUI](#extending-the-gui)
+17. [Registering Payback-Method Rail Types](#registering-payback-method-rail-types)
+18. [Testing a Plugin](#testing-a-plugin)
+19. [Safety Model and Limitations](#safety-model-and-limitations)
+20. [Troubleshooting](#troubleshooting)
+21. [Related Documentation](#related-documentation)
 
 ---
 
@@ -38,26 +41,64 @@ boot.
 
 ### What plugins can do
 
-- Subscribe to core events (sync, delivery, chain-drop, transaction, contact,
-  P2P, plugin lifecycle) via `EventDispatcher`
-- Register new services in the `ServiceContainer`
-- Add new repositories (including new database tables)
-- Decorate existing services
-- Register their own CLI subcommands via `PluginCliRegistry` (`eiou <plugin> ...`)
-- Register their own REST endpoints via `PluginApiRegistry`
-  (`* /api/v1/plugins/<plugin>/<action>`, admin-scoped)
+Plugins declare what they want in `plugin.json` — core's IPC
+forwarder bridges each declared surface into the plugin's
+`__dispatch.php` at runtime. The full surface list:
+
+- Subscribe to core events (sync, delivery, chain-drop, transaction,
+  contact, P2P, plugin lifecycle) via the manifest's `subscribes_to`
+  field
+- Contribute filter values for host hooks (e.g. `gui.dashboard.widgets`,
+  `gui.contact.actions`) via `filter_hooks`
+- Inject HTML at named render slots (e.g. `gui.dashboard.after`) via
+  `render_hooks`
+- Add top-level GUI tabs (`tabs`), POST action handlers (`gui_actions`),
+  and CSS/JS asset enqueues (`gui_assets`)
+- Add admin-scoped REST endpoints (`api_routes`) at
+  `/api/v1/plugins/<plugin>/<action>`
+- Add top-level CLI subcommands (`cli_commands`) — operators invoke as
+  `eiou <plugin> ...`
+- Expose non-admin HTTP endpoints (`public_routes`) under
+  `/p/<plugin>/<action>` for customer-bearer-token-authenticated traffic
+  (off by default behind `EIOU_PUBLIC_PLUGIN_ROUTES`)
+- Reach a curated subset of core services via `core_call()` declared in
+  the `core_services` allow-list (`Logger.*`, the `*LookupService`
+  family for read-only facades over node identity / transactions /
+  contacts / runtime config, `PluginEventPublisher.publish` for
+  namespaced cross-plugin events, `WalletOutboundService.send` for
+  autonomous outbound transfers, `PaymentRequestService.create` for
+  billing contacts, `ContainerLifecycleService.start/stopSidecar`
+  for companion-container orchestration; full table in
+  [Plugin-callable surface — policy](#plugin-callable-surface--policy))
+- Own database tables under their `database.user` block, accessed
+  through a per-plugin MySQL user with grants scoped to those tables
 - Register new payback-method rail types (Bitcoin, PayPal, Bizum, …)
   via `PaybackMethodTypeRegistry` so they appear in the GUI type
   picker and route through validation/masking/precision like core types
 
 ### What plugins cannot do (by design)
 
-- Run before `UserContext` is initialized — the lifecycle is wired after core
-  bootstrap, not before
-- Crash the node during discovery, registration, or boot — failures are caught
-  per-plugin, logged, and the plugin is marked as `failed`; core keeps running
-- Persist state outside their own directory or the shared state file
-- Take effect without a node restart — see [Lifecycle](#lifecycle) below
+- Run in the wallet pool process. Sandboxed plugins live in their own
+  PHP-FPM pool as their own Unix user; the wallet pool sees them only
+  through the IPC forwarder's HTTP calls to the plugin's
+  `__dispatch.php`.
+- Read core tables (`contacts`, `transactions`, `api_keys`, `balances`,
+  `payback_methods`, …) or other plugins' tables via raw SQL — the
+  plugin's own MySQL user has grants only on its `owned_tables`. Core
+  data is reached through the `core_call()` gateway against allow-listed
+  services. See [How plugins interact with core
+  data](#how-plugins-interact-with-core-data).
+- Read `/etc/eiou/config/.master.key`, `userconfig.json`, or any other
+  wallet secret. The plugin pool's `open_basedir` and Unix UID block
+  filesystem access; `disable_functions` blocks shell-out and `eval`.
+- Crash the node during discovery, registration, or boot — failures
+  are caught per-plugin, logged, and the plugin is marked as `failed`;
+  core keeps running.
+- Persist state outside their own directory or their own MySQL tables.
+- Take effect on event subscriptions / filter / render hooks without a
+  node restart — the wallet pool's IPC forwarder binds those at boot.
+  Enable / disable for sandboxed plugins applies *immediately* though
+  (the supervisor brings their FPM pool up or down on the toggle).
 
 
 ### Disabled by default
@@ -107,6 +148,31 @@ Plugins shipped inside the Docker image (currently just `hello-eiou`) live at
 boot via `cp -rn` — `-n` means "no clobber", so if an operator has removed or
 modified a bundled plugin, the change persists across container rebuilds.
 
+When the operator pulls a new image whose bundled plugin version is **newer**
+than the copy already on the plugins volume, `cp -rn` correctly leaves the
+old directory alone (operator state lives in MySQL + credentials JSON, and a
+raw overwrite would skip the migration ceremony that preserves it). The
+actual version bump happens inside `Application::boot` via
+`PluginUpgradeService::upgradeFromBundle` — see [Upgrading
+Plugins](#upgrading-plugins) for the full backup → `onUpgrade` → grant
+reconcile → pool reload chain. So:
+
+| Situation | What happens |
+| --- | --- |
+| Bundled plugin not yet on volume | `cp -rn` seeds it. Disabled by default per the safety stance. |
+| Bundled version == installed | No-op. |
+| Bundled version > installed | Auto-upgrade on next boot via the upgrade service (preserves operator state). |
+| Operator removed the bundled plugin | `cp -rn` skips (dir absent on the volume? — actually no: removal happens by deleting the dir, so subsequent boots will re-seed. To suppress re-seeding, operators uninstall via the GUI/CLI, which records the uninstall in the plugins-state file). |
+
+**Trust gate (deferred):** today the auto-upgrade path trusts anything under
+`/app/plugins/` because the operator already trusted the image they pulled.
+Once image-baked plugin signing is wired (build-time `plugin.sig` generation
++ a first-party `.pub` in `/app/eiou/plugins/trusted-keys/`), the
+auto-upgrade should reject bundles whose signature doesn't verify against
+the first-party key — same gate as third-party plugin installs, with the
+key-rotation cost called out in
+[`PluginSignatureVerifier`](../files/src/services/plugins/PluginSignatureVerifier.php).
+
 ### Volume persistence
 
 `/etc/eiou/plugins/` is mounted on a named Docker volume (`{node}-plugins`,
@@ -135,12 +201,20 @@ and backup-priority guidance.
     "psr-4": {
       "Eiou\\Plugins\\MyPlugin\\": "src/"
     }
-  }
+  },
+  "sandboxed": true
 }
 ```
 
-Full manifest with all optional metadata (including the `database` block for
-plugins that want their own MySQL user — see [Database Isolation](#database-isolation)):
+`"sandboxed": true` is required — the loader refuses to load plugins
+without it (see [Sandboxing is mandatory](#sandboxing-is-mandatory)).
+The four other required fields (`name`, `version`, `entryClass`,
+`autoload`) shape the same way they always did.
+
+Full manifest with all the surfaces a sandboxed plugin can declare,
+plus the optional metadata and the `database` block for plugins that
+want their own MySQL user (see [Database
+Isolation](#database-isolation)):
 
 ```json
 {
@@ -153,6 +227,9 @@ plugins that want their own MySQL user — see [Database Isolation](#database-is
       "Eiou\\Plugins\\MyPlugin\\": "src/"
     }
   },
+
+  "sandboxed": true,
+
   "author": {
     "name": "Acme Co.",
     "url": "https://acme.example"
@@ -160,6 +237,48 @@ plugins that want their own MySQL user — see [Database Isolation](#database-is
   "homepage": "https://acme.example/plugins/my-plugin",
   "changelog": "https://acme.example/plugins/my-plugin/CHANGELOG.md",
   "license": "MIT",
+
+  "min_upgradable_from": "1.0.0",
+
+  "core_services": ["Logger.info", "TransactionLookupService.getByTxid"],
+
+  "subscribes_to": ["transaction.received", "sync.completed"],
+  "filter_hooks":  ["gui.dashboard.widgets"],
+  "render_hooks":  ["gui.dashboard.after"],
+
+  "plugin_tab_panel": {"label": "My Plugin", "icon": "fas fa-puzzle-piece"},
+  "gui_actions":  [{"name": "myPluginAction", "tier": "csrf"}],
+  "gui_assets":   [{"type": "css", "path": "assets/styles.css"}],
+  "api_routes":   [{"method": "GET", "action": "fortune"}],
+  "cli_commands": [{"name": "my-plugin"}],
+
+  "public_routes": [
+    {
+      "method": "POST",
+      "action": "chat",
+      "auth": "bearer",
+      "rate_per_minute": 60,
+      "max_body_bytes": 65536,
+      "cors_allowed_origins": ["https://example.com"]
+    }
+  ],
+
+  "payback_method_types": [
+    {
+      "id": "btc",
+      "catalog": {
+        "id": "btc",
+        "label": "Bitcoin",
+        "group": "crypto",
+        "icon": "fab fa-bitcoin",
+        "currencies": ["BTC"],
+        "fields": [
+          {"name": "address", "label": "Bitcoin address", "type": "text", "required": true}
+        ]
+      }
+    }
+  ],
+
   "database": {
     "user": true,
     "owned_tables": [
@@ -174,20 +293,46 @@ plugins that want their own MySQL user — see [Database Isolation](#database-is
 }
 ```
 
+The declarative surface fields (`subscribes_to`, `filter_hooks`,
+`render_hooks`, `tabs`, `gui_actions`, `gui_assets`, `api_routes`,
+`cli_commands`, `public_routes`) replace the in-process registry
+calls plugins used to make in `boot()`. Core's IPC forwarder reads
+each list at boot and bridges the surface into your `__dispatch.php`
+when an event fires, a hook resolves, a request hits, etc. See
+[Sandboxed Plugin Authoring](#sandboxed-plugin-authoring) for the
+contract and [The `__dispatch.php`
+contract](#the-__dispatchphp-contract) for the wire shape.
+
 ### Field reference
 
-| Field         | Required | Type                  | Notes                                                                                          |
-| ------------- | -------- | --------------------- | ---------------------------------------------------------------------------------------------- |
-| `name`        | yes      | string (kebab-case)   | Used as the key in `plugins.json` and in all API responses. Should match the subdirectory name (loader doesn't enforce, but mismatches make the GUI/CLI surfaces confusing). |
-| `version`     | yes      | string (semver)       | Displayed in the Plugins table. Used for log correlation.                                      |
-| `entryClass`  | yes      | string (FQCN)         | Must implement `Eiou\Contracts\PluginInterface`.                                               |
-| `autoload`    | yes      | object                | PSR-4 map: `{ "psr-4": { "Namespace\\": "src/" } }`. Relative to the plugin directory.        |
-| `description` | no       | string                | One-line summary, shown in the table and detail modal.                                         |
-| `author`      | no       | string or object      | `"Acme Co."` or `{"name": "Acme Co.", "url": "https://..."}`. URL is validated as http(s).     |
-| `homepage`    | no       | absolute http(s) URL  | Rendered as an external link in the detail modal.                                              |
-| `changelog`   | no       | absolute http(s) URL  | Fallback when no bundled `CHANGELOG.md` is present. Bundled file wins when both exist.         |
-| `license`     | no       | string (≤ 64 chars)   | SPDX identifier preferred (`MIT`, `Apache-2.0`, etc.). Shown next to version.                  |
-| `database`    | no       | object                | Enables per-plugin MySQL user isolation. See [Database Isolation](#database-isolation).        |
+| Field                  | Required | Type                  | Notes                                                                                          |
+| ---------------------- | -------- | --------------------- | ---------------------------------------------------------------------------------------------- |
+| `name`                 | yes      | string (kebab-case)   | Used as the key in `plugins.json` and in all API responses. Should match the subdirectory name (loader doesn't enforce, but mismatches make the GUI/CLI surfaces confusing). |
+| `version`              | yes      | string (semver)       | Displayed in the Plugins table. Used for log correlation and `version_compare()` in the upgrade flow. |
+| `entryClass`           | yes      | string (FQCN)         | Must implement `Eiou\Contracts\PluginInterface`. Optionally also `UninstallablePlugin` for cleanup hooks or `UpgradablePlugin` for cross-version migration hooks. |
+| `autoload`             | yes      | object                | PSR-4 map: `{ "psr-4": { "Namespace\\": "src/" } }`. Relative to the plugin directory.        |
+| `sandboxed`            | yes      | boolean (`true`)      | Must be `true`. Plugins missing the flag are refused at install, refused at enable, and skipped at discover. See [Sandboxing is mandatory](#sandboxing-is-mandatory). |
+| `description`          | no       | string                | One-line summary, shown in the table and detail modal.                                         |
+| `author`               | no       | string or object      | `"Acme Co."` or `{"name": "Acme Co.", "url": "https://..."}`. URL is validated as http(s).     |
+| `homepage`             | no       | absolute http(s) URL  | Rendered as an external link in the detail modal.                                              |
+| `changelog`            | no       | absolute http(s) URL  | Fallback when no bundled `CHANGELOG.md` is present. Bundled file wins when both exist.         |
+| `license`              | no       | string (≤ 64 chars)   | SPDX identifier preferred (`MIT`, `Apache-2.0`, etc.). Shown next to version.                  |
+| `database`             | no       | object                | Enables per-plugin MySQL user isolation. See [Database Isolation](#database-isolation).        |
+| `min_upgradable_from`  | no       | string (semver)       | Lowest version this manifest can be upgraded from. `PluginUpgradeService` refuses upgrades whose installed version is below this floor. See [Upgrading Plugins → `min_upgradable_from`](#min_upgradable_from-manifest-field). |
+| `core_services`        | no       | list&lt;string&gt;    | Allow-list of `<Service>.<method>` entries the plugin will call via `core_call()`. Methods not in this list are 403'd by the gateway even if they carry `#[PluginCallable]`. See [Plugin-callable surface — policy](#plugin-callable-surface--policy). |
+| `permissions`          | no       | list&lt;string&gt;    | Louder-consent grants required by a subset of `#[PluginCallable]` methods (e.g. bulk address-book enumeration). Each entry is a snake_case key catalogued by the host in `PluginPermissionCatalog`. Keys not in the catalog are rejected at install time. See [Permissions — louder consent than `core_services`](#permissions--louder-consent-than-core_services). |
+| `subscribes_to`        | no       | list&lt;string&gt;    | Event names this plugin handles. Core's IPC forwarder POSTs each fired event into your `__dispatch.php` with `type: "event"`. See [Events a Plugin Can Subscribe To](#events-a-plugin-can-subscribe-to). |
+| `filter_hooks`         | no       | list&lt;string&gt;    | Filter hook names this plugin transforms. IPC forwarder routes each `applyFilter` call into the dispatcher with `type: "filter"`. See [Extending the GUI](#extending-the-gui). |
+| `render_hooks`         | no       | list&lt;string&gt;    | Render hook names this plugin contributes HTML to. IPC forwarder routes each `doRender` call into the dispatcher with `type: "render"`. |
+| `tabs`                 | no       | list&lt;object&gt;    | **Deprecated for plugins.** Was used to declare top-level GUI tabs; the host now owns a single Plugins tab and each plugin registers a sub-panel via `plugin_tab_panel`. Manifests carrying `tabs` log a deprecation warning and the entries are not registered. Use `plugin_tab_panel` instead. |
+| `plugin_tab_panel`     | no       | object               | Single object `{label, icon?, order?}` declaring this plugin's panel inside the host-owned **Plugins** tab (between Activity and Settings). Operators see a dropdown of all installed plugins at the top of that tab; selecting an entry swaps the panel body. `label` is required and shown in the dropdown; `icon` defaults to `fas fa-puzzle-piece`; `order` defaults to 100 (lower = earlier in the dropdown). |
+| `gui_actions`          | no       | list&lt;object&gt;    | POST handlers this plugin exposes inside the wallet GUI. Each entry: `{name, tier?}`. |
+| `gui_assets`           | no       | list&lt;object&gt;    | CSS/JS files to enqueue. Each entry: `{type: "css"\|"js", path}`. Paths are plugin-dir-relative. |
+| `api_routes`           | no       | list&lt;object&gt;    | Admin-scoped REST endpoints under `/api/v1/plugins/<id>/<action>`. Each entry: `{method, action}`. |
+| `cli_commands`         | no       | list&lt;object&gt;    | Top-level CLI subcommands. Each entry: `{name}` — operators invoke as `eiou <name> [args...]`. |
+| `public_routes`        | no       | list&lt;object&gt;    | Non-admin HTTP endpoints under `/p/<plugin-id>/<action>`, off by default behind `EIOU_PUBLIC_PLUGIN_ROUTES`. See [Public routes](#public-routes--non-admin-http-under-pplugin-idaction) for the entry shape. |
+| `payback_method_types` | no       | list&lt;object&gt;    | Plugin-provided payback-method rail types (Bitcoin, PayPal, Bizum, etc.). Each entry: `{id, catalog}`. See [Registering Payback-Method Rail Types](#registering-payback-method-rail-types). |
+| `cron`                 | no       | list&lt;object&gt;    | Host-driven scheduled tasks. Each entry: `{interval_minutes, action, timeout_ms?}` (`interval_minutes` bounded `[1, 1440]`, `action` kebab-case, optional `timeout_ms` overrides the default 5s cron dispatch budget, clamped to 25s — see [Per-entry timeout](#per-entry-timeout-optional)). See [Scheduled Tasks (cron)](#scheduled-tasks-cron). |
 
 ### Validation
 
@@ -284,24 +429,134 @@ identifier limit.
 
 ### What a plugin user can do
 
-Each plugin user gets exactly these privileges on its own table namespace:
+Each plugin user gets exactly these privileges, **issued per-table** for every
+entry in the manifest's `owned_tables`:
 
 ```
-CREATE, ALTER, DROP, INDEX, SELECT, INSERT, UPDATE, DELETE ON eiou.plugin_<snake_id>_%
+CREATE, ALTER, DROP, INDEX, SELECT, INSERT, UPDATE, DELETE ON eiou.<owned_table>
 ```
+
+(One `GRANT` statement per entry. MySQL/MariaDB only treats `%`/`_` as LIKE
+wildcards in the *database* portion of `db.tbl`; the *table* portion is
+stored as a literal name in `mysql.tables_priv`, which is why the grants
+have to enumerate each table individually.)
 
 Not included:
 
 - **`REFERENCES`** — plugins cannot create foreign keys pointing at core
   tables. They can FK between their own tables freely.
 - **`GRANT OPTION`** — plugins cannot sub-grant privileges to other users.
-- **Any privilege on core tables** — `contacts`, `transactions`, `api_keys`,
-  `payback_methods`, etc. are invisible and inaccessible.
+- **Any privilege on `eiou.*`** — there is no database-level grant. Core
+  tables (`contacts`, `transactions`, `api_keys`, `payback_methods`, …) are
+  invisible and inaccessible, and the plugin user cannot even `SHOW TABLES`.
 - **Any privilege on other plugins' tables** — Plugin A cannot read,
   modify, or even enumerate Plugin B's tables.
+- **Any privilege on tables not in this plugin's `owned_tables`** — adding
+  a new table at runtime requires updating the manifest and re-enabling
+  (or re-running boot-time reconciliation) so the per-table grant is
+  issued. A plugin that tries to `CREATE TABLE plugin_<id>_<unlisted>` at
+  runtime will be denied at the privilege check.
 
 The user is bound to `'plugin_<snake_id>'@'localhost'` — never `'%'`. A
 network-layer compromise cannot reach it via remote MySQL auth.
+
+### How plugins interact with core data
+
+The MySQL grants above describe what the plugin's *own database connection*
+can touch. They are not the whole picture — plugins also interact with
+core data, but the two paths run through different mechanisms:
+
+**Route 1 — Plugin-owned tables via direct PDO**
+
+Each enabled plugin gets a credentials file at
+`/etc/eiou/credentials/plugin-<id>.json` (mode `0640`, owned by
+`root:eiou-pc-<hash>`). The supervisor adds the plugin's pool user
+(`eiou-p-<same-hash>`) to that group on every apply, and the FPM pool's
+`open_basedir` is extended to admit the file's exact path. The plugin
+reads the file from inside `__dispatch.php` and constructs its own PDO,
+authenticated as `plugin_<snake_id>` — the same user whose MySQL grants
+are scoped to `owned_tables`. No gateway round-trip, no allow-list
+entry, no JSON-encoded query body. The master key never enters the pool
+process; the plaintext password does, but that password is bound to
+`@'localhost'` and useless without already being inside the pool
+(MySQL's grants are what gate the surface, not the password's secrecy).
+
+What it sees: only the tables listed in this plugin's `owned_tables`.
+Core tables (`contacts`, `transactions`, `api_keys`, `payback_methods`,
+`balances`, …) and other plugins' tables are not just hidden — they
+are denied at the MySQL privilege check. `SELECT * FROM contacts` from
+this PDO returns MySQL error 1142.
+
+This is the route you use for anything the plugin *owns*: storing its
+own state, building its own indexes, running its own analytics on its
+own rows. See *Running queries* below for the dispatch-side code.
+
+**Route 2 — Host-curated services via `core_call($service, $method, …)`**
+
+What it sees: whatever each host service chooses to expose through methods
+marked `#[PluginCallable]`. Those methods run inside the wallet process
+with full app-user database privileges and return whatever shape they
+normally return. The plugin's manifest must allow-list each
+`<Service>.<method>` it intends to call in `core_services`.
+
+This is the route you use for anything the plugin needs to *read* or
+*react to* in core data. A notifications plugin doesn't query
+`transactions` directly — it subscribes via `subscribes_to` and/or calls
+`TransactionLookupService::getRecent()`. A custom payback-method type
+doesn't query `payback_methods` directly — it registers via the
+manifest's `payback_method_types` and gets invoked with the rows already
+loaded.
+
+Why the split: the host services act as a typed, business-rule-aware
+boundary. They redact what shouldn't leave the core, gate sensitive
+operations behind sensitive-access, and stay stable across schema
+changes. A direct `SELECT * FROM api_keys` from a plugin would be a
+disaster on multiple axes (schema coupling, no redaction, no
+authorization, no audit) — `ApiKeyService::list()` returns hashed
+identifiers and never plaintext, regardless of caller.
+
+What this means in practice:
+
+| Goal | Right path |
+| ---- | ---------- |
+| Read recent transactions | `core_call('TransactionLookupService', 'getReceivedUserTransactions', …)` |
+| Look up a contact by pubkey hash | `core_call('ContactLookupService', 'getByPubkeyHash', …)` |
+| Look up a contact by name | `core_call('ContactLookupService', 'getByName', …)` |
+| Check whether a contact is online | `core_call('ContactLookupService', 'getOnlineStatus', …)` |
+| List accepted contacts (paginated) | `core_call('ContactLookupService', 'listAccepted', …)` (also requires `permissions: ["contact_address_book_enumerate"]`) |
+| List pending contact requests | `core_call('ContactLookupService', 'listPending', …)` (also requires `permissions: ["contact_pending_enumerate"]`) |
+| Read a contact's available credit | `core_call('ContactCreditLookupService', 'getCreditState', …)` (also requires `permissions: ["contact_credit_read"]`) |
+| Look up a transaction by memo | `core_call('TransactionLookupService', 'getByMemo', …)` |
+| Read sent transactions | `core_call('TransactionLookupService', 'getSentUserTransactions', …)` (also requires `permissions: ["transaction_history_enumerate"]`) |
+| Read transactions between two pubkeys | `core_call('TransactionLookupService', 'getTransactionsBetweenPubkeys', …)` (also requires `permissions: ["transaction_history_enumerate"]`) |
+| Read aggregate stats for a period | `core_call('TransactionStatisticsLookupService', 'getStatsForPeriod', …)` (also requires `permissions: ["transaction_history_aggregate"]`) |
+| Read the wallet balance | `core_call('BalanceLookupService', 'getUserBalance', …)` (also requires `permissions: ["wallet_balance_read"]`) |
+| Read a contact's balance | `core_call('BalanceLookupService', 'getUserBalanceContact', …)` (also requires `permissions: ["wallet_balance_read"]`) |
+| Look up a payment request by id | `core_call('PaymentRequestLookupService', 'getByRequestId', …)` |
+| List pending incoming payment requests | `core_call('PaymentRequestLookupService', 'listPendingIncoming', …)` (also requires `permissions: ["payment_request_enumerate"]`) |
+| List outgoing payment requests | `core_call('PaymentRequestLookupService', 'listOutgoing', …)` (also requires `permissions: ["payment_request_enumerate"]`) |
+| Read your own configured payback methods | `core_call('PaybackMethodLookupService', 'getMyConfiguredMethods', …)` (also requires `permissions: ["payback_method_read_own"]`) |
+| Read a contact's payback preferences | `core_call('PaybackMethodLookupService', 'getContactPaybackPreference', …)` (also requires `permissions: ["payback_method_read_contact"]`) |
+| Read your own permissions / manifest | `core_call('PluginLookupService', 'getOwnPermissions', …)` / `'getOwnManifest'` |
+| List other enabled plugins | `core_call('PluginLookupService', 'listEnabledPluginIds', …)` (also requires `permissions: ["plugin_inventory_read"]`) |
+| Send EIOU on behalf of the wallet | `core_call('WalletOutboundService', 'send', …)` (also requires `permissions: ["wallet_outbound_send"]`) |
+| Bill a contact (mint a payment request) | `core_call('PaymentRequestService', 'create', …)` |
+| Stop your sidecar container on disable | `core_call('ContainerLifecycleService', 'stopSidecar', …)` |
+| React to a sync event | declare `subscribes_to: ["sync.completed"]` in the manifest |
+| Store the plugin's own state | direct PDO against an `owned_tables` entry (see *Running queries*) |
+
+Common asks that are deliberately unreachable:
+
+- Reading all wallet keys — no service exposes plaintext private keys; the
+  per-plugin user can't read the wallet table either.
+- Reading API key plaintext — `ApiKeyService` returns only hashed
+  identifiers; the per-plugin user can't read `api_keys` either.
+- `SELECT * FROM contacts` — privilege denied at MySQL.
+- Modifying another plugin's tables — privilege denied at MySQL.
+
+If a host service doesn't yet expose the data your plugin needs, the
+right move is to add or extend a `#[PluginCallable]` method — not to
+widen MySQL grants.
 
 ### Resource limits
 
@@ -317,40 +572,95 @@ The four `db_limits` keys map directly to MySQL's per-user resource caps:
 Defaults cap a runaway loop at roughly 3 queries per second sustained —
 non-restrictive for honest plugins, visible enough to halt a bug.
 
-### Getting a PDO
+### Running queries
 
-Use `ServiceContainer::getPluginPdo($pluginId)` from your `boot()` or
-runtime code:
+The plugin reads its credentials file from inside `__dispatch.php` and
+opens a PDO directly. Schema setup happens lazily the first time the
+plugin sees a relevant envelope (or once on `type: "cli"` from an
+install-time command) rather than at boot — there is no `boot()`
+callback running inside the sandbox.
 
 ```php
-class MyPlugin implements PluginInterface
-{
-    public function getName(): string    { return 'my-plugin'; }
-    public function getVersion(): string { return '1.0.0'; }
+// Inside __dispatch.php (runs as eiou-p-<hash> in the plugin's pool):
 
-    public function register(ServiceContainer $c): void {}
+function pluginPdo(PluginLog $log): ?PDO {
+    static $pdo = null;
+    if ($pdo !== null) return $pdo;
 
-    public function boot(ServiceContainer $container): void
-    {
-        $pdo = $container->getPluginPdo($this->getName());
-
-        // Create your tables (idempotent — called on every boot).
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS plugin_my_plugin_subscriptions (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                topic VARCHAR(64) NOT NULL,
-                created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6)
-            ) ENGINE=InnoDB
-        ");
+    $pluginId  = basename(__DIR__);
+    $credsPath = '/etc/eiou/credentials/plugin-' . $pluginId . '.json';
+    $raw       = @file_get_contents($credsPath);
+    if ($raw === false) {
+        $log->error('credentials file unreadable', ['path' => $credsPath]);
+        return null;
     }
+    $cfg = json_decode($raw, true);
+    if (!is_array($cfg) || !isset($cfg['host'], $cfg['database'], $cfg['username'], $cfg['password'])) {
+        $log->error('credentials file malformed');
+        return null;
+    }
+
+    try {
+        $dsn = "mysql:host={$cfg['host']};dbname={$cfg['database']};charset=utf8mb4";
+        $pdo = new PDO($dsn, $cfg['username'], $cfg['password'], [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
+    } catch (PDOException $e) {
+        $log->error('plugin PDO connect failed', ['error' => $e->getMessage()]);
+        return null;
+    }
+    return $pdo;
 }
+
+function ensureSchema(PluginLog $log): bool {
+    static $applied = false;
+    if ($applied) return true;
+    $pdo = pluginPdo($log);
+    if ($pdo === null) return false;
+    $pdo->exec(<<<SQL
+CREATE TABLE IF NOT EXISTS plugin_my_plugin_subscriptions (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    topic       VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
+    UNIQUE KEY ux_topic (topic)
+) ENGINE=InnoDB
+SQL);
+    $applied = true;
+    return true;
+}
+
+// SELECT
+$stmt = pluginPdo($log)->prepare(
+    'SELECT id, topic FROM plugin_my_plugin_subscriptions WHERE topic = ?'
+);
+$stmt->execute([$topic]);
+$rows = $stmt->fetchAll();
+
+// INSERT / UPDATE / DELETE
+$stmt = pluginPdo($log)->prepare(
+    'INSERT IGNORE INTO plugin_my_plugin_subscriptions (topic) VALUES (?)'
+);
+$stmt->execute([$topic]);
+$insertedId = $pdo->lastInsertId();
+$affected   = $stmt->rowCount();
 ```
 
-The PDO is cached per-plugin for the lifetime of the request; repeated
-`getPluginPdo()` calls from the same request return the same connection.
+The PDO is local to the FPM worker, so transactions, prepared-statement
+caching, and `lastInsertId()` work the way they normally do —
+`BEGIN`/`COMMIT` around a multi-step write is fine when the plugin
+needs cross-statement atomicity.
 
-**Do not call `$container->getPdo()`.** That returns the root/app PDO —
-the credentials plugin users are specifically sandboxed away from.
+No `core_services` allow-list entry is needed for owned-table access —
+the path is filesystem + MySQL privileges. The credentials file is
+readable only to the plugin's own pool user (via `eiou-pc-<hash>` group
+membership) and only at one exact path under `/etc/eiou/credentials/`
+(the rest of the directory is outside the pool's `open_basedir`).
+Privileges are enforced at the MySQL layer — the per-plugin user can
+only touch the manifest's `owned_tables`, so `SELECT * FROM contacts`
+(or any other core table) is denied with MySQL error 1142 even though
+the PDO connection itself is unrestricted.
 
 ### Credential storage
 
@@ -366,23 +676,192 @@ It is never shown to the operator or logged; rotation replaces the
 ciphertext in-place and runs `ALTER USER ... IDENTIFIED BY NEW` in the
 same transaction.
 
+### Sibling-container credentials
+
+Some plugins are easier to ship as the eIOU plugin **plus a sibling
+Docker container** the operator deploys separately — e.g. a heavy
+provider-client library that doesn't fit cleanly into a per-request
+PHP-FPM pool, or a long-running daemon that needs to live somewhere
+the FPM lifecycle doesn't reach. To let the sibling share state with
+the plugin's MySQL user, the host writes a credentials JSON file at
+plugin-enable time that the operator can mount read-only into the
+sibling.
+
+**Path and contents:**
+
+```
+/etc/eiou/credentials/plugin-<plugin-id>.json
+```
+
+```json
+{
+  "host":      "127.0.0.1",
+  "port":      3306,
+  "database":  "eiou",
+  "username":  "plugin_my_plugin",
+  "password":  "<plaintext>",
+  "issued_at": "2026-05-13T11:56:00Z"
+}
+```
+
+`host` is what the wallet sees inside its own container (typically
+`127.0.0.1`). The operator's sibling will almost certainly need to
+override this in its own configuration to point at the eIOU
+container's address on the docker network — the wallet has no way
+to know the operator's network topology, so it writes what's
+locally true and leaves the override to the deployer.
+
+**File permissions and per-plugin group:**
+
+The file is mode `0640` owned by `root:eiou-pc-<8hex>` where the
+hex is `sha256(pluginId)[0:8]` — the same shape used elsewhere
+in plugin sandboxing (the per-plugin system user is
+`eiou-p-<same-8hex>`, so operators can recognize the user/group
+pair belongs to the same plugin). The supervisor creates the
+group at first apply (`groupadd -rf`, system-range GID,
+idempotent) and removes it on plugin disable / uninstall
+(`groupdel`, refused while members exist so a sibling deployment
+that's still attached doesn't get its group pulled out from
+under it).
+
+The credentials directory itself is mode `0711 root:root`:
+traverse-only, no list. Unprivileged host users can't enumerate
+which plugins exist; the per-file group on each `plugin-<id>.json`
+governs actual reads.
+
+**Operator workflow on the sibling-container side:**
+
+Pick a host-side uid for the sibling container's process and add
+it to the specific plugin's group. The plugin id whose
+credentials the sibling needs determines which group:
+
+```bash
+# On the docker host, AFTER the plugin has been enabled in the wallet
+# (the group only exists once apply-credentials has run).
+sudo usermod -a -G eiou-pc-$(printf '%s' my-plugin | sha256sum | cut -c1-8) <sibling-uid-name>
+```
+
+Then bind-mount the specific credentials file into the sibling:
+
+```yaml
+# docker-compose.yml for the sibling container
+services:
+  my-plugin-companion:
+    image: vendor/my-plugin-companion:1.0.0
+    user: "1500:1500"   # uid added to eiou-pc-<hex> above
+    volumes:
+      - /etc/eiou/credentials/plugin-my-plugin.json:/run/credentials.json:ro
+```
+
+Inside the sibling, read `/run/credentials.json`, override `host`
+to the eIOU container's network address, and use the values to
+open a MariaDB connection.
+
+**Trust model:**
+
+- Each plugin's credentials file lives in its own group; no
+  cross-plugin read access on the host. A sibling configured for
+  plugin A can't drift into reading plugin B's credentials by
+  mistake (it doesn't have the group).
+- The wallet pool (`www-data`) is **not** in any of these groups.
+  It doesn't need to read the credential files — it has the master
+  key and decrypts credentials in memory whenever it needs to act
+  on them. So a wallet pool compromise doesn't grant access to the
+  on-disk credential files beyond what it already has via the DB
+  directly.
+- Plugin FPM pools run as `eiou-p-<hex>` users. Each pool user is
+  added to its **own** `eiou-pc-<same-hex>` group on apply, and the
+  pool's `open_basedir` admits **its own** credentials file as an
+  exact path (no trailing slash, so the rest of
+  `/etc/eiou/credentials/` is outside basedir). A plugin can read its
+  own credentials file; reading a sibling plugin's is denied at both
+  the group layer and the basedir layer.
+- The file holds **plaintext**, not encrypted — sibling containers
+  can't decrypt the wrapped form (they don't have the master key,
+  by design) so the protection is purely filesystem-level.
+  Operators with full host root can read every credentials file;
+  this is unchanged from any other secret on disk and is
+  intentional.
+
+The file is rewritten on every plugin enable and on every boot
+reconcile (so a `/etc/eiou` volume recreation or manual file
+deletion self-heals on the next boot). It is removed on plugin
+disable and on uninstall.
+
+**Operator obligation when retiring a plugin with a sibling:**
+
+`groupdel` refuses to remove a group with live members. If the
+operator added a sibling-container uid to `eiou-pc-<hex>` and then
+uninstalls the plugin without first removing that uid from the
+group, the supervisor's `groupdel` is rejected, the group persists,
+and the sibling uid retains its group membership. If the same
+plugin id is later reinstalled, the group already exists with the
+sibling still attached — meaning the sibling would inherit access
+to the new plugin's credentials without the operator opting in
+again. Two ways to avoid this:
+
+- **Recommended.** Detach the sibling before uninstall: stop the
+  sibling container, then `gpasswd -d <sibling-uid-name>
+  eiou-pc-<hex>` to remove it from the group, then `eiou plugin
+  uninstall <name>`. The supervisor's `groupdel` succeeds and the
+  group is fully torn down.
+
+- **Defensive.** If you only operate one set of plugins on a
+  host, reusing a plugin id with a new author / new database
+  schema is uncommon — but if you do reuse ids, also run
+  `getent group eiou-pc-<hex>` after uninstall to spot any
+  lingering members and clean them up before reinstalling.
+
 ### Boot-time reconciliation
 
 On every node boot, after the master key is loaded and before plugins'
 `register()` runs, the loader runs an idempotent reconcile pass:
 
 - For each enabled plugin with `database.user: true`: `CREATE USER IF NOT
-  EXISTS` + `ALTER USER` + `GRANT`. Self-heals after a `mysql-data` volume
-  recreation, a manual `DROP USER`, an operator `db_limits` edit, or a
-  master-key rotation.
+  EXISTS` + `ALTER USER` + one `GRANT` per `owned_tables` entry. Self-heals
+  after a `mysql-data` volume recreation, a manual `DROP USER`, an operator
+  `db_limits` edit, or a master-key rotation. A manifest that adds a new
+  table is picked up automatically on the next reconcile.
 - For each disabled plugin that still has a credential row: `REVOKE ALL
-  PRIVILEGES`. Self-heals cases where `setEnabled(false)` flipped the flag
-  but didn't revoke (shouldn't happen in current code, but the reconciler
-  is defensive).
+  PRIVILEGES, GRANT OPTION FROM <plugin_user>` (the no-`ON` form, which
+  drops every grant the user holds without needing to know which tables
+  were granted). Self-heals cases where `setEnabled(false)` flipped the
+  flag but didn't revoke (shouldn't happen in current code, but the
+  reconciler is defensive).
 
 Per-plugin reconcile errors are logged and surfaced as `error:<msg>` in
 the plugin list's status field. They do **not** block node boot — the
 operator investigates via the GUI/CLI list.
+
+### App DB user privileges
+
+The plugin isolation feature requires the application's own MySQL user
+(`eiou_user_<hex>`, generated by `DatabaseSetup::freshInstall`) to hold
+two upstream privileges so it can in turn create plugin users and grant
+them their per-table access:
+
+```
+GRANT ALL ON `eiou`.* TO 'eiou_user_<hex>'@'localhost' WITH GRANT OPTION;
+GRANT CREATE USER ON *.* TO 'eiou_user_<hex>'@'localhost';
+```
+
+Fresh installs receive these directly during database provisioning. On
+container boot a small root-credentialed helper (`files/scripts/grant-app-user-plugin-privileges.php`,
+invoked from `startup.sh` after MariaDB is up) re-applies them
+idempotently — no-op when the master key isn't loadable yet, and no-op
+when the user already holds them. This exists so installs that pre-date
+the plugin isolation feature pick up the required grants on first boot
+under a new image, and so a manual `REVOKE` against the app user
+self-heals on the next restart.
+
+These privileges are scoped to user creation and `eiou.*`-grant
+delegation only — the app user cannot read `mysql.*`, cannot `FILE`,
+`PROCESS`, or `SHUTDOWN`, and cannot escalate to MariaDB root. The
+threat-model trade-off is that an attacker who already controls the app
+user (which has full read/write on `eiou.*`, including wallet keys) can
+now also create persistent backdoor users — but they could already
+self-grant equivalent access via `WITH GRANT OPTION`, so this is a
+timing change, not a privilege-surface widening.
 
 ### Uninstall
 
@@ -399,8 +878,10 @@ status so the operator can investigate):
    `onUninstall()` method runs while the plugin still has MySQL grants
    so it can clean up its own data. Exceptions are logged but do not
    block the remaining steps.
-2. **`REVOKE ALL PRIVILEGES`** — locks out the plugin user before the
-   table drops, so a hostile plugin can't race the next steps.
+2. **`REVOKE ALL PRIVILEGES, GRANT OPTION FROM <plugin_user>`** — the
+   no-`ON` form drops every privilege the user holds in one statement,
+   regardless of which tables had grants. Locks out the plugin user before
+   the table drops so a hostile plugin can't race the next steps.
 3. **`DROP TABLE IF EXISTS`** for every table in `owned_tables`. Each
    name is revalidated against the `/^plugin_[a-z0-9_]+$/` shape so a
    manifest edited between install and uninstall cannot inject
@@ -432,8 +913,15 @@ class MyPlugin implements UninstallablePlugin
 
     public function onUninstall(ServiceContainer $container): void
     {
-        // Runs BEFORE MySQL revoke — full grants still available.
-        // Plugin's getPluginPdo() still returns a working connection.
+        // Runs BEFORE MySQL revoke — full grants still available, so
+        // the plugin's own PDO (constructed from
+        // `/etc/eiou/credentials/plugin-<id>.json` inside the pool,
+        // see *Running queries*) still works against `owned_tables`.
+        // Sandboxed plugins reach this hook through an
+        // `__dispatch.php` envelope with `type: "uninstall"`; the
+        // `$container` argument is retained on the interface for
+        // signature compatibility but the in-pool ServiceContainer
+        // cannot reach the master key or `dbconfig.json`.
         //
         // Typical uses: ping an external service to revoke a
         // subscription, purge a remote cache, write a final audit row.
@@ -645,60 +1133,463 @@ vector. They don't close:
 
 ## Lifecycle
 
-`PluginLoader` runs three phases, all driven by `Application::__construct`:
+Two distinct lifecycles run in parallel because the wallet and the
+plugin live in different PHP-FPM pools.
 
-### 1. `discover()`
+### Wallet-side lifecycle — IPC forwarder registration
 
-- Scans `/etc/eiou/plugins/` for subdirectories with a `plugin.json`
-- Parses each manifest; malformed JSON or missing required fields skip the
-  plugin silently
-- Registers the PSR-4 autoload map with the SPL autoloader
-- Instantiates the entry class (still without wiring to `ServiceContainer`)
-- Marks each plugin's status as `discovered`
+`PluginLoader` runs three phases inside `Application::__construct`,
+all in the **wallet's** PHP-FPM worker (not the plugin's):
 
-### 2. `registerAll(ServiceContainer $c)`
+1. **`discover()`** — Scans `/etc/eiou/plugins/` for subdirectories
+   with a `plugin.json`. Parses each manifest. Records the plugin's
+   declarative surfaces (`subscribes_to`, `filter_hooks`,
+   `render_hooks`, `tabs`, `gui_actions`, `gui_assets`, `api_routes`,
+   `cli_commands`, `public_routes`). Plugins missing
+   `"sandboxed": true` are recorded with status `legacy_unsupported`
+   and skipped.
 
-Runs **before** `ServiceContainer::wireAllServices()`.
+2. **`reconcileIsolation()` + `reconcileSandbox()`** — Boot-time
+   self-heal. Idempotent: re-applies the per-plugin MySQL user +
+   grants from the manifest; re-applies the per-plugin FPM pool
+   config; prunes upgrade backups older than 30 days. Failures here
+   are logged but don't abort the wallet boot.
 
-- Calls `register()` on every enabled, successfully-discovered plugin
-- Use this phase to add new services, register custom repositories, or
-  reserve database tables
-- Other plugins' services may not yet be available — don't assume they are
-- A thrown exception disables just this plugin (logged, marked `failed`) but
-  does not abort core bootstrap
+3. **`PluginIpcForwarder::registerAll()`** — Walks every enabled
+   sandboxed plugin's manifest surfaces and registers in-process
+   bridges:
+   - For each `subscribes_to` entry, subscribes the
+     `EventDispatcher` so that when an in-process event fires, the
+     forwarder HTTPS-POSTs the event payload into the plugin's
+     `__dispatch.php` with `type: "event"`.
+   - For each `filter_hooks` / `render_hooks` entry, registers an
+     `onFilter` / `onRender` listener that does the same.
+   - For each `gui_actions`, `api_routes`, `cli_commands` entry,
+     registers a handler in the matching in-process registry
+     (`GuiActionRegistry`, `PluginApiRegistry`, `PluginCliRegistry`)
+     that forwards the invocation as an IPC call.
 
-### 3. `bootAll(ServiceContainer $c)`
+The wallet pool **does not load the plugin's PHP code** — sandboxed
+plugins live in their own FPM pool and only that pool sees their
+classes. `PluginInterface::register()` and `PluginInterface::boot()`
+are still on the interface for compatibility but they run inside the
+plugin's pool on each `__dispatch.php` request, not in the wallet
+pool's boot path.
 
-Runs **after** `ServiceContainer::wireAllServices()`.
+### Plugin-side lifecycle — per-request init in the plugin pool
 
-- Calls `boot()` on every plugin that survived `registerAll`
-- All core services are wired and ready — subscribe to events, decorate
-  services, register CLI/API extensions here
-- Same failure isolation as `registerAll`
+Each call into the plugin's pool — whether from the IPC forwarder
+(`type: "event"` / `"filter"` / `"render"` / `"action"` / `"rest"` /
+`"cli"`) or from a customer (`type: "public"`) — runs the dispatcher
+in a fresh-or-recycled FPM worker. The dispatcher:
 
-### Per-process lifecycle
+- Reads the request envelope
+- Loads the plugin's autoload + entry class
+- Runs the plugin's per-type handler (which the plugin author writes
+  in `__dispatch.php`)
+- Buffers any log lines into `_log`, returns the response
 
-Every process that loads the eIOU core — PHP-FPM worker, the `eiou` CLI, the
-background processors, per-message P2P workers — constructs its own
-`Application` singleton and runs the full lifecycle. Event subscriptions are
-*process-local*: a plugin that subscribes to `sync.completed` inside a PHP-FPM
-worker will not react to sync events happening inside the `P2pWorker`
-process. Each runtime needs its own copy of the subscriptions, so each
-runtime runs the lifecycle locally.
+Workers cycle on `pm.max_requests` / `pm.process_idle_timeout` —
+opcache picks up new code via mtime, so the upgrade flow's directory
+swap plus FPM SIGUSR2 reload is what causes workers to pick up the
+new on-disk version.
 
-### Why changes need a restart
+### One-shot `on_enable` hook
 
-Toggling a plugin on or off updates `/etc/eiou/config/plugins.json`
-immediately, but the running processes have already passed through
-`registerAll` / `bootAll` — their service graphs are frozen and their event
-subscriptions are wired. A restart recycles those processes through a fresh
-lifecycle, picking up the new state.
+When `PluginLoader::setEnabled($id, true)` succeeds, the host
+dispatches a single `lifecycle` envelope at the plugin's
+`__dispatch.php` before returning to the caller:
 
-The GUI's **Restart node** button (shown inside the yellow "changes saved"
-banner when the on-disk state diverges from what's actually loaded) triggers
-this via the request-marker pattern documented in
-[ARCHITECTURE.md](ARCHITECTURE.md) — see `RestartRequestService` and
-`NodeRestartService`.
+    {
+      "type":    "lifecycle",
+      "name":    "on_enable",
+      "context": {"fired_at": 1715635200}
+    }
+
+This is the sandbox-model replacement for the pre-sandbox `boot()`
+method. Plugins that need to wire sidecars (call
+`ContainerLifecycleService.startSidecar`), prime caches, verify a
+provider, or do any other one-shot setup do it here. The dispatch
+budget is 5 seconds (same as `cron`); failures are logged but do
+**not** roll back the enable — the plugin's state is already
+committed by the time the hook fires. Disable does NOT mirror this:
+by the time we'd dispatch the plugin's pool has already been
+dropped, and the call would never reach a live worker. Plugins that
+need cleanup work should register it inside the `on_enable` handler
+(e.g. via a manifest-declared cron that drains a wind-down queue).
+
+Plugin-side handling looks like every other envelope:
+
+    if ($type === 'lifecycle' && $name === 'on_enable') {
+        // one-shot setup work — verify, prime, register sidecars …
+        return ['ok' => true];
+    }
+
+### Why GUI / event subscriptions need a wallet restart
+
+Toggling a plugin on or off in `/etc/eiou/config/plugins.json` is
+immediate, and the supervisor brings the plugin's pool up or down on
+the toggle — so **plugin endpoints work immediately**. But the
+wallet pool's in-process IPC forwarder binds its event / hook
+listeners at boot (`registerAll`'s pass). Those bindings are frozen
+in the running wallet workers; a wallet restart recycles them
+through `registerAll` again so the new on-disk subscriptions list
+takes effect.
+
+The GUI's **Restart node** button (shown inside the yellow "changes
+saved" banner when the wallet's on-disk plugin state diverges from
+what's bound in the running workers) triggers this via the
+request-marker pattern documented in [ARCHITECTURE.md](ARCHITECTURE.md)
+— see `RestartRequestService` and `NodeRestartService`.
+
+---
+
+## Installing Plugins
+
+There are three ways to land a plugin's files in `/etc/eiou/plugins/<name>/`:
+
+1. **Drop the directory in by hand** — log in to the container, copy the
+   plugin's files into `/etc/eiou/plugins/`, then enable it in the GUI / CLI.
+   This is the path operators with shell access have always had. The plugin
+   is disabled by default ([Disabled by default](#disabled-by-default)).
+
+2. **Bundled** — plugins shipped inside the Docker image are seeded into the
+   plugins volume on first boot via `cp -rn` ([Bundled
+   plugins](#bundled-plugins)).
+
+3. **Upload a `.zip` through the GUI** — the operator picks a `.zip` from
+   their machine and the node stages it disabled, after a layered validation
+   pass. The rest of this section documents that path.
+
+### Why a separate code path
+
+A plugin installs at PHP-FPM privilege — once it runs, it can do anything PHP
+can do (see [No sandboxing](#no-sandboxing)). The upload path's job is not to
+make every plugin safe — it can't — but to make the *install decision*
+deliberate and to ensure that a malformed, oversized, or hostile zip cannot
+exploit the node before the operator has even decided whether to enable the
+plugin. Trust comes from the operator (and optionally the signature trust
+chain — see [Plugin Signatures](#plugin-signatures)). Mechanical safety
+comes from the gates below.
+
+### Service
+
+`Eiou\Services\Plugins\PluginInstallService` owns the validation and extraction
+pipeline. The GUI's `pluginsUpload` action and the CLI's `eiou plugin install
+<zip-path>` both delegate to it — same validation gates, same staging /
+atomic-publish ceremony, same `PLUGIN_INSTALLED` event. The CLI form is the
+scripted-rollout entry point (`docker cp` the zip into the container, then
+run the install command via `docker exec`); operators with shell access can
+still drop a plugin directory in by hand, but the install service is what
+the rest of the docs assume going forward.
+
+### Validation pipeline
+
+Validations run in the order listed. The pipeline short-circuits on the
+first failure, and any bytes already written to the staging directory are
+removed before the error returns.
+
+| Gate                          | Limit / Rule                                                                                         | Why                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| File readable, non-empty      | `PluginInstallService::MAX_ZIP_BYTES` (25 MiB)                                                       | First-line DoS guard; rejects before the zip is even opened.                                     |
+| Magic bytes                   | First 4 bytes must be `PK\x03\x04`                                                                   | Client-supplied MIME / extension aren't trusted; the magic header is.                            |
+| Path traversal                | No `..`, no leading `/`, no `\`, no `./`                                                             | Zip-slip — prevents extraction from escaping `/etc/eiou/plugins/`.                               |
+| Single top-level directory    | All entries share one root, matching `^[a-z0-9][a-z0-9_-]{0,63}$`                                    | A plugin is one named directory; multiple roots or capital-letter names break the loader's contract. |
+| Per-file uncompressed size    | `MAX_FILE_BYTES` (15 MiB)                                                                            | No single file can dominate the install; sized to forgive heavy single assets (large splash images, bundled fonts) without raising the aggregate cap. |
+| Total uncompressed size       | `MAX_UNCOMPRESSED_BYTES` (50 MiB)                                                                    | Disk-space cap.                                                                                  |
+| File count                    | `MAX_FILE_COUNT` (500)                                                                               | Inode-pressure cap.                                                                              |
+| Compression ratio             | `MAX_COMPRESSION_RATIO` (100:1)                                                                      | Zip-bomb sentinel; legitimate plugin zips sit well under 20:1.                                   |
+| File extension allow-list     | `php, json, md, txt, css, js, map, html, htm, svg, png, jpg, jpeg, gif, webp, ico, woff, woff2, ttf, otf, eot` | Refuses `.phar`, `.so`, `.htaccess`, hidden dotfiles, anything outside the plugin asset contract. |
+| Symlink rejection             | No `is_link()` paths in the extracted tree                                                           | Belt-and-suspenders: even if entry walk approved a name, an actual symlink on disk is anomalous. |
+| Extraction stays inside root  | `realpath()` of every extracted path is under the staging dir                                        | Cross-checks the entry walk against the post-extraction filesystem state.                        |
+| Manifest validation           | `plugin.json` parses, `name` matches directory, `version` and `entryClass` present                   | Catches corrupt manifests before the loader has to.                                              |
+| No overwrite                  | Target dir must not already exist                                                                    | Install is not update; the GUI then offers a confirm modal that re-routes the same zip through the upgrade flow, and the CLI surfaces `eiou plugin upgrade <zip-path>` as the replacement command. |
+| Signature (mode dependent)    | In `require` mode, the zip must include a valid `plugin.sig` against a trusted key                   | See [Enforcement modes](#enforcement-modes). `warn` and `off` modes accept the upload but report the verifier's verdict in the response. |
+
+The numeric limits and the allow-list are returned to the GUI by the
+`pluginsUploadLimits` action so the upload form can echo them without
+duplicating constants.
+
+### Staging and atomic publish
+
+Uploaded bytes are not written under their final name. The pipeline:
+
+1. The upload tmp file (provided by PHP under `$_FILES['plugin_zip']['tmp_name']`)
+   is opened read-only via `ZipArchive`.
+2. Every entry is walked with `statIndex()` — no extraction yet — and the
+   gates above run against the metadata.
+3. If the walk passes, extraction targets a sibling directory:
+   `/etc/eiou/plugins/.staging-<16-hex-chars>/`. A failure here leaves the
+   staging directory in place, which the service immediately recursive-deletes
+   inside the catch block.
+4. The extracted tree is walked again for symlinks / realpath escapes, and
+   the manifest is parsed.
+5. If signature mode is `require`, the verifier runs against the staged tree.
+   A bad verdict aborts the install; the staging directory is cleaned up.
+6. `rename()` moves `.staging-…/<plugin_id>/` to
+   `/etc/eiou/plugins/<plugin_id>/`. `rename()` inside the same filesystem is
+   atomic, so `PluginLoader::discover()` never sees a half-written plugin.
+7. The staging parent is removed. The `PLUGIN_INSTALLED` event fires.
+
+If anything between steps 3 and 6 fails, the catch block recursive-deletes
+the staging directory before re-throwing, so failed uploads leave no
+artefacts on the volume.
+
+### What the upload does *not* do
+
+- **Enable.** Installed plugins land disabled. No `register()` or `boot()`
+  runs. The operator must toggle the plugin on and restart the node, exactly
+  like a manually-dropped-in plugin. This matches the
+  [Disabled by default](#disabled-by-default) stance.
+- **Replace an existing plugin.** Re-uploading a plugin whose `name` is
+  already installed returns `409 already_installed` with a message
+  pointing at the upgrade flow. To replace the plugin while preserving
+  its data, the GUI offers a confirm modal that re-routes the same zip
+  through `pluginsUploadAsUpgrade`. See [Upgrading
+  Plugins](#upgrading-plugins) for the full story. (Operators who
+  *do* want a destructive replace — losing the plugin's DB tables,
+  credentials, and gateway token — uninstall first and then upload as
+  a fresh install.)
+- **Bypass signature enforcement.** If `PLUGIN_SIGNATURE_MODE` is set to
+  `require`, the upload path applies the same verifier as the loader.
+
+### Response shape
+
+```json
+{
+  "success": true,
+  "plugin_id": "my-plugin",
+  "version": "1.2.3",
+  "signature": {
+    "status": "ok",
+    "key_fingerprint": "sha256:…",
+    "enforced": true
+  },
+  "enabled": false,
+  "restart_required": false,
+  "message": "Plugin uploaded and staged as disabled. Enable it and restart the node to activate."
+}
+```
+
+`signature.status` mirrors `PluginSignatureVerifier::verify()`: `ok`,
+`unsigned`, `untrusted_key`, `bad_signature`, `malformed_sig`,
+`malformed_manifest`, or `not_checked` when no verifier is wired.
+
+### Errors
+
+| HTTP | Code                 | When                                                                   |
+| ---- | -------------------- | ---------------------------------------------------------------------- |
+| 400  | `invalid_upload`     | No file, partial upload, PHP `UPLOAD_ERR_*`, or forged `tmp_name`      |
+| 400  | `invalid_zip`        | Magic-byte / zip-slip / oversize / bad-extension / manifest failures   |
+| 409  | `already_installed`  | Target directory already exists                                        |
+| 500  | `install_unavailable`| Service not wired (early-boot / no-wallet state)                       |
+| 500  | `install_failed`     | Filesystem failure, signature required but verification failed, etc.   |
+
+### Trust boundary
+
+Every check above is mechanical. None of them can answer "should I trust
+this plugin's code?" — that is a human decision, and a plugin you trust
+enough to enable runs at PHP-FPM privilege ([No
+sandboxing](#no-sandboxing)). Before enabling an uploaded plugin:
+
+- Read the manifest.
+- Read the changelog (the detail modal renders it).
+- Note the signature status — `ok` proves only that the plugin was signed
+  by a key in `trusted-keys/`, not that the code is safe.
+- If you're running with `database.user` declarations, review them —
+  enabling triggers `CREATE USER` / `GRANT`.
+
+---
+
+## Upgrading Plugins
+
+Replacing a plugin's on-disk code with a newer version preserves the
+operator's state — MySQL tables, plugin user, credentials, the gateway
+bearer token. Doing this through uninstall-then-install would lose all
+of that (DROP TABLE for every owned table, DROP USER, delete credential
+row), which is why upgrade is a separate flow with its own service and
+its own end-to-end test coverage.
+
+Four paths feed into the same engine:
+
+| Path                       | When it fires                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **GUI zip upload (`pluginsUploadAsUpgrade`)** | Operator uploads a newer-version `.zip` of an already-installed plugin and confirms the replace in the "Replace v{current} with v{new}?" modal. |
+| **CLI zip upgrade (`eiou plugin upgrade <zip-path>`)** | Operator runs the CLI with a path-shaped argument (anything that doesn't match the kebab-case plugin-name regex). Routes through `PluginUpgradeService::upgradeFromZip`. Same engine as the GUI zip upload, no confirmation modal — the verb itself is the confirmation. |
+| **Bundled (`eiou plugin upgrade <name>` / `pluginsUpgrade`)** | Operator explicitly triggers an upgrade to the image-baked version via CLI (with a name argument) or the GUI "Upgrade available" badge. |
+| **Auto on boot (`Application::autoUpgradeBundledPlugins`)** | The image (`/app/plugins/<name>/`) ships a newer version than the operator's plugins volume holds; runs before `discover()` so the rest of boot operates on the post-upgrade manifest. No operator action required — image swap → container restart → upgrade. |
+
+All four routes call the same `PluginUpgradeService` and produce the same
+step-status envelope.
+
+### What the upgrade flow does
+
+1. **Validate the new bundle.** Zip path runs the same magic-bytes /
+   size cap / entry walk / manifest / signature checks that
+   `pluginsUpload` runs. Bundled path validates the on-disk
+   `/app/plugins/<name>/plugin.json` shape but skips zip ceremony.
+2. **Read the old manifest.** Refuses if the plugin isn't installed
+   (this is upgrade, not install).
+3. **Version compare** via `version_compare()`. Refuses:
+   - Equal versions — nothing to do.
+   - Downgrades — the operator would have to uninstall + install
+     explicitly to acknowledge the destructive intent.
+4. **Honour `min_upgradable_from`** in the new manifest. If the
+   installed version is below that floor, the operator gets a clear
+   error telling them to install an intermediate version first (or
+   to uninstall + reinstall and accept the data loss).
+5. **Snapshot old → backup.** The current plugin dir is renamed to
+   `<pluginDir>/<name>.backup-<oldver>-<YYYYMMDD-HHMMSS>/` next to
+   the live plugin. Kept for 30 days by default
+   (`BACKUP_RETENTION_DAYS`); the boot reconcile prunes anything older.
+6. **Swap new in.** Staged dir renamed into the canonical location.
+   On rename failure, step 5's snapshot is restored — the operator's
+   plugin doesn't disappear.
+7. **`onUpgrade()` hook.** If the new entry class implements
+   `Eiou\Contracts\UpgradablePlugin`, its `onUpgrade(ServiceContainer,
+   $oldVersion, $newVersion)` runs with the **old MySQL grants still
+   active** (so the plugin can read/transform its existing data via
+   the unchanged plugin user) and the **new code loaded** (`$this`
+   resolves to the new entry class). A thrown exception triggers full
+   rollback to the backup snapshot; the failed bundle is preserved at
+   `<name>.failed-<ts>/` for post-mortem.
+8. **Reconcile MySQL grants.** REVOKE ALL clears the old set in one
+   statement; GRANT per-table from the new manifest's `owned_tables`
+   rebuilds the new set. Handles both growth and shrinkage. The
+   plugin's MySQL user itself is unchanged.
+9. **Re-export the sibling-mountable credentials file** if the plugin
+   is currently enabled. Picks up any manifest-driven changes to the
+   file shape across versions.
+10. **Reload the FPM pool** if the plugin is currently enabled —
+    triggers the supervisor's SIGUSR2 to FPM so workers pick up the
+    new on-disk code rather than continuing to hold stale class
+    definitions. Disabled plugins skip this step; their next enable
+    runs through the normal enable path which loads the new code.
+11. **Fire `PluginEvents::PLUGIN_UPGRADED`** with `{name, old_version,
+    new_version, source}`. Only fires on full success; subscribers
+    never observe a "half upgraded" state because partial failures
+    throw before reaching the dispatch site.
+
+### `UpgradablePlugin` hook
+
+Plugins that need cross-version data migration implement
+`Eiou\Contracts\UpgradablePlugin`:
+
+```php
+use Eiou\Contracts\UpgradablePlugin;
+use Eiou\Services\ServiceContainer;
+
+class MyPlugin implements UpgradablePlugin
+{
+    public function getName(): string    { return 'my-plugin'; }
+    public function getVersion(): string { return '1.1.0'; }
+
+    public function register(ServiceContainer $c): void { /* ... */ }
+    public function boot(ServiceContainer $c): void     { /* ... */ }
+
+    public function onUpgrade(
+        ServiceContainer $container,
+        string $oldVersion,
+        string $newVersion
+    ): void {
+        // Sandboxed plugins receive this hook through an
+        // `__dispatch.php` envelope with `type: "upgrade"`. Run schema
+        // migrations against the plugin's own PDO (constructed inside
+        // the pool from `/etc/eiou/credentials/plugin-<id>.json`, see
+        // *Running queries*); the `$container` argument is retained
+        // on the interface for signature compatibility but the in-pool
+        // ServiceContainer cannot reach the master key or
+        // `dbconfig.json`.
+        if (version_compare($oldVersion, '1.1.0', '<')) {
+            // From __dispatch.php on a "type: upgrade" envelope:
+            //
+            //   pluginPdo($log)->exec(
+            //     'ALTER TABLE plugin_my_plugin_keys '
+            //     . 'ADD COLUMN expires_at INT NULL'
+            //   );
+        }
+    }
+}
+```
+
+Plugins that don't need migration simply don't implement the
+interface — the upgrade flow handles the directory swap, grant
+reconcile, and pool reload automatically.
+
+### `min_upgradable_from` manifest field
+
+An optional declaration in the new manifest that refuses upgrades
+from a version below the declared floor:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "2.0.0",
+  "min_upgradable_from": "1.0.0",
+  ...
+}
+```
+
+When set, the upgrade service refuses transitions whose
+`$installedVersion < $minUpgradableFrom` per `version_compare()`. Use
+this when v2.0 ships a schema migration that assumes the v1.0 schema
+shape — operators on v0.x must install v1.x first (so v1's
+`onUpgrade` runs the intermediate migration) before stepping to v2.0.
+
+### Backup retention
+
+Upgrade backups live at `<pluginDir>/<name>.backup-<oldver>-<ts>/`.
+The boot reconcile prunes anything older than
+`PluginUpgradeService::BACKUP_RETENTION_DAYS` (30 days). Operators who
+want to preserve a specific backup past the window can rename it out
+of the `.backup-<ver>-<ts>` shape (the prune regex is anchored on
+exactly that pattern).
+
+To roll back manually within the retention window:
+
+```bash
+# Stop the plugin pool so it doesn't see the swap mid-request.
+eiou plugin disable my-plugin
+sudo rm -rf /etc/eiou/plugins/my-plugin
+sudo mv /etc/eiou/plugins/my-plugin.backup-1.0.0-20260513-140000 \
+        /etc/eiou/plugins/my-plugin
+eiou plugin enable my-plugin
+```
+
+(`onUpgrade` was already idempotent per the contract, so the rollback
+side doesn't need a reverse hook — the old code expects its own
+schema shape and operates against it.)
+
+### What's NOT preserved across upgrade
+
+The upgrade flow preserves the plugin user, its credentials, its
+owned tables, and its gateway token. It does **not** preserve:
+
+- The plugin's PSR-4-autoloaded class instances inside the FPM
+  workers. The supervisor reload recycles workers so the new code
+  takes effect; any in-memory state in the old workers is lost.
+- The plugin's on-disk scratch space if the new manifest's
+  open_basedir paths differ from the old (rare; scratch is keyed on
+  `eiou-p-<system_user>` which is plugin-id-derived, not version-
+  derived).
+- Custom additions a plugin made to its own directory at runtime
+  that weren't in the new bundle. The swap is wholesale — anything
+  in the old dir that isn't in the new bundle ends up only in the
+  backup snapshot.
+
+If your plugin writes runtime state into its own directory (rare;
+DB-backed state is the supported pattern), include a stub in the
+new bundle that triggers regeneration on first request, or stage
+the migration via `onUpgrade`.
+
+### Surface summary
+
+| Surface                              | Drives                                      | Notes                                                                              |
+| ------------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| GUI: "Upgrade available" badge       | `pluginsUpgrade` → `upgradeFromBundle()`    | Row on a plugin appears with badge when image's bundled version > installed.       |
+| GUI: Zip upload of installed plugin  | `pluginsUploadAsUpgrade` → `upgradeFromZip()` | After `pluginsUpload` returns 409 already_installed, operator confirms the replace. |
+| CLI: `eiou plugin upgrade <name>`    | `upgradeFromBundle()`                       | Same logic as the GUI badge, accessible without the wallet's web pool.             |
+| Direct PHP: `PluginUpgradeService`   | both methods                                | For test-harness and bundled scripts that don't go through CLI/GUI.                |
 
 ---
 
@@ -741,6 +1632,37 @@ Clicking any row opens a detail modal showing:
   uninstall an enabled plugin regardless of how the request arrives. See
   [Database Isolation → Uninstall](#uninstall).
 
+### Uploading a `.zip`
+
+The section header carries an **Upload .zip** button next to **Refresh**.
+Clicking it opens the OS file picker; selecting a `.zip` POSTs it to the
+`pluginsUpload` action.
+
+Three outcomes:
+
+- **Fresh install.** The plugin's `name` isn't already on disk. The new
+  plugin appears in the table as disabled (grey dot); the toast carries
+  the signature status (`ok`, `unsigned`, etc.). To activate, toggle the
+  plugin on and use the restart banner.
+
+- **Plugin already installed.** The server returns `409 already_installed`.
+  The GUI catches the 409 and pops a confirm modal showing the
+  installed version and asking whether to upgrade. On confirm, the same
+  zip is re-POSTed to `pluginsUploadAsUpgrade`, which drives the
+  upgrade flow (atomic swap, `onUpgrade` hook, grant reconcile, pool
+  reload) — the plugin's DB tables, credentials, and gateway token are
+  preserved. See [Upgrading Plugins](#upgrading-plugins).
+
+- **Bundled-version newer than installed.** When `/app/plugins/<id>/`
+  ships a higher `version` than the operator's `/etc/eiou/plugins/<id>/`,
+  the row in the table surfaces an **Upgrade available** affordance.
+  Clicking it POSTs to `pluginsUpgrade` (no zip — drives the bundled
+  upgrade path), same engine as `pluginsUploadAsUpgrade`.
+
+The full validation contract and threat model for fresh installs is
+documented in [Installing Plugins](#installing-plugins); the upgrade
+flow lives in [Upgrading Plugins](#upgrading-plugins).
+
 ### Restart banner
 
 A yellow banner appears above the table when the desired enabled state
@@ -761,8 +1683,12 @@ runtime, no restart needed" when not.
 
 ## Managing Plugins from the CLI
 
-Three subcommands, no restart triggered — operator must follow up with
-`eiou restart` once they're done toggling.
+Five subcommands. Toggle / uninstall don't restart on their own; the
+operator follows up with `eiou restart` once they're done. The
+upgrade path *does* recycle the plugin's FPM pool (so the new code
+takes effect immediately for enabled plugins) but a wallet restart is
+still required for the new code's event subscriptions and other
+manifest-declared surfaces to bind in the wallet pool's IPC forwarder.
 
 ### `eiou plugin list`
 
@@ -788,6 +1714,41 @@ For plugins that declare `database.user: true`, `enable` triggers
 are generated on first enable and persisted encrypted. See
 [Database Isolation](#database-isolation).
 
+### `eiou plugin install <zip-path>`
+
+Install a plugin from a `.zip` file on the container's filesystem. The
+CLI runs inside the wallet container, so operators usually `docker cp`
+the zip into `/tmp/` first:
+
+```bash
+docker cp my-plugin.zip alice:/tmp/my-plugin.zip
+docker exec alice eiou plugin install /tmp/my-plugin.zip
+```
+
+Runs the same validation pipeline the GUI's `pluginsUpload` uses —
+magic bytes, entry walk, manifest, signature verification per the
+configured mode — then atomic-renames the staged tree into
+`/etc/eiou/plugins/<name>/`. The plugin lands **disabled**; follow up
+with `eiou plugin enable <name>` and a node restart to activate.
+
+Refused for:
+
+- Missing or unreadable zip file (error includes a `docker cp` hint)
+- Plugin id already installed — error carries the on-disk version,
+  the would-be-installed version, and points at
+  `eiou plugin upgrade <zip-path>` for the replacement path. The CLI
+  deliberately does NOT auto-route to upgrade on collision (the GUI's
+  confirmation modal is what guards that path; the CLI's analog is
+  making the operator type a different verb)
+- Anything the install service rejects — malformed zip, manifest
+  validation, signature failure in `require` mode
+
+```bash
+eiou plugin install /tmp/my-plugin.zip
+eiou plugin enable my-plugin
+eiou restart
+```
+
 ### `eiou plugin uninstall <name>`
 
 Runs the full uninstall flow — `onUninstall()` hook, `REVOKE`, `DROP TABLE`
@@ -803,6 +1764,54 @@ Per-step status is printed in the JSON response (`ok` / `skipped` /
 `error:<msg>`) so operators can see exactly what succeeded. This is a
 **permanent** action — a fresh install issues new credentials, new tables,
 and a new MySQL user.
+
+### `eiou plugin upgrade <name|zip-path>`
+
+Replaces the installed plugin code with a newer version. Two argument
+shapes feed into the same engine:
+
+- **`<name>` (strict kebab-case)**: upgrades to the image-baked version
+  under `/app/plugins/<name>/` via `PluginUpgradeService::upgradeFromBundle`.
+  Refused unless the bundled version is strictly newer than installed.
+- **`<zip-path>` (slashes, dots, anything else)**: upgrades to the
+  version inside the operator-supplied zip via
+  `PluginUpgradeService::upgradeFromZip`. Runs the same validation
+  pipeline the GUI upload uses before swapping. Operators usually
+  `docker cp` the zip into `/tmp/` first, then pass the in-container
+  path. Detection happens automatically — anything matching
+  `^[a-z0-9][a-z0-9-_]{0,63}$` is treated as a plugin name; anything
+  else is treated as a path.
+
+Either way the plugin's state (MySQL tables, plugin user, credentials,
+gateway token) is preserved across the upgrade — the directory swap
+is atomic, the old version is snapshotted to
+`<name>.backup-<oldver>-<ts>/` next to the live plugin, the plugin's
+`onUpgrade(...)` hook (if implemented) runs against the new code with
+the old grants still active, grants are reconciled against the new
+`owned_tables`, and the FPM pool reloads so workers pick up the new
+code.
+
+Refused for:
+
+- Same version (`error: Plugin '<name>' is already at version X.Y.Z`)
+- Downgrades (`error: Refusing downgrade of '<name>' from A to B …`)
+- `min_upgradable_from` violations — the new manifest declares a
+  floor and the installed version is below it
+- Bundled path: no bundled version on disk
+- Zip path: missing / unreadable file (error includes a `docker cp` hint)
+
+```bash
+# Bundled (image-baked) upgrade
+eiou plugin upgrade hello-eiou
+
+# Zip-based upgrade (operator-supplied)
+docker cp hello-eiou-1.6.zip alice:/tmp/hello-eiou-1.6.zip
+docker exec alice eiou plugin upgrade /tmp/hello-eiou-1.6.zip
+```
+
+Backups are pruned automatically after 30 days by the boot reconcile.
+See [Upgrading Plugins](#upgrading-plugins) for the full flow, the
+`UpgradablePlugin` hook contract, and the manual rollback recipe.
 
 ```bash
 eiou plugin enable hello-eiou
@@ -830,6 +1839,21 @@ still enabled, `404 Not Found` if unknown, `200` with `success: true` on a
 fully-clean uninstall, and `200` with `success: false` + the per-step map
 if any step reported an error. See
 [Database Isolation → Uninstall](#uninstall) for the full step sequence.
+
+**Install and zip-upgrade are GUI- and CLI-only today; the REST API does
+not expose them.** The GUI uses `pluginsUpload`, `pluginsUploadAsUpgrade`,
+and `pluginsUpgrade` AJAX actions against the admin-authenticated session
+(see [Managing Plugins in the GUI](#managing-plugins-in-the-gui)). The CLI
+offers `eiou plugin install <zip-path>` for fresh installs and
+`eiou plugin upgrade <name|zip-path>` for both bundled and zip upgrades
+(see [`eiou plugin install`](#eiou-plugin-install-zip-path) and
+[`eiou plugin upgrade`](#eiou-plugin-upgrade-namezip-path)). REST API
+install / upgrade is deferred pending the auth-scope decision —
+a compromised `admin`-scope key today can toggle existing plugins
+(matching what the CLI/GUI allow) but cannot introduce new plugin code,
+and widening the blast radius to "API can install arbitrary code"
+deserves its own scope (e.g. `plugin:install`) rather than slipping into
+the existing `admin` umbrella.
 
 ### Example
 
@@ -886,6 +1910,628 @@ Errors: `400 invalid_name` (regex mismatch), `404 unknown_plugin`
 (not on disk), `500 persist_failed` (state file unwritable),
 `500 plugin_loader_unavailable` (the plugin system didn't initialize
 during boot — usually means the node is in an incomplete state).
+
+---
+
+## Sandboxed Plugin Authoring
+
+Plugins can opt into running in an isolated PHP-FPM pool as their own
+Unix user, with no access to `/etc/eiou/config/` (and therefore no
+access to the master key, the seed phrase, the encrypted private key,
+or any other wallet secret). Set `"sandboxed": true` in the manifest.
+
+The full architecture lives in this document; the subsections below
+walk through what you need to know as a plugin author.
+
+### Sandboxing is mandatory
+
+All plugins must declare `"sandboxed": true` in their manifest. The
+in-process plugin model has been removed — non-sandboxed plugins
+could read the master key and decrypt the seed phrase, so the loader
+refuses to load them. Operator-facing behaviour:
+
+| Manifest | At install | At enable | At boot |
+|---|---|---|---|
+| `"sandboxed": true` | Accepted | Accepted | Pool spawned, IPC plumbed |
+| Missing flag *or* `"sandboxed": false` | **Rejected** with `sandboxed_required` | **Rejected** — `setEnabled` returns false | `legacy_unsupported` status, auto-flipped to disabled in `plugins.json` |
+
+Plugins run in their own per-plugin PHP-FPM pool as their own Unix
+user (`eiou-p-<hash>`), with `open_basedir` restricted to the
+plugin's dir + scratch, `disable_functions` blocking shell-out and
+eval, and zero filesystem access to wallet secrets.
+
+### Manifest surfaces a sandboxed plugin declares
+
+Everything a plugin would have wired in `boot()` becomes manifest
+metadata:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "entryClass": "Vendor\\MyPlugin\\Entry",
+  "autoload": { "psr-4": { "Vendor\\MyPlugin\\": "src/" } },
+
+  "sandboxed": true,
+
+  "subscribes_to":  ["sync.completed", "contact.created"],
+  "render_hooks":   ["gui.dashboard.after"],
+  "filter_hooks":   ["gui.dashboard.widgets"],
+  "plugin_tab_panel": {"label": "My Plugin", "icon": "fas fa-puzzle-piece"},
+  "gui_actions":    [{"name": "myPluginAction", "tier": "csrf"}],
+  "gui_assets":     [{"type": "css", "path": "assets/styles.css"}],
+  "api_routes":     [{"method": "GET", "action": "fortune"}],
+  "cli_commands":   [{"name": "my-plugin"}],
+
+  "core_services":  ["Logger.info", "Logger.warning"]
+}
+```
+
+Core reads each list at boot and registers IPC forwarders that route
+each surface into the plugin's `__dispatch.php`. The plugin's own
+PHP code never executes in-process.
+
+### The `__dispatch.php` contract
+
+The plugin ships **one** PHP file as its sandboxed entry point:
+`<plugin-dir>/__dispatch.php`. nginx is configured to route
+`/gui/plugin/<plugin-id>/*` to the plugin's FPM socket with
+`SCRIPT_FILENAME` pinned to that file — the plugin never picks its
+own entry.
+
+Wire shape (request):
+
+```http
+POST /gui/plugin/<id>/__dispatch HTTP/1.1
+Content-Type: application/json
+
+{
+  "type":    "event" | "filter" | "render" | "action" | "rest" | "cli",
+  "name":    "<event_name | hook_name | action_name | route_action | command>",
+  "context": <type-specific payload>
+}
+```
+
+Response:
+
+```json
+{
+  "ok":     true,
+  "result": <type-specific>,
+  "_log":   [
+    {"level": "info", "message": "...", "context": {...}},
+    ...
+  ]
+}
+```
+
+The `_log` array is copied into the wallet's central log under the
+plugin's name when the dispatch returns — so log lines emitted by
+the plugin appear next to wallet log lines for the same operation,
+even though the plugin couldn't write `/var/log/` directly.
+
+Use the bundled template at
+`files/src/templates/plugin-dispatch-template.php` as the starting
+point for your dispatcher. The template carries a
+`PLUGIN_DISPATCH_VERSION` constant — bump it in lockstep with
+upstream so the wallet can warn operators if your plugin's
+dispatcher is older than the current contract.
+
+### Public routes — non-admin HTTP under `/p/<plugin-id>/<action>`
+
+The IPC contract above only carries internal core→plugin traffic
+(events, filters, REST routes from authenticated admin callers). A
+plugin that wants to serve **non-admin** customers — anything where
+the caller holds a per-customer bearer token rather than the wallet's
+admin session — declares `public_routes` in its manifest. Each
+declared route is routed by nginx directly to the plugin's FPM pool
+under a separate URL prefix `/p/<plugin-id>/<action>` that lives
+outside the admin gate.
+
+The feature is **off by default**. Operators opt in at the node level
+by setting `EIOU_PUBLIC_PLUGIN_ROUTES=on` in the container's
+environment. With the flag off, the nginx renderer skips
+public-route blocks entirely — the manifest field still validates,
+but no requests reach the plugin until the operator flips the flag.
+
+Manifest shape:
+
+```json
+{
+  "sandboxed": true,
+  "public_routes": [
+    {
+      "method": "POST",
+      "action": "chat",
+      "auth": "bearer",
+      "rate_per_minute": 60,
+      "max_body_bytes": 65536,
+      "cors_allowed_origins": [
+        "https://example.com",
+        "https://app.example.com"
+      ]
+    }
+  ]
+}
+```
+
+Per-entry fields:
+
+| Field                  | Required | Default | Notes                                                                                                                     |
+| ---------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `method`               | yes      | —       | One of `GET` / `POST` / `PUT` / `PATCH` / `DELETE`. Pinned — wrong verb returns `405` without invoking the plugin.        |
+| `action`               | yes      | —       | Kebab-case, `^[a-z][a-z0-9-]{0,63}$`. Becomes the final URL segment.                                                       |
+| `auth`                 | no       | `"bearer"` | Only `"bearer"` is supported today. Host validates the `Authorization` header *shape*; the plugin does the real auth check. |
+| `rate_per_minute`      | no       | `60`    | Per-bearer-per-route rate cap. Bounded `[1, 6000]`. Enforced server-side via nginx `limit_req_zone`.                       |
+| `max_body_bytes`       | no       | `65536` | Body size cap; bounded `[1, 1048576]`.                                                                                     |
+| `cors_allowed_origins` | no       | —       | List of explicit origin strings. No wildcard `*`. Max 10 entries. When present, the host emits CORS headers and short-circuits `OPTIONS` preflight. |
+
+What the host does, before any plugin code runs:
+
+1. **Method gate** — wrong verb → 405.
+2. **Bearer shape preflight** — `Authorization: Bearer [A-Za-z0-9._~+/=-]{8,256}` is the only shape accepted. Anything else → 401. The plugin still does the real credential check against its own state; this just refuses values that obviously can't be a token.
+3. **Rate limit** — one `limit_req_zone` per route at http{} scope, keyed on `$http_authorization` (so the window is per-bearer-per-route, not per-IP — a single misbehaving customer can't starve well-behaved ones sharing the same plugin). Excess requests → 429.
+4. **Body size cap** — `client_max_body_size` per route. Excess → 413.
+5. **CORS** (only when `cors_allowed_origins` is declared) — `OPTIONS` preflight returns `204` with the appropriate `Access-Control-*` headers without invoking the plugin; cross-origin requests from non-allow-listed origins get an empty `Access-Control-Allow-Origin` value, which the browser's same-origin check then refuses to surface to the calling page. The host also `fastcgi_hide_header`'s `Access-Control-*` and `Vary` headers from the plugin's response — a plugin handler that emitted its own `Access-Control-Allow-Origin: *` can't fight the allow-list (browsers reject duplicate ACAO anyway, but stripping the upstream value keeps the host's intent authoritative). Don't bother setting CORS headers from your handler when `cors_allowed_origins` is configured; they'll be dropped.
+
+What the plugin sees in `__dispatch.php`:
+
+The dispatcher template detects public-route invocations via the
+`EIOU_PLUGIN_PUBLIC_ROUTE=1` fastcgi param and synthesizes an
+envelope from the raw HTTP request. From the handler's point of
+view, the wire shape is the same uniform envelope as IPC:
+
+```json
+{
+  "type": "public",
+  "name": "<action>",
+  "context": {
+    "method":    "POST",
+    "bearer":    "<the raw bearer token, prefix stripped>",
+    "body":      "<raw request body>",
+    "remote_ip": "1.2.3.4"
+  }
+}
+```
+
+The same `respond($status, $body, $log)` helper from the template
+sends the response back. Returning JSON works as you'd expect; the
+plugin is free to set its own content type via PHP's `header()` if
+it needs to.
+
+A minimal public-route handler:
+
+```php
+// inside the dispatch switch
+case 'public':
+    if ($name !== 'chat') {
+        respond(404, ['ok' => false, 'error' => ['code' => 'unknown_action']], $log);
+    }
+    $bearer = $context['bearer'] ?? '';
+    $customer = $myKeysTable->lookupByBearer($bearer); // your own state
+    if ($customer === null) {
+        respond(401, ['ok' => false, 'error' => ['code' => 'invalid_token']], $log);
+    }
+    $body = json_decode($context['body'] ?? '', true);
+    // … do the work, charge the customer …
+    respond(200, ['ok' => true, 'result' => $result], $log);
+    break;
+```
+
+**Authoring constraints to keep in mind:**
+
+- **Bearer storage.** The host doesn't know what a valid bearer is — that's plugin state. Store bearer hashes (bcrypt / argon2id) in your plugin DB, not plaintext. Match incoming tokens by constant-time compare against the hash.
+- **Rate limit semantics.** `burst=rate_per_minute` lets one minute of capacity absorb a small retry storm without 429'ing every retry; `nodelay` means excess requests are rejected immediately rather than queued (so a misbehaving client sees 429 fast instead of latency-bombed responses).
+- **No cookies.** The customer-bearer auth flow is intentionally stateless — sessions belong to the admin GUI, not customer-facing services. If your plugin needs per-customer state across requests, store it keyed on the bearer (or a customer id derived from it) in your plugin DB.
+- **CORS is allow-list only.** Don't try to accept arbitrary origins via wildcard — the manifest validator refuses `*` and the renderer's defence-in-depth filter would drop it anyway. Add explicit origin strings; if your plugin's web frontend moves to a new origin, update the manifest and re-enable.
+- **Companion-container deployment.** Some plugins are easier to ship as the eIOU plugin + a sibling Docker container the operator deploys separately (e.g. a heavy provider-client library that doesn't belong in a PHP-FPM pool). The sibling can authenticate to the plugin's MySQL user via the on-disk credentials file — see [Sibling-container credentials](#sibling-container-credentials) under Database Isolation.
+
+### Calling core services from your handler — `core_call()`
+
+The dispatcher template includes a `core_call($service, $method, $args, $log)`
+helper. It POSTs an authenticated request to the wallet's gateway
+endpoint, which validates:
+
+1. The plugin's bearer token (loaded from `.gateway-token` in the
+   plugin's dir, written there by core at enable time).
+2. The plugin's manifest declares `"<Service>.<method>"` in
+   `core_services` (this manifest gate is *operator-visible* —
+   operators see which APIs the plugin wants to use *before*
+   they enable it).
+3. The target method on the core service carries the
+   `#[\Eiou\Contracts\PluginCallable]` attribute. This is a per-
+   method allow-list in the core codebase, reviewable in
+   `git grep PluginCallable`.
+
+Example:
+
+```php
+core_call('Logger', 'info', [
+    "Sync completed for {$contactPubkey}",
+    ['plugin' => 'my-plugin', 'contact_pubkey' => $contactPubkey],
+], $log);
+```
+
+Returns the method's return value on success, `null` on failure
+(transport error / validation rejection / handler exception).
+Failure cases log to `$log` with structured context.
+
+### Plugin-callable surface — policy
+
+The set of methods reachable through `core_call()` is intentionally
+small. As of this writing, the callable surface is:
+
+| Service                         | Methods                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `Logger`                        | `debug`, `info`, `warning`, `error`                                                                  |
+| `TransactionLookupService`      | `getByTxid`, `getStatusByTxid`, `existingTxid`, `isCompletedByTxid`, `getByMemo`, `getStatusByMemo`, `getReceivedUserTransactions` (requires `transaction_history_enumerate`), `getSentUserTransactions` (requires `transaction_history_enumerate`), `getTransactionsBetweenPubkeys` (requires `transaction_history_enumerate`) |
+| `TransactionStatisticsLookupService` | `getStatsForPeriod` (requires `transaction_history_aggregate`)                                  |
+| `ContactLookupService`          | `getByPubkeyHash`, `getByName`, `getOnlineStatus`, `listAccepted` (requires `contact_address_book_enumerate`), `listPending` (requires `contact_pending_enumerate`) |
+| `ContactCreditLookupService`    | `getCreditState` (requires `contact_credit_read`)                                                    |
+| `BalanceLookupService`          | `getUserBalance` (requires `wallet_balance_read`), `getUserBalanceContact` (requires `wallet_balance_read`) |
+| `PaymentRequestLookupService`   | `getByRequestId`, `listPendingIncoming` (requires `payment_request_enumerate`), `listOutgoing` (requires `payment_request_enumerate`) |
+| `PaybackMethodLookupService`    | `getMyConfiguredMethods` (requires `payback_method_read_own`), `getContactPaybackPreference` (requires `payback_method_read_contact`) — both strictly scoped to the plugin's declared `payback_method_types` |
+| `PluginLookupService`           | `getOwnPermissions`, `getOwnManifest` (self-introspection — no permission key, scope is the calling plugin's own row only), `listEnabledPluginIds` (requires `plugin_inventory_read`) |
+| `IdentityLookupService`         | `getPublicKey`, `getPublicKeyHash`, `getName`                                                        |
+| `NodeInfoLookupService`         | `getAppEnv`, `isDebug`, `getHttpsAddress`, `getTorAddress`                                           |
+| `PluginEventPublisher`          | `publish`                                                                                            |
+| `WalletOutboundService`         | `send` (requires `wallet_outbound_send`)                                                             |
+| `PaymentRequestService`         | `create`                                                                                             |
+| `ContainerLifecycleService`     | `startSidecar`, `stopSidecar`                                                                        |
+
+That's it. The list grows **on demand**, when a concrete plugin
+needs something — not speculatively. The reasoning is straightforward:
+every `#[PluginCallable]` method is operator-visible attack surface.
+Operators reading a plugin's manifest see the list of methods that
+plugin will call; the wider the underlying surface, the harder that
+review becomes. A small, deliberately-curated surface keeps the
+review meaningful.
+
+Two principles guide what gets added:
+
+1. **Default-deny, expand for a concrete need.** A repository method
+   is exposed only when a real plugin (in this repo's plugin
+   directory, or a downstream plugin whose author has filed an
+   issue) has a use case that can't be satisfied any other way. We
+   don't preemptively expose "this looks useful" — useful is
+   measured by an actual handler that would call it.
+
+2. **Prefer narrow single-row lookups over bulk listings.** When a
+   plugin needs to enrich one event payload's identifier, a
+   `lookupBy<X>(id): ?array` method is strictly additive to what
+   the event already told the plugin. A `getAllX(): array` method
+   is a different shape of trust — it's a one-call exfiltration
+   primitive for the underlying table. The first kind is easy to
+   justify case-by-case; the second kind needs a concrete export
+   plugin (or similar) and a deliberate decision.
+
+If a plugin needs a method that isn't exposed, the path is: file an
+issue describing the use case, propose the method signature, and
+include the smallest read-only repository method that satisfies it.
+The maintainer adds it as a thin `Lookup/` service if the use case
+holds up. Decoration on the repository itself is *not* the path —
+those classes stay pure data-access.
+
+### Permissions — louder consent than `core_services`
+
+A subset of `#[PluginCallable]` methods carry a `permission:` key on
+their attribute. Those methods require the calling plugin to declare
+the key in a top-level `permissions: [...]` manifest field, in
+addition to the usual `core_services` entry. The gateway enforces
+this as a third gate (after the attribute presence and the
+`core_services` allow-list).
+
+Why the second tier exists: `core_services` is a per-method
+allow-list. That works well for narrow methods where one entry means
+roughly what its name suggests — `Logger.info`, a per-hash lookup, a
+send-payment call. It works less well for methods whose trust shape
+goes beyond what a single line conveys to a casual reader. The first
+example is `ContactLookupService.listAccepted`, which enumerates
+every accepted contact on the wallet (operator-chosen labels + all
+transport addresses including `.onion`) — a different shape of
+disclosure than the per-hash `getByPubkeyHash` on the same service,
+but a manifest reader skimming `core_services` sees two similarly-
+shaped lines. Routing the bulk-enumerate method through a separate
+`permissions` entry gives the operator a distinct line item to read
+and consent to.
+
+Catalogued keys (single source of truth: `PluginPermissionCatalog`):
+
+| Key | Granted when set | Required by |
+| --- | ---------------- | ----------- |
+| `contact_address_book_enumerate` | Plugin may list every accepted contact (operator-chosen labels + all transport addresses including `.onion`). Distinct from per-hash lookups, which only reveal contacts the plugin has already seen via events. | `ContactLookupService.listAccepted` |
+| `contact_pending_enumerate` | Plugin may walk the wallet's pending contact requests (people who have asked to connect but the operator has not accepted or blocked yet). Distinct from the address-book enumerate — pending requests reveal who wants to talk to the operator, not who they already do. | `ContactLookupService.listPending` |
+| `contact_credit_read` | Plugin may read per-contact credit policy (available credit for a given contact and currency) — operator-set financial policy normally not visible to plugins. | `ContactCreditLookupService.getCreditState` |
+| `transaction_history_enumerate` | Plugin may walk the wallet's received- and sent-transaction lists (amounts, currencies, descriptions, counterparty pubkey hashes). Distinct from per-txid lookups, which only reveal transactions the plugin has already learned about through events. | `TransactionLookupService.getReceivedUserTransactions`, `TransactionLookupService.getSentUserTransactions`, `TransactionLookupService.getTransactionsBetweenPubkeys` |
+| `transaction_history_aggregate` | Plugin may read aggregated totals across the wallet's transaction history (count + total amount for a time window, optionally per-currency). Distinct from the row-level enumerate — aggregates leak volume but not individual counterparties or memos. Dashboard / daily-summary plugins typically need this only. | `TransactionStatisticsLookupService.getStatsForPeriod` |
+| `wallet_balance_read` | Plugin may read the wallet's current balance totals (overall and per-currency) and per-contact balances. Discloses the operator's net financial position. | `BalanceLookupService.getUserBalance`, `BalanceLookupService.getUserBalanceContact` |
+| `wallet_outbound_send` | Plugin may spend funds from the wallet (same path as the `eiou send` CLI). The most consequential permission in the catalog — every call is rate-capped and logged, but within the cap the plugin can move money. | `WalletOutboundService.send` |
+| `payment_request_enumerate` | Plugin may walk the wallet's pending-incoming and outgoing payment-request lists. Per-id lookups by request_id are not gated by this permission — a plugin that minted the request via `PaymentRequestService.create` already knows its id. | `PaymentRequestLookupService.listPendingIncoming`, `PaymentRequestLookupService.listOutgoing` |
+| `payback_method_read_own` | Plugin may read capability metadata for the operator's configured payback methods of rail types this plugin itself declared in `payback_method_types`. Encrypted account identifiers are NOT exposed by this surface. | `PaybackMethodLookupService.getMyConfiguredMethods` |
+| `payback_method_read_contact` | Plugin may read capability metadata for a contact's chosen payback methods of rail types this plugin itself declared. Decrypted account identifiers are NOT exposed by this surface. | `PaybackMethodLookupService.getContactPaybackPreference` |
+| `plugin_inventory_read` | Plugin may enumerate which other plugins are enabled on this node (name + version). Orchestration plugins use this to branch on whether a companion is installed. | `PluginLookupService.listEnabledPluginIds` |
+
+Adding a permission key is a deliberate act in both directions:
+
+- **In code:** annotate the attribute (`#[PluginCallable(permission: "<key>")]`)
+  and add the catalog entry (`PluginPermissionCatalog::ENTRIES`) — the
+  install validator rejects manifests requesting un-catalogued keys, and
+  the gateway returns 503 if an attribute references a key the catalog
+  doesn't know about.
+- **In a manifest:** include the key in `permissions: [...]`. Missing the
+  key when the method requires it returns 403 with `permission_not_declared`
+  and a message naming the missing key.
+
+GUI surface: the plugin's modal in *Settings → Plugins* renders a
+"Permissions requested" panel (before enable) / "Permissions granted"
+panel (after enable) listing each key with its catalog label and
+description. Operators reviewing a plugin before flipping the toggle
+read the panel as a separate line of consent from the routine
+`core_services` list.
+
+**Consent gate on enable — declared *and* approved.** The manifest
+declaring a permission is necessary but not sufficient. The gateway
+requires the calling plugin's `approved_permissions` (operator-recorded
+consent in `plugins.json`) to also include the key — 403
+`permission_not_approved` if not. This separation matters because a
+plugin upgrade can quietly grow the manifest's `permissions` list;
+without a record of operator consent, the new surface would be
+auto-allowed on the next call. The approved set is the load-bearing
+authority.
+
+Two paths to record consent:
+
+- **GUI.** Sliding the Enabled toggle on for a plugin that declares
+  any `permissions` opens a confirmation modal listing every requested
+  permission with its full description. **Grant & enable** records the
+  list to `approved_permissions` and proceeds; Cancel reverts the
+  slider without firing the enable POST. The gate fires from both
+  call sites — the Settings → Plugins row toggle AND the slider
+  inside the plugin's detail modal.
+
+- **CLI.** `eiou plugin enable <name>` for a permission-requesting
+  plugin takes one of three forms:
+  - `--grant-all` — approve every permission the manifest declares
+  - `--grant <key,key,…>` — approve a subset (must be a subset of
+    the manifest; unknown keys are refused)
+  - no flag on an interactive TTY — operator is prompted (`y/N`)
+  - no flag on a piped / non-TTY context — refused with a message
+    listing the permissions and the flag to add. Automation has to
+    declare its intent.
+
+Disable always passes through without a prompt (reducing access
+doesn't need confirmation) and **preserves** the approved set, so a
+routine off/on cycle doesn't re-prompt when the manifest hasn't
+changed. Plugins that request no permissions bypass the consent
+flow entirely.
+
+**Drift detection auto-disables.** On boot, `PluginLoader::discover()`
+walks every enabled plugin and computes the manifest-minus-approved
+difference. Non-empty difference (the plugin author added a permission
+since the operator last consented, or the operator never consented at
+all) flips the plugin's `enabled` flag to false and emits
+`plugin_permission_drift_auto_disabled` in the log. The operator must
+re-enable through the consent flow — the existing approvals stay on
+file so the GUI / CLI can show the diff between what was previously
+granted and what's newly requested.
+
+**State-file shape** (`/etc/eiou/config/plugins.json`):
+
+    {
+      "<plugin-name>": {
+        "enabled": true,
+        "approved_permissions": ["contact_address_book_enumerate", "wallet_balance_read"],
+        "approved_at": "2026-05-14T22:45:00Z"
+      }
+    }
+
+`approved_permissions` is absent on entries for plugins that declare
+no manifest permissions; `approved_at` is the UTC ISO8601 timestamp
+of the most recent grant.
+
+### Where plugin-owned state and code lives
+
+Sandboxed plugins are full PHP applications inside their own FPM pool.
+Anything beyond the dispatcher is **plugin-owned and plugin-managed** —
+core doesn't load it, doesn't audit it, doesn't migrate it. A
+typical layout for a non-trivial plugin:
+
+    /etc/eiou/plugins/payback-btc/
+      plugin.json                       ← manifest (declares autoload, surfaces, etc.)
+      __dispatch.php                    ← entry; routes envelope types
+      src/
+        PaybackBtcPlugin.php            ← entry class (PluginInterface)
+        CustomerRepository.php          ← plugin-owned, queries the plugin's own MySQL schema
+        RefundPolicyService.php         ← plugin-owned, enforces the plugin's own caps
+        OutboundAuditRepository.php     ← plugin-owned, writes to the plugin's own audit table
+        ...
+
+Your `__dispatch.php` is responsible for loading these classes
+itself. The manifest's `autoload.psr-4` field is metadata that
+tooling (and the pre-sandbox in-process load path) read, but the
+sandboxed FPM pool **does not register an autoloader on your behalf**
+— the dispatcher template ships without one. Two practical paths:
+
+**`require_once` from the top of `__dispatch.php`:**
+
+    require_once __DIR__ . '/src/CustomerRepository.php';
+    require_once __DIR__ . '/src/RefundPolicyService.php';
+    require_once __DIR__ . '/src/OutboundAuditRepository.php';
+
+Simple and explicit. Fine for small plugins. The plugin's
+`open_basedir` includes its own dir, so the includes succeed; the
+disabled-functions list does not block `require_once`.
+
+**Register a PSR-4 autoloader from the top of `__dispatch.php`:**
+
+    spl_autoload_register(function (string $class): void {
+        $prefix = 'Eiou\\Plugins\\PaybackBtc\\';
+        if (strncmp($class, $prefix, strlen($prefix)) !== 0) return;
+        $relative = substr($class, strlen($prefix));
+        $file = __DIR__ . '/src/' . str_replace('\\', '/', $relative) . '.php';
+        if (is_file($file)) require_once $file;
+    });
+
+Cleaner for plugins with many classes — instantiate by FQCN and the
+file gets loaded on demand. Mirrors the autoloader core used to run
+on the in-process load path; nothing stops you from porting that
+exact closure into your dispatcher.
+
+Your handler then instantiates the classes as plain PHP, and they
+talk to your per-plugin MySQL user via the connection your handler
+opens itself.
+
+Core doesn't have a "factory that auto-loads plugin services" — and
+deliberately so:
+
+- **It would defeat the sandbox.** Loading plugin code into the
+  wallet's FPM pool would give that code the wallet's master key,
+  full DB access, and no `open_basedir` restriction. That's the
+  in-process model the mandatory-sandboxing change deliberately
+  removed.
+- **The plugin's pool is the right home anyway.** Plugin state
+  belongs in the plugin's own DB schema (isolated MySQL user, can't
+  reach wallet tables); plugin business logic runs as the plugin's
+  Unix user under restricted `open_basedir`. There's no reason for
+  the wallet pool to know about either.
+
+What core DOES provide for plugin-owned tables: per-plugin database
+isolation (see [Database Isolation](#database-isolation)). Your
+plugin gets a MySQL user, a credential entry, optional
+sibling-container credential export, and grants on tables your
+manifest declares via `owned_tables` (or unrestricted DDL if you
+prefer to `CREATE TABLE IF NOT EXISTS` from your own boot path).
+What core does NOT provide is a class loader for your services —
+load them yourself from `__dispatch.php` using one of the two
+patterns above.
+
+The trade-off this design accepts: plugin-managed state is opaque to
+the operator. If a plugin maintains its own audit log of, say,
+outbound spending, the operator's view of that log is whatever the
+plugin chooses to show. The honest framing is that this matches the
+trust model — if you trust a plugin enough to allow-list a
+mutating core service like `WalletOutboundService.send`, you trust
+it enough to keep its own honest audit. If you don't, the right
+path is the event-publish + operator-approval flow, where the
+operator is the one clicking through the existing wallet send GUI
+and the canonical record is the wallet's own `transactions` table.
+
+### Where plugin runtime files (caches, locks, state files) live
+
+**Not your own plugin folder.** `/etc/eiou/plugins/<your-id>/` is
+owned by `www-data` (the wallet pool extracted the zip and chowned
+it that way during install). Your pool runs as `eiou-p-<hash>`, a
+different uid that has *read* access to those files (via the
+filesystem's other-permission bits) but no *write* access. A naïve
+`file_put_contents(__DIR__ . '/cache/foo.json', …)` from your
+dispatcher returns false with EACCES.
+
+**Use the scratch dir instead.** Each sandboxed pool gets a
+private writable directory at
+`/var/lib/eiou/plugin-scratch/<your-system-user>/`, created by the
+supervisor on every `apply-pool` and chowned `<your-system-user>:<your-system-user>`
+with mode `0700`. It's the only path under `/var/` your `open_basedir`
+admits — perfect home for SQLite databases, decoded caches, lock
+files, last-tick timestamps, anything the pool itself produces.
+Derive the directory from the plugin id without trusting any
+external input:
+
+    $systemUser = 'eiou-p-' . substr(hash('sha256', basename(__DIR__)), 0, 8);
+    $scratch    = '/var/lib/eiou/plugin-scratch/' . $systemUser;
+
+The scratch dir survives container restarts (it's on the
+`/var/lib/eiou` volume) and survives plugin upgrades, but is torn
+down on uninstall.
+
+If you need durable, queryable state — schedule rows, customer
+records, an audit log the operator can inspect via MySQL CLI — use
+your per-plugin MySQL user (see [Database Isolation](#database-isolation))
+rather than scratch. SQLite-in-scratch is the right tool for
+plugin-private caches that don't need to outlive the pool's idle
+recycle; MySQL is the right tool for everything else.
+
+### What you CAN do as a sandboxed plugin
+
+- Subscribe to events; emit log lines via the `_log` envelope.
+- Render dashboard widgets, register tabs, contribute filter values.
+- Handle GUI actions (CSRF + auth tier validated by core before
+  dispatch).
+- Serve REST endpoints at `/api/v1/plugins/<your-id>/<action>`.
+- Register CLI subcommands; the `eiou` binary dispatches to your
+  plugin via IPC.
+- Read your own files and the scratch dir at
+  `/var/lib/eiou/plugin-scratch/<your-system-user>/`.
+- Open MySQL connections to your own per-plugin database user (your
+  manifest's `database.user: true` flag still works the same way it
+  did pre-sandboxing).
+- Ship your own PHP classes (repositories, services, value objects,
+  whatever) — `require_once` them or register your own autoloader
+  from `__dispatch.php`. Core doesn't load them.
+- Call whitelisted core services via `core_call`.
+
+### What you CANNOT do as a sandboxed plugin
+
+- Read `/etc/eiou/config/.master.key` or any wallet secret. **EACCES
+  at the kernel level.** This is the whole point.
+- Decorate / wrap a core service. Plugin code runs in a different
+  process from core; there's no shared address space to override.
+  Use events to observe core actions instead.
+- Call into another plugin directly. Plugins talk to core only;
+  cross-plugin coordination happens via shared events or
+  database tables that core mediates.
+- Execute shell-out functions (`exec`, `shell_exec`, `passthru`,
+  `proc_open`, `popen`, `system`, `pcntl_exec`, `eval`, `assert`).
+- Open arbitrary file URLs (`allow_url_fopen=0`,
+  `allow_url_include=0`).
+
+### Constraints to design around
+
+- **Handler timeout**: 500ms per IPC call. Long-running work needs to
+  be queued in the plugin's own DB tables and processed
+  asynchronously by the plugin's own processor (if you have one).
+- **Event-mid-transaction**: if core fires an event while inside an
+  uncommitted DB transaction, your handler reads from a separate DB
+  connection and won't see the in-flight rows. (Core's own dispatch
+  call sites commit before firing for this reason.)
+- **Per-render IPC latency**: each render-hook fire adds ~1-5ms.
+  Negligible for a dashboard widget, expensive if your plugin
+  subscribes to a render hook that fires on every page render.
+
+### Migration checklist for an existing in-process plugin
+
+1. Take inventory of every `boot()` / `register()` action: events
+   subscribed, hooks registered, registries called, services added.
+2. For every service registration via `$container->setService(...)`
+   — **stop**. This pattern doesn't work sandboxed. Replace with
+   event-based observation or document the constraint.
+3. Move every declarative surface (event names, hook names, tab
+   metadata, asset paths, route paths, CLI names) into the manifest
+   fields above.
+4. Write `__dispatch.php` from the bundled template. Add a `case`
+   in the switch for each `type` your manifest declared.
+5. Declare every core service method your handler calls in
+   `core_services` (e.g. `"Logger.info"`).
+6. Set `"sandboxed": true`.
+7. Disable, then re-enable the plugin (rotates the gateway token,
+   triggers a fresh FPM pool reload).
+
+### Security note for plugin authors
+
+Even with sandboxing, **a plugin that's installed and enabled has
+real reach inside the operator's wallet** — it can:
+
+- Read every contact (via `ContactService` calls if its manifest
+  declares them).
+- Read every transaction (via `TransactionService` calls if
+  declared).
+- Sign messages on the wallet's behalf (if `MessageDeliveryService`
+  is whitelisted in the manifest *and* the core method is
+  `#[PluginCallable]`).
+
+Sandboxing prevents *seed-phrase exfiltration*. It doesn't make a
+plugin trustworthy. Operators reading your manifest's
+`core_services` list see the surface you're asking for — don't ask
+for more than you need.
 
 ---
 
@@ -971,29 +2617,336 @@ contract.
 
 ### `PluginEvents`
 
-Plugin-lifecycle events dispatched by `PluginLoader` itself.
+Plugin-lifecycle events dispatched by `PluginLoader` and the plugin
+management services. Use them to observe other plugins' lifecycle
+transitions or to record audit trails.
 
-| Constant            | When it fires                                                 |
-| ------------------- | ------------------------------------------------------------- |
-| `PLUGIN_REGISTERED` | After a plugin's `register()` completes                       |
-| `PLUGIN_BOOTED`     | After a plugin's `boot()` completes                           |
-| `PLUGIN_FAILED`     | A plugin threw during `register()` or `boot()` (plus phase)   |
+| Constant              | When it fires                                                 | Payload                                                            |
+| --------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `PLUGIN_REGISTERED`   | After a plugin's `register()` completes                       | `{name, version}`                                                  |
+| `PLUGIN_BOOTED`       | After a plugin's `boot()` completes                           | `{name, version}`                                                  |
+| `PLUGIN_FAILED`       | A plugin threw during `register()` or `boot()`                | `{name, version, phase, error}`                                    |
+| `PLUGIN_INSTALLED`    | After a successful `.zip` install via `pluginsUpload`         | `{name, version, source: "zip_upload"}`                            |
+| `PLUGIN_UNINSTALLING` | Just before uninstall begins, while grants are still in place | `{name}`                                                           |
+| `PLUGIN_UNINSTALLED`  | After every uninstall step has run                            | `{name, success, steps}` — per-step status map (`ok` / `skipped` / `error:<msg>`) |
+| `PLUGIN_UPGRADED`     | After a successful upgrade (atomic swap + hook + reload)      | `{name, old_version, new_version, source: "zip_upload" \| "bundled"}` |
 
 Subscriptions made in `register()` won't observe other plugins'
 `PLUGIN_REGISTERED` events that ran ahead of you in iteration order —
-subscribe in `boot()` to catch the full registration pass.
+subscribe in `boot()` (or via the manifest's `subscribes_to` for
+sandboxed plugins, which always sees all of them) to catch the full
+registration pass.
 
+### Plugin-published events
+
+Beyond subscribing to core events, a sandboxed plugin can **emit** its
+own events for other plugins or in-process subscribers to react to. The
+host namespaces every plugin-emitted event so subscribers can identify
+the origin and one plugin cannot spoof another:
+
+    plugin.<source-plugin-id>.<event-name>
+
+Where `<source-plugin-id>` is the trusted plugin id resolved by the
+plugin gateway from the bearer token (not a value the plugin passes —
+attempts to do so are ignored), and `<event-name>` is the local event
+name supplied by the publisher, constrained to `^[a-z][a-z0-9_-]{0,63}$`.
+
+A plugin opts into the publish surface by allow-listing
+`PluginEventPublisher.publish` in its manifest `core_services` list and
+calling it through `core_call()`:
+
+    $envelope = [
+      'service' => 'PluginEventPublisher',
+      'method'  => 'publish',
+      'args'    => ['refund-issued', ['txid' => $txid, 'amount' => $amount]],
+    ];
+    core_call($envelope);
+
+The host dispatches `plugin.<your-plugin-id>.refund-issued` with the
+payload, augmented with `_source_plugin` for trace-ability. Subscribers
+declare the full namespaced name in their manifest `subscribes_to` list
+(the existing regex already admits the dotted form):
+
+    "subscribes_to": ["plugin.payback-btc.refund-issued"]
+
+Constraints applied by the host:
+
+- Event name pattern: `^[a-z][a-z0-9_-]{0,63}$`.
+- JSON-encoded payload size cap: 16 KiB (after `_source_plugin` is
+  added).
+- Per-plugin rate cap: 600 publishes per minute (via the
+  `#[PluginCallable]` `ratePerMinute`).
+- The publishing plugin's id is host-injected via `PluginCallerAware`
+  on the gateway path; plugins cannot publish under another plugin's
+  id by passing it as an argument.
+
+Subscribers see plugin-emitted events through the same EventDispatcher
+that fans out core events — in-process subscribers receive them
+synchronously; sandboxed plugins receive them as `event`-typed envelopes
+via `PluginIpcForwarder`, same as for core events. The dispatch path is
+asymmetric (publish is plugin → wallet via gateway; receive is wallet →
+plugin via IPC) because sandboxed plugins run in their own FPM pool and
+cannot share an EventDispatcher instance with the wallet pool.
+
+---
+
+## Scheduled Tasks (cron)
+
+Sandboxed plugins can declare manifest-driven scheduled tasks that the
+host fires on a regular interval. Use cases: batched usage flushes,
+key-TTL sweeps, daily summary rollups, periodic cache refreshes —
+anything the plugin would otherwise need to ship a separate cron
+container for.
+
+### Manifest field
+
+    "cron": [
+      {"interval_minutes": 60,   "action": "flush-usage"},
+      {"interval_minutes": 1440, "action": "daily-summary"}
+    ]
+
+`interval_minutes` is bounded `[1, 1440]` (one minute to one day).
+`action` matches the same kebab-case shape as `public_routes`
+(`^[a-z][a-z0-9-]{0,63}$`) and is the discriminator the plugin's
+`__dispatch.php` switches on to route the work.
+
+### Why `interval_minutes` instead of a full cron expression
+
+The host scheduler ticks once per minute (driven by `startup.sh`'s
+`plugin_cron_poller`), so sub-minute precision is impossible regardless
+of expression syntax. Cron expressions also bring timezone and DST
+traps that don't pay off for the use cases this is designed for. A
+plugin that needs "daily at 03:00 UTC" can fold the hour-of-day check
+into its handler — the dispatch envelope carries `scheduled_at` (Unix
+timestamp), so the handler knows the exact moment the host invoked it.
+
+### Dispatch envelope
+
+When an entry's interval has elapsed since its last fire, the host
+POSTs to the plugin's `__dispatch.php` with:
+
+    {
+      "type":    "cron",
+      "name":    "flush-usage",
+      "context": {
+        "scheduled_at":     1715635200,
+        "interval_minutes": 60
+      }
+    }
+
+The plugin handles it in the same dispatch switch as other envelope
+types:
+
+    if ($type === 'cron') {
+      if ($name === 'flush-usage') {
+        // ... do the work, return ok ...
+      }
+    }
+
+### State and locking
+
+The host persists last-fire timestamps in
+`/var/lib/eiou/plugin-cron-state.json` (mode `0640 root:www-data` —
+same multi-writer permissions as `plugins.json`). Each
+`(plugin-id, action)` pair has its own entry. State entries for actions
+that are no longer declared (plugin uninstalled or entry removed from
+manifest) are pruned automatically on each tick, so the file doesn't
+grow without bound.
+
+Each `(plugin-id, action)` also takes a non-blocking `flock` on a
+lockfile under `/tmp` before dispatch. If a previous tick's invocation
+is still running — a slow plugin handler, a stalled IPC connection —
+the new tick skips with `reason=lock_held` and relies on the next
+minute's tick to retry once the lock is free. This prevents pile-up
+under a hanging handler.
+
+### Failure handling
+
+A transport failure (plugin pool down, FPM unreachable) records
+`reason=dispatch_failed` and **does not advance the last-fire window** —
+the next tick retries. A handler that throws records `reason=threw:<msg>`
+and likewise does not advance — same retry semantics. A handler that
+returns `{"ok": true}` advances the window normally.
+
+### CLI
+
+    eiou plugin cron-tick
+
+Runs one tick manually. Useful for diagnostics, forced fires during
+development, and `--json` output for scripting. The startup poller
+invokes this same command — there is no separate code path for
+operator-triggered vs automated ticks.
+
+### Per-entry timeout (optional)
+
+The host caps each dispatch envelope's wall-clock budget. Cron's
+default cap is 5 seconds (much longer than the 500ms ceiling on
+user-blocking surfaces like `event` / `filter` / `render` — those
+park a real user's request, so a slow plugin must not extend the
+wait). Plugins that need more than 5s for a single tick can declare:
+
+    "cron": [
+      {"interval_minutes": 60, "action": "flush-usage", "timeout_ms": 15000}
+    ]
+
+The host clamps `timeout_ms` to a hard ceiling below the plugin
+pool's own FPM `request_terminate_timeout` (currently 25s vs 30s) so
+the host always times out first and logs the failure under our
+control. Bigger budgets indicate the tick is doing too much in one
+invocation — prefer the queue-and-drain pattern below.
+
+---
+
+## Async work pattern (cron + queue)
+
+Most non-trivial plugin work belongs in a cron tick, NOT in the
+event/filter/render handlers that fire on user requests. The hard
+constraint: those handlers have a **500ms host-side budget** and the
+user is parked waiting for the response. A handler that takes 2s to
+fetch a remote IPFS pin from a Kubo sidecar will:
+
+  1. Trip the host's 500ms timeout. The host logs
+     `plugin_ipc_transport_failed` and abandons the call.
+  2. Keep running inside the plugin's FPM worker — the worker
+     doesn't know its caller has hung up — until either (a) the
+     plugin's own work finishes and the worker silently drops the
+     response, or (b) the FPM `request_terminate_timeout` (30s)
+     fires.
+  3. Hold an FPM worker for the duration. With `pm.max_children = 4`
+     in the default pool render, four concurrent slow handlers
+     wedge the entire plugin.
+
+The right shape is "enqueue in the handler, drain in cron". The
+handler does only what fits in 500ms (insert a row, write a JSON
+file), and a cron tick walks the queue at its own pace.
+
+### Sketch — plugin-side queue table
+
+Add a small queue table in the plugin's MySQL schema (via
+`database.migrations`, see [Database Isolation](#database-isolation)):
+
+```sql
+CREATE TABLE my_plugin_pending_pins (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  txid        VARCHAR(64)  NOT NULL,
+  payload     JSON         NOT NULL,
+  status      VARCHAR(16)  NOT NULL DEFAULT 'pending',
+  attempts    INT UNSIGNED NOT NULL DEFAULT 0,
+  next_run_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  created_at  DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  KEY status_run (status, next_run_at)
+);
+```
+
+### Sketch — `__dispatch.php` handler enqueues, doesn't do work
+
+```php
+if ($type === 'event' && $name === 'transaction.received') {
+    // 500ms budget. Insert + return; the actual work is for cron.
+    $pdo->prepare('
+        INSERT INTO my_plugin_pending_pins (txid, payload)
+        VALUES (:txid, :payload)
+    ')->execute([
+        ':txid'    => $context['data']['txid'] ?? '',
+        ':payload' => json_encode($context['data'] ?? []),
+    ]);
+    return ['ok' => true];
+}
+```
+
+### Sketch — cron tick drains the queue
+
+```php
+if ($type === 'cron' && $name === 'drain-pins') {
+    // 5s budget by default; declare timeout_ms in manifest if more
+    // is genuinely needed for a single tick.
+    $batch = $pdo->query('
+        SELECT id, txid, payload FROM my_plugin_pending_pins
+        WHERE status = "pending" AND next_run_at <= NOW(6)
+        ORDER BY next_run_at LIMIT 5
+    ')->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($batch as $row) {
+        try {
+            // Do the actual work — pin to IPFS, hit a remote API,
+            // whatever. Each iteration is its own try/catch so one
+            // poisonous row doesn't abort the batch.
+            doTheWork($row);
+            $pdo->prepare('
+                UPDATE my_plugin_pending_pins
+                SET status = "done"
+                WHERE id = :id
+            ')->execute([':id' => $row['id']]);
+        } catch (Throwable $e) {
+            // Backoff — exponential by attempts, capped. Mark
+            // 'failed' once attempts hit a manifest-defined ceiling
+            // so the row stops eating budget on every tick.
+            $pdo->prepare('
+                UPDATE my_plugin_pending_pins
+                SET attempts = attempts + 1,
+                    next_run_at = DATE_ADD(NOW(6), INTERVAL POW(2, attempts) MINUTE)
+                WHERE id = :id
+            ')->execute([':id' => $row['id']]);
+        }
+    }
+    return ['ok' => true, 'drained' => count($batch)];
+}
+```
+
+Manifest declares both surfaces:
+
+```json
+{
+  "subscribes_to": ["transaction.received"],
+  "cron": [{"interval_minutes": 1, "action": "drain-pins"}]
+}
+```
+
+### Sizing the batch
+
+Default LIMIT 5 leaves margin under the 5s cron budget for the
+slowest realistic iteration (a single IPFS pin can take ~1s on a
+warm sidecar; cold-cache walks can run to several). Tune per
+workload by measuring how long one iteration takes in production and
+choosing `batch_size * iteration_p99 < timeout_ms - 500ms_overhead`.
+
+If the queue grows faster than the cron tick can drain it, raise
+`interval_minutes` (smaller batches more often is usually better
+than huge batches less often — it bounds the per-tick blast radius).
+Don't be tempted to raise `timeout_ms` past ~10s; longer ticks just
+push the operational pain to discovery time (a stuck handler delays
+the next tick, the lockfile-skip pattern in [State and
+locking](#state-and-locking) only protects within one
+(plugin, action) pair).
+
+### When to skip the queue and just do the work synchronously
+
+If the work genuinely fits in 500ms (a cache read, a single
+in-process computation, a small DB query) the enqueue-and-drain
+pattern is overhead. The smell test: if the worst-case latency for a
+single invocation, including a cold network round-trip, comfortably
+fits in 500ms, do it in the event handler. If you're not sure, ship
+it in cron — moving from "synchronous in handler" to "queued for
+cron" is a refactor; moving back is not.
 
 ---
 
 ## Writing a Plugin
 
-The reference plugin `hello-eiou` is ~80 lines and demonstrates the full
-API surface. Start by copying it:
+The reference plugin `hello-eiou` is ~80 lines and demonstrates the
+full sandboxed-plugin contract end-to-end. Start by copying it:
 
 ```bash
 cp -r /etc/eiou/plugins/hello-eiou /etc/eiou/plugins/my-plugin
 ```
+
+A sandboxed plugin is two things on disk: a `plugin.json` manifest
+that **declares** what surfaces the plugin contributes, and an
+`__dispatch.php` that **handles** invocations of those surfaces when
+core calls into the plugin's FPM pool. The entry class (your
+`MyPlugin` class) exists for the optional lifecycle hooks
+(`UninstallablePlugin`, `UpgradablePlugin`) but does **not** run in
+the wallet pool — see [Lifecycle](#lifecycle) for why.
 
 ### 1. Edit the manifest
 
@@ -1007,14 +2960,36 @@ cp -r /etc/eiou/plugins/hello-eiou /etc/eiou/plugins/my-plugin
     "psr-4": {
       "Eiou\\Plugins\\MyPlugin\\": "src/"
     }
-  }
+  },
+  "sandboxed": true,
+  "subscribes_to": ["sync.completed"],
+  "core_services": ["Logger.info"]
 }
 ```
 
+The two surface fields say:
+
+- `subscribes_to` — when the host fires `sync.completed`, route the
+  payload into our `__dispatch.php` as `{type: "event", name:
+  "sync.completed", context: <event data>}`.
+- `core_services` — the plugin may call `Logger.info` via the
+  service gateway. Adding a method here without the host actually
+  exposing it via `#[PluginCallable]` is a no-op; the gateway 403s
+  unknown methods. See [Plugin-callable surface —
+  policy](#plugin-callable-surface--policy) for the full set.
+
+Every other surface (`tabs`, `gui_actions`, `gui_assets`,
+`api_routes`, `cli_commands`, `public_routes`, `filter_hooks`,
+`render_hooks`, `database`, `min_upgradable_from`) is the same shape
+— declare in the manifest, handle in `__dispatch.php`. Add them as
+your plugin needs them.
+
 ### 2. Rename the entry class
 
-Move `src/HelloEiouPlugin.php` to `src/MyPlugin.php`, update the namespace
-and class name:
+Move `src/HelloEiouPlugin.php` to `src/MyPlugin.php`, update the
+namespace and class name. The class is minimal — it exists for
+identity (`getName`/`getVersion`) and optional cleanup /
+migration hooks:
 
 ```php
 <?php
@@ -1022,146 +2997,239 @@ namespace Eiou\Plugins\MyPlugin;
 
 use Eiou\Contracts\PluginInterface;
 use Eiou\Services\ServiceContainer;
-use Eiou\Events\EventDispatcher;
-use Eiou\Events\SyncEvents;
-use Eiou\Utils\Logger;
 
 class MyPlugin implements PluginInterface
 {
     public function getName(): string    { return 'my-plugin'; }
     public function getVersion(): string { return '1.0.0'; }
 
-    public function register(ServiceContainer $container): void
-    {
-        // Register services here if needed. Runs before wireAllServices.
-    }
-
-    public function boot(ServiceContainer $container): void
-    {
-        EventDispatcher::getInstance()->subscribe(
-            SyncEvents::SYNC_COMPLETED,
-            function (array $data): void {
-                Logger::getInstance()->info('[my-plugin] sync completed', $data);
-            }
-        );
-    }
+    public function register(ServiceContainer $container): void { /* unused in sandboxed model */ }
+    public function boot(ServiceContainer $container): void     { /* unused in sandboxed model */ }
 }
 ```
 
-### 3. Enable and restart
+`register()` and `boot()` are on the interface for compatibility
+but don't run in the wallet pool for sandboxed plugins — the
+wallet pool only reads your manifest. They *do* run inside the
+plugin's own FPM pool on each `__dispatch.php` request (the
+dispatcher calls them), so authors who do need shared init can
+put it there — but most plugins don't need either.
 
-- Settings → Plugins → toggle **my-plugin** on
-- Click **Restart node** in the yellow banner
-- Wait for the page to reload (the GUI polls every second until PHP-FPM is
-  back online)
-- The status dot next to `my-plugin` should turn green — your plugin is live
+### 3. Wire the dispatcher
 
-### 4. Ship a CHANGELOG
+Copy the bundled template to `__dispatch.php` and replace the
+`501` stub for each `type` you declared in the manifest:
 
-Drop a `CHANGELOG.md` next to `plugin.json`. The GUI will automatically
-expose a **View bundled CHANGELOG.md** button in the detail modal. See
-`hello-eiou/CHANGELOG.md` for a minimal example.
+```bash
+cp /app/eiou/src/templates/plugin-dispatch-template.php \
+   /etc/eiou/plugins/my-plugin/__dispatch.php
+```
+
+```php
+// inside the dispatch switch — replace the stub
+case 'event':
+    if ($name === 'sync.completed') {
+        $contactPubkey = $context['contact_pubkey'] ?? 'unknown';
+        core_call('Logger', 'info', [
+            "[my-plugin] sync completed for {$contactPubkey}",
+            ['plugin' => 'my-plugin'],
+        ], $log);
+        respond(200, ['ok' => true], $log);
+    }
+    respond(501, [
+        'ok' => false,
+        'error' => ['code' => 'handler_not_found', 'message' => "no handler for event {$name}"],
+    ], $log);
+```
+
+The template already imports `core_call($service, $method, $args,
+$log)` which authenticates to the wallet's service gateway with the
+plugin's per-pool bearer token (mounted at `.gateway-token`). The
+gateway validates the bearer, the manifest allow-list, and the
+`#[PluginCallable]` attribute before dispatching. See [The
+`__dispatch.php` contract](#the-__dispatchphp-contract) for the
+envelope shape and [Calling core services from your handler —
+`core_call()`](#calling-core-services-from-your-handler--core_call)
+for the call's full validation chain.
+
+### 4. Enable and apply
+
+```bash
+eiou plugin enable my-plugin
+```
+
+The supervisor brings up the plugin's FPM pool immediately. The
+plugin's endpoints respond from this moment on — there's no boot
+wait. A wallet restart is still required for the wallet pool's IPC
+forwarder to bind the new `subscribes_to` / `filter_hooks` /
+`render_hooks` entries, so until you restart, the events / hooks
+won't fire your handler. `gui_actions`, `api_routes`,
+`cli_commands`, `public_routes`, and `tabs` all bind on the same
+restart pass.
+
+```bash
+eiou restart
+```
+
+The status dot next to `my-plugin` in the GUI plugin list should
+turn green — your plugin is live.
+
+### 5. Ship a CHANGELOG
+
+Drop a `CHANGELOG.md` next to `plugin.json`. The GUI will
+automatically expose a **View bundled CHANGELOG.md** button in the
+detail modal. See `hello-eiou/CHANGELOG.md` for a minimal example.
+
+### 6. Plan for upgrades
+
+When you ship a `1.1.0`, give operators a clean upgrade path:
+
+- Bump `version` in the manifest.
+- If you changed `owned_tables` (added or removed a table) or your
+  on-table schema, implement `UpgradablePlugin::onUpgrade()` on the
+  entry class to migrate data — runs against the unchanged plugin
+  user with the old grants still active, see [Upgrading
+  Plugins](#upgrading-plugins).
+- If your `1.1.0` can't safely migrate from earlier than some
+  version, declare a `"min_upgradable_from": "0.5.0"` in the
+  manifest so operators on older versions get a clear refusal
+  instead of a corrupted migration.
 
 ---
 
 ## Extending the CLI and REST API
 
-Plugins can register top-level `eiou` subcommands and REST endpoints under
-`/api/v1/plugins/<plugin>/`. Both registrations happen in `boot()` — the
-registries are wired in by then — and both are admin/privileged by default:
-the CLI runs as the local operator, and plugin-owned REST endpoints
-inherit the admin scope gate from the `/api/v1/plugins` resource.
+Plugins can add top-level `eiou <plugin> ...` CLI subcommands and
+admin-scoped REST endpoints under `/api/v1/plugins/<plugin>/<action>`.
+Both surfaces are **manifest-declared** and **dispatcher-handled**:
+
+- The manifest's `cli_commands` and `api_routes` arrays tell core's
+  IPC forwarder to bind handlers in the wallet pool's registries.
+- When an operator invokes `eiou <plugin> ...` or hits the REST
+  endpoint, the bound handler HTTP-POSTs an envelope into the plugin's
+  `__dispatch.php` with `type: "cli"` or `type: "rest"` respectively.
+- Your dispatcher's `case 'cli':` and `case 'rest':` arms run the
+  actual work and respond.
+
+Both surfaces are admin-only: the CLI runs as the local operator, and
+plugin-owned REST endpoints inherit the admin scope gate from
+`/api/v1/plugins`. For non-admin HTTP from customers, see [Public
+routes](#public-routes--non-admin-http-under-pplugin-idaction).
 
 ### CLI subcommand
 
-```php
-public function boot(ServiceContainer $container): void
+**Manifest:**
+
+```json
 {
-    $container->getPluginCliRegistry()->register('myplugin',
-        function (array $argv, CliOutputManager $output): void {
-            // $argv is the full `eiou <cmd> [args...]` argv. Parse further
-            // subcommands out of $argv[2+].
-            $sub = $argv[2] ?? 'help';
-            if ($sub === 'status') {
-                $output->success('All systems nominal', ['status' => 'ok']);
-                return;
-            }
-            $output->error("Unknown subcommand: {$sub}", 'COMMAND_NOT_FOUND', 404);
-        }
-    );
+  "cli_commands": [{"name": "my-plugin"}]
 }
 ```
 
-Operators invoke it as `eiou myplugin status`.
+Naming rules — kebab-case, 1–32 chars, starts with a letter, doesn't
+collide with a reserved core command (`send`, `add`, `plugin`,
+`restart`, etc. — the registry has a hard-coded list and the manifest
+validator drops bad entries before they reach core).
 
-Naming rules:
+**Dispatcher handler:**
 
-- kebab-case, 1–32 chars, must start with a letter
-- cannot collide with a core command (the registry has a hard-coded list of
-  reserved names — `send`, `add`, `plugin`, `restart`, etc.; colliding names
-  throw at `register()` time so plugin authors find out loudly)
-- each plugin name can only be registered once per process
+```php
+// inside __dispatch.php's switch ($type)
+case 'cli':
+    // $context carries the parsed argv and a writable output struct
+    $argv = $context['argv'] ?? [];
+    $sub  = $argv[2] ?? 'help';
+    if ($sub === 'status') {
+        respond(200, ['result' => ['status' => 'ok']], $log);
+    }
+    respond(404, [
+        'ok' => false,
+        'error' => ['code' => 'unknown_subcommand', 'message' => "Unknown subcommand: {$sub}"],
+    ], $log);
+```
 
-Handler failures are caught and reported via the output manager, so a
-buggy command can't tear down the CLI process.
+Operators invoke as `eiou my-plugin status`. Handler failures (a
+thrown exception inside the dispatcher) come back as a 500 in the
+response envelope; the CLI's output manager surfaces them as an
+error without crashing the CLI process.
 
 ### REST endpoint
 
-```php
-public function boot(ServiceContainer $container): void
+**Manifest:**
+
+```json
 {
-    $container->getPluginApiRegistry()->register('myplugin', 'GET', 'status',
-        function (string $method, array $params, string $body): array {
-            return ['status' => 'ok', 'ts' => time()];
-        }
-    );
+  "api_routes": [{"method": "GET", "action": "status"}]
 }
 ```
 
-Callers invoke it as `GET /api/v1/plugins/myplugin/status`. The handler's
-return array is wrapped in the standard `successResponse` shape by the
-core `ApiController`. Throwing becomes a 500 with a structured error body.
+Rules: `method` is one of `GET / POST / PUT / PATCH / DELETE`;
+`action` is kebab-case, 1–64 chars; the action names `enable` and
+`disable` are reserved for the core plugin-management endpoints; the
+same `(plugin, method, action)` tuple is registered once.
 
-Rules:
+**Dispatcher handler:**
 
-- `action` is kebab-case, 1–64 chars
-- `enable` and `disable` are reserved for core's plugin-management endpoints
-- same `(plugin, method, action)` tuple can only be registered once
-- admin scope is enforced by the core `handlePlugins` gate, so individual
-  handlers don't need to re-check auth
+```php
+// inside __dispatch.php's switch ($type)
+case 'rest':
+    // $context carries: method, params (query/path), body (raw string)
+    if ($name === 'status') {
+        respond(200, ['result' => ['status' => 'ok', 'ts' => time()]], $log);
+    }
+    respond(404, [
+        'ok' => false,
+        'error' => ['code' => 'unknown_route', 'message' => "no handler for {$name}"],
+    ], $log);
+```
 
-Path shape is single-level only: `/api/v1/plugins/<plugin>/<action>`.
-Nested paths like `/api/v1/plugins/myplugin/users/123` aren't supported in
-v1 because the API router's path parser stops at the fifth segment —
-encode sub-resources as query params (`?id=123`) or as a compound action
-name.
+Callers invoke as `GET /api/v1/plugins/my-plugin/status` (admin
+auth required — the wallet's `ApiController::handlePlugins` checks
+the admin scope before routing into your handler). The handler's
+`result` is wrapped in the standard `successResponse` shape by the
+core controller. Path shape is single-level only — nested paths
+aren't supported in v1; encode sub-resources as query params
+(`?id=123`) or as a compound action name.
 
 ### Reference
 
-See `hello-eiou` — `eiou hello-eiou` returns a random fortune from the
-CLI, and `GET /api/v1/plugins/hello-eiou/fortune` returns one as JSON.
-Both registrations live in `HelloEiouPlugin::boot()`.
+See `hello-eiou` — `eiou hello-eiou` and `GET /api/v1/plugins/hello-eiou/fortune`
+both return a random fortune. Both declarations live in `plugin.json`
+(`cli_commands` + `api_routes`); both handlers live in
+`__dispatch.php`'s switch.
 
 ---
 
 ## Extending the GUI
 
-Plugins extend the wallet GUI through five complementary surfaces — render
-hooks, filter hooks, the asset registry, the tab registry, and the action
-registry. Each is exposed via `ServiceContainer` and meant to be used from
-`boot()`. Full design rationale lives in `docs/PLUGIN_GUI_HOOKS.md`; this
-section is the API reference plugin authors need day-to-day.
+Plugins extend the wallet GUI through five complementary surfaces —
+render hooks, filter hooks, asset enqueues, a Plugins-tab sub-panel,
+and POST action handlers. All five are **manifest-declared,
+dispatcher-handled**:
 
-```php
-public function boot(ServiceContainer $container): void
-{
-    $hooks   = $container->getHooks();          // render + filter primitives
-    $assets  = $container->getAssetRegistry();  // CSS / JS enqueue
-    $tabs    = $container->getTabRegistry();    // top-level tabs
-    $actions = $container->getActionRegistry(); // POST handlers
-    // … register surfaces below …
-}
-```
+| Surface           | Manifest field      | Dispatcher type | What the handler returns         |
+| ----------------- | ------------------- | --------------- | -------------------------------- |
+| Render slot       | `render_hooks`      | `"render"`      | An HTML string                   |
+| Filter slot       | `filter_hooks`      | `"filter"`      | The transformed filter value     |
+| Plugins-tab panel | `plugin_tab_panel`  | `"render"` (name=`plugin_tab_panel`) | HTML for the plugin's body inside the host's Plugins tab |
+| POST action       | `gui_actions`       | `"action"`      | A response envelope (JSON or redirect) |
+| CSS / JS asset    | `gui_assets`        | — purely declarative; no handler runs |  Asset file at the declared path |
+
+> **Note:** the older `tabs` manifest field (which let plugins register
+> their own top-level tabs in the wallet nav) is deprecated for plugin
+> use. The host now owns a single **Plugins** tab between Activity and
+> Settings with a dropdown of installed plugins; each plugin gets one
+> sub-panel via `plugin_tab_panel`. Manifests still carrying `tabs`
+> log a deprecation warning at boot and the entries are not
+> registered.
+
+The IPC forwarder reads each manifest list at wallet boot and binds
+matching in-process listeners; when a slot fires / filter resolves /
+action POSTs / tab renders, the forwarder HTTP-POSTs an envelope into
+the plugin's `__dispatch.php` and surfaces the response back to the
+host caller. This section is the GUI-surface reference plugin authors
+need day-to-day; the underlying IPC contract is documented in [The
+`__dispatch.php` contract](#the-__dispatchphp-contract).
 
 ### Render slots
 
@@ -1181,16 +3249,34 @@ are logged and skipped.
 | `gui.activity.after` | activity tab bottom | Custom analytics under the transaction history. |
 | `gui.settings.section` | settings tab bottom | Plugin-owned settings section. |
 
-```php
-$hooks->onRender('gui.dashboard.after', function (array $ctx): string {
-    $name = htmlspecialchars($ctx['user']->getDisplayName() ?? '');
-    return "<section class=\"plugin-myplugin-widget\"><h3>Hi {$name}</h3></section>";
-}, 20);
+**Manifest:**
+
+```json
+{
+  "render_hooks": ["gui.dashboard.after"]
+}
 ```
 
-The `$ctx` array carries whatever the host passed at the fire site — at
-present every wallet template fires with `['user' => $user]`. Listeners
-that don't need the context can ignore the parameter.
+**Dispatcher handler:**
+
+```php
+// inside __dispatch.php's switch ($type)
+case 'render':
+    if ($name === 'gui.dashboard.after') {
+        // $context carries whatever the host passed at the fire site —
+        // every wallet template fires with `{'user': <user>}`.
+        $display = htmlspecialchars($context['user']['display_name'] ?? '');
+        respond(200, [
+            'result' => "<section class=\"plugin-myplugin-widget\"><h3>Hi {$display}</h3></section>",
+        ], $log);
+    }
+    respond(200, ['result' => ''], $log); // no contribution for unknown hooks
+```
+
+The host concatenates render-hook contributions in priority order
+(plugin handlers get the default priority; core's own listeners
+register their own). A handler that throws is logged and skipped —
+other plugins' contributions still appear.
 
 ### Filter slots
 
@@ -1207,34 +3293,66 @@ other listeners aren't punished for a misbehaving one).
 | `gui.contact_modal.body` | array of `{id, html}` | Body HTML for the matching modal tab. Host renders it inside `<div id="<id>-tab" class="modal-tab-content">`. |
 | `gui.contact.actions` | array of `{label, icon, action}` | Buttons on the contact-modal Settings tab. The host wraps each entry in a CSRF-protected POST form whose hidden `contact_address` input is auto-populated when the modal opens. |
 
-```php
-$hooks->onFilter('gui.contact.actions', function (array $actions): array {
-    $actions[] = [
-        'label'  => 'Bookmark',
-        'icon'   => 'fas fa-star',
-        'action' => 'myPluginBookmark',   // must match a registered action
-    ];
-    return $actions;
-});
+**Manifest:**
+
+```json
+{
+  "filter_hooks": ["gui.contact.actions"]
+}
 ```
 
-### Asset enqueue (`PluginAssetRegistry`)
+**Dispatcher handler:**
 
 ```php
-$assets->enqueueStyle('myplugin', 'assets/styles.css');
-$assets->enqueueScript('myplugin', 'assets/main.js');
-$assets->enqueueScript('myplugin', 'assets/early.js', ['head' => true]);
-$assets->enqueueStyle('myplugin', 'assets/big.css', ['priority' => 5]);
+// inside __dispatch.php's switch ($type)
+case 'filter':
+    if ($name === 'gui.contact.actions') {
+        // $context['value'] is the incoming filter value
+        $actions = is_array($context['value'] ?? null) ? $context['value'] : [];
+        $actions[] = [
+            'label'  => 'Bookmark',
+            'icon'   => 'fas fa-star',
+            'action' => 'myPluginBookmark',   // must match a declared gui_action
+        ];
+        respond(200, ['result' => $actions], $log);
+    }
+    // Pass-through if we don't transform this hook
+    respond(200, ['result' => $context['value'] ?? null], $log);
 ```
 
-Paths resolve under the plugin root (`/etc/eiou/plugins/<id>/`). Path
-traversal (`..`, leading slash, backslashes) is rejected at enqueue and
-re-validated against `realpath()` at render so a symlinked target can't
-escape the plugin tree. Files smaller than `URL_MODE_THRESHOLD` (4 KiB)
-inline as `<style nonce>` / `<script nonce>` blocks; larger files get a
-`<link href="…?v=<hash>">` / `<script src="…?v=<hash>">` tag served by
-the `/gui/plugin-assets/<id>/<path>` route. Force a mode with
-`['inline' => true]` or `['inline' => false]`.
+The handler's `result` becomes the value the next listener in the
+chain sees (or the final value the host renders). Throwing falls
+back to the previous value, so a buggy plugin doesn't punish other
+contributors to the same filter.
+
+### Asset enqueue
+
+CSS and JS files are declared purely in the manifest — there's no
+dispatcher handler for assets. Paths resolve under the plugin root
+(`/etc/eiou/plugins/<id>/`); path traversal (`..`, leading slash,
+backslashes) is rejected at manifest validation and re-validated at
+render against `realpath()` so a symlinked target can't escape the
+plugin tree.
+
+**Manifest:**
+
+```json
+{
+  "gui_assets": [
+    {"type": "css", "path": "assets/styles.css"},
+    {"type": "js",  "path": "assets/main.js"},
+    {"type": "js",  "path": "assets/early.js", "head": true},
+    {"type": "css", "path": "assets/big.css", "priority": 5}
+  ]
+}
+```
+
+Files smaller than `URL_MODE_THRESHOLD` (4 KiB) inline as
+`<style nonce>` / `<script nonce>` blocks; larger files get a
+`<link href="…?v=<hash>">` / `<script src="…?v=<hash>">` tag served
+by the `/gui/plugin-assets/<id>/<path>` route (handled by core's
+`PluginAssetServer`). Force a mode with `"inline": true` or
+`"inline": false`.
 
 CSP nonce stamping is automatic. Plugin authors don't think about it.
 
@@ -1251,34 +3369,24 @@ Payback Methods card list, API Keys table, Settings, etc. — wraps its
 content in the same outer shape: a `form-container fade-in-up` div, a
 `section-header` with icon + h2 + optional inline buttons, an optional
 `<details>` "About this …" disclosure, and the body. `renderSection()`
-in `WalletTemplateHelpers.php` consolidates the wrapper so plugin
-sections look native and core sections stay consistent when CSS/UX
-refinements happen.
+in `WalletTemplateHelpers.php` consolidates the wrapper so core's own
+sections stay visually consistent when CSS/UX refinements happen.
 
-```php
-echo renderSection([
-    'id'    => 'my-plugin-stats',           // div id + hook namespace
-    'icon'  => 'fas fa-chart-line',
-    'title' => 'My Plugin Stats',
+**Sandboxed plugins don't call `renderSection()` directly** — it runs
+in the wallet pool when wallet.html renders, not in the plugin's
+pool. Plugin authors who want their HTML to match the host's section
+shape have two options:
 
-    // Optional: extra HTML rendered inside the header after the title
-    // (badges, inline buttons). Raw HTML — caller is responsible for
-    // any escaping inside the snippet.
-    'headerExtras' => '<button class="btn btn-sm btn-primary"
-                              data-action="myPluginRefresh">Refresh</button>',
+- **Mirror the markup yourself.** Return an HTML string from your
+  render hook handler that uses the same `form-container fade-in-up`
+  + `section-header` outer shape. The CSS will style it identically.
+- **Use a tab.** Declare a `tabs` entry in the manifest (see below).
+  Core's wallet.html iterates the tab registry and runs each tab's
+  body through `renderSection()` automatically, so tab bodies get
+  the native chrome for free.
 
-    // Optional: explanatory copy in a <details> disclosure. Raw HTML;
-    // pass null/'' to skip the disclosure entirely.
-    'introTitle' => 'About my plugin',
-    'intro'      => 'Plain prose with <strong>inline markup</strong> OK.',
-
-    // Required: the section body — table, form, list, anything.
-    'body'  => $myStatsHtml,
-]);
-```
-
-The helper auto-fires two render hooks around every section it
-renders:
+The helper also auto-fires two render hooks around every section it
+renders, and these *are* available to plugins via `render_hooks`:
 
 - `gui.section.before.<id>` — fired immediately before the section
   opens. Plugins can inject a banner above someone else's section
@@ -1290,11 +3398,17 @@ renders:
 The hook context is the full spec array, so listeners can adapt to
 which section they're inside (e.g. only inject for `id === 'dlq'`).
 
+```json
+{
+  "render_hooks": ["gui.section.after.dlq"]
+}
+```
+
 ```php
-// In a plugin's boot():
-$container->getHooks()->onRender('gui.section.after.dlq', function (array $ctx): string {
-    return '<div class="my-plugin-dlq-followup">…</div>';
-});
+// inside __dispatch.php's switch ($type), case 'render':
+if ($name === 'gui.section.after.dlq') {
+    respond(200, ['result' => '<div class="my-plugin-dlq-followup">…</div>'], $log);
+}
 ```
 
 Every standard wallet section is rendered through `renderSection()`:
@@ -1309,110 +3423,146 @@ every one of them.
 Every paginated table in the wallet wraps its `<table>` in
 `<div class="contacts-table-wrapper">` and adds a `contacts-table
 {variant}-table` class. `renderTable()` hides that boilerplate so
-plugin-authored tables get the same chrome.
+core tables stay consistent.
 
-```php
-echo renderTable([
-    'id'           => 'my-plugin-table-wrapper', // optional <div id>
-    'wrapperClass' => 'contacts-table-wrapper d-none', // optional, default is just contacts-table-wrapper
-    'variant'      => 'my-plugin',  // becomes class="contacts-table my-plugin-table"
-    'headers'      => '<tr><th>Col 1</th><th>Col 2</th></tr>',
-    'body'         => $rowsHtml,    // your <tr>…</tr> rows; empty for JS-populated tables
-    'tbodyId'      => 'my-plugin-tbody', // optional <tbody id> for JS-populated tables
-]);
+As with `renderSection`, sandboxed plugins don't call `renderTable()`
+directly — return HTML from your render hook handler that uses the
+same outer shape (`<div class="contacts-table-wrapper">` containing a
+`<table class="contacts-table <variant>-table">`) and the CSS will
+style it identically.
+
+### The Plugins tab — `plugin_tab_panel`
+
+The host owns a single **Plugins** tab in the wallet nav, between
+Activity and Settings. Each enabled plugin can register one sub-panel
+that appears in a dropdown at the top of that tab; selecting a plugin
+swaps the panel body below the dropdown.
+
+Why a host-owned parent rather than per-plugin top-level tabs: the
+wallet's primary navigation is small and stable on purpose — five
+core tabs operators learn once and don't have to relearn after every
+plugin install. A wallet running four plugins would otherwise grow
+the nav by 80 %; consolidating into one parent tab keeps the nav
+size constant regardless of how many plugins are installed.
+
+**Manifest:**
+
+```json
+{
+  "plugin_tab_panel": {
+    "label": "My Plugin",
+    "icon":  "fas fa-puzzle-piece",
+    "order": 100
+  }
+}
 ```
 
-Column definitions stay as raw HTML — they're domain-specific (sort
-buttons, info-tooltip icons, custom `data-` attributes) and a generic
-config array would just push complexity around. The helper is just
-the wrapper.
+Field rules: `label` is plain text up to 64 chars (shown in the
+dropdown); `icon` defaults to `fas fa-puzzle-piece`; `order` defaults
+to 100 (lower = earlier in the dropdown, ties broken by plugin id).
+The plugin's `name` is the row's identity — there's no separate `id`
+in `plugin_tab_panel` because each plugin gets at most one panel.
 
-
-
-```php
-$tabs->register([
-    'id'     => 'myplugin',           // kebab-case; must be unique
-    'label'  => 'My Plugin',
-    'icon'   => 'fas fa-puzzle-piece', // Font Awesome class
-    'order'  => 50,                    // <100 = before settings
-    'render' => fn() => '<div class="plugin-myplugin">…</div>',
-    // OR
-    // 'include' => '/etc/eiou/plugins/myplugin/views/tab.php',
-]);
-```
-
-The five core tabs (Dashboard 10, Payment 20, Contacts 30, Activity 40,
-Settings 50) are registered by Functions.php each request. Plugin tabs
-slot in by `order`. `wallet.html` iterates the registry once to build
-the desktop nav, mobile nav, and panel sections from a single source of
-truth — your tab automatically appears in all three places.
-
-Optional `badge` (int or callable returning int) renders a numeric pill
-on the tab button; `badgeTitle` (string or callable) provides hover
-text. Last-write-wins on `id` collision lets a plugin override a core
-tab if it really wants to.
-
-### Action registry (`GuiActionRegistry`)
-
-Routes every authenticated POST in the wallet GUI through one
-registry. Both core handlers and plugin handlers register against the
-same registry; the dispatcher in `Functions.php` looks up `$_POST['action']`
-and calls the matching closure.
+**Dispatcher handler:**
 
 ```php
-$actions->register('myPluginBookmark',
-    function (array $request): void {
-        // The registry has already enforced the tier you declared at
-        // registration time (see the table below). The handler still
-        // emits whatever response shape it wants — JSON + exit, or
-        // MessageHelper::redirectMessage(...), or anything else a
-        // normal POST handler does.
-        \Eiou\Gui\Helpers\MessageHelper::redirectMessage('Bookmarked!', 'success');
-    },
-    GuiActionRegistry::TIER_CSRF,   // public | auth | csrf | sensitive
-    'myplugin'                       // plugin id (for diagnostics)
-);
+// inside __dispatch.php's switch ($type)
+case 'render':
+    if ($name === 'plugin_tab_panel') {
+        respond(200, ['result' => '<div class="plugin-myplugin">…</div>'], $log);
+    }
 ```
 
-| Tier | Constant | Gate the registry enforces |
-|---|---|---|
-| `public` | `TIER_PUBLIC` | None — anonymous callers OK. Use sparingly. |
-| `auth` | `TIER_AUTH` | Authenticated session required. The registry routes but does NOT check CSRF — your handler is expected to do its own check (most useful when you need rotating CSRF, the legacy plain-text 403 body, or a per-handler envelope shape). |
-| `csrf` | `TIER_CSRF` | Auth + valid CSRF token (non-rotating). On failure the registry emits `{"success":false,"error":"csrf_error","message":"Invalid CSRF token"}` with HTTP 403 and `Content-Type: application/json`. **Default for new plugin AJAX handlers.** |
-| `sensitive` | `TIER_SENSITIVE` | Auth + CSRF + recent sensitive-access grant (the same gate that protects "Reveal API key", "Delete account", etc.). |
+The host POSTs `type: "render"`, `name: "plugin_tab_panel"` (fixed
+— no per-tab suffix, since each plugin gets at most one panel) when
+it needs the panel's HTML. The plugin's body renders inside a
+host-provided container with the tab title already in place, so the
+plugin's body should drop the outer `<h2>` and start with its own
+sub-header (typically `<h3>`).
 
-Action names are camelCase, 1–64 chars. **Last-write-wins on collisions:**
-a plugin that registers an action with the same name as a core action
-overrides core, and a plugin that registers after another plugin
-overrides the earlier one. The registry runs in the order
-`Application::bootAll()` boots plugins, then `index.html` registers
-core controllers, then plugins' explicit late registrations. Naming
-collisions with core are documented but not blocked — exercise the
-override deliberately.
+**Empty state.** When zero plugins have a panel registered, the
+Plugins tab shows a helpful empty-state message ("No plugins
+installed yet. Upload a plugin from Settings → Plugins.") instead of
+an empty dropdown.
 
-#### Core actions are registry entries
+**Persistence.** The operator's last-viewed panel selection is
+saved to `localStorage`; revisiting the Plugins tab restores the
+last choice. A stored selection pointing at an uninstalled plugin
+silently falls back to the first registered panel.
 
-Every core POST action — contact / transaction / payment-request /
-settings / API-keys / plugin / payback-methods management, the
-remember-me revoke endpoints, the DLQ retry endpoints, the
-search/loadMore AJAX endpoints, and the "What's New" dismiss/notes
-endpoints — is registered with the registry by core's startup code at
-the same time plugins register theirs. That means a plugin can
-override `addContact`, `sendEIOU`, `apiKeysCreate`, etc. by
-registering a handler with the same name. Use this with care; the JS
-client expects specific response shapes and will misbehave if your
-override changes them.
+> **Deprecation note:** the older `tabs` manifest field is no longer
+> the registration path for plugins — the IPC forwarder logs a
+> deprecation warning and does not register manifest `tabs` entries.
+> Existing plugins should move their panel into `plugin_tab_panel`
+> (drop the outer `tabs` list entirely) and rename the dispatcher's
+> render handler from `tab:<id>` to `plugin_tab_panel`. See
+> `files/plugins/hello-eiou/` for the reference migration.
 
-Core entries register with `'core'` as the plugin-id tag and at
-`TIER_AUTH` so each handler keeps its existing inline CSRF semantics
-(rotating for HTML form submits, non-rotating for AJAX) and its
-existing failure-response shape (plain-text 403 for HTML form submits,
-per-handler legacy JSON envelope for AJAX). When you write a plugin
-that overrides a core action, mirror those semantics or expect the JS
-to break.
+### POST action handlers
 
-Forms rendered by `gui.contact.actions` post to `/wallet?action=<name>`;
-you don't need a separate route.
+GUI POST actions (form submits + AJAX) are declared in the manifest
+and handled in the dispatcher with `type: "action"`. The wallet's
+`GuiActionRegistry` registers an IPC-forwarding handler for each
+declared `gui_actions` entry; when a request arrives with the
+matching `$_POST['action']`, the forwarder bridges it into the
+plugin's dispatcher.
+
+**Manifest:**
+
+```json
+{
+  "gui_actions": [
+    {"name": "myPluginBookmark", "tier": "csrf"}
+  ]
+}
+```
+
+Field rules: `name` is camelCase, 1–64 chars; `tier` is one of:
+
+| Tier         | Gate the registry enforces before reaching your handler |
+| ------------ | ------------------------------------------------------- |
+| `public`     | None — anonymous callers OK. Use sparingly. |
+| `auth`       | Authenticated session required; CSRF check left to the handler. |
+| `csrf`       | Auth + valid CSRF token (non-rotating). On failure the registry emits `{"success":false,"error":"csrf_error","message":"Invalid CSRF token"}` with HTTP 403 — your handler never runs. **Default for new plugin AJAX handlers.** |
+| `sensitive`  | Auth + CSRF + recent sensitive-access grant (same gate that protects "Reveal API key", "Delete account", etc.). |
+
+**Dispatcher handler:**
+
+```php
+// inside __dispatch.php's switch ($type)
+case 'action':
+    if ($name === 'myPluginBookmark') {
+        // $context carries the POST body as 'request' and the
+        // contact_address (if any) automatically populated by the GUI's
+        // contact-action wiring.
+        $address = $context['request']['contact_address'] ?? '';
+        // … do the work …
+        respond(200, [
+            'result' => ['success' => true, 'message' => 'Bookmarked!'],
+        ], $log);
+    }
+    respond(404, [
+        'ok' => false,
+        'error' => ['code' => 'unknown_action', 'message' => "no handler for {$name}"],
+    ], $log);
+```
+
+The handler's `result` becomes the response body the host emits to
+the browser. For redirect-style responses (legacy form submits), set
+the `redirect` field instead of `result`; the host emits a 303 to
+the given URL with a flash message attached.
+
+**Last-write-wins on collisions** — a plugin declaring an action
+name that core or another plugin already registered overrides the
+earlier handler. The order is: core's own actions register first,
+then plugins in the order `bootAll()` iterates them. Overriding
+core actions (e.g. `addContact`, `sendEIOU`, `apiKeysCreate`) is
+permitted but **fragile** — the JS client expects specific response
+shapes and will misbehave if your override changes them. Do it
+deliberately or not at all.
+
+Forms rendered by the `gui.contact.actions` filter post to
+`/wallet?action=<name>`; you don't need a separate route.
 
 ### Wiring `gui.contact.actions` to a registered handler
 
@@ -1455,10 +3605,13 @@ deprecation policy as any host-side API. New hooks are added as needed
 yet exist.
 
 The `hello-eiou` example plugin (see `files/plugins/hello-eiou/`)
-exercises every surface above: an enqueued stylesheet, a dashboard
+exercises every surface above: a declared CSS asset, a dashboard
 render hook, a `Fortunes` top-level tab, the `helloEiouFortune` POST
-action with `TIER_CSRF`, the `gui.dashboard.widgets` filter, and the
-`gui.contact.actions` filter. It's the smallest end-to-end reference.
+action at the `csrf` tier, the `gui.dashboard.widgets` filter, and
+the `gui.contact.actions` filter. Manifest declarations live in
+`plugin.json`; the corresponding handlers live in
+`__dispatch.php`'s switch. It's the smallest end-to-end reference
+for a sandboxed plugin's GUI surface.
 
 ---
 
@@ -1467,76 +3620,144 @@ action with `TIER_CSRF`, the `gui.dashboard.widgets` filter, and the
 Core ships two payback-method rail types — `bank_wire` (with SEPA /
 Faster Payments / ACH / FedNow / SWIFT) and `custom` (free-text
 instructions). Every other rail — Bitcoin, PayPal, Bizum, Lightning,
-EVM, Pix, UPI, etc. — is a plugin opportunity. A plugin registers one
-type by implementing `Eiou\Contracts\PaybackMethodTypeContract` and
-calling `PaybackMethodTypeRegistry::register()` from its `register()`
-phase:
+EVM, Pix, UPI, etc. — is a plugin opportunity.
+
+Sandboxed plugins declare rail types in the manifest's
+`payback_method_types` list and handle the dynamic contract methods
+(`validate`, `mask`, `defaultPrecision`) in `__dispatch.php` under a
+new `case 'payback_method':` arm. The wallet pool's
+`PaybackMethodTypeRegistry` is populated at boot with an
+`IpcPaybackMethodTypeProxy` per declared type — proxies hold the
+static catalog row in memory and IPC into the plugin's dispatcher for
+each dynamic method call.
+
+**Manifest:**
+
+```json
+{
+  "name": "payback-btc",
+  "version": "0.1.0",
+  "entryClass": "Eiou\\Plugins\\PaybackBtc\\PaybackBtcPlugin",
+  "autoload": { "psr-4": { "Eiou\\Plugins\\PaybackBtc\\": "src/" } },
+  "sandboxed": true,
+
+  "payback_method_types": [
+    {
+      "id": "btc",
+      "catalog": {
+        "id": "btc",
+        "label": "Bitcoin",
+        "group": "crypto",
+        "icon": "fab fa-bitcoin",
+        "description": "Settle in BTC. Accepts a mainnet address.",
+        "currencies": ["BTC"],
+        "fields": [
+          {
+            "name": "address",
+            "label": "Bitcoin address",
+            "type": "text",
+            "required": true,
+            "placeholder": "bc1q…"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Multiple types per plugin are supported — declare each one as a
+separate `payback_method_types` entry. `id` must match
+`^[a-z][a-z0-9_]{0,31}$` and must not be one of the reserved core ids
+(`bank_wire`, `custom`); the manifest validator drops bad entries
+before they reach the registry. `catalog` is the static GUI row
+documented under [What the contract plugs
+into](#what-the-contract-plugs-into).
+
+**Dispatcher handler:**
 
 ```php
-namespace Eiou\Plugins\PaybackBtc;
+// inside __dispatch.php's switch ($type)
+case 'payback_method':
+    $typeId   = $context['type_id'] ?? '';
+    $currency = $context['currency'] ?? '';
+    $fields   = $context['fields'] ?? [];
 
-use Eiou\Contracts\PluginInterface;
-use Eiou\Contracts\PaybackMethodTypeContract;
-use Eiou\Services\ServiceContainer;
-
-class PaybackBtcPlugin implements PluginInterface
-{
-    public function getName(): string    { return 'payback-btc'; }
-    public function getVersion(): string { return '0.1.0'; }
-
-    public function register(ServiceContainer $container): void
-    {
-        $container->getPaybackMethodTypeRegistry()->register(new BtcType());
+    if ($typeId !== 'btc') {
+        respond(404, [
+            'ok' => false,
+            'error' => ['code' => 'unknown_type', 'message' => "no handler for type '{$typeId}'"],
+        ], $log);
     }
 
-    public function boot(ServiceContainer $container): void { /* no-op */ }
-}
+    if ($name === 'validate') {
+        // Return a list of {field, code, message} records. [] = success.
+        if ($currency !== 'BTC') {
+            respond(200, ['result' => [[
+                'field' => 'currency', 'code' => 'invalid_currency_for_type',
+                'message' => 'Bitcoin settles in BTC',
+            ]]], $log);
+        }
+        if (empty($fields['address'])) {
+            respond(200, ['result' => [[
+                'field' => 'address', 'code' => 'required',
+                'message' => 'address is required',
+            ]]], $log);
+        }
+        respond(200, ['result' => []], $log);
+    }
 
+    if ($name === 'mask') {
+        $a = (string) ($fields['address'] ?? '');
+        $masked = $a === '' ? '•••' : substr($a, 0, 6) . '…' . substr($a, -4);
+        respond(200, ['result' => $masked], $log);
+    }
+
+    if ($name === 'defaultPrecision') {
+        // [min_unit, exponent] — satoshi precision when currency is BTC,
+        // null otherwise so SettlementPrecisionService falls back to the
+        // generic crypto / fiat default.
+        respond(200, [
+            'result' => $currency === 'BTC' ? [1, -8] : null,
+        ], $log);
+    }
+
+    respond(404, [
+        'ok' => false,
+        'error' => ['code' => 'unknown_method', 'message' => "no handler for {$name}"],
+    ], $log);
+```
+
+The proxy's IPC-failure behaviour is operator-friendly: a transport
+failure on `validate` surfaces as a top-level `plugin_ipc_failed`
+error record (the operator sees "could not check" rather than the
+form silently passing); `mask` falls back to `'•••'` (list-view
+shouldn't break a row over a transient plugin blip); `defaultPrecision`
+falls back to null (`SettlementPrecisionService`'s generic default
+applies). Authors don't need to worry about transport — the proxy
+handles every failure mode with a sensible degradation.
+
+### In-process equivalent (core types only)
+
+Core's own rail types (`bank_wire`, `custom`) register the in-process
+way because they live in the wallet pool by design. The interface they
+implement is `Eiou\Contracts\PaybackMethodTypeContract`:
+
+```php
 class BtcType implements PaybackMethodTypeContract
 {
     public function getId(): string { return 'btc'; }
-
-    public function getCatalogEntry(): array
-    {
-        return [
-            'id'          => 'btc',
-            'label'       => 'Bitcoin',
-            'group'       => 'crypto',
-            'icon'        => 'fab fa-bitcoin',
-            'description' => 'Settle in BTC. Accepts a mainnet address.',
-            'currencies'  => ['BTC'],          // null = any ISO-4217
-            'fields'      => [
-                ['name' => 'address', 'label' => 'Bitcoin address', 'type' => 'text',
-                 'required' => true, 'placeholder' => 'bc1q…'],
-            ],
-        ];
-    }
-
-    public function validate(string $currency, array $fields): array
-    {
-        if ($currency !== 'BTC') {
-            return [['field' => 'currency', 'code' => 'invalid_currency_for_type',
-                     'message' => 'Bitcoin settles in BTC']];
-        }
-        if (empty($fields['address'])) {
-            return [['field' => 'address', 'code' => 'required',
-                     'message' => 'address is required']];
-        }
-        return [];
-    }
-
-    public function mask(array $fields): string
-    {
-        $a = (string) ($fields['address'] ?? '');
-        return $a === '' ? '•••' : substr($a, 0, 6) . '…' . substr($a, -4);
-    }
-
-    public function defaultPrecision(string $currency): ?array
-    {
-        return $currency === 'BTC' ? [1, -8] : null;   // satoshi
-    }
+    public function getCatalogEntry(): array { /* the catalog block above */ }
+    public function validate(string $currency, array $fields): array { /* … */ }
+    public function mask(array $fields): string { /* … */ }
+    public function defaultPrecision(string $currency): ?array { /* … */ }
 }
 ```
+
+The contract is documented for anyone porting an existing in-process
+implementation to the sandboxed model — the method bodies translate
+1:1 into the dispatcher case shown above. Sandboxed plugins don't
+implement this contract directly; the proxy does it on their behalf.
 
 ### What the contract plugs into
 
@@ -1551,16 +3772,19 @@ The registry is consulted from four places in core:
 
 ### Registration rules
 
-- `getId()` must match `^[a-z][a-z0-9_]{0,31}$`
-- `bank_wire` and `custom` are reserved — a plugin can't shadow them
-- Each id can only be registered once per process; registering a
-  duplicate raises `InvalidArgumentException`, which the plugin loader
-  catches and marks the offending plugin `failed` without taking the
-  node down
-- Register in `register()`, not `boot()` — the validator is
-  instantiated as part of `ServiceContainer::getPaybackMethodService()`
-  which is wired during `ServiceContainer::wireAllServices()`, right
-  after the `register()` phase
+- `id` must match `^[a-z][a-z0-9_]{0,31}$`
+- `bank_wire` and `custom` are reserved — a plugin can't shadow them.
+  The manifest validator drops entries with reserved ids before they
+  reach the registry; the registry's own collision check is the
+  defence-in-depth net.
+- Each id can only be registered once across all enabled plugins;
+  the second-arriving plugin's entry is skipped with a logged warning
+  and the first plugin keeps the slot.
+- For sandboxed plugins, registration happens at wallet boot through
+  the IPC forwarder — no in-process call from the plugin's PHP. A
+  wallet restart is required after enabling a plugin that declares
+  `payback_method_types` (same as any other manifest-declared
+  surface), so the forwarder picks the new entries up.
 
 ### Field schema — what the GUI renders
 
@@ -1677,14 +3901,37 @@ entry points are called. This is a defensive measure against some
 edge cases in the PHP-FPM request lifecycle where the same worker PID would
 otherwise run the lifecycle twice and double-subscribe event listeners.
 
-### No sandboxing
+### Sandboxing is mandatory
 
-Plugins run with the same permissions and filesystem access as the core PHP
-process (`www-data` inside the container). There is no opcode sandbox, no
-capability filter, no per-plugin process isolation. **Only install plugins
-from sources you trust.** The manifest opt-in model (disabled by default) is
-a safety rail against *accidental* breakage, not a defence against malicious
-code.
+Every plugin must declare `"sandboxed": true` in its manifest. The
+in-process plugin model has been removed — a non-sandboxed plugin
+could read the master key and decrypt the seed phrase, so the loader
+refuses to load plugins missing the flag.
+
+In practice:
+
+- **At install** — `PluginInstallService` rejects zip uploads whose
+  manifest lacks `"sandboxed": true`. The plugin's bytes never reach
+  the plugins directory.
+- **At enable** — `PluginLoader::setEnabled(true)` refuses non-
+  sandboxed plugins. The state file is not modified.
+- **At boot** — `discover()` records non-sandboxed plugins with
+  status `legacy_unsupported`, never registers their autoloader,
+  never instantiates their entry class. Any plugin still marked
+  enabled in `plugins.json` after a manifest downgrade gets auto-
+  flipped to disabled and a single notice is written to the wallet
+  log so the operator knows what happened.
+
+Plugins run in their own per-plugin PHP-FPM pool as their own Unix
+user (`eiou-p-<hash>`), with `open_basedir` restricted to the
+plugin's dir + scratch, `disable_functions` blocking shell-out and
+eval, and zero filesystem access to wallet secrets. Communication
+with core happens over loopback HTTP through a per-plugin bearer
+token to a whitelisted service gateway. See [Sandboxed Plugin
+Authoring](#sandboxed-plugin-authoring) for the contract.
+
+The disabled-by-default rule still applies — a freshly-discovered
+plugin doesn't run until the operator explicitly enables it.
 
 ### URL validation for GUI rendering
 
@@ -1702,6 +3949,58 @@ into executing script. Bundled-CHANGELOG rendering goes through
 enabled flag. It is written atomically via temp-file + rename. Corrupted or
 unreadable state falls back to "all plugins disabled" — no crash, no ghost
 state.
+
+Two writers produce the file in normal operation: the wallet pool (running as
+`www-data`, via GUI/REST plugin toggles) and the operator CLI (`eiou plugin
+enable|disable`, typically running as root inside the container via `docker
+exec`). Both must produce a file the wallet pool can read, otherwise CLI-driven
+changes would be invisible to HTTP requests until a subsequent www-data-owned
+write re-established readability. `writeState()` chmods the temp file to `0640`
+and chgrps it to `www-data` before the atomic rename, so the root-write path
+ends up `root:www-data 0640` and the www-data-write path ends up
+`www-data:www-data 0640`; in both cases the wallet pool can read its own state.
+Mirrors the multi-writer ownership pattern used elsewhere for plugin-gateway
+tokens.
+
+### Privileged writes into the plugin directory
+
+**Rule:** host code that needs to write a file under
+`/etc/eiou/plugins/<id>/` MUST route the write through the supervisor's
+`plugin_routing_poller` (via the `/tmp/eiou-routing-req-*.json` request-file
+protocol), not write directly from the wallet pool. The wallet pool runs as
+`www-data` and cannot reliably write into the per-plugin dir; the supervisor
+runs as root and can.
+
+**Why:** the directory's owner varies by install topology. Production
+zip-uploads land the dir owned by `www-data` (the wallet pool extracted the
+zip and chowned it that way), so a direct www-data write would actually
+succeed. Dev bind-mount layouts — where `/etc/eiou/plugins/` is mounted from
+the host filesystem — inherit the host operator's uid. On a typical host
+that uid is 1000, which inside the container collides with the
+`eiou-p-<8hex>` plugin pool user (also derived to land low) rather than
+with `www-data`. Direct writes from www-data into that dir then fail with
+EACCES, the failure surfaces as "plugin won't enable" with no obvious cause,
+and the operator's workaround (`usermod -aG eiou-p-<hash> www-data`) doesn't
+even work without a full container restart because FPM workers' supplementary
+groups are fixed at master start. Routing through the supervisor sidesteps
+the whole class of perm issues — root writes anywhere.
+
+**Reference implementation:** `PluginGatewayTokenService::mint()` generates
+the token in memory (no filesystem touch), `PluginPoolService::applyPool()`
+ships it through the `apply-pool` request payload as the `gateway_token`
+field, and `plugin_routing_poller` in `startup.sh` writes the per-plugin
+`.gateway-token` file as root with `chown <system_user>:<system_user>` plus
+mode `0600`. The request handler validates the token shape (`^[a-f0-9]{64}$`)
+as defence in depth against a corrupted-request write primitive against
+arbitrary paths.
+
+**Applies to future features too.** Anything that needs the host to write
+into the plugin dir — config snapshots, per-plugin certs, manifest
+overrides, generated assets — should extend the supervisor poller protocol
+with a new request type rather than try to write from the wallet pool
+directly. Doing so keeps the operational story consistent across production
+and dev bind-mount, and concentrates "wrote a privileged file" auditing in
+one place (the supervisor's stdout).
 
 ---
 

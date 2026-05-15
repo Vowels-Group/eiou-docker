@@ -442,7 +442,7 @@ class UserContextTest extends TestCase
     }
 
     /**
-     * Test getUserLocaters derives HTTP from HTTPS in QUICKSTART mode
+     * Test getUserLocaters derives HTTP from HTTPS when only HTTPS is set
      * When hostname is set to https:// (no separate HTTP), the HTTP version
      * should be derived automatically since Apache serves both.
      */
@@ -450,7 +450,7 @@ class UserContextTest extends TestCase
     {
         $instance = UserContext::getInstance();
         $instance->setUserData([
-            'hostname' => 'https://eiou',  // QUICKSTART sets hostname to https://
+            'hostname' => 'https://eiou',  // EIOU_HOST sets hostname to https://
             'torAddress' => 'abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuvwx.onion'
         ]);
 
@@ -950,6 +950,125 @@ class UserContextTest extends TestCase
         $instance->setUserData([]);
 
         $this->assertNull($instance->getAuthCode());
+    }
+
+    // =========================================================================
+    // Alt-code getters & writers
+    // =========================================================================
+
+    public function testHasAltCodeReturnsFalseWhenAbsent(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertFalse($instance->hasAltCode());
+    }
+
+    public function testHasAltCodeReturnsFalseForEmptyString(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['altcode_hash' => '']);
+        $this->assertFalse($instance->hasAltCode());
+    }
+
+    public function testHasAltCodeReturnsTrueWhenSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['altcode_hash' => '$argon2id$v=19$m=65536,t=4,p=1$irrelevant']);
+        $this->assertTrue($instance->hasAltCode());
+    }
+
+    public function testGetAltCodeHashReturnsStoredValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $hash = '$argon2id$v=19$m=65536,t=4,p=1$abc$def';
+        $instance->setUserData(['altcode_hash' => $hash]);
+        $this->assertSame($hash, $instance->getAltCodeHash());
+    }
+
+    public function testGetAltCodeHashReturnsNullWhenAbsent(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+        $this->assertNull($instance->getAltCodeHash());
+    }
+
+    public function testGetAllExcludesAltCodeHash(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([
+            'public' => 'pub',
+            'altcode_hash' => '$argon2id$leaked-hash-would-be-bad',
+            'hostname' => 'http://x',
+        ]);
+        $all = $instance->getAll();
+        $this->assertArrayNotHasKey('altcode_hash', $all);
+        $this->assertSame('pub', $all['public']);
+        $this->assertSame('http://x', $all['hostname']);
+    }
+
+    public function testSetAltCodePersistsHash(): void
+    {
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+        file_put_contents($userPath, json_encode(['public' => 'pub_for_test']));
+
+        try {
+            // Force a reload so the singleton picks up the new userconfig.
+            UserContext::getInstance()->setUserData(['public' => 'pub_for_test']);
+            UserContext::getInstance()->setAltCode('TestAlt12!Strong');
+
+            $data = json_decode((string) file_get_contents($userPath), true);
+            $this->assertIsArray($data);
+            $this->assertArrayHasKey('altcode_hash', $data);
+            $this->assertTrue(password_verify('TestAlt12!Strong', $data['altcode_hash']));
+            // Existing field preserved.
+            $this->assertSame('pub_for_test', $data['public']);
+            // In-memory state reflects the write.
+            $this->assertTrue(UserContext::getInstance()->hasAltCode());
+        } finally {
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            } else {
+                @unlink($userPath);
+            }
+        }
+    }
+
+    public function testClearAltCodeRemovesHash(): void
+    {
+        $userPath = '/etc/eiou/config/userconfig.json';
+        if (!is_dir('/etc/eiou/config') || !is_writable('/etc/eiou/config')) {
+            $this->markTestSkipped('Config directory not writable (not running in Docker)');
+        }
+        $userBackup = file_exists($userPath) ? file_get_contents($userPath) : null;
+        $hash = password_hash('SomeAlt12!Code', PASSWORD_ARGON2ID);
+        file_put_contents($userPath, json_encode([
+            'public' => 'pub_for_test',
+            'altcode_hash' => $hash,
+        ]));
+
+        try {
+            UserContext::getInstance()->setUserData([
+                'public' => 'pub_for_test',
+                'altcode_hash' => $hash,
+            ]);
+            UserContext::getInstance()->clearAltCode();
+
+            $data = json_decode((string) file_get_contents($userPath), true);
+            $this->assertIsArray($data);
+            $this->assertArrayNotHasKey('altcode_hash', $data);
+            $this->assertSame('pub_for_test', $data['public']);
+            $this->assertFalse(UserContext::getInstance()->hasAltCode());
+        } finally {
+            if ($userBackup !== null) {
+                file_put_contents($userPath, $userBackup);
+            } else {
+                @unlink($userPath);
+            }
+        }
     }
 
     // =========================================================================

@@ -8,8 +8,6 @@ namespace Eiou\Gui\Includes;
  *
  * Centralizes all $_SESSION key names to prevent typos and enable
  * IDE autocompletion/refactoring.
- *
- * @see https://github.com/eiou-org/eiou-docker/issues/699
  */
 class SessionKeys
 {
@@ -18,6 +16,10 @@ class SessionKeys
     const AUTH_TIME = 'auth_time';
     const LAST_ACTIVITY = 'last_activity';
     const LAST_REGENERATION = 'last_regeneration';
+    // True when the current session was authenticated via the alternate
+    // auth code rather than the primary BIP39-derived one. Used to block
+    // alt-code holders from rotating the alt code itself.
+    const AUTH_VIA_ALT = 'auth_via_alt';
 
     // Sensitive-action re-auth (independent of remember-me)
     const SENSITIVE_ACCESS_UNTIL = 'sensitive_access_until';

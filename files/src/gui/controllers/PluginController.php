@@ -5,10 +5,15 @@ namespace Eiou\Gui\Controllers;
 
 use Eiou\Gui\Helpers\GuiErrorResponse;
 use Eiou\Gui\Includes\Session;
+use Eiou\Core\UserContext;
 use Eiou\Services\GuiActionRegistry;
-use Eiou\Services\PluginLoader;
-use Eiou\Services\PluginUninstallService;
+use Eiou\Services\Plugins\PluginInstallService;
+use Eiou\Services\Plugins\PluginPermissionCatalog;
+use Eiou\Services\Plugins\PluginUpgradeService;
+use Eiou\Services\Plugins\PluginLoader;
+use Eiou\Services\Plugins\PluginUninstallService;
 use Eiou\Services\RestartRequestService;
+use Eiou\Services\UpdateCheckService;
 use Eiou\Utils\Logger;
 use Throwable;
 
@@ -30,17 +35,23 @@ class PluginController
     private PluginLoader $loader;
     private RestartRequestService $restartRequester;
     private ?PluginUninstallService $uninstallService;
+    private ?PluginInstallService $installService;
+    private ?PluginUpgradeService $upgradeService;
 
     public function __construct(
         Session $session,
         PluginLoader $loader,
         ?RestartRequestService $restartRequester = null,
-        ?PluginUninstallService $uninstallService = null
+        ?PluginUninstallService $uninstallService = null,
+        ?PluginInstallService $installService = null,
+        ?PluginUpgradeService $upgradeService = null
     ) {
         $this->session = $session;
         $this->loader = $loader;
         $this->restartRequester = $restartRequester ?? new RestartRequestService();
         $this->uninstallService = $uninstallService;
+        $this->installService = $installService;
+        $this->upgradeService = $upgradeService;
     }
 
     /**
@@ -54,6 +65,10 @@ class PluginController
         'pluginsRequestRestart',
         'pluginChangelog',
         'pluginsUninstall',
+        'pluginsUpload',
+        'pluginsUploadAsUpgrade',
+        'pluginsUpgrade',
+        'pluginsUploadLimits',
     ];
 
     /**
@@ -140,6 +155,18 @@ class PluginController
                 case 'pluginsUninstall':
                     $this->uninstallPlugin();
                     break;
+                case 'pluginsUpload':
+                    $this->uploadPlugin();
+                    break;
+                case 'pluginsUploadAsUpgrade':
+                    $this->uploadAsUpgrade();
+                    break;
+                case 'pluginsUpgrade':
+                    $this->upgradeBundled();
+                    break;
+                case 'pluginsUploadLimits':
+                    $this->reportUploadLimits();
+                    break;
                 default:
                     $this->respondError('unknown_action', 'Unknown action', 400);
             }
@@ -157,6 +184,37 @@ class PluginController
     private function listPlugins(): void
     {
         $plugins = $this->loader->listAllPlugins();
+
+        // Merge bundled-upgrade availability into each row when the
+        // upgrade service is wired. Operators see an "Upgrade" affordance
+        // next to plugins whose image-baked version is newer than what's
+        // installed in the volume. The merge is additive — rows without
+        // a bundled-newer counterpart are untouched.
+        if ($this->upgradeService !== null) {
+            $available = $this->upgradeService->availableBundledUpgrades();
+            foreach ($plugins as &$row) {
+                $name = $row['name'] ?? null;
+                if (is_string($name) && isset($available[$name])) {
+                    $row['upgrade_available'] = [
+                        'installed_version' => $available[$name]['installed_version'],
+                        'bundled_version'   => $available[$name]['bundled_version'],
+                    ];
+                }
+            }
+            unset($row);
+        }
+
+        // Materialise the permission catalog entries for each plugin's
+        // granted permissions so the GUI renders human-readable copy
+        // without shipping the catalog to the client. Empty array when
+        // the plugin requested nothing; absent rows have already been
+        // dropped by PluginLoader.
+        foreach ($plugins as &$row) {
+            $keys = is_array($row['permissions'] ?? null) ? $row['permissions'] : [];
+            $row['permissions_described'] = PluginPermissionCatalog::describe($keys);
+        }
+        unset($row);
+
         $this->respond([
             'success' => true,
             'plugins' => $plugins,
@@ -179,11 +237,19 @@ class PluginController
     private function computeRestartRequired(array $plugins): bool
     {
         // status values from PluginLoader: discovered, registered, booted,
-        // failed, disabled, not_loaded. Anything that ran register/boot is
-        // "actually loaded" from the worker's perspective.
+        // failed, disabled, sandboxed, not_loaded. Anything that ran
+        // register/boot is "actually loaded" from the worker's perspective.
         $loadedStatuses = ['discovered', 'registered', 'booted'];
 
         foreach ($plugins as $p) {
+            // Sandboxed plugins never load in-process — their pool is
+            // a separate FPM process. Their enabled flag took effect on
+            // applyPool / dropPool, not at PHP-FPM master startup, so a
+            // state vs in-process divergence here is expected and
+            // doesn't mean a restart is needed.
+            if (!empty($p['sandboxed'])) {
+                continue;
+            }
             $isLoaded = in_array($p['status'] ?? '', $loadedStatuses, true);
             if (($p['enabled'] ?? false) !== $isLoaded) {
                 return true;
@@ -199,7 +265,7 @@ class PluginController
         // requestor empty in the audit log.
         $pubkeyHash = '';
         try {
-            $user = \Eiou\Core\UserContext::getInstance();
+            $user = UserContext::getInstance();
             if ($user->getPublicKey() !== null) {
                 $pubkeyHash = (string) $user->getPublicKeyHash();
             }
@@ -241,25 +307,98 @@ class PluginController
 
         // Refuse to toggle a plugin that doesn't exist on disk — otherwise
         // the state file accumulates ghost entries.
-        $known = array_column($this->loader->listAllPlugins(), 'name');
-        if (!in_array($name, $known, true)) {
+        $rows = $this->loader->listAllPlugins();
+        $row = null;
+        foreach ($rows as $candidate) {
+            if (($candidate['name'] ?? null) === $name) {
+                $row = $candidate;
+                break;
+            }
+        }
+        if ($row === null) {
             $this->respondError('unknown_plugin', 'Plugin not found', 404);
         }
 
-        if (!$this->loader->setEnabled($name, $enabled)) {
-            $this->respondError('persist_failed', 'Could not persist the new state', 500);
+        // Permission approval from the consent modal. Only consulted on
+        // enable — disable always proceeds without re-asking. Accepted
+        // shapes from the client:
+        //   - approved_permissions[]=key1&approved_permissions[]=key2  (form array)
+        //   - approved_permissions=key1,key2                           (comma list)
+        //   - omitted                                                  (re-enable
+        //     path: PluginLoader uses the previously-approved set if it
+        //     still covers the manifest, otherwise refuses)
+        // The loader does the subset-of-manifest validation; the
+        // controller just normalises the wire shape.
+        $approvals = null;
+        if ($enabled && isset($_POST['approved_permissions'])) {
+            $raw = $_POST['approved_permissions'];
+            if (is_string($raw)) {
+                $raw = $raw === ''
+                    ? []
+                    : array_map('trim', explode(',', $raw));
+            }
+            if (!is_array($raw)) {
+                $this->respondError(
+                    'invalid_approved_permissions',
+                    'approved_permissions must be an array or comma-separated string',
+                    400
+                );
+            }
+            $approvals = array_values(array_filter(array_map(
+                fn($v): string => is_string($v) ? $v : '',
+                $raw
+            ), 'strlen'));
+        }
+
+        if (!$this->loader->setEnabled($name, $enabled, $approvals)) {
+            $failure = $this->loader->getLastSetEnabledFailure();
+            $message = $failure['message'] ?? 'Could not persist the new state';
+            $code = isset($failure['stage']) ? ('plugin_' . $failure['stage'] . '_failed') : 'persist_failed';
+            // refused-stage failures are client-correctable (operator
+            // didn't consent, or sent a permission not in the manifest);
+            // surface as 400 so the GUI can show the message inline
+            // rather than treating it as a server-side fault.
+            $status = (($failure['stage'] ?? null) === 'refused') ? 400 : 500;
+            $this->respondError($code, $message, $status);
+        }
+
+        // Sandboxed plugins took effect immediately (applyPool reloaded
+        // FPM + nginx). In-process plugins need a full node restart so
+        // PluginLoader's register()/boot() can re-run with the new
+        // state. Surface the distinction so the GUI doesn't raise a
+        // "restart required" banner when nothing actually requires it.
+        //
+        // Also surface whether this plugin declares a `plugin_tab_panel`
+        // — if it does, the Plugins-tab dropdown is now stale (the
+        // entry needs to appear on enable / disappear on disable) and
+        // the JS triggers a soft page reload so the server-side
+        // rendered Plugins tab catches up. Plugins without a panel
+        // don't need a reload — local DOM updates in script.js cover
+        // the Settings → Plugins row state.
+        $isSandboxed = false;
+        $hasPluginTabPanel = false;
+        foreach ($this->loader->listAllPlugins() as $row) {
+            if (($row['name'] ?? null) === $name) {
+                $isSandboxed = !empty($row['sandboxed']);
+                $hasPluginTabPanel = isset($row['plugin_tab_panel']) && is_array($row['plugin_tab_panel']);
+                break;
+            }
         }
 
         Logger::getInstance()->info('plugin_toggled_via_gui', [
             'plugin' => $name,
             'enabled' => $enabled,
+            'sandboxed' => $isSandboxed,
+            'has_plugin_tab_panel' => $hasPluginTabPanel,
         ]);
 
         $this->respond([
             'success' => true,
             'plugin' => $name,
             'enabled' => $enabled,
-            'restart_required' => true,
+            'sandboxed' => $isSandboxed,
+            'has_plugin_tab_panel' => $hasPluginTabPanel,
+            'restart_required' => !$isSandboxed,
         ]);
     }
 
@@ -324,13 +463,183 @@ class PluginController
         $this->respond([
             'success' => true,
             'plugin' => $name,
-            'html' => \Eiou\Services\UpdateCheckService::markdownToHtml($markdown),
+            'html' => UpdateCheckService::markdownToHtml($markdown),
         ]);
+    }
+
+    /**
+     * Install a plugin from an uploaded zip. The plugin lands on disk
+     * DISABLED — install never auto-enables. The client is expected to
+     * call pluginsList afterwards to refresh the table and then either
+     * pluginsToggle + pluginsRequestRestart to activate it, or
+     * pluginsUninstall if the operator changes their mind after seeing
+     * the signature status.
+     *
+     * Error envelopes:
+     *   - 400 invalid_upload        — no file, partial upload, PHP UPLOAD_ERR_*
+     *   - 400 invalid_zip           — bad magic / zip-slip / oversize / bad ext
+     *   - 409 already_installed     — target dir already exists
+     *   - 500 install_unavailable   — service not wired (shouldn't normally happen)
+     *   - 500 install_failed        — filesystem / signature-required failure
+     */
+    private function uploadPlugin(): void
+    {
+        if ($this->installService === null) {
+            $this->respondError(
+                'install_unavailable',
+                'Plugin install service is not wired in this context.',
+                500
+            );
+        }
+
+        $file = $_FILES['plugin_zip'] ?? null;
+        if (!is_array($file)) {
+            $this->respondError('invalid_upload', 'No file uploaded (expected field: plugin_zip)', 400);
+        }
+
+        $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($err !== UPLOAD_ERR_OK) {
+            $this->respondError(
+                'invalid_upload',
+                'Upload failed: ' . $this->describeUploadError($err),
+                400
+            );
+        }
+
+        $tmpPath = (string) ($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !$this->isUploadedFile($tmpPath)) {
+            // is_uploaded_file() is the canonical "this came from the same
+            // request" check — guards against a caller passing /etc/passwd
+            // as tmp_name in a forged $_FILES array (which can't happen via
+            // the wire but is the documented safety check).
+            $this->respondError('invalid_upload', 'Upload did not come from this request', 400);
+        }
+
+        $originalName = (string) ($file['name'] ?? '');
+        try {
+            $result = $this->installService->installFromZip($tmpPath, $originalName);
+        } catch (\Eiou\Services\Plugins\PluginAlreadyInstalledException $e) {
+            // Surface both versions so the GUI can render a
+            // "Replace v{current} with v{new}?" confirmation modal and
+            // re-POST the same file through pluginsUploadAsUpgrade on
+            // operator consent. Returning these fields is what makes
+            // the two-step upgrade-from-zip flow usable; without them
+            // the operator just sees a generic "already installed"
+            // toast with no upgrade path from the UI.
+            $this->respondError(
+                'already_installed',
+                $e->getMessage(),
+                409,
+                [
+                    'plugin_id' => $e->pluginId,
+                    'new_version' => $e->newVersion,
+                    'current_version' => $e->currentVersion,
+                ]
+            );
+        } catch (\InvalidArgumentException $e) {
+            // Other InvalidArgument cases ("appeared during install"
+            // race, malformed zip, manifest validation) — already
+            // narrowed by the install service. 409 for the race
+            // collision shape, 400 for the rest.
+            $msg = $e->getMessage();
+            $code = (stripos($msg, 'appeared during install') !== false)
+                ? 'already_installed'
+                : 'invalid_zip';
+            $status = $code === 'already_installed' ? 409 : 400;
+            $this->respondError($code, $msg, $status);
+        } catch (\RuntimeException $e) {
+            $this->respondError('install_failed', $e->getMessage(), 500);
+        } catch (Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'context' => 'plugin_install',
+                'original_filename' => $originalName,
+            ]);
+            $this->respondError('install_failed', 'Unexpected error during install', 500);
+        }
+
+        Logger::getInstance()->info('plugin_uploaded_via_gui', [
+            'plugin' => $result['plugin_id'],
+            'version' => $result['version'],
+            'signature_status' => $result['signature']['status'],
+        ]);
+
+        $this->respond([
+            'success' => true,
+            'plugin_id' => $result['plugin_id'],
+            'version' => $result['version'],
+            'signature' => $result['signature'],
+            // The plugin is staged DISABLED. Installing does not require a
+            // restart by itself; *enabling* does. Surface that here so the
+            // GUI doesn't immediately raise the restart banner.
+            'enabled' => false,
+            'restart_required' => false,
+            'message' => 'Plugin uploaded and staged as disabled. Enable it and restart the node to activate.',
+        ]);
+    }
+
+    /**
+     * Expose the install service's limits so the upload UI can present them
+     * without copying constants out of PHP. Cheap, idempotent, CSRF-checked.
+     */
+    private function reportUploadLimits(): void
+    {
+        // Limits live in the service even when no service instance is wired
+        // — they're static. Callers can use them to pre-validate before
+        // shipping the bytes over the wire.
+        $this->respond([
+            'success' => true,
+            'limits' => PluginInstallService::limits(),
+            'install_available' => $this->installService !== null,
+        ]);
+    }
+
+    /**
+     * Thin wrapper around PHP's is_uploaded_file() so tests can override
+     * the check without spinning up a real multipart request. Production
+     * code path is the genuine PHP-internal check.
+     */
+    protected function isUploadedFile(string $path): bool
+    {
+        return is_uploaded_file($path);
+    }
+
+    private function describeUploadError(int $err): string
+    {
+        // PHP's upload_err_* constants — translate to operator-friendly text.
+        // INI_SIZE / FORM_SIZE both surface the same way to the user: the
+        // file was too big.
+        switch ($err) {
+            case UPLOAD_ERR_INI_SIZE:
+            case UPLOAD_ERR_FORM_SIZE:
+                return 'file exceeded the upload size limit';
+            case UPLOAD_ERR_PARTIAL:
+                return 'upload was interrupted';
+            case UPLOAD_ERR_NO_FILE:
+                return 'no file was sent';
+            case UPLOAD_ERR_NO_TMP_DIR:
+                return 'server is missing its tmp directory';
+            case UPLOAD_ERR_CANT_WRITE:
+                return 'server could not write the upload to disk';
+            case UPLOAD_ERR_EXTENSION:
+                return 'a PHP extension blocked the upload';
+            default:
+                return "PHP upload error code {$err}";
+        }
     }
 
     /**
      * Emit a JSON response and unwind. Same test-seam pattern as
      * ApiKeysController::respond().
+     *
+     * Calls fastcgi_finish_request() after the echo so the response
+     * is flushed to nginx immediately, before any longer post-handler
+     * cleanup runs. This matters specifically for plugin-toggle:
+     * setEnabled triggers an FPM pool reload via the supervisor;
+     * without an explicit flush, the response can sit in PHP's
+     * output buffer past the brief window the supervisor leaves
+     * before signalling the reload, and the connection gets reset
+     * while nginx is still reading from FPM. With the flush, the
+     * response is in nginx's hands before the throw even returns.
      *
      * @param array<string,mixed> $payload
      */
@@ -338,6 +647,9 @@ class PluginController
     {
         http_response_code($status);
         echo json_encode($payload);
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        }
         throw new PluginControllerResponseSent($status);
     }
 
@@ -354,6 +666,181 @@ class PluginController
             $payload = array_merge($payload, $extras);
         }
         $this->respond($payload, $status);
+    }
+
+    // =========================================================================
+    // Upgrade actions
+    // =========================================================================
+
+    /**
+     * AJAX action: `pluginsUploadAsUpgrade`. Same upload surface as
+     * `pluginsUpload`, but routed through the upgrade flow instead of
+     * the install flow. The GUI calls this when the user explicitly
+     * confirms "Replace 1.2 with 1.3" after a regular `pluginsUpload`
+     * returned 409 already_installed with new_version/current_version
+     * context — a two-step confirmation so operators can't accidentally
+     * blow away a stateful plugin by re-uploading.
+     *
+     * Error envelopes mirror the install path's set, plus:
+     *   - 400 not_installed          — no installed plugin with that id
+     *   - 400 same_version           — incoming version equals installed
+     *   - 400 downgrade_refused      — incoming version is older
+     *   - 400 min_upgradable_violation — installed version too old per
+     *                                    the new manifest's
+     *                                    min_upgradable_from declaration
+     *   - 500 upgrade_unavailable    — upgrade service not wired
+     *   - 500 upgrade_failed         — filesystem / hook / supervisor failure
+     */
+    private function uploadAsUpgrade(): void
+    {
+        if ($this->upgradeService === null) {
+            $this->respondError(
+                'upgrade_unavailable',
+                'Plugin upgrade service is not wired in this context.',
+                500
+            );
+        }
+
+        $file = $_FILES['plugin_zip'] ?? null;
+        if (!is_array($file)) {
+            $this->respondError('invalid_upload', 'No file uploaded (expected field: plugin_zip)', 400);
+        }
+        $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($err !== UPLOAD_ERR_OK) {
+            $this->respondError(
+                'invalid_upload',
+                'Upload failed: ' . $this->describeUploadError($err),
+                400
+            );
+        }
+        $tmpPath = (string) ($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !$this->isUploadedFile($tmpPath)) {
+            $this->respondError('invalid_upload', 'Upload did not come from this request', 400);
+        }
+        $originalName = (string) ($file['name'] ?? '');
+
+        try {
+            $result = $this->upgradeService->upgradeFromZip($tmpPath, $originalName);
+        } catch (\InvalidArgumentException $e) {
+            // Map specific upgrade-refused messages to dedicated error
+            // codes so the GUI can render the right "why" without
+            // parsing free-text.
+            $msg = $e->getMessage();
+            $code = $this->classifyUpgradeRefusal($msg);
+            $this->respondError($code, $msg, 400);
+        } catch (\RuntimeException $e) {
+            $this->respondError('upgrade_failed', $e->getMessage(), 500);
+        } catch (Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'context' => 'plugin_upload_as_upgrade',
+                'original_filename' => $originalName,
+            ]);
+            $this->respondError('upgrade_failed', 'Unexpected error during upgrade', 500);
+        }
+
+        Logger::getInstance()->info('plugin_upgraded_via_gui_zip', [
+            'plugin' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+        ]);
+
+        $this->respond([
+            'success' => true,
+            'plugin_id' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+            'steps' => $result['steps'],
+            // The new plugin code is on disk and (if enabled) the FPM
+            // pool was reloaded. Enable-flag flips persist immediately
+            // for plugins that were already enabled; the wallet pool's
+            // own service graph might still reference cached state, so
+            // a restart picks up changes to register()/boot() bindings
+            // the new version may have altered.
+            'restart_required' => true,
+            'message' => "Plugin upgraded: {$result['plugin_id']} ({$result['old_version']} → {$result['new_version']}). Old version preserved at {$result['backup_dir']} for rollback.",
+        ]);
+    }
+
+    /**
+     * AJAX action: `pluginsUpgrade`. Operator clicks the "Upgrade
+     * available" affordance on a plugin row in the GUI; the row already
+     * surfaces the bundled-newer fact via the listPlugins enrichment, so
+     * by the time this action fires the operator has already seen the
+     * version delta.
+     *
+     * Request body: `plugin=<id>`. Same error-code shape as
+     * uploadAsUpgrade plus a couple bundle-specific cases.
+     */
+    private function upgradeBundled(): void
+    {
+        if ($this->upgradeService === null) {
+            $this->respondError(
+                'upgrade_unavailable',
+                'Plugin upgrade service is not wired in this context.',
+                500
+            );
+        }
+
+        $name = $_POST['plugin'] ?? '';
+        if (!is_string($name) || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+            $this->respondError(
+                'invalid_plugin_name',
+                'plugin must be kebab-case, 1-64 chars',
+                400
+            );
+        }
+
+        try {
+            $result = $this->upgradeService->upgradeFromBundle($name);
+        } catch (\InvalidArgumentException $e) {
+            $msg = $e->getMessage();
+            $code = $this->classifyUpgradeRefusal($msg);
+            $this->respondError($code, $msg, 400);
+        } catch (\RuntimeException $e) {
+            $this->respondError('upgrade_failed', $e->getMessage(), 500);
+        } catch (Throwable $e) {
+            Logger::getInstance()->logException($e, [
+                'context' => 'plugin_upgrade_bundled',
+                'plugin' => $name,
+            ]);
+            $this->respondError('upgrade_failed', 'Unexpected error during upgrade', 500);
+        }
+
+        Logger::getInstance()->info('plugin_upgraded_via_gui_bundle', [
+            'plugin' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+        ]);
+
+        $this->respond([
+            'success' => true,
+            'plugin_id' => $result['plugin_id'],
+            'old_version' => $result['old_version'],
+            'new_version' => $result['new_version'],
+            'backup_dir' => $result['backup_dir'],
+            'steps' => $result['steps'],
+            'restart_required' => true,
+            'message' => "Plugin upgraded: {$result['plugin_id']} ({$result['old_version']} → {$result['new_version']}). Old version preserved at {$result['backup_dir']} for rollback.",
+        ]);
+    }
+
+    /**
+     * Map an InvalidArgumentException message from PluginUpgradeService
+     * to a stable error code the GUI's JS can pivot on. The service's
+     * messages are stable strings; we match on substrings to avoid
+     * locking the controller to verbatim text.
+     */
+    private function classifyUpgradeRefusal(string $msg): string
+    {
+        if (stripos($msg, 'not installed') !== false)          return 'not_installed';
+        if (stripos($msg, 'already at version') !== false)     return 'same_version';
+        if (stripos($msg, 'Refusing downgrade') !== false)     return 'downgrade_refused';
+        if (stripos($msg, 'min_upgradable_from') !== false)    return 'min_upgradable_violation';
+        if (stripos($msg, 'No bundled version') !== false)     return 'no_bundle';
+        return 'upgrade_refused';
     }
 }
 

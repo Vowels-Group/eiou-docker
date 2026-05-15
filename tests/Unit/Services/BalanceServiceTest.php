@@ -58,6 +58,15 @@ class BalanceServiceTest extends TestCase
 
     public function testContactBalanceConversionWithSingleContact(): void
     {
+        // Two source-side changes since this test was written:
+        //
+        // 1. Per-contact `getTransactionsWithContact()` was replaced
+        //    with a batched `getTransactionsWithContactsBatch($hashes,
+        //    $limit)` call to fix an N+1 query problem.
+        // 2. `convertMinorToMajor` is the formal hop now (the test
+        //    used to inline `$amount->toMajorUnits()`); we keep the
+        //    callback bcmath-free so the test runs locally without
+        //    the extension.
         $contact = [
             'pubkey' => 'test-pubkey-123',
             'name' => 'Test Contact',
@@ -72,29 +81,23 @@ class BalanceServiceTest extends TestCase
 
         $balance = new SplitAmount(50, 0);
 
-        $this->userContext->expects($this->once())
-            ->method('getPublicKey')
-            ->willReturn('user-pubkey');
+        $this->userContext->method('getPublicKey')->willReturn('user-pubkey');
 
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
             ->with('user-pubkey', ['test-pubkey-123'])
             ->willReturn(['test-pubkey-123' => ['USD' => $balance]]);
 
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
+        $this->addressRepository->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
         $this->transactionContactRepository->expects($this->once())
-            ->method('getTransactionsWithContact')
-            ->with(['http://test.example.com', 'https://test.example.com'], 5)
-            ->willReturn([]);
+            ->method('getTransactionsWithContactsBatch')
+            ->with(['test-hash-123'], 5)
+            ->willReturn(['test-hash-123' => []]);
 
-        $this->currencyUtility->expects($this->exactly(2))
-            ->method('convertMinorToMajor')
-            ->willReturnCallback(function (SplitAmount $amount) {
-                return $amount->toMajorUnits();
-            });
+        $this->currencyUtility->method('convertMinorToMajor')
+            ->willReturnCallback(fn(SplitAmount $a) => (float) $a->whole);
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
 
@@ -110,16 +113,18 @@ class BalanceServiceTest extends TestCase
             [
                 'pubkey' => 'pubkey-1', 'name' => 'Contact One', 'contact_id' => 'c1',
                 'online_status' => 'online', 'valid_chain' => true,
+                'pubkey_hash' => 'hash-1',
                 'http' => 'http://one.example.com', 'https' => '', 'tor' => ''
             ],
             [
                 'pubkey' => 'pubkey-2', 'name' => 'Contact Two', 'contact_id' => 'c2',
                 'online_status' => 'offline', 'valid_chain' => false,
+                'pubkey_hash' => 'hash-2',
                 'http' => 'http://two.example.com', 'https' => 'https://two.example.com', 'tor' => ''
             ]
         ];
 
-        $this->userContext->expects($this->once())->method('getPublicKey')->willReturn('user-pubkey');
+        $this->userContext->method('getPublicKey')->willReturn('user-pubkey');
 
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
@@ -128,19 +133,18 @@ class BalanceServiceTest extends TestCase
                 'pubkey-2' => ['USD' => new SplitAmount(-5, 0)]
             ]);
 
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
+        $this->addressRepository->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
 
-        $this->transactionContactRepository->expects($this->exactly(2))
-            ->method('getTransactionsWithContact')
-            ->willReturn([]);
+        // N+1 fix: single batched call instead of one per contact.
+        $this->transactionContactRepository->expects($this->once())
+            ->method('getTransactionsWithContactsBatch')
+            ->with(['hash-1', 'hash-2'], 5)
+            ->willReturn(['hash-1' => [], 'hash-2' => []]);
 
-        $this->currencyUtility->expects($this->exactly(4))
-            ->method('convertMinorToMajor')
-            ->willReturnCallback(function (SplitAmount $amount) {
-                return $amount->toMajorUnits();
-            });
+        // Plain whole-units stub keeps the test bcmath-free.
+        $this->currencyUtility->method('convertMinorToMajor')
+            ->willReturnCallback(fn(SplitAmount $a) => (float) $a->whole);
 
         $result = $this->balanceService->contactBalanceConversion($contacts);
 
@@ -154,19 +158,18 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'zero-balance-pubkey', 'name' => 'Zero Balance Contact',
             'contact_id' => 'zero-contact', 'online_status' => 'unknown', 'valid_chain' => null,
+            'pubkey_hash' => 'zero-hash',
             'http' => 'http://zero.example.com', 'https' => '', 'tor' => ''
         ];
 
-        $this->userContext->expects($this->once())->method('getPublicKey')->willReturn('user-pubkey');
+        $this->userContext->method('getPublicKey')->willReturn('user-pubkey');
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
             ->willReturn(['zero-balance-pubkey' => ['USD' => 0]]);
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
+        $this->addressRepository->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
-        $this->transactionContactRepository->expects($this->once())
-            ->method('getTransactionsWithContact')
-            ->willReturn([]);
+        $this->transactionContactRepository->method('getTransactionsWithContactsBatch')
+            ->willReturn(['zero-hash' => []]);
 
         // Zero int is not instanceof SplitAmount, so convertMinorToMajor should not be called
         $this->currencyUtility->expects($this->never())->method('convertMinorToMajor');
@@ -181,24 +184,23 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'limit-pubkey', 'name' => 'Limit Contact', 'contact_id' => 'limit-c',
             'online_status' => 'online', 'valid_chain' => true,
+            'pubkey_hash' => 'limit-hash',
             'http' => 'http://limit.example.com', 'https' => '', 'tor' => ''
         ];
 
-        $this->userContext->expects($this->once())->method('getPublicKey')->willReturn('user-pubkey');
+        $this->userContext->method('getPublicKey')->willReturn('user-pubkey');
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
             ->willReturn(['limit-pubkey' => ['USD' => new SplitAmount(10, 0)]]);
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
+        $this->addressRepository->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
         $this->transactionContactRepository->expects($this->once())
-            ->method('getTransactionsWithContact')
-            ->with(['http://limit.example.com'], 10)
-            ->willReturn([]);
+            ->method('getTransactionsWithContactsBatch')
+            ->with(['limit-hash'], 10)
+            ->willReturn(['limit-hash' => []]);
 
-        $this->currencyUtility->expects($this->exactly(2))
-            ->method('convertMinorToMajor')
-            ->willReturnCallback(fn(SplitAmount $a) => $a->toMajorUnits());
+        $this->currencyUtility->method('convertMinorToMajor')
+            ->willReturnCallback(fn(SplitAmount $a) => (float) $a->whole);
 
         $result = $this->balanceService->contactBalanceConversion([$contact], 10);
         $this->assertCount(1, $result);
@@ -209,6 +211,7 @@ class BalanceServiceTest extends TestCase
         $contact = [
             'pubkey' => 'tx-pubkey', 'name' => 'Transaction Contact', 'contact_id' => 'tx-c',
             'online_status' => 'online', 'valid_chain' => true,
+            'pubkey_hash' => 'tx-hash',
             'http' => 'http://tx.example.com', 'https' => '', 'tor' => ''
         ];
 
@@ -217,20 +220,18 @@ class BalanceServiceTest extends TestCase
             ['txid' => 'tx2', 'amount' => 200, 'status' => 'completed']
         ];
 
-        $this->userContext->expects($this->once())->method('getPublicKey')->willReturn('user-pubkey');
+        $this->userContext->method('getPublicKey')->willReturn('user-pubkey');
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
             ->willReturn(['tx-pubkey' => ['USD' => new SplitAmount(30, 0)]]);
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
+        $this->addressRepository->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
         $this->transactionContactRepository->expects($this->once())
-            ->method('getTransactionsWithContact')
-            ->willReturn($transactions);
+            ->method('getTransactionsWithContactsBatch')
+            ->willReturn(['tx-hash' => $transactions]);
 
-        $this->currencyUtility->expects($this->exactly(2))
-            ->method('convertMinorToMajor')
-            ->willReturnCallback(fn(SplitAmount $a) => $a->toMajorUnits());
+        $this->currencyUtility->method('convertMinorToMajor')
+            ->willReturnCallback(fn(SplitAmount $a) => (float) $a->whole);
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
         $this->assertCount(2, $result[0]['transactions']);
@@ -240,23 +241,21 @@ class BalanceServiceTest extends TestCase
     {
         $contact = [
             'pubkey' => 'minimal-pubkey', 'name' => 'Minimal Contact',
+            'pubkey_hash' => 'minimal-hash',
             'http' => 'http://minimal.example.com', 'https' => '', 'tor' => ''
         ];
 
-        $this->userContext->expects($this->once())->method('getPublicKey')->willReturn('user-pubkey');
+        $this->userContext->method('getPublicKey')->willReturn('user-pubkey');
         $this->transactionContactRepository->expects($this->once())
             ->method('getAllContactBalances')
             ->willReturn(['minimal-pubkey' => ['USD' => new SplitAmount(10, 0)]]);
-        $this->addressRepository->expects($this->once())
-            ->method('getAllAddressTypes')
+        $this->addressRepository->method('getAllAddressTypes')
             ->willReturn(['http', 'https', 'tor']);
-        $this->transactionContactRepository->expects($this->once())
-            ->method('getTransactionsWithContact')
-            ->willReturn([]);
+        $this->transactionContactRepository->method('getTransactionsWithContactsBatch')
+            ->willReturn(['minimal-hash' => []]);
 
-        $this->currencyUtility->expects($this->exactly(2))
-            ->method('convertMinorToMajor')
-            ->willReturnCallback(fn(SplitAmount $a) => $a->toMajorUnits());
+        $this->currencyUtility->method('convertMinorToMajor')
+            ->willReturnCallback(fn(SplitAmount $a) => (float) $a->whole);
 
         $result = $this->balanceService->contactBalanceConversion([$contact]);
         $this->assertEquals('', $result[0]['contact_id']);

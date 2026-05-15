@@ -226,18 +226,22 @@ class CurrencyUtilityServiceTest extends TestCase
 
     public function testFormatCurrencyUsesDisplayDecimals(): void
     {
-        // Global DISPLAY_DECIMALS = 4, so 100.12345678 displays as "100.1235 USD"
+        // Default DISPLAY_DECIMALS = 2 (Constants.php), so 100.12345678
+        // rounds to "100.12 USD". UserContext can raise this up to 8 via
+        // changesettings displayDecimals; without a UserContext the
+        // fallback is the constant.
         $amount = new SplitAmount(100, 12345678);
         $formatted = $this->service->formatCurrency($amount, 'USD');
-        $this->assertSame('100.1235 USD', $formatted);
+        $this->assertSame('100.12 USD', $formatted);
     }
 
     public function testFormatCurrencyAnyCurrencyUsesGlobalDisplayDecimals(): void
     {
-        // All currencies use global DISPLAY_DECIMALS (4)
+        // All currencies share the same global decimal count — there's
+        // no per-currency override, USD and XYZ render identically.
         $amount = new SplitAmount(100, 12345678);
         $formatted = $this->service->formatCurrency($amount, 'XYZ');
-        $this->assertSame('100.1235 XYZ', $formatted);
+        $this->assertSame('100.12 XYZ', $formatted);
     }
 
     public function testFormatCurrencyNegativeAmount(): void
@@ -258,10 +262,13 @@ class CurrencyUtilityServiceTest extends TestCase
 
     public function testFormatCurrencyVerySmallWithFullPrecision(): void
     {
-        // Same amount but with unknown currency → full 8-decimal display
+        // 1 minor unit (0.00000001) rounds to "0.00 XYZ" at the default
+        // 2-decimal display. The "full 8-decimal" path the original test
+        // expected belonged to a per-currency override that never
+        // landed; all currencies share getDisplayDecimals().
         $amount = new SplitAmount(0, 1);
         $formatted = $this->service->formatCurrency($amount, 'XYZ');
-        $this->assertSame('0.00000001 XYZ', $formatted);
+        $this->assertSame('0.00 XYZ', $formatted);
     }
 
     public function testFormatCurrencyLargeAmountThousandsSeparator(): void

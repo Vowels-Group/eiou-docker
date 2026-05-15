@@ -200,10 +200,18 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
                 'sender_pubkey' => $request['senderPublicKey'] ?? null,
             ]);
         } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
-            // End-recipient — fires both P2P_RECEIVED and P2P_COMPLETED; the
-            // former keeps symmetry with the relay path, the latter signals
-            // that this node is the final hop (useful for "tx finished"
-            // notifications, settlement triggers, etc.).
+            // End-recipient — fires P2P_RECEIVED + P2P_COMPLETED for the
+            // P2P-specific relay/finalisation surface, AND
+            // TRANSACTION_RECEIVED for the routing-agnostic "I received a
+            // transaction" surface. Both paths insert with status='received',
+            // so a plugin subscribing to `transaction.received` for incoming
+            // notifications has no way to know whether the tx arrived via
+            // the direct or P2P route from the operator's perspective —
+            // and they shouldn't have to. P2P_COMPLETED stays available
+            // for plugins that specifically care about the relay path
+            // (settlement triggers, hop-tracing) but doesn't carry the
+            // generic "money arrived" semantics that the event name
+            // `transaction.received` promises.
             $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
             if (!isset($request['recipientSignature'])) {
@@ -217,15 +225,28 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             output(outputTransactionInsertion($insertTransactionResponse));
             $this->transactionRepository->updateTrackingFields($request['txid'], $myAddress, null);
 
-            $payload = [
+            $p2pPayload = [
                 'p2p_id' => $memo,
                 'txid' => $request['txid'] ?? '',
                 'amount' => $request['amount'] ?? null,
                 'currency' => $request['currency'] ?? null,
                 'sender_pubkey' => $request['senderPublicKey'] ?? null,
             ];
-            EventDispatcher::getInstance()->dispatch(P2pEvents::P2P_RECEIVED, $payload);
-            EventDispatcher::getInstance()->dispatch(P2pEvents::P2P_COMPLETED, $payload);
+            EventDispatcher::getInstance()->dispatch(P2pEvents::P2P_RECEIVED, $p2pPayload);
+            EventDispatcher::getInstance()->dispatch(P2pEvents::P2P_COMPLETED, $p2pPayload);
+
+            // Routing-agnostic "received" — same payload shape as the
+            // standard-incoming path so plugins can write one handler
+            // regardless of whether the tx came via the direct route or
+            // landed here as the P2P final hop. `sender_address` is
+            // included on the standard path, so we include it here too.
+            EventDispatcher::getInstance()->dispatch(TransactionEvents::TRANSACTION_RECEIVED, [
+                'txid' => $request['txid'] ?? '',
+                'amount' => $request['amount'] ?? null,
+                'currency' => $request['currency'] ?? null,
+                'sender_pubkey' => $request['senderPublicKey'] ?? null,
+                'sender_address' => $request['senderAddress'] ?? null,
+            ]);
         }
     }
 

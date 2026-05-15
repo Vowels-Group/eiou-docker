@@ -29,7 +29,7 @@
  *   backup <action> [args]                     - Manage encrypted database backups
  *   apikey <action> [args]                     - Manage REST API keys
  *   payback <action> [args]                    - Manage your payback methods
- *   plugin [list|enable|disable|uninstall]     - Manage plugins (requires `restart` to apply)
+ *   plugin [list|install|enable|disable|uninstall|upgrade] - Manage plugins (requires `restart` to apply)
  *   viewsettings / changesettings [k v]        - View / change wallet settings
  *   report <type> [--full] [--send]            - Generate troubleshooting reports
  *   updatecheck                                - Check Docker Hub / GitHub for newer images
@@ -132,6 +132,7 @@ if ($app->currentPdoLoaded()) {
         'report' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 report generations per minute
         'p2p' => ['max' => 30, 'window' => 60, 'block' => 300],       // 30 P2P approval operations per minute
         'request' => ['max' => 20, 'window' => 60, 'block' => 300],   // 20 payment request operations per minute
+        'altcode' => ['max' => 5, 'window' => 300, 'block' => 900],   // 5 alt-code attempts per 5 minutes (the set/clear flow re-enters the primary auth code, so cap aggressively)
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
 
@@ -222,24 +223,37 @@ elseif($request === "dlq"){
 }
 // Settings
 elseif($request === "help"){
-  // Help. Top-level commands render via CliHelpService; namespaced verbs
-  // delegate to the namespace handler's own help so there's a single
-  // source of truth for the subcommand tree (no drift between
-  // `eiou help contact` and `eiou contact`).
+  // Help. The bare `eiou help` (no namespace) and any non-namespaced
+  // verb like `eiou help info` go through CliHelpService for the
+  // top-level overview / generic showDetailedHelp.
+  //
+  // Each namespace that owns a CLI subtree (apikey, contact,
+  // chaindrop, payback) instead delegates `eiou help <ns>` straight
+  // into the handler's own showHelp() — same code path as
+  // `eiou <ns>` / `eiou <ns> help`. One source of truth per
+  // namespace; no duplicate help strings sitting in CliHelpService
+  // that drift away from the handler's own copy.
   $debugService->output("Executing help request", 'SILENT');
   $helpTarget = isset($cleanArgv[2]) ? strtolower($cleanArgv[2]) : '';
+
   if ($helpTarget === 'contact') {
     $sub = isset($cleanArgv[3]) ? strtolower($cleanArgv[3]) : '';
-    if ($sub === 'currency') {
-      // eiou help contact currency → showCurrencyHelp()
-      $namespaceArgv = ['eiou', 'contact', 'currency', 'help'];
-    } else {
-      // eiou help contact [<anything-else>] → showHelp() (full tree)
-      $namespaceArgv = ['eiou', 'contact', 'help'];
-    }
-    $contactCli = $app->services->getContactCliHandler($output);
-    $contactCli->handleCommand($namespaceArgv);
+    // contact has a sub-namespace `currency` with its own help —
+    // route to it directly so `eiou help contact currency` works.
+    $namespaceArgv = ($sub === 'currency')
+      ? ['eiou', 'contact', 'currency', 'help']
+      : ['eiou', 'contact', 'help'];
+    $app->services->getContactCliHandler($output)->handleCommand($namespaceArgv);
+  } elseif ($helpTarget === 'apikey') {
+    $app->services->getApiKeyService($output)->handleCommand(['eiou', 'apikey', 'help']);
+  } elseif ($helpTarget === 'chaindrop') {
+    $app->services->getChainDropService()->handleCommand(['eiou', 'chaindrop', 'help'], $output);
+  } elseif ($helpTarget === 'payback') {
+    $app->services->getPaybackMethodCliHandler($output)->handleCommand(['eiou', 'payback', 'help']);
   } else {
+    // Top-level overview, or detailed help for non-namespaced verbs
+    // (info, send, request, sync, …). showDetailedHelp() in
+    // CliHelpService renders these from the static $commands array.
     $cliService = $app->services->getCliService();
     $cliService->displayHelp($cleanArgv, $output);
   }
@@ -326,17 +340,26 @@ elseif($request === "plugin"){
     $output->error('Plugin system not initialized', ErrorCodes::GENERAL_ERROR);
     exit(1);
   }
-  $pluginCliService = new \Eiou\Services\CliPluginService(
+  $pluginCliService = new \Eiou\Services\Plugins\CliPluginService(
     $app->pluginLoader,
-    $app->services->getPluginUninstallService()
+    $app->services->getPluginUninstallService(),
+    $app->services->getPluginUpgradeService($app->pluginLoader),
+    $app->services->getPluginCronService($app->pluginLoader),
+    $app->services->getPluginInstallService()
   );
   $subcommand = strtolower($cleanArgv[2] ?? 'list');
   if ($subcommand === 'enable') {
     $pluginCliService->enablePlugin($cleanArgv, $output);
   } elseif ($subcommand === 'disable') {
     $pluginCliService->disablePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'install') {
+    $pluginCliService->installPlugin($cleanArgv, $output);
   } elseif ($subcommand === 'uninstall') {
     $pluginCliService->uninstallPlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'upgrade') {
+    $pluginCliService->upgradePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'cron-tick') {
+    $pluginCliService->cronTick($cleanArgv, $output);
   } else {
     $pluginCliService->listPlugins($cleanArgv, $output);
   }
@@ -353,6 +376,15 @@ elseif($request === "payback"){
   $debugService->output("Executing payback method management request", 'SILENT');
   $paybackCli = $app->services->getPaybackMethodCliHandler($output);
   $paybackCli->handleCommand($cleanArgv);
+}
+// Alternate auth code — user-chosen credential that can be submitted at
+// the GUI login form or the sensitive-action gate alongside the BIP39-
+// derived primary auth code. Set/clear both gate on the primary; the
+// alt code may never rotate itself.
+elseif($request === "altcode"){
+  $debugService->output("Executing altcode request", 'SILENT');
+  $altCodeCli = new \Eiou\Cli\AltCodeCliHandler($output);
+  $altCodeCli->handleCommand($cleanArgv);
 }
 // Contacts (new namespace) — replaces the deprecated top-level
 // eiou add/accept/delete/block/unblock/viewcontact/ping/pending/search.

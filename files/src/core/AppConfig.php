@@ -36,6 +36,7 @@ final class AppConfig
         public readonly ?string $sslExtraSans,
         public readonly string $appEnv,
         public readonly bool $appDebug,
+        public readonly bool $publicPluginRoutes,
     ) {
     }
 
@@ -58,6 +59,11 @@ final class AppConfig
             sslExtraSans: ($extraSans !== false && $extraSans !== '') ? $extraSans : null,
             appEnv: ($appEnvRaw !== false && $appEnvRaw !== '') ? $appEnvRaw : Constants::APP_ENV,
             appDebug: self::boolFromEnv($appDebugRaw, Constants::APP_DEBUG),
+            // Off by default — the public-route surface lets sandboxed
+            // plugins expose non-admin HTTP endpoints under /p/<id>/.
+            // Operators opt in once they're comfortable with their
+            // plugins' bearer auth + rate-limit posture.
+            publicPluginRoutes: self::boolFromEnv(getenv('EIOU_PUBLIC_PLUGIN_ROUTES'), false),
         );
     }
 
@@ -68,13 +74,14 @@ final class AppConfig
     public function withOverrides(array $overrides): self
     {
         return new self(
-            pluginHooksTrace: $overrides['pluginHooksTrace'] ?? $this->pluginHooksTrace,
-            p2pSslVerify:     $overrides['p2pSslVerify']     ?? $this->p2pSslVerify,
-            p2pCaCert:        array_key_exists('p2pCaCert', $overrides)  ? $overrides['p2pCaCert']  : $this->p2pCaCert,
-            trustedProxies:   $overrides['trustedProxies']   ?? $this->trustedProxies,
-            sslExtraSans:     array_key_exists('sslExtraSans', $overrides) ? $overrides['sslExtraSans'] : $this->sslExtraSans,
-            appEnv:           $overrides['appEnv']           ?? $this->appEnv,
-            appDebug:         $overrides['appDebug']         ?? $this->appDebug,
+            pluginHooksTrace:    $overrides['pluginHooksTrace']    ?? $this->pluginHooksTrace,
+            p2pSslVerify:        $overrides['p2pSslVerify']        ?? $this->p2pSslVerify,
+            p2pCaCert:           array_key_exists('p2pCaCert', $overrides)  ? $overrides['p2pCaCert']  : $this->p2pCaCert,
+            trustedProxies:      $overrides['trustedProxies']      ?? $this->trustedProxies,
+            sslExtraSans:        array_key_exists('sslExtraSans', $overrides) ? $overrides['sslExtraSans'] : $this->sslExtraSans,
+            appEnv:              $overrides['appEnv']              ?? $this->appEnv,
+            appDebug:            $overrides['appDebug']            ?? $this->appDebug,
+            publicPluginRoutes:  $overrides['publicPluginRoutes']  ?? $this->publicPluginRoutes,
         );
     }
 

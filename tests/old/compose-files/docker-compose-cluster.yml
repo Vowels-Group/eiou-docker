@@ -53,10 +53,10 @@ services:
       - "127.0.0.1:8080:80"
       - "127.0.0.1:8443:443"
     environment:
-      - QUICKSTART=cluster-a0
-      # Node Identity (optional - override QUICKSTART for production use):
-      # - EIOU_NAME=Cluster Hub  # Display name (defaults to QUICKSTART)
-      # - EIOU_HOST=10.0.0.1     # External address (defaults to QUICKSTART)
+      - EIOU_HOST=cluster-a0
+      # Node Identity (optional - override EIOU_HOST for production use):
+      # - EIOU_NAME=Cluster Hub  # Display name (defaults to EIOU_HOST)
+      # - EIOU_HOST=10.0.0.1     # External address (defaults to EIOU_HOST)
       # - EIOU_PORT=8443         # Port for HTTP/HTTPS URLs
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
@@ -65,7 +65,7 @@ services:
       - cluster-a0-mysql-data:/var/lib/mysql
       - cluster-a0-config:/etc/eiou/config
       - cluster-a0-backups:/var/lib/eiou/backups
-      - cluster-a0-letsencrypt:/etc/letsencrypt
+      - cluster-a0-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -107,12 +107,12 @@ services:
       - "127.0.0.1:8081:80"
       - "127.0.0.1:8444:443"
     environment:
-      - QUICKSTART=cluster-a1
+      - EIOU_HOST=cluster-a1
     volumes:
       - cluster-a1-mysql-data:/var/lib/mysql
       - cluster-a1-config:/etc/eiou/config
       - cluster-a1-backups:/var/lib/eiou/backups
-      - cluster-a1-letsencrypt:/etc/letsencrypt
+      - cluster-a1-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -153,12 +153,12 @@ services:
       - "127.0.0.1:8082:80"
       - "127.0.0.1:8445:443"
     environment:
-      - QUICKSTART=cluster-a2
+      - EIOU_HOST=cluster-a2
     volumes:
       - cluster-a2-mysql-data:/var/lib/mysql
       - cluster-a2-config:/etc/eiou/config
       - cluster-a2-backups:/var/lib/eiou/backups
-      - cluster-a2-letsencrypt:/etc/letsencrypt
+      - cluster-a2-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -199,12 +199,12 @@ services:
       - "127.0.0.1:8083:80"
       - "127.0.0.1:8446:443"
     environment:
-      - QUICKSTART=cluster-a3
+      - EIOU_HOST=cluster-a3
     volumes:
       - cluster-a3-mysql-data:/var/lib/mysql
       - cluster-a3-config:/etc/eiou/config
       - cluster-a3-backups:/var/lib/eiou/backups
-      - cluster-a3-letsencrypt:/etc/letsencrypt
+      - cluster-a3-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -245,12 +245,12 @@ services:
       - "127.0.0.1:8084:80"
       - "127.0.0.1:8447:443"
     environment:
-      - QUICKSTART=cluster-a4
+      - EIOU_HOST=cluster-a4
     volumes:
       - cluster-a4-mysql-data:/var/lib/mysql
       - cluster-a4-config:/etc/eiou/config
       - cluster-a4-backups:/var/lib/eiou/backups
-      - cluster-a4-letsencrypt:/etc/letsencrypt
+      - cluster-a4-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -292,12 +292,12 @@ services:
       - "127.0.0.1:8085:80"
       - "127.0.0.1:8448:443"
     environment:
-      - QUICKSTART=cluster-a11
+      - EIOU_HOST=cluster-a11
     volumes:
       - cluster-a11-mysql-data:/var/lib/mysql
       - cluster-a11-config:/etc/eiou/config
       - cluster-a11-backups:/var/lib/eiou/backups
-      - cluster-a11-letsencrypt:/etc/letsencrypt
+      - cluster-a11-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -338,12 +338,12 @@ services:
       - "127.0.0.1:8086:80"
       - "127.0.0.1:8449:443"
     environment:
-      - QUICKSTART=cluster-a12
+      - EIOU_HOST=cluster-a12
     volumes:
       - cluster-a12-mysql-data:/var/lib/mysql
       - cluster-a12-config:/etc/eiou/config
       - cluster-a12-backups:/var/lib/eiou/backups
-      - cluster-a12-letsencrypt:/etc/letsencrypt
+      - cluster-a12-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -384,12 +384,12 @@ services:
       - "127.0.0.1:8087:80"
       - "127.0.0.1:8450:443"
     environment:
-      - QUICKSTART=cluster-a21
+      - EIOU_HOST=cluster-a21
     volumes:
       - cluster-a21-mysql-data:/var/lib/mysql
       - cluster-a21-config:/etc/eiou/config
       - cluster-a21-backups:/var/lib/eiou/backups
-      - cluster-a21-letsencrypt:/etc/letsencrypt
+      - cluster-a21-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -430,12 +430,12 @@ services:
       - "127.0.0.1:8088:80"
       - "127.0.0.1:8451:443"
     environment:
-      - QUICKSTART=cluster-a22
+      - EIOU_HOST=cluster-a22
     volumes:
       - cluster-a22-mysql-data:/var/lib/mysql
       - cluster-a22-config:/etc/eiou/config
       - cluster-a22-backups:/var/lib/eiou/backups
-      - cluster-a22-letsencrypt:/etc/letsencrypt
+      - cluster-a22-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -476,12 +476,12 @@ services:
       - "127.0.0.1:8089:80"
       - "127.0.0.1:8452:443"
     environment:
-      - QUICKSTART=cluster-a31
+      - EIOU_HOST=cluster-a31
     volumes:
       - cluster-a31-mysql-data:/var/lib/mysql
       - cluster-a31-config:/etc/eiou/config
       - cluster-a31-backups:/var/lib/eiou/backups
-      - cluster-a31-letsencrypt:/etc/letsencrypt
+      - cluster-a31-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -522,12 +522,12 @@ services:
       - "127.0.0.1:8090:80"
       - "127.0.0.1:8453:443"
     environment:
-      - QUICKSTART=cluster-a32
+      - EIOU_HOST=cluster-a32
     volumes:
       - cluster-a32-mysql-data:/var/lib/mysql
       - cluster-a32-config:/etc/eiou/config
       - cluster-a32-backups:/var/lib/eiou/backups
-      - cluster-a32-letsencrypt:/etc/letsencrypt
+      - cluster-a32-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -568,12 +568,12 @@ services:
       - "127.0.0.1:8091:80"
       - "127.0.0.1:8454:443"
     environment:
-      - QUICKSTART=cluster-a41
+      - EIOU_HOST=cluster-a41
     volumes:
       - cluster-a41-mysql-data:/var/lib/mysql
       - cluster-a41-config:/etc/eiou/config
       - cluster-a41-backups:/var/lib/eiou/backups
-      - cluster-a41-letsencrypt:/etc/letsencrypt
+      - cluster-a41-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -614,12 +614,12 @@ services:
       - "127.0.0.1:8092:80"
       - "127.0.0.1:8455:443"
     environment:
-      - QUICKSTART=cluster-a42
+      - EIOU_HOST=cluster-a42
     volumes:
       - cluster-a42-mysql-data:/var/lib/mysql
       - cluster-a42-config:/etc/eiou/config
       - cluster-a42-backups:/var/lib/eiou/backups
-      - cluster-a42-letsencrypt:/etc/letsencrypt
+      - cluster-a42-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -661,8 +661,8 @@ volumes:
     name: cluster-a0-config
   cluster-a0-backups:
     name: cluster-a0-backups
-  cluster-a0-letsencrypt:
-    name: cluster-a0-letsencrypt
+  cluster-a0-ssl-cert:
+    name: cluster-a0-ssl-cert
 
   cluster-a1-mysql-data:
     name: cluster-a1-mysql-data
@@ -670,8 +670,8 @@ volumes:
     name: cluster-a1-config
   cluster-a1-backups:
     name: cluster-a1-backups
-  cluster-a1-letsencrypt:
-    name: cluster-a1-letsencrypt
+  cluster-a1-ssl-cert:
+    name: cluster-a1-ssl-cert
 
   cluster-a2-mysql-data:
     name: cluster-a2-mysql-data
@@ -679,8 +679,8 @@ volumes:
     name: cluster-a2-config
   cluster-a2-backups:
     name: cluster-a2-backups
-  cluster-a2-letsencrypt:
-    name: cluster-a2-letsencrypt
+  cluster-a2-ssl-cert:
+    name: cluster-a2-ssl-cert
 
   cluster-a3-mysql-data:
     name: cluster-a3-mysql-data
@@ -688,8 +688,8 @@ volumes:
     name: cluster-a3-config
   cluster-a3-backups:
     name: cluster-a3-backups
-  cluster-a3-letsencrypt:
-    name: cluster-a3-letsencrypt
+  cluster-a3-ssl-cert:
+    name: cluster-a3-ssl-cert
 
   cluster-a4-mysql-data:
     name: cluster-a4-mysql-data
@@ -697,8 +697,8 @@ volumes:
     name: cluster-a4-config
   cluster-a4-backups:
     name: cluster-a4-backups
-  cluster-a4-letsencrypt:
-    name: cluster-a4-letsencrypt
+  cluster-a4-ssl-cert:
+    name: cluster-a4-ssl-cert
 
   cluster-a11-mysql-data:
     name: cluster-a11-mysql-data
@@ -706,8 +706,8 @@ volumes:
     name: cluster-a11-config
   cluster-a11-backups:
     name: cluster-a11-backups
-  cluster-a11-letsencrypt:
-    name: cluster-a11-letsencrypt
+  cluster-a11-ssl-cert:
+    name: cluster-a11-ssl-cert
 
   cluster-a12-mysql-data:
     name: cluster-a12-mysql-data
@@ -715,8 +715,8 @@ volumes:
     name: cluster-a12-config
   cluster-a12-backups:
     name: cluster-a12-backups
-  cluster-a12-letsencrypt:
-    name: cluster-a12-letsencrypt
+  cluster-a12-ssl-cert:
+    name: cluster-a12-ssl-cert
 
   cluster-a21-mysql-data:
     name: cluster-a21-mysql-data
@@ -724,8 +724,8 @@ volumes:
     name: cluster-a21-config
   cluster-a21-backups:
     name: cluster-a21-backups
-  cluster-a21-letsencrypt:
-    name: cluster-a21-letsencrypt
+  cluster-a21-ssl-cert:
+    name: cluster-a21-ssl-cert
 
   cluster-a22-mysql-data:
     name: cluster-a22-mysql-data
@@ -733,8 +733,8 @@ volumes:
     name: cluster-a22-config
   cluster-a22-backups:
     name: cluster-a22-backups
-  cluster-a22-letsencrypt:
-    name: cluster-a22-letsencrypt
+  cluster-a22-ssl-cert:
+    name: cluster-a22-ssl-cert
 
   cluster-a31-mysql-data:
     name: cluster-a31-mysql-data
@@ -742,8 +742,8 @@ volumes:
     name: cluster-a31-config
   cluster-a31-backups:
     name: cluster-a31-backups
-  cluster-a31-letsencrypt:
-    name: cluster-a31-letsencrypt
+  cluster-a31-ssl-cert:
+    name: cluster-a31-ssl-cert
 
   cluster-a32-mysql-data:
     name: cluster-a32-mysql-data
@@ -751,8 +751,8 @@ volumes:
     name: cluster-a32-config
   cluster-a32-backups:
     name: cluster-a32-backups
-  cluster-a32-letsencrypt:
-    name: cluster-a32-letsencrypt
+  cluster-a32-ssl-cert:
+    name: cluster-a32-ssl-cert
 
   cluster-a41-mysql-data:
     name: cluster-a41-mysql-data
@@ -760,8 +760,8 @@ volumes:
     name:  cluster-a41-config
   cluster-a41-backups:
     name: cluster-a41-backups
-  cluster-a41-letsencrypt:
-    name: cluster-a41-letsencrypt
+  cluster-a41-ssl-cert:
+    name: cluster-a41-ssl-cert
 
   cluster-a42-mysql-data:
     name: cluster-a42-mysql-data
@@ -769,5 +769,5 @@ volumes:
     name: cluster-a42-config
   cluster-a42-backups:
     name: cluster-a42-backups
-  cluster-a42-letsencrypt:
-    name: cluster-a42-letsencrypt
+  cluster-a42-ssl-cert:
+    name: cluster-a42-ssl-cert

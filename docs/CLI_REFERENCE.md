@@ -110,9 +110,9 @@ Wallet generation and restoration are handled automatically by `startup.sh` duri
 
 | Variable | Description |
 |----------|-------------|
-| `QUICKSTART` | Hostname for quickstart mode (e.g., `alice`, `192.168.1.100:8080`) — auto-generates wallet on first boot |
-| `EIOU_HOST` | Override hostname (IP or domain, optional `:port` — takes priority over `QUICKSTART`) |
-| `EIOU_NAME` | Display name for the node |
+| `EIOU_HOST` | Hostname (IP, FQDN, or bare hostname for Docker-network use; optional `:port`). Setting this enables HTTP/HTTPS mode. Omit for Tor-only |
+| `EIOU_NAME` | Display name for the node (defaults to `EIOU_HOST`) |
+| `EIOU_PORT` | Port appended to HTTP/HTTPS URLs (default: standard 80/443) |
 | `RESTORE` | BIP39 seed phrase (24 words) to restore an existing wallet |
 | `RESTORE_FILE` | Path to file containing seed phrase (recommended — more secure) |
 
@@ -1024,22 +1024,25 @@ eiou help apikey
 eiou help --json
 ```
 
-**Namespaced subcommand help.** For the contact namespace, `eiou help contact` is wired to delegate to `ContactCliHandler::showHelp()` — so `eiou help contact` and `eiou contact` print the **exact same** subcommand tree (single source of truth, no drift). `eiou help contact currency` likewise delegates to the per-currency help.
+**Namespaced subcommand help.** Every namespace that owns a CLI subtree — `apikey`, `contact`, `chaindrop`, `payback` — delegates `eiou help <namespace>` straight into that namespace's own help. `eiou help <ns>` and `eiou <ns>` (or `eiou <ns> help`) print the **exact same** subcommand tree, so help lives in exactly one place per namespace and never drifts.
 
 ```bash
-eiou contact            # full contact subcommand tree (same as `eiou contact help`)
-eiou help contact       # ← identical output, delegated to the contact handler
-eiou contact currency   # per-currency subcommand tree
-eiou help contact currency  # ← identical output
+eiou contact                # full contact subcommand tree
+eiou help contact           # ← identical output, delegated to the contact handler
+eiou contact currency       # per-currency subcommand tree
+eiou help contact currency  # ← identical output, delegated to the same handler
 
-# Other namespaces are still reached via the namespace itself:
-eiou backup help
-eiou apikey help
-eiou payback help
-eiou chaindrop help
+eiou apikey                 # full API key help
+eiou help apikey            # ← identical output
+
+eiou chaindrop              # full chain drop help
+eiou help chaindrop         # ← identical output
+
+eiou payback                # full payback methods help
+eiou help payback           # ← identical output
 ```
 
-There is no `eiou help contact add` form — drill down by running the namespace's own help (`eiou contact` for the full tree) and read the subcommand line you want.
+There is no `eiou help <namespace> <subcommand>` drill-down form — read the subcommand line you want from the namespace's full tree and use it directly. Top-level (non-namespaced) commands like `info`, `send`, `viewsettings` still render their detailed help via `eiou help <command>` as documented above.
 
 ---
 
@@ -1175,6 +1178,64 @@ eiou apikey enable eiou_abc123
 ```
 
 **Important:** The API secret is only shown once at creation time. Store it securely.
+
+---
+
+## Alternate Auth Code
+
+### altcode
+
+Manage the alternate authentication code — a user-chosen passphrase that can be
+submitted at the GUI login form or the sensitive-action gate alongside the
+seed-derived primary auth code. Useful because the primary is 20 random hex
+characters that aren't memorable; the alt code is whatever the operator can
+actually recall.
+
+**Syntax:**
+```bash
+eiou altcode <action>
+```
+
+**Actions:**
+
+| Action   | Syntax            | Description                                                |
+|----------|-------------------|------------------------------------------------------------|
+| `status` | `altcode status`  | Show whether an alt code is currently set                  |
+| `set`    | `altcode set`     | Set or rotate the alt code (interactively prompts for the primary first; then for the new alt code with confirmation) |
+| `clear`  | `altcode clear`   | Remove the alt code (interactively prompts for the primary first) |
+| `help`   | `altcode help`    | Show detailed alt-code help                                |
+
+**Strength rules** (enforced server-side and mirrored in the GUI):
+
+- minimum 12 characters
+- at least one uppercase letter, one lowercase letter, one digit, one symbol
+- no three repeated characters in a row (`aaa`, `111`)
+- no monotonic ascending/descending run of length 4+ (`abcd`, `4321`)
+- not a substring of a bundled common-password list
+
+**Examples:**
+```bash
+# Check status (no secrets read)
+eiou altcode status
+
+# Set (prompts: Primary auth code → New alt code → Confirm new alt code)
+eiou altcode set
+
+# Remove (prompts: Primary auth code)
+eiou altcode clear
+```
+
+**Security notes:**
+- Set / clear always require the **primary** auth code. The alt code itself can
+  never rotate or remove itself — this prevents an attacker who learns the alt
+  code from locking the legitimate operator out.
+- Inputs are read with `stty -echo` when stdin is a TTY so the plaintext does
+  not appear in shell history or terminal scrollback.
+- Stored as a one-way Argon2id hash in `userconfig.json` under `altcode_hash`.
+  Forgetting it is recoverable only by re-running `altcode set` from a session
+  that authenticates with the primary; there is no separate recovery code.
+- The CLI rate limiter caps `altcode` invocations at 5 attempts per 5 minutes
+  to slow online brute-force against the primary.
 
 ---
 

@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Eiou\Api\ApiController;
+use Eiou\Core\AppConfig;
 use Eiou\Services\ApiAuthService;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Services\ServiceContainer;
@@ -49,6 +50,12 @@ class ApiControllerTest extends TestCase
             });
         $this->mockServices->method('getRepositoryFactory')
             ->willReturn($mockRepoFactory);
+
+        // ServiceContainer::getAppConfig() returns a final value object;
+        // PHPUnit can't auto-double a final class, so the mock would
+        // throw "Class AppConfig is declared final and cannot be doubled"
+        // on the first call from any handler that touches it.
+        $this->mockServices->method('getAppConfig')->willReturn(AppConfig::fromEnvironment());
 
         $this->controller = new ApiController(
             $this->mockAuthService,
@@ -256,6 +263,9 @@ class ApiControllerTest extends TestCase
             });
         $mockServices->method('getRepositoryFactory')
             ->willReturn($mockRepoFactory);
+        // Required: getAppConfig() returns a final class that PHPUnit
+        // cannot auto-double. See setUp() comment.
+        $mockServices->method('getAppConfig')->willReturn(AppConfig::fromEnvironment());
 
         $mockApiKeyRepo = $this->createMock(ApiKeyRepository::class);
         $mockApiKeyRepo->method('logRequest');

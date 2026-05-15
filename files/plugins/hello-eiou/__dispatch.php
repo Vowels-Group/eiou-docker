@@ -1,0 +1,385 @@
+<?php
+# Copyright 2025-2026 Vowels Group, LLC
+#
+# hello-eiou — sandboxed dispatcher.
+#
+# Runs inside the per-plugin FPM pool as eiou-p-<hash>. Cannot read the
+# wallet's master key or seed (kernel EACCES + open_basedir). Reaches
+# core services only through the gateway via core_call().
+#
+# Surfaces handled here (declared in plugin.json):
+#   subscribes_to:    sync.completed       → log a fortune via Logger.info
+#   render_hooks:     gui.dashboard.after  → fortune widget HTML
+#   render:           plugin_tab_panel     → body for this plugin's panel
+#                                            inside the host's Plugins tab.
+#                                            Panel ships an interactive
+#                                            "Draw a fortune" button wired
+#                                            up by assets/script.js, which
+#                                            POSTs the helloEiouFortune
+#                                            gui_action via XHR and renders
+#                                            the response in-panel.
+#   filter_hooks:     gui.dashboard.widgets → contribute a mini-tip widget
+#   filter_hooks:     gui.contact.actions  → add a Fortune action button
+#   gui_actions:      helloEiouFortune     → return a random fortune as JSON
+#   api_routes:       GET /api/v1/plugins/hello-eiou/fortune
+#   cli_commands:     eiou hello-eiou
+# Manifest also declares plugin_tab_panel: {label:"Hello eIOU", icon:"fas fa-cookie-bite"}.
+#
+# See docs/PLUGINS.md (Sandboxed Plugin Authoring) for the contract.
+
+declare(strict_types=1);
+
+/** Wire-contract version this dispatcher targets. See
+ *  files/src/templates/plugin-dispatch-template.php for the canonical
+ *  current version; bump in lockstep when the wire contract evolves. */
+const PLUGIN_DISPATCH_VERSION = 1;
+
+header('Content-Type: application/json');
+
+// =============================================================================
+// PluginLog — buffer logs into the response's _log array. Same shape
+// as the dispatcher template's PluginLog; duplicated rather than
+// shared because open_basedir restricts this pool to its own dir.
+// =============================================================================
+final class PluginLog
+{
+    /** @var array<int, array{level:string, message:string, context:array}> */
+    public array $entries = [];
+    public function info(string $m, array $c = []): void    { $this->entries[] = ['level' => 'info', 'message' => $m, 'context' => $c]; }
+    public function warning(string $m, array $c = []): void { $this->entries[] = ['level' => 'warning', 'message' => $m, 'context' => $c]; }
+    public function error(string $m, array $c = []): void   { $this->entries[] = ['level' => 'error', 'message' => $m, 'context' => $c]; }
+    public function debug(string $m, array $c = []): void   { $this->entries[] = ['level' => 'debug', 'message' => $m, 'context' => $c]; }
+}
+
+$log = new PluginLog();
+
+function respond(int $status, array $body, PluginLog $log): void
+{
+    http_response_code($status);
+    echo json_encode(array_merge($body, ['_log' => $log->entries]));
+    exit;
+}
+
+// =============================================================================
+// core_call($service, $method, $args, $log) — service gateway client.
+// =============================================================================
+function core_call(string $service, string $method, array $args, PluginLog $log)
+{
+    static $cachedToken = null;
+    if ($cachedToken === null) {
+        $tokenPath = __DIR__ . '/.gateway-token';
+        if (!is_file($tokenPath)) {
+            $log->error('core_call: token file missing');
+            return null;
+        }
+        $cachedToken = trim((string) @file_get_contents($tokenPath));
+        if ($cachedToken === '') {
+            $cachedToken = null;
+            $log->error('core_call: token file empty');
+            return null;
+        }
+    }
+    $body = json_encode(['service' => $service, 'method' => $method, 'args' => $args]);
+    if ($body === false) {
+        $log->error('core_call: encode failed', ['service' => $service, 'method' => $method]);
+        return null;
+    }
+    $ch = curl_init('http://127.0.0.1/__plugin_gateway');
+    if ($ch === false) return null;
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $cachedToken,
+            'Accept: application/json',
+        ],
+        CURLOPT_TIMEOUT        => 5,
+    ]);
+    $response = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($response === false) {
+        $log->error('core_call: transport failed', ['service' => $service, 'method' => $method, 'error' => $err]);
+        return null;
+    }
+    $decoded = json_decode((string) $response, true);
+    if (!is_array($decoded) || empty($decoded['ok'])) {
+        $log->error('core_call: gateway rejected', [
+            'service' => $service, 'method' => $method,
+            'error'   => $decoded['error'] ?? null,
+        ]);
+        return null;
+    }
+    return $decoded['result'] ?? null;
+}
+
+// =============================================================================
+// hello-eiou fortunes — kept verbatim from the in-process entry class.
+// =============================================================================
+final class Fortunes
+{
+    public const LINES = [
+        "An eIOU paid is a friendship maintained.",
+        "Trust travels in both directions on every chain.",
+        "A balanced ledger is a quiet ledger.",
+        "Today's IOU is tomorrow's reciprocation.",
+        "Every sync brings two wallets closer to truth.",
+        "The shortest path between two debts is forgiveness.",
+        "A node that remembers is a node that pays back.",
+        "No hash mismatch survives a careful conversation.",
+        "Settle small, settle often, sleep well.",
+        "An empty pending queue is a happy pending queue.",
+        "The chain you keep honest keeps you honest.",
+        "A handshake is just an IOU with better marketing.",
+        "Some debts are paid in money. Better ones in trust.",
+        "A reconciled balance is a small kind of peace.",
+        "Hello, ledger! Well hello, ledger! It's so nice to have you back where you belong.",
+    ];
+    public static function pick(): string
+    {
+        return self::LINES[array_rand(self::LINES)];
+    }
+}
+
+// =============================================================================
+// Parse + dispatch the request envelope.
+// =============================================================================
+$rawBody = (string) @file_get_contents('php://input');
+if ($rawBody === '') {
+    respond(400, ['ok' => false, 'error' => ['code' => 'bad_envelope', 'message' => 'empty body']], $log);
+}
+$envelope = json_decode($rawBody, true);
+if (!is_array($envelope)) {
+    respond(400, ['ok' => false, 'error' => ['code' => 'bad_envelope', 'message' => 'not JSON']], $log);
+}
+
+$type = (string) ($envelope['type'] ?? '');
+$name = (string) ($envelope['name'] ?? '');
+$context = is_array($envelope['context'] ?? null) ? $envelope['context'] : [];
+
+switch ($type) {
+    case 'event':
+        if ($name === 'sync.completed') {
+            $fortune = Fortunes::pick();
+            $contactPubkey = $context['data']['contact_pubkey'] ?? null;
+            // Log via the central wallet logger so the fortune lands in
+            // the same log file as in-process behaviour did. Logger.info
+            // is tagged #[PluginCallable] in core and declared in this
+            // plugin's core_services manifest entry.
+            core_call('Logger', 'info', [
+                "[hello-eiou] {$fortune}",
+                ['plugin' => 'hello-eiou', 'event' => 'sync.completed', 'contact_pubkey' => $contactPubkey],
+            ], $log);
+            // Also push into _log so the forwarder writes a trace line
+            // under [hello-eiou] in the central log — handy when an
+            // operator is reading both surfaces side-by-side.
+            $log->debug('fortune dispatched on sync.completed', ['fortune' => $fortune]);
+        }
+        respond(200, ['ok' => true, 'result' => null], $log);
+
+    case 'render':
+        if ($name === 'gui.dashboard.after') {
+            $fortune = htmlspecialchars(Fortunes::pick(), ENT_QUOTES);
+            $html = '<section class="plugin-hello-eiou-widget">'
+                  . '<h3><i class="fas fa-cookie-bite"></i> Fortune</h3>'
+                  . '<p>' . $fortune . '</p>'
+                  . '</section>';
+            respond(200, ['ok' => true, 'result' => $html], $log);
+        }
+        // Plugin-panel render — forwarder POSTs name="plugin_tab_panel"
+        // to ask the dispatcher for the HTML this plugin's panel
+        // should display inside the host's Plugins tab. (Replaces
+        // the prior name="tab:hello-eiou-fortunes" — top-level
+        // plugin tabs were consolidated into the host's Plugins tab
+        // with a per-plugin dropdown.)
+        if ($name === 'plugin_tab_panel') {
+            // ----------------------------------------------------------
+            // Self-introspection demo: a real plugin can fail-fast at
+            // boot if a required permission isn't granted, or render
+            // "this app uses…" UI from its own manifest. Here we pull
+            // both surfaces and show them — useful as a reference for
+            // plugin authors who want to see how the calls land.
+            // No permission required for either method (scope is the
+            // calling plugin's own row), so this works regardless of
+            // what permissions the operator granted.
+            // ----------------------------------------------------------
+            $ownPerms = core_call('PluginLookupService', 'getOwnPermissions', [], $log);
+            $ownManifest = core_call('PluginLookupService', 'getOwnManifest', [], $log);
+            $permsRow = '';
+            if (is_array($ownPerms) && $ownPerms !== []) {
+                $permItems = '';
+                foreach ($ownPerms as $p) {
+                    $permItems .= '<li><code>' . htmlspecialchars((string) $p, ENT_QUOTES) . '</code></li>';
+                }
+                $permsRow = '<div class="plugin-hello-eiou-self">'
+                          . '<h3 style="font-size:0.95rem"><i class="fas fa-shield-alt"></i> Permissions granted to this plugin</h3>'
+                          . '<ul style="margin:0.25rem 0 0 0; padding-left:1.5rem; list-style:disc;">' . $permItems . '</ul>'
+                          . '</div>';
+            }
+            $manifestRow = '';
+            if (is_array($ownManifest) && isset($ownManifest['version'])) {
+                $manifestRow = '<div class="plugin-hello-eiou-self text-muted">'
+                             . '<small>This plugin self-reports as <code>'
+                             . htmlspecialchars((string) ($ownManifest['name'] ?? ''), ENT_QUOTES)
+                             . '</code> v<code>'
+                             . htmlspecialchars((string) $ownManifest['version'], ENT_QUOTES)
+                             . '</code> (read from PluginLookupService.getOwnManifest).</small>'
+                             . '</div>';
+            }
+
+            // ----------------------------------------------------------
+            // Permission-gated demo: pick a random accepted contact via
+            // ContactLookupService.listAccepted and personalise one of
+            // the fortunes ("Hello, Alice!"). Requires the
+            // `contact_address_book_enumerate` permission — declared in
+            // plugin.json's `permissions` field. Falls back gracefully
+            // if the operator hasn't granted the permission (the
+            // gateway returns null and we just skip the personalised
+            // line) or if the wallet has no contacts yet.
+            // ----------------------------------------------------------
+            $personalised = '';
+            $accepted = core_call('ContactLookupService', 'listAccepted', [50, 0], $log);
+            if (is_array($accepted) && $accepted !== []) {
+                $row = $accepted[array_rand($accepted)];
+                $contactName = is_array($row) && isset($row['name']) ? (string) $row['name'] : '';
+                if ($contactName !== '') {
+                    $personalised = '<p class="plugin-hello-eiou-personalised"><em>Hello, '
+                                  . htmlspecialchars($contactName, ENT_QUOTES) . '! '
+                                  . htmlspecialchars(Fortunes::pick(), ENT_QUOTES)
+                                  . '</em></p>';
+                }
+            }
+
+            // Interactive "Show me a fortune" section — button +
+            // live result area. The button is wired up client-side
+            // by assets/script.js (declared in gui_assets), which
+            // POSTs the helloEiouFortune gui_action via XHR and
+            // drops the returned fortune into the output div above.
+            // Demonstrates the round-trip plugin -> host gateway ->
+            // plugin dispatcher path with no full-page reload.
+            $pickSection = '<div class="plugin-hello-eiou-pick">'
+                         . '<h3 style="font-size:0.95rem;margin:0 0 0.5rem 0">'
+                         . '<i class="fas fa-cookie-bite"></i> Show me a fortune'
+                         . '</h3>'
+                         . '<div class="plugin-hello-eiou-pick-row">'
+                         . '<div id="plugin-hello-eiou-fortune-output"'
+                         . ' class="plugin-hello-eiou-fortune-output"'
+                         . ' role="status" aria-live="polite"></div>'
+                         . '<div>'
+                         . '<button type="button" class="btn btn-primary btn-sm"'
+                         . ' id="plugin-hello-eiou-fortune-btn">'
+                         . '<i class="fas fa-dice"></i> Draw a fortune'
+                         . '</button>'
+                         . '</div>'
+                         . '</div>'
+                         . '</div>';
+
+            // The host's Plugins-tab partial already renders the
+            // tab-level chrome (title, dropdown, container). This
+            // body fills only the panel area — wrap in a section
+            // header for the plugin's own sub-title, then content.
+            $html = '<div id="hello-eiou-fortunes">'
+                  . '<div class="section-header">'
+                  . '<h3 style="font-size:1rem"><i class="fas fa-cookie-bite"></i> Fortunes</h3>'
+                  . '</div>'
+                  . '<details class="section-intro text-muted">'
+                  . '<summary><i class="fas fa-info-circle"></i> <span>About this panel</span></summary>'
+                  . '<div class="section-intro-body">A demo of the sandboxed-plugin panel IPC. '
+                  . 'The button below POSTs the helloEiouFortune gui_action via XHR; the '
+                  . 'response is rendered by assets/script.js, which is loaded as a '
+                  . 'declarative gui_assets entry with the page\'s CSP nonce. Everything '
+                  . 'runs inside the plugin\'s own FPM pool and reaches the host only '
+                  . 'through the gateway.</div>'
+                  . '</details>'
+                  . $pickSection
+                  . $personalised
+                  . $permsRow
+                  . $manifestRow
+                  . '</div>';
+            respond(200, ['ok' => true, 'result' => $html], $log);
+        }
+        respond(501, ['ok' => false, 'error' => ['code' => 'handler_not_found', 'message' => "no render handler for {$name}"]], $log);
+
+    case 'filter':
+        if ($name === 'gui.dashboard.widgets') {
+            $widgets = is_array($context['value'] ?? null) ? $context['value'] : [];
+            $widgets[] = [
+                'id'    => 'hello-eiou',
+                'order' => 200,
+                'html'  => '<section class="plugin-hello-eiou-mini">'
+                         . '<small>Tip: <em>' . htmlspecialchars(Fortunes::pick(), ENT_QUOTES) . '</em></small>'
+                         . '</section>',
+            ];
+            respond(200, ['ok' => true, 'result' => $widgets], $log);
+        }
+        if ($name === 'gui.contact.actions') {
+            $actions = is_array($context['value'] ?? null) ? $context['value'] : [];
+            $actions[] = [
+                'label'  => 'Fortune',
+                'icon'   => 'fas fa-cookie-bite',
+                'action' => 'helloEiouFortune',
+            ];
+            respond(200, ['ok' => true, 'result' => $actions], $log);
+        }
+        respond(501, ['ok' => false, 'error' => ['code' => 'handler_not_found', 'message' => "no filter handler for {$name}"]], $log);
+
+    case 'action':
+        if ($name === 'helloEiouFortune') {
+            respond(200, [
+                'ok' => true,
+                'result' => [
+                    'success' => true,
+                    'fortune' => Fortunes::pick(),
+                ],
+            ], $log);
+        }
+        respond(501, [
+            'ok' => false,
+            'error' => [
+                'code' => 'handler_not_found',
+                'message' => "no action handler for '{$name}'",
+            ],
+        ], $log);
+
+    case 'rest':
+        if ($name === 'fortune') {
+            respond(200, [
+                'ok' => true,
+                'result' => ['fortune' => Fortunes::pick()],
+            ], $log);
+        }
+        respond(501, [
+            'ok' => false,
+            'error' => [
+                'code' => 'handler_not_found',
+                'message' => "no REST handler for '{$name}'",
+            ],
+        ], $log);
+
+    case 'cli':
+        if ($name === 'hello-eiou') {
+            $fortune = Fortunes::pick();
+            respond(200, [
+                'ok' => true,
+                'result' => [
+                    'exit_code' => 0,
+                    'stdout' => $fortune,
+                    // CliOutputManager::success() will use this as the
+                    // structured-output payload when --json is passed.
+                    'fortune' => $fortune,
+                ],
+            ], $log);
+        }
+        respond(501, [
+            'ok' => false,
+            'error' => [
+                'code' => 'handler_not_found',
+                'message' => "no CLI handler for '{$name}'",
+            ],
+        ], $log);
+
+    default:
+        respond(400, ['ok' => false, 'error' => ['code' => 'bad_envelope', 'message' => "unknown type '{$type}'"]], $log);
+}

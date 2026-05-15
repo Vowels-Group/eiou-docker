@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Services\Plugins\PluginAssetServer;
+
 /**
  * Plugin asset entry point.
  *
@@ -10,12 +12,12 @@
  * + path-resolution + cache-header logic lives in the server class so
  * it is unit-testable without spinning up nginx.
  *
- * See docs/PLUGIN_GUI_HOOKS.md (Phase 6).
+ * See docs/PLUGINS.md "Extending the GUI" for the asset registry API.
  */
 
 require_once '/app/eiou/vendor/autoload.php';
 
-$server = new \Eiou\Services\PluginAssetServer();
+$server = new PluginAssetServer();
 $response = $server->handle();
 
 http_response_code($response['status']);

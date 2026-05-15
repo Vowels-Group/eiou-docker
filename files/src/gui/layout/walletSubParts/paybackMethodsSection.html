@@ -10,12 +10,15 @@
     first time the user expands the section.
 -->
 <?php
+    use Eiou\Services\ServiceContainer;
+    use Eiou\Validators\PaybackMethodTypeValidator;
+
     // Route through the container so plugin-registered rail types (BTC,
     // PayPal, …) layered onto the core bank_wire/custom entries are
     // included in the GUI type picker. Falls back to the core-only
     // catalog if the container hasn't wired a registry yet.
-    $paybackMethodsCatalog = (new \Eiou\Validators\PaybackMethodTypeValidator(
-        \Eiou\Services\ServiceContainer::getInstance()->getPaybackMethodTypeRegistry()
+    $paybackMethodsCatalog = (new PaybackMethodTypeValidator(
+        ServiceContainer::getInstance()->getPaybackMethodTypeRegistry()
     ))->getCatalog();
 
     $body = '<div id="payback-methods-list" class="payback-methods-list">'
@@ -24,18 +27,30 @@
           . '</div>'
           . '</div>';
 
+    // Initial server-rendered state for the unlocked-for-X-min row.
+    // Lives on its own line (full width, hidden when locked) instead of
+    // the section header — narrow viewports broke when the badge shared a
+    // row with the title and the Add button.
+    // updateSensitiveAccessBadges() in script.js keeps it in sync after.
+    $paybackAccessSeconds = $secureSession->sensitiveAccessSecondsRemaining();
+    $paybackAccessBadge   = $paybackAccessSeconds > 0
+        ? '<i class="fas fa-unlock-alt"></i> Unlocked for ' . (int) ceil($paybackAccessSeconds / 60) . ' min'
+        : '';
+    $paybackAccessRow = '<div id="payback-methods-access-state" class="section-access-state-row text-muted'
+        . ($paybackAccessSeconds > 0 ? '' : ' d-none')
+        . '" style="font-size: 0.85rem; padding: 0 0 0.5rem; text-align: right;">'
+        . $paybackAccessBadge
+        . '</div>';
+
     echo renderSection([
         'id'    => 'payback-methods-section',
         'class' => 'form-container fade-in-up payback-methods-section',
         'icon'  => 'fas fa-hand-holding-usd',
         'title' => 'Payback Methods',
         'headerExtras' =>
-              '<div class="dlq-section-header-actions">'
-            . '<span id="payback-methods-access-state" class="text-muted" style="font-size: 0.85rem; margin-right: 0.75rem;"></span>'
-            . '<button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">'
-            . '<i class="fas fa-plus"></i> Add'
-            . '</button>'
-            . '</div>',
+              '<button class="btn btn-sm btn-primary" data-action="openPaybackMethodForm" data-payback-mode="add">'
+            . '<i class="fas fa-plus"></i> <span class="btn-text-collapse">Add</span>'
+            . '</button>',
         'introTitle' => 'How payback methods work',
         'intro' =>
               'Payback methods are how you prefer to be paid back — a bank wire, '
@@ -51,17 +66,16 @@
             . 'and redact everything before it; the full value is released only '
             . 'after you unlock with your auth code.'
             . '<br><br>'
-            . '<strong>Custom</strong> is free-text you write yourself — the '
-            . 'list shows the first 80 characters as a preview since the whole '
-            . 'point of the field is to be descriptive. Treat it like a note, '
-            . 'not a secret: anything after that 80-char cut-off is hidden '
-            . 'until unlock, but don\'t paste bank details into it and expect the '
-            . 'same redaction as a typed rail.'
+            . '<strong>Custom</strong> is free-text you write yourself, so the '
+            . 'list redacts it entirely (<code>•••</code>) — there is no safe '
+            . 'prefix to preview when the field could hold anything from a '
+            . 'public handle to bank details. The full value is released only '
+            . 'after you unlock with your auth code.'
             . '<br><br>'
             . 'Each method also carries a share policy so you control whether a '
             . 'contact asking how to settle up receives it automatically or never '
             . 'sees it at all.',
-        'body' => $body,
+        'body' => $paybackAccessRow . $body,
     ]);
 ?>
 

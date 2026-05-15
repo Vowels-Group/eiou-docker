@@ -40,10 +40,10 @@ services:
       - "127.0.0.1:8080:80"
       - "127.0.0.1:8443:443"
     environment:
-      - QUICKSTART=node-a
-      # Node Identity (optional - override QUICKSTART for production use):
-      # - EIOU_NAME=Node A       # Display name (defaults to QUICKSTART)
-      # - EIOU_HOST=10.0.0.1     # External address (defaults to QUICKSTART)
+      - EIOU_HOST=node-a
+      # Node Identity (optional - override EIOU_HOST for production use):
+      # - EIOU_NAME=Node A       # Display name (defaults to EIOU_HOST)
+      # - EIOU_HOST=10.0.0.1     # External address (defaults to EIOU_HOST)
       # - EIOU_PORT=8443         # Port for HTTP/HTTPS URLs
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
@@ -52,7 +52,7 @@ services:
       - node-a-mysql-data:/var/lib/mysql
       - node-a-config:/etc/eiou/config
       - node-a-backups:/var/lib/eiou/backups
-      - node-a-letsencrypt:/etc/letsencrypt
+      - node-a-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -98,12 +98,12 @@ services:
       - "127.0.0.1:8081:80"
       - "127.0.0.1:8444:443"
     environment:
-      - QUICKSTART=node-b
+      - EIOU_HOST=node-b
     volumes:
       - node-b-mysql-data:/var/lib/mysql
       - node-b-config:/etc/eiou/config
       - node-b-backups:/var/lib/eiou/backups
-      - node-b-letsencrypt:/etc/letsencrypt
+      - node-b-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -149,12 +149,12 @@ services:
       - "127.0.0.1:8082:80"
       - "127.0.0.1:8445:443"
     environment:
-      - QUICKSTART=node-c
+      - EIOU_HOST=node-c
     volumes:
       - node-c-mysql-data:/var/lib/mysql
       - node-c-config:/etc/eiou/config
       - node-c-backups:/var/lib/eiou/backups
-      - node-c-letsencrypt:/etc/letsencrypt
+      - node-c-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -200,12 +200,12 @@ services:
       - "127.0.0.1:8083:80"
       - "127.0.0.1:8446:443"
     environment:
-      - QUICKSTART=node-d
+      - EIOU_HOST=node-d
     volumes:
       - node-d-mysql-data:/var/lib/mysql
       - node-d-config:/etc/eiou/config
       - node-d-backups:/var/lib/eiou/backups
-      - node-d-letsencrypt:/etc/letsencrypt
+      - node-d-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -251,12 +251,12 @@ services:
       - "127.0.0.1:8084:80"
       - "127.0.0.1:8447:443"
     environment:
-      - QUICKSTART=node-e
+      - EIOU_HOST=node-e
     volumes:
       - node-e-mysql-data:/var/lib/mysql
       - node-e-config:/etc/eiou/config
       - node-e-backups:/var/lib/eiou/backups
-      - node-e-letsencrypt:/etc/letsencrypt
+      - node-e-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -302,12 +302,12 @@ services:
       - "127.0.0.1:8085:80"
       - "127.0.0.1:8448:443"
     environment:
-      - QUICKSTART=node-f
+      - EIOU_HOST=node-f
     volumes:
       - node-f-mysql-data:/var/lib/mysql
       - node-f-config:/etc/eiou/config
       - node-f-backups:/var/lib/eiou/backups
-      - node-f-letsencrypt:/etc/letsencrypt
+      - node-f-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -353,12 +353,12 @@ services:
       - "127.0.0.1:8086:80"
       - "127.0.0.1:8449:443"
     environment:
-      - QUICKSTART=node-g
+      - EIOU_HOST=node-g
     volumes:
       - node-g-mysql-data:/var/lib/mysql
       - node-g-config:/etc/eiou/config
       - node-g-backups:/var/lib/eiou/backups
-      - node-g-letsencrypt:/etc/letsencrypt
+      - node-g-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -404,12 +404,12 @@ services:
       - "127.0.0.1:8087:80"
       - "127.0.0.1:8450:443"
     environment:
-      - QUICKSTART=node-h
+      - EIOU_HOST=node-h
     volumes:
       - node-h-mysql-data:/var/lib/mysql
       - node-h-config:/etc/eiou/config
       - node-h-backups:/var/lib/eiou/backups
-      - node-h-letsencrypt:/etc/letsencrypt
+      - node-h-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -455,12 +455,12 @@ services:
       - "127.0.0.1:8088:80"
       - "127.0.0.1:8451:443"
     environment:
-      - QUICKSTART=node-i
+      - EIOU_HOST=node-i
     volumes:
       - node-i-mysql-data:/var/lib/mysql
       - node-i-config:/etc/eiou/config
       - node-i-backups:/var/lib/eiou/backups
-      - node-i-letsencrypt:/etc/letsencrypt
+      - node-i-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -506,12 +506,12 @@ services:
       - "127.0.0.1:8089:80"
       - "127.0.0.1:8452:443"
     environment:
-      - QUICKSTART=node-j
+      - EIOU_HOST=node-j
     volumes:
       - node-j-mysql-data:/var/lib/mysql
       - node-j-config:/etc/eiou/config
       - node-j-backups:/var/lib/eiou/backups
-      - node-j-letsencrypt:/etc/letsencrypt
+      - node-j-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -558,8 +558,8 @@ volumes:
     name: node-a-config
   node-a-backups:
     name: node-a-backups
-  node-a-letsencrypt:
-    name: node-a-letsencrypt
+  node-a-ssl-cert:
+    name: node-a-ssl-cert
 
   node-b-mysql-data:
     name: node-b-mysql-data
@@ -567,8 +567,8 @@ volumes:
     name: node-b-config
   node-b-backups:
     name: node-b-backups
-  node-b-letsencrypt:
-    name: node-b-letsencrypt
+  node-b-ssl-cert:
+    name: node-b-ssl-cert
 
   node-c-mysql-data:
     name: node-c-mysql-data
@@ -576,8 +576,8 @@ volumes:
     name: node-c-config
   node-c-backups:
     name: node-c-backups
-  node-c-letsencrypt:
-    name: node-c-letsencrypt
+  node-c-ssl-cert:
+    name: node-c-ssl-cert
 
   node-d-mysql-data:
     name: node-d-mysql-data
@@ -585,8 +585,8 @@ volumes:
     name: node-d-config
   node-d-backups:
     name: node-d-backups
-  node-d-letsencrypt:
-    name: node-d-letsencrypt
+  node-d-ssl-cert:
+    name: node-d-ssl-cert
 
   node-e-mysql-data:
     name: node-e-mysql-data
@@ -594,8 +594,8 @@ volumes:
     name: node-e-config
   node-e-backups:
     name: node-e-backups
-  node-e-letsencrypt:
-    name: node-e-letsencrypt
+  node-e-ssl-cert:
+    name: node-e-ssl-cert
 
   node-f-mysql-data:
     name: node-f-mysql-data
@@ -603,8 +603,8 @@ volumes:
     name: node-f-config
   node-f-backups:
     name: node-f-backups
-  node-f-letsencrypt:
-    name: node-f-letsencrypt
+  node-f-ssl-cert:
+    name: node-f-ssl-cert
 
   node-g-mysql-data:
     name: node-g-mysql-data
@@ -612,8 +612,8 @@ volumes:
     name: node-g-config
   node-g-backups:
     name: node-g-backups
-  node-g-letsencrypt:
-    name: node-g-letsencrypt
+  node-g-ssl-cert:
+    name: node-g-ssl-cert
 
   node-h-mysql-data:
     name: node-h-mysql-data
@@ -621,8 +621,8 @@ volumes:
     name: node-h-config
   node-h-backups:
     name: node-h-backups
-  node-h-letsencrypt:
-    name: node-h-letsencrypt
+  node-h-ssl-cert:
+    name: node-h-ssl-cert
 
   node-i-mysql-data:
     name: node-i-mysql-data
@@ -630,8 +630,8 @@ volumes:
     name: node-i-config
   node-i-backups:
     name: node-i-backups
-  node-i-letsencrypt:
-    name: node-i-letsencrypt
+  node-i-ssl-cert:
+    name: node-i-ssl-cert
 
   node-j-mysql-data:
     name: node-j-mysql-data
@@ -639,5 +639,5 @@ volumes:
     name: node-j-config
   node-j-backups:
     name: node-j-backups
-  node-j-letsencrypt:
-    name: node-j-letsencrypt
+  node-j-ssl-cert:
+    name: node-j-ssl-cert

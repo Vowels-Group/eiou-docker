@@ -18,6 +18,9 @@ ob_start();
         <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="nginx-logs">
             <i class="fas fa-server"></i> nginx Logs
         </button>
+        <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="processes">
+            <i class="fas fa-microchip"></i> Processes
+        </button>
         <button type="button" class="debug-tab" data-action="showDebugTab" data-tab="system-info">
             <i class="fas fa-info-circle"></i> System Info
         </button>
@@ -38,7 +41,7 @@ ob_start();
                 <input type="hidden" name="action" value="clearDebugLogs">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                 <button type="submit" class="btn btn-sm btn-warning" data-confirm="Clear all debug entries?">
-                    <i class="fas fa-trash"></i> Clear Logs
+                    <i class="fas fa-trash"></i> <span class="btn-text-collapse">Clear Logs</span>
                 </button>
             </form>
         </div>
@@ -158,6 +161,158 @@ ob_start();
                 <div class="debug-search-info"></div>
                 <pre class="debug-pre"><?php echo htmlspecialchars($nginxLogContent); ?></pre>
             <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Running Processes — PID lookup for the [PID:N] tags in the EIOU log -->
+    <div id="processes" class="debug-content">
+        <div class="debug-header">
+            <span class="debug-count">Running Processes</span>
+        </div>
+        <div class="debug-log-container">
+            <details class="section-intro text-muted">
+                <summary>
+                    <i class="fas fa-info-circle"></i>
+                    <span>About running processes</span>
+                </summary>
+                <div class="section-intro-body">
+                    The EIOU log tags each entry with <code>[PID:N]</code>. Use this table to identify which long-running processor that PID belongs to.
+                    <br><br>
+                    Short-lived P2P worker children (forked per outgoing message) are intentionally not listed &mdash; they exit in seconds and almost never appear in the log lookup window.
+                    <br><br>
+                    Status meanings: <strong>Running</strong> = lockfile exists and the PID is alive; <strong>Stale lockfile</strong> = lockfile holds a PID that no longer exists (usually a crashed processor; the watchdog cleans these on the next restart); <strong>Stopped</strong> = no lockfile.
+                </div>
+            </details>
+
+            <?php
+            // Each long-running processor writes its PID to a fixed lockfile
+            // in /tmp/. The path → friendly-name mapping is duplicated from
+            // CleanupMessageProcessor / P2pMessageProcessor /
+            // TransactionMessageProcessor / ContactStatusProcessor's
+            // constructors. If a processor's lockfile path changes, update
+            // here too.
+            $processList = [
+                [
+                    'name'     => 'Transaction Message Processor',
+                    'role'     => 'Polls the outgoing transaction queue, signs envelopes, ships them via Tor / direct.',
+                    'lockfile' => '/tmp/transactionmessages_lock.pid',
+                ],
+                [
+                    'name'     => 'P2P Message Processor',
+                    'role'     => 'Routes multi-hop transactions; forks short-lived P2pWorker children per outgoing relay.',
+                    'lockfile' => '/tmp/p2pmessages_lock.pid',
+                ],
+                [
+                    'name'     => 'Cleanup Message Processor',
+                    'role'     => 'Periodic maintenance: archive old transactions/payment requests, prune DLQ rows, expire held P2Ps.',
+                    'lockfile' => '/tmp/cleanupmessages_lock.pid',
+                ],
+                [
+                    'name'     => 'Contact Status Processor',
+                    'role'     => 'Pings contacts to refresh their per-currency available-credit + chain heads.',
+                    'lockfile' => '/tmp/contact_status.pid',
+                ],
+                // Bash subshells of startup.sh — supervisor pollers
+                // running as root. PHP daemons above can't reach root
+                // operations (useradd, FPM pool reload, eiou restart),
+                // so these pollers pick up request files in /tmp and
+                // execute the privileged side. Each writes a lockfile
+                // at startup so this panel can detect them with the
+                // same posix_kill probe used above.
+                [
+                    'name'     => 'Watchdog',
+                    'role'     => 'Supervises the four message processors; respawns crashed children; tracks Tor health for the GUI banner.',
+                    'lockfile' => '/tmp/eiou_watchdog.pid',
+                ],
+                [
+                    'name'     => 'Restart Poller',
+                    'role'     => 'Picks up GUI "Restart node" requests written to /tmp/eiou_restart_requested and runs `eiou restart` as root.',
+                    'lockfile' => '/tmp/eiou_restart_poller.pid',
+                ],
+                [
+                    'name'     => 'Plugin User Poller',
+                    'role'     => 'Creates / removes per-plugin Unix users (eiou-p-<hash>) when a sandboxed plugin enables or disables.',
+                    'lockfile' => '/tmp/eiou_plugin_user_poller.pid',
+                ],
+                [
+                    'name'     => 'Plugin Routing Poller',
+                    'role'     => 'Writes per-plugin FPM pool config + the nginx routing snippet, runs `nginx -t`, gracefully reloads both.',
+                    'lockfile' => '/tmp/eiou_plugin_routing_poller.pid',
+                ],
+            ];
+
+            // For each processor: read the lockfile (if present), check
+            // whether the PID is still alive, and pick the right badge.
+            // posix_kill($pid, 0) returns true if a process with that PID
+            // exists AND we have permission to signal it (containers run
+            // every processor as the same user, so permission is always
+            // there on a running node).
+            $processRows = [];
+            foreach ($processList as $proc) {
+                $row = $proc + ['pid' => null, 'status' => 'stopped', 'badge_class' => 'text-muted'];
+                if (file_exists($proc['lockfile']) && is_readable($proc['lockfile'])) {
+                    $contents = trim((string) @file_get_contents($proc['lockfile']));
+                    if ($contents !== '' && ctype_digit($contents)) {
+                        $pid = (int) $contents;
+                        $row['pid'] = $pid;
+                        if (function_exists('posix_kill') && posix_kill($pid, 0)) {
+                            $row['status']      = 'running';
+                            $row['badge_class'] = 'text-success';
+                        } else {
+                            // Lockfile exists, PID inside, but no live
+                            // process — usually a crashed processor that
+                            // didn't get to clean up. The watchdog removes
+                            // these on the next restart.
+                            $row['status']      = 'stale lockfile';
+                            $row['badge_class'] = 'text-warning';
+                        }
+                    } else {
+                        $row['status']      = 'empty lockfile';
+                        $row['badge_class'] = 'text-warning';
+                    }
+                }
+                $processRows[] = $row;
+            }
+            ?>
+
+            <table class="debug-info-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Process</th>
+                        <th style="text-align: left;">PID</th>
+                        <th style="text-align: left;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($processRows as $row): ?>
+                        <tr>
+                            <td>
+                                <details>
+                                    <summary style="cursor: pointer; list-style: none;">
+                                        <strong><?php echo htmlspecialchars($row['name']); ?></strong>
+                                        <i class="fas fa-info-circle text-muted" style="margin-left: 0.35rem; font-size: 0.75rem;"></i>
+                                    </summary>
+                                    <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.4rem;">
+                                        <?php echo htmlspecialchars($row['role']); ?>
+                                    </div>
+                                </details>
+                            </td>
+                            <td>
+                                <?php if ($row['pid'] !== null): ?>
+                                    <code><?php echo (int) $row['pid']; ?></code>
+                                <?php else: ?>
+                                    <span class="text-muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="<?php echo htmlspecialchars($row['badge_class']); ?>">
+                                    <?php echo htmlspecialchars(ucfirst($row['status'])); ?>
+                                </span>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -316,13 +471,13 @@ ob_start();
         <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
         <div class="debug-actions">
             <button type="button" class="btn btn-primary" data-action="submitDebugReportToSupport" data-report-mode="full" title="Send full report to eIOU support via Tor">
-                <i class="fas fa-paper-plane"></i> Send to Support
+                <i class="fas fa-paper-plane"></i> Send<span class="btn-text-collapse"> to Support</span>
             </button>
             <button type="button" class="btn btn-secondary" data-action="downloadLimitedDebugReport" title="Quick download - same data shown in GUI above">
-                <i class="fas fa-download"></i> Limited Report
+                <i class="fas fa-download"></i> Limited<span class="btn-text-collapse"> Report</span>
             </button>
             <button type="button" class="btn btn-secondary" data-action="downloadFullDebugReport" title="Complete logs - may take longer over Tor">
-                <i class="fas fa-download"></i> Full Report
+                <i class="fas fa-download"></i> Full<span class="btn-text-collapse"> Report</span>
             </button>
         </div>
         <p class="text-muted font-sm mt-md">

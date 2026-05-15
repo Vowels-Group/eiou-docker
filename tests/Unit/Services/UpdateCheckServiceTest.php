@@ -318,6 +318,60 @@ class UpdateCheckServiceTest extends TestCase
     }
 
     /**
+     * Soft line breaks inside a paragraph fold into a single <p>. GitHub
+     * release bodies routinely hard-wrap intro paragraphs at ~120 chars; without
+     * folding, each wrapped line emits its own <p> and the paragraph renders as
+     * a stack of broken short lines.
+     */
+    public function testMarkdownToHtmlFoldsSoftLineBreaksIntoSingleParagraph(): void
+    {
+        $md = "Major release covering the plugin system, the Payback Methods\n"
+            . "feature, and the contact CLI rework. SCHEMA_VERSION advances\n"
+            . "11 → 14.";
+
+        $result = UpdateCheckService::markdownToHtml($md);
+
+        $this->assertSame(
+            '<p>Major release covering the plugin system, the Payback Methods '
+            . 'feature, and the contact CLI rework. SCHEMA_VERSION advances '
+            . '11 → 14.</p>',
+            $result
+        );
+    }
+
+    /**
+     * Blank lines split paragraphs — two paragraphs separated by a blank line
+     * stay as two <p> elements, not folded into one.
+     */
+    public function testMarkdownToHtmlBlankLineSplitsParagraphs(): void
+    {
+        $md = "First paragraph line one\nline two\n\nSecond paragraph";
+
+        $result = UpdateCheckService::markdownToHtml($md);
+
+        $this->assertSame(
+            '<p>First paragraph line one line two</p><p>Second paragraph</p>',
+            $result
+        );
+    }
+
+    /**
+     * A heading immediately following a paragraph (no blank line) still closes
+     * the paragraph — the <p> must end before the <h2> opens.
+     */
+    public function testMarkdownToHtmlHeadingClosesOpenParagraph(): void
+    {
+        $md = "intro line one\nintro line two\n## Heading\n\nbody";
+
+        $result = UpdateCheckService::markdownToHtml($md);
+
+        $this->assertSame(
+            '<p>intro line one intro line two</p><h2>Heading</h2><p>body</p>',
+            $result
+        );
+    }
+
+    /**
      * Test list type switch (ul → ol) closes the previous list
      */
     public function testMarkdownToHtmlHandlesListTypeSwitch(): void

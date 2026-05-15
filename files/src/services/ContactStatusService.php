@@ -616,12 +616,40 @@ class ContactStatusService implements ContactStatusServiceInterface {
     }
 
     /**
-     * Manually ping a specific contact and update their status
+     * Manually ping a specific contact and update their status.
      *
-     * Rate limited to 3 pings per minute per user to prevent abuse.
+     * Rate limited to 3 pings per 5 minutes per user to prevent abuse.
+     *
+     * **Privacy: Tor-only by design.** The address-priority chain below is
+     * `tor > https > http` with NO transport fallback when Tor fails — unlike
+     * `TransportUtilityService::send()` which has the `torFailureTransportFallback`
+     * setting. The reason: ping payloads are small, frequent, and emit
+     * recognizable timing/size patterns that allow a network observer to
+     * reconstruct the contact graph (who-pings-whom-and-how-often) even
+     * though the body is E2E encrypted (ECDH + AES-256-GCM via
+     * `PayloadEncryption::encryptForRecipient()`). Tor's three-hop circuit
+     * structure prevents any single observer from seeing both endpoints;
+     * HTTPS leaks IPs, SNI hostnames, and connection timing to ISPs and
+     * peers' hosting providers; HTTP leaks the whole packet shape on top.
+     * Falling back from Tor to HTTPS for ping would silently degrade
+     * metadata privacy below what the user opted into.
+     *
+     * When Tor is unreachable, this method returns a structured
+     * `tor_unavailable` error rather than ignoring the failure or
+     * weakening privacy via fallback. Operators can then decide whether
+     * to wait, restart Tor (the watchdog will attempt this within ~30s
+     * via `/tmp/tor-restart-requested`), or temporarily relax their
+     * privacy posture out-of-band.
+     *
+     * See `docs/ARCHITECTURE.md` (ContactStatusProcessor → "Privacy:
+     * Tor-only by design") and `SECURITY.md` (Network Security) for the
+     * full rationale.
      *
      * @param string $identifier Contact name or address to ping
-     * @return array Result with status, online_status, chain_valid, and message
+     * @return array Result with success/error fields. On success:
+     *               status, online_status, chain_valid, message.
+     *               On Tor failure: error='tor_unavailable',
+     *               retry_after, message.
      */
     public function pingContact(string $identifier): array {
         // Rate limit manual pings: 3 per 5 minutes, block for 300 seconds if exceeded
@@ -693,6 +721,38 @@ class ContactStatusService implements ContactStatusServiceInterface {
 
             $rawResponse = $this->transportUtility->send($contactAddress, $payload);
             $response = json_decode($rawResponse, true);
+
+            // Tor delivery failure short-circuit. `sendByTor()` returns a
+            // structured envelope with status='error' and a message starting
+            // "TOR request failed" when SOCKS5/curl can't reach the proxy.
+            // For ping specifically (Tor-only by design — see method
+            // docblock), surface this as `tor_unavailable` rather than
+            // letting it fall through to the "contact offline" branch.
+            // The contact may be perfectly online; the issue is on OUR
+            // side. Do NOT mark them offline. The watchdog will attempt
+            // a Tor restart within ~30s via /tmp/tor-restart-requested.
+            if ($this->transportUtility->isTorAddress($contactAddress)
+                && is_array($response)
+                && ($response['status'] ?? null) === 'error'
+                && isset($response['message'])
+                && str_contains($response['message'], 'TOR request failed')
+            ) {
+                Logger::getInstance()->warning("Manual ping: Tor unavailable", [
+                    'contact_name' => $contact['name'],
+                    'curl_errno' => $response['error_code'] ?? null,
+                ]);
+                return [
+                    'success' => false,
+                    'error' => 'tor_unavailable',
+                    'contact_name' => $contact['name'],
+                    'message' => 'Cannot ping: Tor is currently unreachable on this node. '
+                        . 'Pings are Tor-only by design (metadata privacy) — eIOU does not fall '
+                        . 'back to HTTPS for this operation. The watchdog will attempt to '
+                        . 'restart Tor within ~30 seconds; retry then. The wallet GUI shows a '
+                        . '"Tor Connectivity Issue" banner while connectivity is degraded.',
+                    'retry_after' => 30,
+                ];
+            }
 
             // Update contact based on response
             if ($response && isset($response['status'])) {

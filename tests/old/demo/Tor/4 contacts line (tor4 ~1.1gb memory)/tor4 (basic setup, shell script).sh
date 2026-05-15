@@ -63,7 +63,7 @@ echo "Removing associated volumes (if any)..."
 for container in "${containers[@]}"; do
     remove_volume_if_exists "${container}-mysql-data"
     remove_volume_if_exists "${container}-config"
-    remove_volume_if_exists "${container}-letsencrypt"
+    remove_volume_if_exists "${container}-ssl-cert"
     remove_volume_if_exists "${container}-backups"
 done
 
@@ -72,7 +72,7 @@ docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-config:/etc/eiou/config" -v "${container}-plugins:/etc/eiou/plugins" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-letsencrypt:/etc/letsencrypt" eiou/eiou
+    docker run -d --restart unless-stopped --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-config:/etc/eiou/config" -v "${container}-plugins:/etc/eiou/plugins" -v "${container}-backups:/var/lib/eiou/backups" -v "${container}-ssl-cert:/var/lib/eiou/ssl" eiou/eiou
 done
 
 echo -e "\nWaiting for 5 seconds for proper container startup..."

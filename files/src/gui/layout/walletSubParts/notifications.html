@@ -1,5 +1,6 @@
 <!-- Copyright 2025-2026 Vowels Group, LLC -->
 
+
 <!-- Toast notifications for operation results -->
 <?php if (!empty($messageForDisplay)): ?>
     <script nonce="<?php echo cspNonce(); ?>">
@@ -59,6 +60,26 @@
     'title' => 'Tor Connectivity Issue',
     'body' => $torStatusMsg . '. Transactions and messages may be delayed until connectivity is restored.',
 ]); ?>
+<?php elseif ($torStatusType === 'publishing'): ?>
+<?php
+    // First-boot HSDir publication progress. startup.sh's
+    // watch_hs_descriptor_publication subscribes to Tor's HS_DESC events and
+    // updates this status as each successful UPLOADED event arrives. Shown as
+    // an info-style banner (not warning — this is normal first-boot behavior,
+    // not an error), with a spinner since publication is in-progress. After
+    // the target HSDir count is reached, status flips to 'recovered' and this
+    // branch goes away on next render, replaced by the success toast below.
+    $uploads = (int)($torGuiStatus['uploads'] ?? 0);
+    $targetUploads = (int)($torGuiStatus['target'] ?? 3);
+    echo renderAlertBanner([
+        'variant' => 'info',
+        'icon' => 'fa-spinner',
+        'spinner' => true,
+        'extraClass' => 'alert-border-info',
+        'title' => 'Tor Descriptor Publishing',
+        'body' => $torStatusMsg . '. Your node will be reachable over Tor once publication completes (typically 1–3 minutes after startup).',
+    ]);
+?>
 <?php elseif ($torStatusType === 'recovered' && $torStatusAge <= 300): ?>
 <script nonce="<?php echo cspNonce(); ?>">
 document.addEventListener('DOMContentLoaded', function() {
@@ -94,7 +115,7 @@ echo renderAlertBanner([
        upgraded — node has been upgraded from an earlier version      -->
 <?php if (!empty($whatsNewVariant)): ?>
 <?php
-$appVer = htmlspecialchars(\Eiou\Core\Constants::APP_VERSION);
+$appVer = htmlspecialchars(appVersion());
 $isFresh = $whatsNewVariant === 'fresh';
 echo renderAlertBanner([
     'id' => 'whats-new-banner',

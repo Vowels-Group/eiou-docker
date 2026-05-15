@@ -115,9 +115,11 @@ class CliP2pApprovalServiceTest extends TestCase
                 ['def456', 3],
             ]);
 
+        // formatCurrency now receives SplitAmount, not raw int — call
+        // toMajorUnits() to get the float for number_format.
         $this->currencyUtility->method('formatCurrency')
             ->willReturnCallback(function ($amount, $currency) {
-                return number_format($amount / 100, 2);
+                return number_format($amount->toMajorUnits(), 2);
             });
 
         ob_start();
@@ -253,9 +255,11 @@ class CliP2pApprovalServiceTest extends TestCase
         $this->rp2pRepository->method('getByHash')
             ->willReturn(null);
 
+        // formatCurrency now receives SplitAmount, not raw int — call
+        // toMajorUnits() to get the float for number_format.
         $this->currencyUtility->method('formatCurrency')
             ->willReturnCallback(function ($amount, $currency) {
-                return number_format($amount / 100, 2);
+                return number_format($amount->toMajorUnits(), 2);
             });
 
         ob_start();
@@ -300,9 +304,11 @@ class CliP2pApprovalServiceTest extends TestCase
                 'sender_signature' => 'sig1',
             ]);
 
+        // formatCurrency now receives SplitAmount, not raw int — call
+        // toMajorUnits() to get the float for number_format.
         $this->currencyUtility->method('formatCurrency')
             ->willReturnCallback(function ($amount, $currency) {
-                return number_format($amount / 100, 2);
+                return number_format($amount->toMajorUnits(), 2);
             });
 
         ob_start();

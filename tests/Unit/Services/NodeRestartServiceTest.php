@@ -34,6 +34,9 @@ class NodeRestartServiceTest extends TestCase
         $service = $this->makeService(
             processorPidGlob: $this->tmpRoot . '/processors/*.pid',
             fpmCandidates: [],
+            // Point the cmdline-scan fallback at our empty tmp dir so we
+            // don't accidentally find php-fpm running on the host/container.
+            procCmdlineGlob: $this->tmpRoot . '/proc/[0-9]*/cmdline',
             signaler: $this->recordingSignaler($signaled)
         );
 

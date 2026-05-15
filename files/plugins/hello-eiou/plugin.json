@@ -1,7 +1,7 @@
 {
   "name": "hello-eiou",
-  "version": "1.2.0",
-  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the eIOU plugin API surface: events, CLI, REST, and the GUI hooks system (render hooks, asset enqueue, tab registry, action registry, filter slots).",
+  "version": "1.6.0",
+  "description": "A tiny example plugin in the spirit of WordPress's Hello Dolly. Demonstrates the sandboxed eIOU plugin contract: declarative manifest surfaces, an in-pool __dispatch.php, event/filter/render/action handlers, REST + CLI dispatch, core_call into whitelisted core services, the manifest permissions tier for surfaces that warrant louder operator consent, and the plugin_tab_panel field for rendering inside the host's Plugins tab.",
   "author": {
     "name": "EIOU",
     "url": "https://eiou.org"
@@ -13,5 +13,56 @@
     "psr-4": {
       "Eiou\\Plugins\\HelloEiou\\": "src/"
     }
-  }
+  },
+
+  "sandboxed": true,
+
+  "subscribes_to": [
+    "sync.completed"
+  ],
+
+  "render_hooks": [
+    "gui.dashboard.after"
+  ],
+
+  "filter_hooks": [
+    "gui.dashboard.widgets",
+    "gui.contact.actions"
+  ],
+
+  "core_services": [
+    "Logger.info",
+    "Logger.warning",
+    "Logger.error",
+    "Logger.debug",
+    "ContactLookupService.listAccepted",
+    "PluginLookupService.getOwnPermissions",
+    "PluginLookupService.getOwnManifest"
+  ],
+
+  "permissions": [
+    "contact_address_book_enumerate"
+  ],
+
+  "gui_assets": [
+    {"type": "css", "path": "assets/styles.css"},
+    {"type": "js",  "path": "assets/script.js"}
+  ],
+
+  "plugin_tab_panel": {
+    "label": "Hello eIOU",
+    "icon": "fas fa-cookie-bite"
+  },
+
+  "gui_actions": [
+    {"name": "helloEiouFortune", "tier": "csrf"}
+  ],
+
+  "api_routes": [
+    {"method": "GET", "action": "fortune"}
+  ],
+
+  "cli_commands": [
+    {"name": "hello-eiou", "description": "Print a random eIOU fortune."}
+  ]
 }

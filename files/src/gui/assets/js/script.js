@@ -28,6 +28,45 @@ var operationTimeoutId = null;
 var countdownIntervalId = null;
 
 /**
+ * Returns the wallet's CSRF token string, skipping any empty-valued
+ * input[name="csrf_token"] placeholders that may sit earlier in the
+ * DOM.
+ *
+ * Why this is value-guarded rather than a plain
+ * `document.querySelector('input[name="csrf_token"]').value`:
+ * sandboxed plugins are free to render their own
+ * `<input type="hidden" name="csrf_token" value="">` placeholders
+ * inside their tab bodies and populate them client-side at submit
+ * time. When the plugin's tab content sits earlier in document
+ * order than the host modal that holds the wallet's filled token,
+ * a too-greedy selector returns the empty placeholder and every
+ * subsequent wallet AJAX POSTs `csrf_token=`, getting a 403 from
+ * Functions.php's CSRF gate. The visible symptom was "Could not
+ * load API keys" and "Could not load plugins" toasts on every page
+ * load when any plugin emitted empty CSRF placeholders.
+ *
+ * Strategy:
+ *   1. Attribute-based discovery: prefer an input whose `value`
+ *      attribute is present and non-empty. This is what
+ *      server-rendered tokens look like.
+ *   2. Property-value fallback: walk every `csrf_token` input and
+ *      return the first whose `.value` property is truthy. Catches
+ *      tokens populated post-render by JS that didn't update the
+ *      attribute.
+ *
+ * @returns {string} The CSRF token, or '' if none is available.
+ */
+function csrfTokenValue() {
+    var el = document.querySelector('input[name="csrf_token"][value]:not([value=""])');
+    if (el && el.value) return el.value;
+    var all = document.querySelectorAll('input[name="csrf_token"]');
+    for (var i = 0; i < all.length; i++) {
+        if (all[i].value) return all[i].value;
+    }
+    return '';
+}
+
+/**
  * Flag indicating whether sessionStorage is available.
  * Set to false in Tor Browser with strict privacy settings.
  * @type {boolean}
@@ -295,7 +334,7 @@ function displayTxDescription(desc, currency) {
 // `Paginator.get(key).apply()` so Paginator recomputes which subset of the
 // currently-visible (unfiltered) rows falls in the active page.
 //
-// Phase 2 "Load older" is layered on via the `loadMore` config: Paginator
+// "Load older" is layered on via the `loadMore` config: Paginator
 // renders a button below the nav that triggers the configured fetcher,
 // appends the returned HTML fragment to the tbody, and re-runs `apply()`.
 
@@ -686,6 +725,61 @@ function switchTab(tabName, scrollToId) {
 }
 
 /**
+ * Plugins tab — swap the visible plugin panel.
+ *
+ * Each plugin that declares plugin_tab_panel renders a hidden body
+ * server-side; this just toggles which one is visible. Selection
+ * persists to localStorage so revisiting the Plugins tab restores
+ * the operator's last choice. A no-op when the plugin id doesn't
+ * have a matching panel — handles the case where a plugin was
+ * uninstalled while a stored selection still points at it.
+ */
+function switchPluginsTabPanel(pluginId) {
+    if (!pluginId) return;
+    var panels = document.querySelectorAll('#plugins-tab-root .plugins-tab-panel');
+    var found = false;
+    for (var i = 0; i < panels.length; i++) {
+        if (panels[i].getAttribute('data-plugin-id') === pluginId) {
+            panels[i].style.display = '';
+            found = true;
+        } else {
+            panels[i].style.display = 'none';
+        }
+    }
+    if (!found) return;
+    var selector = document.getElementById('plugins-tab-selector');
+    if (selector && selector.value !== pluginId) {
+        selector.value = pluginId;
+    }
+    safeStorageSet('eiou_plugins_tab_panel', pluginId);
+}
+
+/**
+ * Restore the operator's last-viewed plugin panel on page load.
+ * No-op when the Plugins tab isn't rendered (no plugin panels
+ * registered) or when the stored selection points at an uninstalled
+ * plugin.
+ */
+function initPluginsTabPanel() {
+    var stored = safeStorageGet('eiou_plugins_tab_panel');
+    if (!stored) return;
+    var selector = document.getElementById('plugins-tab-selector');
+    if (!selector) return;
+    // Verify the stored id is still a registered option — otherwise
+    // fall through and leave the first option active (set server-side).
+    var hasOption = false;
+    for (var i = 0; i < selector.options.length; i++) {
+        if (selector.options[i].value === stored) {
+            hasOption = true;
+            break;
+        }
+    }
+    if (hasOption) {
+        switchPluginsTabPanel(stored);
+    }
+}
+
+/**
  * Initializes tab navigation on page load.
  * Checks URL hash, then sessionStorage, then defaults to dashboard.
  */
@@ -747,6 +841,9 @@ window.addEventListener('hashchange', function() {
         }
         // Initialize tab navigation
         initTabNavigation();
+        // Restore last-viewed plugin panel inside the Plugins tab.
+        // No-op when no plugin panels are registered.
+        initPluginsTabPanel();
     });
 
 /**
@@ -1510,8 +1607,8 @@ function openTransactionModalByTxid(txid) {
         modal.style.display = 'flex';
     }
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (content) { content.innerHTML = '<div style="padding:1rem;color:#dc3545">Could not load transaction: CSRF token missing.</div>'; }
         return;
     }
@@ -1519,7 +1616,7 @@ function openTransactionModalByTxid(txid) {
     var formData = new FormData();
     formData.append('action', 'getTransactionByTxid');
     formData.append('txid', txid);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -2614,6 +2711,7 @@ function confirmPrApproveModal() {
         if (errEl) {
             errEl.textContent = 'Note too long — max ' + max + ' chars for this request';
             errEl.classList.remove('d-none');
+            scrollErrorIntoView(errEl);
         }
         return;
     }
@@ -3649,8 +3747,7 @@ function runDatabaseSearch(cfg) {
     var tbody = document.getElementById(cfg.tbodyId);
     var banner = document.getElementById(cfg.bannerId);
     var bannerText = document.getElementById(cfg.bannerTextId);
-    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
-    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+    var csrfToken = csrfTokenValue();
 
     if (banner && bannerText) {
         banner.classList.remove('d-none');
@@ -4684,11 +4781,8 @@ function pingContact() {
     if (resultMsg) resultMsg.textContent = '';
 
     // Get CSRF token (try multiple selectors for compatibility)
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     if (!csrfToken) {
-        csrfToken = document.getElementById('csrf_token');
-    }
-    if (!csrfToken || !csrfToken.value) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -4701,7 +4795,7 @@ function pingContact() {
     var formData = new FormData();
     formData.append('action', 'pingContact');
     formData.append('contact_address', currentContactAddress);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     // Send AJAX request (Tor Browser compatible XMLHttpRequest)
     var xhr = new XMLHttpRequest();
@@ -5094,9 +5188,9 @@ function initPaginators() {
         });
     }
 
-    // Contacts — Phase 1 (client slicing) AND Phase 2 (load-older). Only
-    // accepted contacts paginate via Phase 2; pending + blocked are always
-    // rendered up-front because they're small and operationally important.
+    // Contacts — client slicing AND load-older. Only accepted contacts
+    // paginate via load-older; pending + blocked are always rendered
+    // up-front because they're small and operationally important.
     var contactsBody = document.getElementById('contacts-grid');
     var contactsContainer = document.getElementById('contacts-paginator');
     if (contactsBody && contactsContainer) {
@@ -5177,8 +5271,7 @@ function loadMoreContacts(inst) {
 var loadMoreCursors = {};
 
 function loadMoreViaGuiAction(action, key, inst) {
-    var csrfTokenEl = document.querySelector('input[name="csrf_token"]');
-    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+    var csrfToken = csrfTokenValue();
 
     var formData = new FormData();
     formData.append('action', action);
@@ -5267,8 +5360,8 @@ function proposeChainDrop() {
     if (btnText) btnText.textContent = 'Sending...';
     if (resultMsg) resultMsg.textContent = '';
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -5280,7 +5373,7 @@ function proposeChainDrop() {
     var formData = new FormData();
     formData.append('action', 'proposeChainDrop');
     formData.append('contact_pubkey_hash', currentContactPubkeyHash);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -5361,8 +5454,8 @@ function acceptChainDrop() {
     if (btnText) btnText.textContent = 'Accepting...';
     if (resultMsg) resultMsg.textContent = '';
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -5374,7 +5467,7 @@ function acceptChainDrop() {
     var formData = new FormData();
     formData.append('action', 'acceptChainDrop');
     formData.append('proposal_id', currentChainDropProposalId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -5446,8 +5539,8 @@ function rejectChainDrop() {
     if (btnText) btnText.textContent = 'Rejecting...';
     if (resultMsg) resultMsg.textContent = '';
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         if (resultMsg) {
             resultMsg.textContent = 'CSRF token not found';
             resultMsg.style.color = '#dc3545';
@@ -5459,7 +5552,7 @@ function rejectChainDrop() {
     var formData = new FormData();
     formData.append('action', 'rejectChainDrop');
     formData.append('proposal_id', currentChainDropProposalId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -5630,6 +5723,169 @@ function switchAdvancedSection(sectionId) {
         target.style.display = 'block';
     }
 }
+
+/**
+ * Update every "Unlocked for X min" badge on the page from a single
+ * source of truth. Each section template renders an empty span with a
+ * known id (settings-access-state, api-keys-access-state,
+ * payback-methods-access-state — extend the list below as new sections
+ * grow their own badge); this function fills any of them that exist on
+ * the current page with the same uniformly-formatted text.
+ *
+ * Why a top-level helper instead of leaving each section's own
+ * renderAccessState in place: the unlock modal is one global UX, but
+ * before this helper each section's badge only updated when *that*
+ * section's own AJAX action came back with seconds_remaining. Unlocking
+ * via the Payback Methods + Add preflight wouldn't refresh the API
+ * Keys badge or vice versa. Now any caller that learns the new
+ * seconds_remaining (the verify-modal success handler, any list/load
+ * callback, or PHP via SSR on the next reload) just calls this once
+ * and every visible badge agrees.
+ *
+ * @param {number} secondsRemaining - 0 means locked, >0 means
+ *     "X minutes" rounded up shown on every badge.
+ * @returns {void}
+ */
+/**
+ * Scroll a freshly-revealed error banner into view so the user actually
+ * sees the message even if they pressed Submit at the bottom of a long
+ * modal form. Safe to call with a missing element (no-op).
+ *
+ * Used by every modal-form error display in this file (api-keys create,
+ * api-keys verify, payback methods form, payment request approve, …) so
+ * the behavior stays consistent — point this at any future error
+ * banner you reveal and the same scroll behavior follows.
+ *
+ * @param {HTMLElement|null} el - The error banner element (already
+ *     populated with the message text) to scroll into view.
+ * @returns {void}
+ */
+function scrollErrorIntoView(el) {
+    if (!el || typeof el.scrollIntoView !== 'function') { return; }
+    // 'start' (vs the more conservative 'nearest') guarantees the
+    // banner ends up at the top of the visible area, which is what we
+    // want when the user just submitted from the bottom of the form.
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function updateSensitiveAccessBadges(secondsRemaining) {
+    var ids = [
+        'settings-access-state',
+        'api-keys-access-state',
+        'payback-methods-access-state',
+    ];
+    var html = secondsRemaining > 0
+        ? '<i class="fas fa-unlock-alt"></i> Unlocked for ' + Math.ceil(secondsRemaining / 60) + ' min'
+        : '';
+    ids.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) { return; }
+        el.innerHTML = html;
+        // The element is its own full-width row above each section's
+        // body content. Hiding it (rather than just blanking the text)
+        // keeps it from claiming layout space on narrow viewports when
+        // the wallet is locked.
+        el.classList.toggle('d-none', !html);
+    });
+}
+
+/**
+ * AJAX submit for the Wallet Settings form (#settingsForm).
+ *
+ * Pre-AJAX, the form posted natively and the server returned a 302 +
+ * flash toast. That meant a sensitive-access lapse showed up only as
+ * the toast "Please re-enter your auth code to continue (sensitive
+ * action)." with no chance for the JS to pop the unlock modal, so the
+ * user was stuck. Now we intercept the submit, post via XHR, and on
+ * the canonical 403 + sensitive_access_required envelope we open the
+ * verify modal and retry the save once the user has entered the code.
+ *
+ * Success → toast + page reload (matches the prior redirect-with-flash
+ * UX, and refreshes any rendered values that depend on the saved
+ * config like Total Fee Earnings labels).
+ * Validation error (400) → toast with the joined error list.
+ * Any other failure → toast with a generic message.
+ *
+ * @param {HTMLFormElement} form
+ * @returns {void}
+ */
+function submitSettingsForm(form) {
+    if (!form) { return; }
+
+    var fd = new FormData(form);
+    // Encode FormData as application/x-www-form-urlencoded so the
+    // server-side $_POST parser reads it the same way it reads the
+    // native form post. multipart/form-data would also work but
+    // there are no file inputs on this form, so url-encoded is the
+    // smaller wire format and keeps server-side handling identical.
+    var pairs = [];
+    fd.forEach(function (val, key) {
+        pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(val));
+    });
+    var body = pairs.join('&');
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) { return; }
+
+        var data;
+        try {
+            data = JSON.parse(xhr.responseText);
+        } catch (e) {
+            // 302 / 401 / an HTML login page all fail JSON.parse here —
+            // nearly always a session expiring mid-action. Show a
+            // generic toast and stop; reloading might land them on the
+            // login page anyway, which is the right outcome.
+            showToast('Error', 'Unexpected response — your session may have expired. Please sign in again.', 'error');
+            return;
+        }
+
+        // Sensitive-access lapsed → pop the verify modal, retry on success.
+        if (xhr.status === 403 && data && data.code === 'sensitive_access_required') {
+            if (window.apiKeys && typeof window.apiKeys.openVerifyModal === 'function') {
+                window.apiKeys.openVerifyModal(function () {
+                    submitSettingsForm(form);
+                }, 'Unlock to save settings');
+            } else {
+                showToast('Error', data.error || data.message || 'Please unlock sensitive actions first.', 'error');
+            }
+            return;
+        }
+
+        // CSRF mismatch → tell the user to refresh; the page-load token
+        // is what the form is signed with.
+        if (xhr.status === 403 && data && data.code === 'csrf_invalid') {
+            showToast('Error', 'Session token mismatch. Please refresh the page and try again.', 'error');
+            return;
+        }
+
+        if (data && data.success) {
+            showToast('Success', data.message || 'Settings updated successfully', 'success');
+            // Reload so the page re-renders any computed labels and the
+            // form's hidden CSRF token rotates naturally on the next page.
+            // Brief delay so the user can see the toast before the reload.
+            setTimeout(function () { window.location.reload(); }, 600);
+            return;
+        }
+
+        // Validation or save error.
+        var msg = (data && (data.message || data.error)) || 'Failed to save settings';
+        showToast('Error', msg, 'error');
+    };
+    xhr.send(body);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('settingsForm');
+    if (!form) { return; }
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitSettingsForm(form);
+    });
+});
 
 /**
  * Keeps the Held TX Sync Timeout max in sync with the P2P Expiration field.
@@ -6973,8 +7229,8 @@ document.addEventListener('click', function(e) {
  * @param {HTMLElement} btn - The button element that was clicked
  */
 function retryDlqItem(dlqId, btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -6994,7 +7250,7 @@ function retryDlqItem(dlqId, btn) {
     var formData = new FormData();
     formData.append('action',     'dlqRetry');
     formData.append('dlq_id',     dlqId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7045,8 +7301,8 @@ function retryDlqItem(dlqId, btn) {
  * badge get re-rendered.
  */
 function revokeRememberSession(sessionId, btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7054,7 +7310,7 @@ function revokeRememberSession(sessionId, btn) {
     var formData = new FormData();
     formData.append('action', 'revokeRememberSession');
     formData.append('session_id', sessionId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7082,15 +7338,15 @@ function revokeRememberSession(sessionId, btn) {
  * login page.
  */
 function revokeAllRememberSessions(btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
     if (btn) { btn.disabled = true; }
     var formData = new FormData();
     formData.append('action', 'revokeAllRememberSessions');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7134,8 +7390,8 @@ function abandonDlqItem(dlqId, btn) {
 }
 
 function abandonDlqItemConfirmed(dlqId, btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7149,7 +7405,7 @@ function abandonDlqItemConfirmed(dlqId, btn) {
     var formData = new FormData();
     formData.append('action',     'dlqAbandon');
     formData.append('dlq_id',     dlqId);
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7202,8 +7458,8 @@ function retryAllDlqItems(btn) {
 
 function retryAllDlqItemsConfirmed(btn) {
     var count = document.querySelectorAll('.dlq-row[data-status="pending"], .dlq-row[data-status="retrying"]').length;
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7212,7 +7468,7 @@ function retryAllDlqItemsConfirmed(btn) {
 
     var formData = new FormData();
     formData.append('action',     'dlqRetryAll');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7278,8 +7534,8 @@ function abandonAllDlqItems(btn) {
 }
 
 function abandonAllDlqItemsConfirmed(btn) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         showToast('Error', 'CSRF token not found', 'error');
         return;
     }
@@ -7288,7 +7544,7 @@ function abandonAllDlqItemsConfirmed(btn) {
 
     var formData = new FormData();
     formData.append('action',     'dlqAbandonAll');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7394,8 +7650,8 @@ function submitAnalyticsConsent(enable) {
     var modal = document.getElementById('analyticsConsentModal');
     if (!modal) { return; }
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
-    if (!csrfToken || !csrfToken.value) {
+    var csrfToken = csrfTokenValue();
+    if (!csrfToken) {
         // Fallback: hide modal even if CSRF is missing (shouldn't happen)
         modal.classList.add('d-none');
         return;
@@ -7408,7 +7664,7 @@ function submitAnalyticsConsent(enable) {
     var formData = new FormData();
     formData.append('action', 'analyticsConsent');
     formData.append('consent', enable ? '1' : '0');
-    formData.append('csrf_token', csrfToken.value);
+    formData.append('csrf_token', csrfToken);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
@@ -7467,12 +7723,12 @@ function openWhatsNewModal(version) {
     modal.style.display = 'flex';
 
     // Fetch release notes via AJAX
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     var formData = new FormData();
     formData.append('action', 'whatsNewNotes');
     formData.append('version', version);
-    if (csrfToken && csrfToken.value) {
-        formData.append('csrf_token', csrfToken.value);
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
     }
 
     var xhr = new XMLHttpRequest();
@@ -7551,11 +7807,11 @@ function dismissWhatsNew() {
         setTimeout(function() { banner.remove(); }, 300);
     }
 
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     var formData = new FormData();
     formData.append('action', 'whatsNewDismiss');
-    if (csrfToken && csrfToken.value) {
-        formData.append('csrf_token', csrfToken.value);
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
     }
 
     var xhr = new XMLHttpRequest();
@@ -7937,9 +8193,9 @@ function approveP2pTransaction(hash, candidateId) {
     var msg = candidateId ? 'Are you sure you want to send via this route?' : 'Are you sure you want to approve and send this transaction?';
     showConfirmModal(msg, { title: 'Approve transaction?', confirmText: 'Send' }).then(function (ok) {
         if (!ok) return;
-        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfTokenValue();
         if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
-        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var body = 'action=approveP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken);
         if (candidateId) {
             body = body + '&candidate_id=' + encodeURIComponent(candidateId);
         }
@@ -7975,9 +8231,9 @@ function rejectP2pTransaction(hash) {
         icon: 'fa-exclamation-triangle'
     }).then(function (ok) {
         if (!ok) return;
-        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfTokenValue();
         if (!csrfToken) { showAlertModal('CSRF token not found', { type: 'error' }); return; }
-        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+        var body = 'action=rejectP2pTransaction&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken);
         var xhr = new XMLHttpRequest();
         xhr.open('POST', window.location.pathname, true);
         xhr.timeout = 60000;
@@ -8003,9 +8259,9 @@ function rejectP2pTransaction(hash) {
 }
 
 function loadP2pCandidates(hash, container) {
-    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    var csrfToken = csrfTokenValue();
     if (!csrfToken) { container.innerHTML = '<div class="text-danger">CSRF token not found</div>'; return; }
-    var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken.value);
+    var body = 'action=getP2pCandidates&hash=' + encodeURIComponent(hash) + '&csrf_token=' + encodeURIComponent(csrfToken);
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
     xhr.timeout = 60000;
@@ -8512,6 +8768,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         'openPluginUninstall': function(el) {
             if (window.plugins) window.plugins.openUninstall(el.getAttribute('data-plugin'));
         },
+        'uploadPlugin': function() { if (window.plugins) window.plugins.openUpload(); },
 
         // Payback Methods
         'openPaybackMethodForm': function(el) {
@@ -8622,13 +8879,16 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         else if (action === 'filterApiKeys') { if (window.apiKeys) window.apiKeys.applyFilters(); }
         else if (action === 'togglePlugin') {
             if (window.plugins) {
-                window.plugins.toggle(el.getAttribute('data-plugin'), el.checked);
+                window.plugins.toggleWithConsent(el.getAttribute('data-plugin'), el.checked, false);
             }
         }
         else if (action === 'togglePluginFromModal') {
             if (window.plugins) {
-                window.plugins.toggleFromModal(el.getAttribute('data-plugin'), el.checked);
+                window.plugins.toggleWithConsent(el.getAttribute('data-plugin'), el.checked, true);
             }
+        }
+        else if (action === 'switchPluginsTabPanel') {
+            switchPluginsTabPanel(el.value);
         }
         else if (action === 'previewColorScheme') {
             // Live preview: flip the swatch next to the select to the
@@ -8706,11 +8966,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         // Persistent order used when sort is cleared (server returns newest-first)
         var originalOrder = [];
 
-        function csrfToken() {
-            var el = document.querySelector('input[name="csrf_token"]');
-            return (el && el.value) ? el.value : '';
-        }
-
         function post(payload) {
             var body = new FormData();
             Object.keys(payload).forEach(function(k) {
@@ -8721,7 +8976,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     body.append(k, v);
                 }
             });
-            if (!body.has('csrf_token')) { body.append('csrf_token', csrfToken()); }
+            if (!body.has('csrf_token')) { body.append('csrf_token', csrfTokenValue()); }
             return fetch(window.location.pathname, {
                 method: 'POST',
                 body: body,
@@ -8753,12 +9008,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         function renderAccessState(secondsRemaining) {
-            var el = document.getElementById('api-keys-access-state');
-            if (!el) return;
-            if (secondsRemaining > 0) {
-                el.textContent = 'Edits unlocked for ' + Math.ceil(secondsRemaining / 60) + ' min';
-            } else {
-                el.textContent = '';
+            // Delegate to the page-wide helper so unlocking from any
+            // section (api-keys verify, payback methods preflight, …)
+            // refreshes every visible badge uniformly.
+            if (typeof updateSensitiveAccessBadges === 'function') {
+                updateSensitiveAccessBadges(secondsRemaining);
             }
         }
 
@@ -9220,7 +9474,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         function showCreateError(msg) {
             var err = document.getElementById('apiKeysCreateError');
-            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+            if (err) {
+                err.textContent = msg;
+                err.classList.remove('d-none');
+                scrollErrorIntoView(err);
+            }
         }
 
         // --- Reveal (one-time) -------------------------------------------
@@ -9242,7 +9500,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             var ack = document.getElementById('apiKeysRevealAck');
             var err = document.getElementById('apiKeysRevealAckError');
             if (ack && !ack.checked) {
-                if (err) err.classList.remove('d-none');
+                if (err) {
+                    err.classList.remove('d-none');
+                    scrollErrorIntoView(err);
+                }
                 return;
             }
             // Clear the secret from memory and from the DOM the moment the
@@ -9399,7 +9660,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         function showEditError(msg) {
             var err = document.getElementById('apiKeysEditError');
-            if (err) { err.textContent = msg; err.classList.remove('d-none'); }
+            if (err) {
+                err.textContent = msg;
+                err.classList.remove('d-none');
+                scrollErrorIntoView(err);
+            }
         }
 
         // --- Bulk Disable / Delete ---------------------------------------
@@ -9535,12 +9800,14 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             ? 'Invalid auth code. Please try again.'
                             : 'Could not verify. Please try again.';
                         err.classList.remove('d-none');
+                        scrollErrorIntoView(err);
                     }
                 }
             }).catch(function() {
                 if (err) {
                     err.textContent = 'Network error. Please try again.';
                     err.classList.remove('d-none');
+                    scrollErrorIntoView(err);
                 }
             });
         }
@@ -9593,11 +9860,6 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         var loaded = false;
         var lastList = [];
 
-        function csrfToken() {
-            var el = document.querySelector('input[name="csrf_token"]');
-            return (el && el.value) ? el.value : '';
-        }
-
         function escapeHtml(s) {
             if (s == null) return '';
             return String(s)
@@ -9615,7 +9877,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                     body.append(k, payload[k]);
                 }
             });
-            if (!body.has('csrf_token')) body.append('csrf_token', csrfToken());
+            if (!body.has('csrf_token')) body.append('csrf_token', csrfTokenValue());
             return fetch(window.location.pathname, {
                 method: 'POST',
                 body: body,
@@ -9631,9 +9893,20 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function statusBadge(status) {
             var label = status || 'unknown';
             var cls = 'status-badge status-unknown';
-            if (status === 'booted')        { cls = 'status-badge status-online';  label = 'Running'; }
+            if (status === 'booted' || status === 'sandboxed') {
+                // 'sandboxed' = running in its own FPM pool; from the
+                // operator's perspective it's the same "actively
+                // serving requests" state as 'booted', just for a
+                // sandboxed plugin instead of an in-process one.
+                cls = 'status-badge status-online';
+                label = 'Running';
+            }
             else if (status === 'failed')   { cls = 'badge-danger';                 label = 'Failed'; }
             else if (status === 'disabled') { cls = 'status-badge status-offline'; label = 'Disabled'; }
+            else if (status === 'legacy_unsupported') {
+                cls = 'badge-danger';
+                label = 'Unsupported (legacy)';
+            }
             else if (status === 'registered' || status === 'discovered') {
                 cls = 'status-badge status-partial'; label = 'Loaded';
             }
@@ -9711,14 +9984,24 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
 
         // "Running" = the plugin is actually live in the current node process.
-        // `booted` is the only status that means fully loaded + subscribed.
-        // Everything else (disabled, failed, registered, discovered) means
-        // not-running from a runtime perspective.
-        function isRunning(p) { return p && p.status === 'booted'; }
+        // Sandboxed plugins are live as soon as their FPM pool is up
+        // (status 'sandboxed'). Legacy in-process plugins (status
+        // 'booted' / 'registered' / 'discovered') need full node
+        // bootstrap; only 'booted' means fully loaded + subscribed.
+        function isRunning(p) {
+            if (!p) return false;
+            if (p.sandboxed) return p.status === 'sandboxed';
+            return p.status === 'booted';
+        }
 
         // A plugin needs a restart iff its desired enabled flag diverges from
-        // the runtime. Toggling back to the pre-change state clears the need.
-        function isDivergent(p) { return !!p.enabled !== isRunning(p); }
+        // the runtime. Sandboxed plugins never need a restart — applyPool /
+        // dropPool already reloaded FPM + nginx via the supervisor.
+        function isDivergent(p) {
+            if (!p) return false;
+            if (p.sandboxed) return false;
+            return !!p.enabled !== isRunning(p);
+        }
 
         function updateRestartBanner() {
             var any = false;
@@ -9797,7 +10080,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 body: (function() {
                     var b = new FormData();
                     b.append('action', 'pluginsList');
-                    b.append('csrf_token', csrfToken());
+                    b.append('csrf_token', csrfTokenValue());
                     return b;
                 })(),
                 credentials: 'same-origin',
@@ -9849,28 +10132,85 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             });
         }
 
-        function toggle(name, enabled) {
+        function toggle(name, enabled, approvedPermissions) {
             if (!name) return;
-            post({
+            // On enable, optionally carry the consent-modal's granted
+            // list. Format is comma-separated keys — keeps the form-
+            // encoded POST simple (no FormData / JSON body needed; Tor
+            // Browser-safe per [[feedback_tor_browser_compat]]). The
+            // backend also accepts the array form for callers that
+            // post via $.post({arr:[...]}).
+            // Omitted entirely on disable so the loader takes the
+            // "preserve existing approvals" branch.
+            var payload = {
                 action: 'pluginsToggle',
                 name: name,
                 enabled: enabled ? '1' : '0'
-            }).then(function(r) {
+            };
+            if (enabled && Array.isArray(approvedPermissions)) {
+                payload.approved_permissions = approvedPermissions.join(',');
+            }
+            post(payload).then(function(r) {
                 if (r.data && r.data.success) {
                     // Mirror the new flag into lastList so the banner and any
                     // follow-up toggle decisions see the current desired state.
                     var p = findByName(name);
                     if (p) p.enabled = enabled;
+                    // Also reflect the new status so the dot / badge
+                    // update locally without waiting for a full reload.
+                    // Sandboxed plugins toggle directly between
+                    // 'sandboxed' and 'disabled'; in-process plugins
+                    // keep their old behaviour until next restart.
+                    if (p && p.sandboxed) {
+                        p.status = enabled ? 'sandboxed' : 'disabled';
+                    }
                     updateRestartBanner();
+                    // Force the checkbox visual to match the desired
+                    // state (the user already flipped it, but this
+                    // protects against any double-click / race where
+                    // the visual drifts from intent).
+                    var cbSync = document.querySelector(
+                        'input[data-plugin="' + name.replace(/"/g, '') + '"]'
+                    );
+                    if (cbSync) cbSync.checked = enabled;
+                    // Refresh the row so the status dot / version /
+                    // description re-render against the new state.
+                    renderList(lastList);
                     if (typeof showToast === 'function') {
-                        var msg = (p && isDivergent(p))
-                            ? name + ' — restart the node for the change to take effect.'
-                            : name + ' — matches the current runtime, no restart needed.';
+                        var msg;
+                        if (p && p.sandboxed) {
+                            // Sandboxed plugins take effect immediately
+                            // via the supervisor's graceful FPM + nginx
+                            // reload. Wording emphasises the new state
+                            // rather than the absence of further action.
+                            msg = enabled
+                                ? name + ' is now active. Sandboxed FPM pool started.'
+                                : name + ' is now inactive. Sandboxed FPM pool stopped.';
+                        } else {
+                            // Legacy in-process plugin — needs node restart.
+                            msg = (p && isDivergent(p))
+                                ? name + ' — restart the node for the change to take effect.'
+                                : name + ' — matches the current runtime, no restart needed.';
+                        }
                         showToast(
                             enabled ? 'Plugin enabled' : 'Plugin disabled',
                             msg,
                             'success'
                         );
+                    }
+                    // Plugins that declare `plugin_tab_panel` need the
+                    // host-rendered Plugins tab to refresh — the
+                    // dropdown + panel bodies come from a server-side
+                    // partial that the in-page DOM doesn't know how to
+                    // rebuild. Trigger a soft reload after a brief
+                    // delay so the operator sees the toast first. The
+                    // Plugins tab body changes (entry appears / vanishes)
+                    // become visible after the reload completes.
+                    if (r.data.has_plugin_tab_panel) {
+                        setTimeout(function() {
+                            try { window.location.reload(); }
+                            catch (e) { /* Tor strict mode: best-effort */ }
+                        }, 1200);
                     }
                 } else {
                     // Revert the checkbox on failure so the UI matches truth.
@@ -9884,6 +10224,119 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 if (cb) cb.checked = !enabled;
                 if (typeof showToast === 'function') showToast('Error', 'Network error', 'error');
             });
+        }
+
+        // -- Permission consent --------------------------------------------
+        // When the operator slides ENABLE on a plugin that requests
+        // permissions, intercept the toggle and require explicit
+        // consent in a modal first. Disable always proceeds without
+        // consent (the operator is reducing access, not granting it).
+        //
+        // Two call sites: the per-row toggle in Settings → Plugins
+        // (`togglePlugin` action) and the toggle inside the plugin
+        // detail modal (`togglePluginFromModal`). The consent gate
+        // sits in front of both — especially important for the row
+        // toggle since the operator may flip it without ever opening
+        // the modal that shows the permissions panel.
+        function toggleWithConsent(name, enabled, fromModal) {
+            if (!enabled) {
+                // Disable always passes through — no consent needed.
+                return fromModal ? toggleFromModal(name, enabled) : toggle(name, enabled);
+            }
+            var p = findByName(name);
+            var perms = (p && p.permissions_described) || [];
+            if (perms.length === 0) {
+                // No permissions requested — also passes through.
+                return fromModal ? toggleFromModal(name, enabled) : toggle(name, enabled);
+            }
+            // Today's consent is all-or-nothing: the modal grants the
+            // full manifest list. Pass the keys explicitly so the
+            // server records exactly what the operator saw, not
+            // whatever the manifest happens to declare on a later
+            // re-read (defense against a TOCTOU between the modal
+            // render and the POST landing — manifest swap mid-flight
+            // shouldn't escalate approvals).
+            var grantedKeys = perms.map(function(p) { return p.key; });
+            openPermissionConsentModal(p, perms, function approved() {
+                if (fromModal) toggleFromModal(name, enabled, grantedKeys);
+                else           toggle(name, enabled, grantedKeys);
+            }, function cancelled() {
+                // Revert whichever toggle the operator flipped.
+                var rowCb = document.querySelector(
+                    'input[data-plugin="' + String(name).replace(/"/g, '') + '"]'
+                );
+                if (rowCb) rowCb.checked = false;
+                var modalCb = document.getElementById('plugin-modal-toggle');
+                if (modalCb) modalCb.checked = false;
+            });
+        }
+
+        function openPermissionConsentModal(plugin, perms, onApprove, onCancel) {
+            // Renders into a top-stack modal so it appears above the
+            // plugin detail modal when consent is triggered from there.
+            var overlay = document.createElement('div');
+            overlay.className = 'modal modal-stack-top';
+            overlay.setAttribute('role', 'dialog');
+            var permItems = '';
+            for (var i = 0; i < perms.length; i++) {
+                var perm = perms[i];
+                permItems +=
+                    '<li style="margin-bottom:0.75rem">' +
+                        '<strong>' + escapeHtml(perm.label || perm.key || '') + '</strong>' +
+                        '<div class="text-muted text-xs" style="margin-top:0.2rem">' +
+                            escapeHtml(perm.description || '') +
+                        '</div>' +
+                    '</li>';
+            }
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width: 520px;">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-shield-alt"></i> Grant permissions to ' + escapeHtml(plugin.name || '') + '?</h3>' +
+                        '<span class="close" data-perm-consent-close="1" title="Cancel">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding:1.25rem;">' +
+                        '<p style="margin:0 0 0.75rem 0; font-size:0.9rem;">' +
+                            'Enabling <strong>' + escapeHtml(plugin.name || '') + '</strong> grants the following permissions. ' +
+                            'Each one is a surface beyond the routine call list — review before turning on.' +
+                        '</p>' +
+                        '<ul style="margin:0 0 0.5rem 1rem; padding:0;">' + permItems + '</ul>' +
+                    '</div>' +
+                    '<div class="modal-footer" style="gap:0.5rem;">' +
+                        '<button type="button" class="btn btn-secondary" data-perm-consent-cancel="1">Cancel</button>' +
+                        '<button type="button" class="btn btn-primary" data-perm-consent-approve="1">' +
+                            '<i class="fas fa-check"></i> Grant &amp; enable' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+            var resolved = false;
+            function cleanup() {
+                document.removeEventListener('keydown', keyHandler);
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+            }
+            function approve() {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                onApprove();
+            }
+            function cancel() {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                onCancel();
+            }
+            function keyHandler(e) {
+                if (e.key === 'Escape' || e.keyCode === 27) cancel();
+                else if (e.key === 'Enter') approve();
+            }
+
+            overlay.querySelector('[data-perm-consent-approve]').onclick = approve;
+            overlay.querySelector('[data-perm-consent-cancel]').onclick = cancel;
+            overlay.querySelector('[data-perm-consent-close]').onclick = cancel;
+            overlay.onclick = function(e) { if (e.target === overlay) cancel(); };
+            document.addEventListener('keydown', keyHandler);
+            document.body.appendChild(overlay);
         }
 
         function ensureLoadedOnTab() {
@@ -10012,6 +10465,41 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 + '</div>'
                 : '';
 
+            // Permissions panel — louder-consent surface on top of the
+            // routine core_services allow-list. PluginController merges
+            // the human-readable {key,label,description} rows server-
+            // side via PluginPermissionCatalog, so the GUI doesn't need
+            // its own copy. Suppressed when the plugin requested none.
+            var permsList = (p.permissions_described && p.permissions_described.length)
+                ? p.permissions_described : [];
+            var permsBlock = '';
+            if (permsList.length) {
+                var permItems = '';
+                for (var i = 0; i < permsList.length; i++) {
+                    var perm = permsList[i];
+                    permItems +=
+                        '<li style="margin-bottom:0.5rem">' +
+                            '<strong>' + escapeHtml(perm.label || perm.key || '') + '</strong>' +
+                            '<div class="text-muted text-xs" style="margin-top:0.15rem">' +
+                                escapeHtml(perm.description || '') +
+                            '</div>' +
+                        '</li>';
+                }
+                permsBlock =
+                    '<div class="alert alert-warning text-sm" style="margin-top:0.75rem">' +
+                        '<div style="font-weight:600;margin-bottom:0.4rem">' +
+                            '<i class="fas fa-shield-alt"></i> ' +
+                            (p.enabled ? 'Permissions granted' : 'Permissions requested') +
+                        '</div>' +
+                        '<div class="text-muted text-xs" style="margin-bottom:0.5rem">' +
+                            (p.enabled
+                                ? 'This plugin already has the following permissions. Disable it if you no longer want to grant them.'
+                                : 'Enabling this plugin grants the following permissions. Each one is a surface beyond the routine call list — review before turning on.') +
+                        '</div>' +
+                        '<ul style="margin:0;padding-left:1.1rem">' + permItems + '</ul>' +
+                    '</div>';
+            }
+
             var overlay = document.createElement('div');
             overlay.className = 'modal';
             overlay.id = 'plugin-modal';
@@ -10032,6 +10520,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             (changelogLine(p) ? '<dt>Changelog</dt><dd>' + changelogLine(p) + '</dd>' : '') +
                             '<dt>Description</dt><dd>' + escapeHtml(p.description || '—') + '</dd>' +
                         '</dl>' +
+                        permsBlock +
                         '<div class="plugin-modal-toggle-row">' +
                             '<label for="' + checkId + '"><strong>Enabled</strong></label>' +
                             '<label class="toggle-switch" for="' + checkId + '">' +
@@ -10043,7 +10532,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             '</label>' +
                         '</div>' +
                         '<div class="text-muted text-sm" style="margin-top:0.75rem">' +
-                            'Toggles persist immediately but take effect after a node restart.' +
+                            (p.sandboxed
+                                ? 'Toggles take effect immediately — the plugin\'s FPM pool starts or stops gracefully via the supervisor.'
+                                : 'Toggles persist immediately but take effect after a node restart.') +
                         '</div>' +
                         errBlock +
                         // Uninstall is a permanent action — only offered when
@@ -10179,20 +10670,325 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             });
         }
 
-        function toggleFromModal(name, enabled) {
+        function toggleFromModal(name, enabled, approvedPermissions) {
             var rowCb = document.querySelector('#plugins-tbody input[data-plugin="' + String(name).replace(/"/g, '') + '"]');
             if (rowCb) rowCb.checked = enabled;
             closeModal();
-            toggle(name, enabled);
+            toggle(name, enabled, approvedPermissions);
+        }
+
+        // -- Upload flow ----------------------------------------------------
+        // Triggers the hidden #plugins-upload-input file picker. When the
+        // user picks a file we POST it directly via FormData — no fancy
+        // drag-drop, no JS-side magic-byte check (the server has to
+        // validate anyway). Tor Browser ships with FormData and the
+        // basic fetch() body type — no streaming or compression APIs
+        // are touched. See [[feedback_tor_browser_compat]].
+        // openUpload() shows a pre-flight modal explaining the rules and
+        // trust posture before the OS file picker opens. Continue triggers
+        // the hidden #plugins-upload-input click; the change handler then
+        // POSTs the file via FormData. Tor Browser-safe (FormData + fetch
+        // only, no streaming APIs).
+        //
+        // Limits are fetched once per session from pluginsUploadLimits so
+        // the modal copy stays in sync with PHP constants without
+        // duplicating them client-side. A network failure on the limits
+        // call falls back to hardcoded copy — the modal must always
+        // render so the operator can't accidentally bypass the warning.
+        var cachedLimits = null;
+
+        function fetchLimits() {
+            if (cachedLimits) return Promise.resolve(cachedLimits);
+            return post({ action: 'pluginsUploadLimits' }).then(function(r) {
+                if (r.data && r.data.success && r.data.limits) {
+                    cachedLimits = r.data.limits;
+                }
+                return cachedLimits;
+            }).catch(function() { return null; });
+        }
+
+        function openUpload() {
+            var input = document.getElementById('plugins-upload-input');
+            if (!input) {
+                if (typeof showToast === 'function') {
+                    showToast('Error', 'Upload control is not available on this page', 'error');
+                }
+                return;
+            }
+            fetchLimits().then(function(limits) {
+                showUploadPreflight(limits, function() {
+                    triggerFilePicker(input);
+                });
+            });
+        }
+
+        function showUploadPreflight(limits, onContinue) {
+            var fmt = function(n) {
+                if (typeof n !== 'number') return '—';
+                if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(0) + ' MiB';
+                if (n >= 1024) return (n / 1024).toFixed(0) + ' KiB';
+                return n + ' B';
+            };
+            // Server is authoritative; fall back to copy that matches
+            // PluginInstallService constants if the limits fetch failed.
+            var zipMax  = limits ? limits.max_zip_bytes          : 25 * 1024 * 1024;
+            var fileMax = limits ? limits.max_file_bytes         : 15 * 1024 * 1024;
+            var totMax  = limits ? limits.max_uncompressed_bytes : 50 * 1024 * 1024;
+            var fileCnt = limits ? limits.max_file_count         : 500;
+            var ratio   = limits ? limits.max_compression_ratio  : 100;
+            var exts    = limits && limits.allowed_extensions
+                ? limits.allowed_extensions.join(', ')
+                : 'php, json, md, txt, css, js, map, html, htm, svg, png, jpg, jpeg, gif, webp, ico, woff, woff2, ttf, otf, eot';
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal modal-stack-top';
+            overlay.setAttribute('role', 'dialog');
+            overlay.innerHTML =
+                '<div class="modal-content" style="max-width: 580px;">' +
+                    '<div class="modal-header">' +
+                        '<h3><i class="fas fa-upload"></i> Upload plugin (.zip)</h3>' +
+                        '<span class="close" data-plugin-upload-close="1" title="Close">&times;</span>' +
+                    '</div>' +
+                    '<div class="modal-body" style="padding: 1rem 1.5rem; font-size: 0.9rem;">' +
+                        '<div class="alert alert-info" style="margin-bottom: 1rem;">' +
+                            '<strong><i class="fas fa-shield-alt"></i> Plugins run sandboxed.</strong> ' +
+                            'A sandboxed plugin runs as its own Unix user in its own PHP-FPM pool — it ' +
+                            '<strong>cannot</strong> read this node\'s master key, decrypt the seed phrase, ' +
+                            'or read <code>/etc/eiou/config/</code>. It <strong>can</strong> call core services ' +
+                            'declared in its <code>core_services</code> manifest field; review that list ' +
+                            'before you enable the plugin.' +
+                        '</div>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Layout</strong></p>' +
+                        '<ul style="margin: 0 0 1rem 1.25rem; padding: 0;">' +
+                            '<li>One <strong>top-level folder</strong> matching <code>^[a-z0-9][a-z0-9_-]{0,63}$</code></li>' +
+                            '<li>That folder is the plugin name, must match <code>plugin.json</code> &rarr; <code>name</code></li>' +
+                            '<li><code>plugin.json</code> with <code>name</code>, <code>version</code>, <code>entryClass</code>, <code>"sandboxed": true</code> all required</li>' +
+                        '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Limits</strong></p>' +
+                        '<ul style="margin: 0 0 1rem 1.25rem; padding: 0;">' +
+                            '<li>Archive &le; <strong>' + escapeHtml(fmt(zipMax)) + '</strong> compressed, &le; <strong>' + escapeHtml(fmt(totMax)) + '</strong> uncompressed</li>' +
+                            '<li>Single file &le; <strong>' + escapeHtml(fmt(fileMax)) + '</strong> uncompressed</li>' +
+                            '<li>&le; <strong>' + escapeHtml(String(fileCnt)) + '</strong> files; compression ratio &le; <strong>' + escapeHtml(String(ratio)) + ':1</strong> (zip-bomb sentinel)</li>' +
+                        '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Allowed file extensions</strong></p>' +
+                        '<p style="margin: 0 0 1rem 0; color: #495057; font-family: monospace; font-size: 0.85rem; word-break: break-word;">' +
+                            escapeHtml(exts) +
+                        '</p>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Rejected automatically</strong></p>' +
+                        '<ul style="margin: 0 0 0.25rem 1.25rem; padding: 0;">' +
+                            '<li>Manifests without <code>"sandboxed": true</code> (in-process plugins are no longer supported)</li>' +
+                            '<li>Path traversal (<code>..</code>, leading <code>/</code>, backslashes)</li>' +
+                            '<li>Symlinks, hidden dotfiles, <code>.phar</code>, <code>.htaccess</code>, anything outside the allow-list</li>' +
+                        '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Replacing an installed plugin</strong></p>' +
+                        '<p style="margin: 0 0 1rem 0;">Upload a newer version of an already-installed plugin and you\'ll be asked to confirm the replace. The plugin\'s installed data (database tables, credentials, gateway token) is preserved; the old version is kept on disk for rollback.</p>' +
+                    '</div>' +
+                    '<div class="modal-footer" style="gap: 0.5rem;">' +
+                        '<button type="button" class="btn btn-secondary" data-plugin-upload-cancel="1">Cancel</button>' +
+                        '<button type="button" class="btn btn-primary" data-plugin-upload-continue="1">' +
+                            '<i class="fas fa-folder-open"></i> Choose .zip&hellip;' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+            function cleanup() {
+                document.removeEventListener('keydown', keyHandler);
+                if (document.body.contains(overlay)) {
+                    document.body.removeChild(overlay);
+                }
+            }
+            function keyHandler(e) {
+                if (e.key === 'Escape' || e.keyCode === 27) { cleanup(); }
+            }
+            overlay.querySelector('[data-plugin-upload-continue]').onclick = function() {
+                cleanup();
+                onContinue();
+            };
+            overlay.querySelector('[data-plugin-upload-cancel]').onclick = cleanup;
+            overlay.querySelector('[data-plugin-upload-close]').onclick = cleanup;
+            overlay.onclick = function(e) { if (e.target === overlay) { cleanup(); } };
+            document.addEventListener('keydown', keyHandler);
+            document.body.appendChild(overlay);
+            try { overlay.querySelector('[data-plugin-upload-continue]').focus(); } catch (e) {}
+        }
+
+        function triggerFilePicker(input) {
+            // The change handler is one-shot per pick. Detaching after each
+            // invocation prevents leftover listeners stacking up if the
+            // user opens the picker, cancels, then opens it again — that
+            // would otherwise fire the handler multiple times on the next
+            // successful pick.
+            var onChange = function() {
+                input.removeEventListener('change', onChange);
+                var file = input.files && input.files[0];
+                input.value = ''; // allow picking the same file again
+                if (!file) return;
+                submitUpload(file);
+            };
+            input.addEventListener('change', onChange);
+            input.click();
+        }
+
+        function submitUpload(file) {
+            // Cheap client-side guard for the obvious cases. The server
+            // re-validates every check — this just gives faster feedback
+            // for a wrong-file mistake without a round-trip.
+            if (!/\.zip$/i.test(file.name)) {
+                if (typeof showToast === 'function') {
+                    showToast('Upload rejected', 'Please pick a .zip file', 'error');
+                }
+                return;
+            }
+            // 25 MiB ceiling mirrored from PluginInstallService::MAX_ZIP_BYTES.
+            // Server is authoritative; this is just a UX shortcut.
+            var hardLimit = 25 * 1024 * 1024;
+            if (file.size > hardLimit) {
+                if (typeof showToast === 'function') {
+                    showToast('Upload rejected', 'Zip exceeds 25 MiB limit', 'error');
+                }
+                return;
+            }
+
+            if (typeof showToast === 'function') {
+                showToast('Uploading…', file.name, 'info');
+            }
+
+            postUploadFor(file, 'pluginsUpload');
+        }
+
+        // POST the file under either `pluginsUpload` (install) or
+        // `pluginsUploadAsUpgrade` (replace already-installed plugin).
+        // Split out so the two-step "upload → 409 → confirm → re-upload"
+        // flow can reuse the same File object without rerunning the
+        // .zip / size guards in submitUpload.
+        function postUploadFor(file, action) {
+            var body = new FormData();
+            body.append('action', action);
+            body.append('csrf_token', csrfTokenValue());
+            body.append('plugin_zip', file);
+
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(data) { return { status: res.status, data: data }; });
+            }).then(function(r) {
+                if (r.data && r.data.success) {
+                    handleUploadSuccess(r.data, action);
+                    return;
+                }
+                // 409 already_installed with both versions surfaced →
+                // offer the upgrade flow. The backend's
+                // PluginAlreadyInstalledException carries plugin_id +
+                // new_version + current_version; we mirror them into a
+                // "Replace v{current} with v{new}?" confirm and re-POST
+                // the same File object through pluginsUploadAsUpgrade
+                // on consent. Only fires on the install path, not when
+                // a pluginsUploadAsUpgrade itself returns 409 (which
+                // shouldn't happen — that endpoint validates the same
+                // shape but throws different codes like same_version /
+                // downgrade_refused — so a 409 from it would mean a
+                // real race the operator can't resolve client-side).
+                if (action === 'pluginsUpload'
+                    && r.status === 409
+                    && r.data && r.data.error === 'already_installed'
+                    && r.data.plugin_id) {
+                    promptReplaceConfirm(file, r.data);
+                    return;
+                }
+                var msg = (r.data && r.data.message) ||
+                          (r.data && r.data.error) ||
+                          'Upload failed';
+                if (typeof showToast === 'function') {
+                    showToast(
+                        action === 'pluginsUploadAsUpgrade' ? 'Upgrade failed' : 'Upload failed',
+                        msg,
+                        'error'
+                    );
+                }
+            }).catch(function() {
+                if (typeof showToast === 'function') {
+                    showToast(
+                        action === 'pluginsUploadAsUpgrade' ? 'Upgrade failed' : 'Upload failed',
+                        'Network error during upload',
+                        'error'
+                    );
+                }
+            });
+        }
+
+        function handleUploadSuccess(data, action) {
+            if (action === 'pluginsUploadAsUpgrade') {
+                if (typeof showToast === 'function') {
+                    showToast(
+                        'Plugin upgraded',
+                        data.plugin_id + ' upgraded ' + data.old_version
+                            + ' → ' + data.new_version
+                            + '. Previous version preserved for rollback.',
+                        'success'
+                    );
+                }
+            } else {
+                var sig = data.signature || {};
+                var sigLine = '';
+                if (sig.status && sig.status !== 'not_checked') {
+                    sigLine = ' Signature: ' + sig.status
+                        + (sig.enforced ? ' (required)' : '');
+                }
+                if (typeof showToast === 'function') {
+                    showToast(
+                        'Plugin uploaded',
+                        data.plugin_id + ' v' + data.version
+                            + ' is staged disabled.' + sigLine
+                            + ' Enable it and restart the node to activate.',
+                        'success'
+                    );
+                }
+            }
+            refresh();
+        }
+
+        function promptReplaceConfirm(file, errData) {
+            var current = errData.current_version || '';
+            var incoming = errData.new_version || '';
+            var msg;
+            if (current && incoming) {
+                msg = 'Replace ' + errData.plugin_id
+                    + ' v' + current + ' with v' + incoming + '? '
+                    + 'The plugin\'s installed data (database tables, '
+                    + 'credentials, gateway token) is preserved. The old '
+                    + 'version is kept on disk for rollback.';
+            } else {
+                msg = 'Replace the installed ' + errData.plugin_id
+                    + ' with this upload? The plugin\'s installed data '
+                    + 'is preserved and the old version is kept on disk '
+                    + 'for rollback.';
+            }
+            showConfirmModal(msg, {
+                title: 'Replace installed plugin?',
+                confirmText: 'Replace',
+                confirmClass: 'btn-primary',
+                icon: 'fa-arrow-up-right-dots'
+            }).then(function(ok) {
+                if (!ok) return;
+                if (typeof showToast === 'function') {
+                    showToast('Upgrading…', file.name, 'info');
+                }
+                postUploadFor(file, 'pluginsUploadAsUpgrade');
+            });
         }
 
         return {
             reload: function() { loaded = false; return refresh(); },
             toggle: toggle,
             toggleFromModal: toggleFromModal,
+            toggleWithConsent: toggleWithConsent,
             openModal: openModal,
             openUninstall: openUninstallModal,
             openChangelog: openChangelogModal,
+            openUpload: openUpload,
             requestRestart: requestRestart
         };
     })();
@@ -10228,14 +11024,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         }
         function getType(id) { ensureCatalog(); return catalogTypesById[id] || null; }
 
-        function csrf() {
-            var el = document.querySelector('input[name="csrf_token"]');
-            return el ? el.value : '';
-        }
-
         function post(action, extra, cb) {
             var body = 'action=' + encodeURIComponent(action) +
-                       '&csrf_token=' + encodeURIComponent(csrf());
+                       '&csrf_token=' + encodeURIComponent(csrfTokenValue());
             Object.keys(extra || {}).forEach(function (k) {
                 body += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(extra[k]);
             });
@@ -10376,6 +11167,13 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         // -------------------------------------------------------------------
 
         function openForm(mode, methodId) {
+            // No preflight on Add: the unlock prompt fires only at submit
+            // time (see the post() callback in submit() below). Edit/View
+            // modes still trigger the modal upfront via paybackMethodsReveal
+            // because they need to decrypt the existing record to pre-fill
+            // the form — there's nothing for them to do without unlocking
+            // first. Add starts from blank inputs, so the user can compose
+            // the form without touching anything sensitive until they save.
             state.formMode = mode || 'add';
             state.editingId = methodId || null;
             state.selectedType = null;
@@ -10996,8 +11794,12 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             html += '</ul>';
             box.innerHTML = html;
             box.style.display = 'block';
+            // 'start' (was 'nearest') guarantees the banner ends up at the
+            // top of the visible area so it's actually noticed when the
+            // user submitted from deep in the form. Same behavior as the
+            // shared scrollErrorIntoView helper used elsewhere.
             if (typeof box.scrollIntoView === 'function') {
-                box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                box.scrollIntoView({ block: 'start', behavior: 'smooth' });
             }
         }
 
@@ -11057,13 +11859,11 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
         function escapeAttr(s) { return escapeHtml(s); }
 
         function renderAccessState(secondsRemaining) {
-            var el = document.getElementById('payback-methods-access-state');
-            if (!el) { return; }
-            if (secondsRemaining > 0) {
-                el.innerHTML = '<i class="fas fa-unlock-alt"></i> Unlocked for ' +
-                    Math.ceil(secondsRemaining / 60) + ' min';
-            } else {
-                el.textContent = '';
+            // Delegate to the page-wide helper so unlocking from any
+            // section (api-keys verify, payback methods preflight, …)
+            // refreshes every visible badge uniformly.
+            if (typeof updateSensitiveAccessBadges === 'function') {
+                updateSensitiveAccessBadges(secondsRemaining);
             }
         }
 
@@ -11312,8 +12112,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             state.lastFetchAddress = address;
             state.loadedForPubkeyHash = pubkeyHash;
 
-            var csrfEl = document.querySelector('input[name="csrf_token"]');
-            var csrf = csrfEl ? csrfEl.value : '';
+            var csrf = csrfTokenValue();
             var body = 'action=paybackMethodsFetchFromContact' +
                        '&csrf_token=' + encodeURIComponent(csrf) +
                        '&address=' + encodeURIComponent(address);
@@ -11359,3 +12158,383 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
     })();
 
 })();
+// Copyright 2025-2026 Vowels Group, LLC
+//
+// Client-side glue for the Alternate Auth Code settings section. Loaded
+// from wallet.html alongside script.js.
+//
+// Tor Browser compatibility notes:
+//   - Vanilla DOM only; no async/await, no arrow functions, no
+//     destructuring, no template literals — Tor Browser ESR builds
+//     follow Firefox ESR which supports modern JS, but we mirror the
+//     codebase-wide style used in script.js (and the project memory)
+//     for "Safer"/"Standard" Tor Browser users on older ESR baselines.
+//   - `NodeList.forEach` is avoided in favour of
+//     `Array.prototype.forEach.call(list, fn)` (older NodeList builds).
+//   - `scrollIntoView({behavior: 'smooth'})` is wrapped in try/catch
+//     with a hard-jump fallback.
+//   - CSS variables in inline `style.boxShadow` use a literal RGBA so
+//     they work in custom-property-disabled environments.
+//   - "Safest" Tor Browser mode disables JS entirely; the section is
+//     server-rendered with all status text + the warning callout
+//     present in HTML, so a no-JS user still sees the locked-state
+//     reasoning. The modal-driven set/clear flow is JS-only; a user
+//     on "Safest" should use `eiou altcode set` from the CLI instead.
+
+(function () {
+    // ---- bootstrap ---------------------------------------------------------
+    //
+    // wallet.html loads script.js from <head>, so this IIFE executes BEFORE
+    // the body has been parsed and #alt-code-config doesn't exist yet. Wait
+    // for DOMContentLoaded before reading the config / wiring listeners.
+    // The previous inline <script> at the bottom of altCodeSection.html
+    // happened to run after the section's DOM existed; the asset-file
+    // version needs to defer explicitly.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAltCodeSection);
+    } else {
+        initAltCodeSection();
+    }
+
+    // Hoisted-friendly: declared as a function statement so it's available
+    // to the addEventListener call above regardless of source order.
+    function initAltCodeSection() {
+
+    var cfgEl = document.getElementById('alt-code-config');
+    if (!cfgEl) {
+        // Section not on this page (e.g. user landed on a non-Settings tab
+        // and the partial wasn't included). Silent no-op.
+        return;
+    }
+    var MIN_LEN = parseInt(cfgEl.getAttribute('data-min-length') || '12', 10);
+    var MAX_LEN = parseInt(cfgEl.getAttribute('data-max-length') || '256', 10);
+
+    // ---- tiny DOM helpers --------------------------------------------------
+
+    function el(id) { return document.getElementById(id); }
+
+    function showError(node, msg) {
+        if (!node) return;
+        node.textContent = msg;
+        node.classList.remove('d-none');
+    }
+
+    function clearError(node) {
+        if (!node) return;
+        node.textContent = '';
+        node.classList.add('d-none');
+    }
+
+    function postAction(payload) {
+        var body = new FormData();
+        Object.keys(payload).forEach(function (k) {
+            if (payload[k] !== null && payload[k] !== undefined) {
+                body.append(k, payload[k]);
+            }
+        });
+        if (!body.has('csrf_token')) body.append('csrf_token', csrfTokenValue());
+        return fetch(window.location.pathname, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (res) {
+            return res.json().then(function (data) {
+                return { status: res.status, data: data };
+            }, function () {
+                return { status: res.status, data: { error: 'Bad response' } };
+            });
+        });
+    }
+
+    // ---- strength meter (client-side, server is authoritative) ------------
+
+    function scoreCandidate(s) {
+        if (!s) return { score: 0, hints: [] };
+        var hints = [];
+        if (s.length < MIN_LEN)            hints.push('at least ' + MIN_LEN + ' characters');
+        if (!/[a-z]/.test(s))              hints.push('a lowercase letter');
+        if (!/[A-Z]/.test(s))              hints.push('an uppercase letter');
+        if (!/[0-9]/.test(s))              hints.push('a digit');
+        if (!/[^A-Za-z0-9]/.test(s))       hints.push('a symbol');
+        if (/(.)\1\1/.test(s))             hints.push('no triple-repeated characters');
+
+        // If ANY required rule is unmet, the server will reject this
+        // submission. Hard-cap the tier at "fair" so the user never
+        // sees a "good" or "strong" badge for input the verifier
+        // would refuse — that was the bug a long passphrase missing
+        // a digit + symbol previously rendered as "strong" because
+        // length overpowered the small unmet-rule penalty.
+        if (hints.length > 0) {
+            var failTier;
+            if (s.length < 6 || hints.length >= 4)  failTier = 0;  // very weak
+            else if (hints.length >= 2)             failTier = 1;  // weak
+            else                                    failTier = 2;  // fair (only one rule unmet)
+            return { score: failTier, hints: hints };
+        }
+
+        // No hints — input would pass server validation. Tier by
+        // length only; class-coverage is already guaranteed because
+        // missing any class would have produced a hint above.
+        var tier;
+        if (s.length >= 16)      tier = 4;  // strong
+        else if (s.length >= 13) tier = 3;  // good
+        else                     tier = 2;  // fair (exactly minimum length)
+        return { score: tier, hints: hints };
+    }
+
+    // CSS tier classes keyed by label, lined up with the `labels` array
+    // below. Aliased here so any future label edit only needs one site.
+    var STRENGTH_TIER_CLASSES = [
+        'alt-code-strength--very-weak',
+        'alt-code-strength--weak',
+        'alt-code-strength--fair',
+        'alt-code-strength--good',
+        'alt-code-strength--strong'
+    ];
+
+    function renderStrength(s) {
+        var box = el('altCodeStrength');
+        if (!box) return;
+        // Strip any prior tier class so cycling weak→strong→weak doesn't
+        // leave the wrong colour stuck on the element.
+        for (var i = 0; i < STRENGTH_TIER_CLASSES.length; i++) {
+            box.classList.remove(STRENGTH_TIER_CLASSES[i]);
+        }
+        if (!s) { box.textContent = ''; return; }
+        var r = scoreCandidate(s);
+        var labels = ['very weak', 'weak', 'fair', 'good', 'strong'];
+        var idx = Math.min(r.score, labels.length - 1);
+        var label = labels[idx];
+        var hint = r.hints.length ? ' — still needs: ' + r.hints.join(', ') : '';
+        box.textContent = 'Strength: ' + label + hint;
+        box.classList.add(STRENGTH_TIER_CLASSES[idx]);
+    }
+
+    // ---- live confirm-match indicator -------------------------------------
+
+    function renderMatch() {
+        var box = el('altCodeMatch');
+        var a = (el('altCodeSetNew') || {}).value || '';
+        var b = (el('altCodeSetConfirm') || {}).value || '';
+        if (!box) return;
+        box.classList.remove('alt-code-match--ok', 'alt-code-match--diff');
+        if (!a || !b) { box.textContent = ''; return; }
+        if (a === b) {
+            box.textContent = 'Codes match.';
+            box.classList.add('alt-code-match--ok');
+        } else {
+            box.textContent = "Codes don't match yet.";
+            box.classList.add('alt-code-match--diff');
+        }
+    }
+
+    // ---- modal open/close + state hygiene ---------------------------------
+
+    function openModal(id) {
+        var m = el(id); if (m) m.classList.remove('d-none');
+        // Use the structural wrapper (.alt-code-input-wrap input) rather
+        // than [type="password"] — after a reveal toggle the input may
+        // be type="text" and the password-only selector would miss it.
+        var first = m && m.querySelector('.alt-code-input-wrap input');
+        if (first) setTimeout(function () { first.focus(); }, 50);
+    }
+
+    function closeModal(id) {
+        var m = el(id); if (m) m.classList.add('d-none');
+        // Re-mask any inputs the user toggled to plaintext, so reopening
+        // the modal never starts pre-revealed.
+        if (m) maskAllInputs(m);
+    }
+
+    function clearForm(formId) {
+        var f = el(formId);
+        if (!f) return;
+        Array.prototype.forEach.call(
+            f.querySelectorAll('.alt-code-input-wrap input'),
+            function (i) { i.value = ''; }
+        );
+        renderStrength('');
+        renderMatch();
+    }
+
+    // ---- reveal toggle ----------------------------------------------------
+
+    function toggleReveal(btn) {
+        var targetId = btn.getAttribute('data-target');
+        var input = targetId && el(targetId);
+        if (!input) return;
+        var icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (icon) {
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            }
+        } else {
+            input.type = 'password';
+            if (icon) {
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+    }
+
+    function maskAllInputs(container) {
+        Array.prototype.forEach.call(
+            container.querySelectorAll('.alt-code-input-wrap input'),
+            function (input) {
+                if (input.type === 'text') input.type = 'password';
+            }
+        );
+        Array.prototype.forEach.call(
+            container.querySelectorAll('.alt-code-reveal-btn i'),
+            function (i) {
+                i.classList.remove('fa-eye-slash');
+                if (!i.classList.contains('fa-eye')) i.classList.add('fa-eye');
+            }
+        );
+    }
+
+    // ---- locked-button explainer flash ------------------------------------
+
+    function flashLockedExplanation() {
+        var alertBox = document.querySelector('#alt-code-section .alert-warning');
+        if (!alertBox) return;
+        try {
+            alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) {
+            // Older Tor Browser ESR builds lacking smooth scroll fall
+            // back to a hard jump.
+            alertBox.scrollIntoView();
+        }
+        // Literal RGBA — CSS variables are fine in Firefox ESR but we
+        // use a literal here for resilience against custom-property-
+        // disabled environments and to keep the "flash" colour stable
+        // across themes.
+        alertBox.style.transition = 'box-shadow 0.4s ease-in-out';
+        alertBox.style.boxShadow = '0 0 0 4px rgba(255, 193, 7, 0.55)';
+        setTimeout(function () { alertBox.style.boxShadow = ''; }, 900);
+    }
+
+    // ---- event wiring -----------------------------------------------------
+
+    document.addEventListener('click', function (ev) {
+        var target = ev.target.closest && ev.target.closest('[data-action]');
+        if (!target) return;
+        var action = target.getAttribute('data-action');
+        switch (action) {
+            case 'toggleAltCodeReveal':
+                toggleReveal(target);
+                ev.preventDefault();
+                break;
+            case 'openAltCodeSetModal':
+                clearError(el('altCodeSetError'));
+                clearForm('altCodeSetForm');
+                renderStrength('');
+                renderMatch();
+                openModal('altCodeSetModal');
+                ev.preventDefault();
+                break;
+            case 'closeAltCodeSetModal':
+                closeModal('altCodeSetModal');
+                ev.preventDefault();
+                break;
+            case 'openAltCodeClearModal':
+                clearError(el('altCodeClearError'));
+                clearForm('altCodeClearForm');
+                openModal('altCodeClearModal');
+                ev.preventDefault();
+                break;
+            case 'closeAltCodeClearModal':
+                closeModal('altCodeClearModal');
+                ev.preventDefault();
+                break;
+            case 'explainAltCodeLocked':
+                flashLockedExplanation();
+                ev.preventDefault();
+                break;
+        }
+    });
+
+    var newInput = el('altCodeSetNew');
+    if (newInput) {
+        newInput.addEventListener('input', function () {
+            renderStrength(newInput.value);
+            renderMatch();
+        });
+    }
+    var confirmInput = el('altCodeSetConfirm');
+    if (confirmInput) {
+        confirmInput.addEventListener('input', renderMatch);
+    }
+
+    var setForm = el('altCodeSetForm');
+    if (setForm) {
+        setForm.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var errNode = el('altCodeSetError');
+            clearError(errNode);
+            var primary = (el('altCodeSetPrimary') || {}).value || '';
+            var newAlt  = (el('altCodeSetNew') || {}).value || '';
+            var confirm = (el('altCodeSetConfirm') || {}).value || '';
+            if (!primary)                       { showError(errNode, 'Primary auth code is required.'); return; }
+            if (newAlt.length < MIN_LEN)        { showError(errNode, 'New alt code must be at least ' + MIN_LEN + ' characters.'); return; }
+            if (newAlt.length > MAX_LEN)        { showError(errNode, 'New alt code is too long.'); return; }
+            if (newAlt !== confirm)             { showError(errNode, 'Alt codes do not match.'); return; }
+
+            var btn = el('altCodeSetSubmit'); if (btn) btn.disabled = true;
+            postAction({
+                action: 'altCodeSet',
+                primary_authcode: primary,
+                new_alt_code: newAlt
+            }).then(function (r) {
+                if (btn) btn.disabled = false;
+                if (r.status === 200 && r.data && r.data.success) {
+                    closeModal('altCodeSetModal');
+                    window.location.reload();
+                    return;
+                }
+                var msg = (r.data && r.data.error) ? r.data.error : 'Could not save alt code.';
+                if (r.data && Array.isArray(r.data.errors) && r.data.errors.length) {
+                    msg += ' ' + r.data.errors.join(' ');
+                }
+                showError(errNode, msg);
+            }).catch(function () {
+                if (btn) btn.disabled = false;
+                showError(errNode, 'Network error. Try again.');
+            });
+        });
+    }
+
+    var clearFormEl = el('altCodeClearForm');
+    if (clearFormEl) {
+        clearFormEl.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var errNode = el('altCodeClearError');
+            clearError(errNode);
+            var primary = (el('altCodeClearPrimary') || {}).value || '';
+            if (!primary) { showError(errNode, 'Primary auth code is required.'); return; }
+
+            var btn = el('altCodeClearSubmit'); if (btn) btn.disabled = true;
+            postAction({
+                action: 'altCodeClear',
+                primary_authcode: primary
+            }).then(function (r) {
+                if (btn) btn.disabled = false;
+                if (r.status === 200 && r.data && r.data.success) {
+                    closeModal('altCodeClearModal');
+                    window.location.reload();
+                    return;
+                }
+                showError(errNode, (r.data && r.data.error) || 'Could not remove alt code.');
+            }).catch(function () {
+                if (btn) btn.disabled = false;
+                showError(errNode, 'Network error. Try again.');
+            });
+        });
+    }
+
+    } // end initAltCodeSection
+})();
+

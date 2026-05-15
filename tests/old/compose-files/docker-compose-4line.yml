@@ -36,10 +36,10 @@ services:
       - "127.0.0.1:8080:80"
       - "127.0.0.1:8443:443"
     environment:
-      - QUICKSTART=alice
-      # Node Identity (optional - override QUICKSTART for production use):
-      # - EIOU_NAME=Alice        # Display name (defaults to QUICKSTART)
-      # - EIOU_HOST=10.0.0.1     # External address (defaults to QUICKSTART)
+      - EIOU_HOST=alice
+      # Node Identity (optional - override EIOU_HOST for production use):
+      # - EIOU_NAME=Alice        # Display name (defaults to EIOU_HOST)
+      # - EIOU_HOST=10.0.0.1     # External address (defaults to EIOU_HOST)
       # - EIOU_PORT=8443         # Port for HTTP/HTTPS URLs
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
@@ -57,7 +57,7 @@ services:
       - alice-mysql-data:/var/lib/mysql
       - alice-config:/etc/eiou/config
       - alice-backups:/var/lib/eiou/backups
-      - alice-letsencrypt:/etc/letsencrypt
+      - alice-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -103,12 +103,12 @@ services:
       - "127.0.0.1:8081:80"
       - "127.0.0.1:8444:443"
     environment:
-      - QUICKSTART=bob
+      - EIOU_HOST=bob
     volumes:
       - bob-mysql-data:/var/lib/mysql
       - bob-config:/etc/eiou/config
       - bob-backups:/var/lib/eiou/backups
-      - bob-letsencrypt:/etc/letsencrypt
+      - bob-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -154,12 +154,12 @@ services:
       - "127.0.0.1:8082:80"
       - "127.0.0.1:8445:443"
     environment:
-      - QUICKSTART=carol
+      - EIOU_HOST=carol
     volumes:
       - carol-mysql-data:/var/lib/mysql
       - carol-config:/etc/eiou/config
       - carol-backups:/var/lib/eiou/backups
-      - carol-letsencrypt:/etc/letsencrypt
+      - carol-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -205,12 +205,12 @@ services:
       - "127.0.0.1:8083:80"
       - "127.0.0.1:8446:443"
     environment:
-      - QUICKSTART=daniel
+      - EIOU_HOST=daniel
     volumes:
       - daniel-mysql-data:/var/lib/mysql
       - daniel-config:/etc/eiou/config
       - daniel-backups:/var/lib/eiou/backups
-      - daniel-letsencrypt:/etc/letsencrypt
+      - daniel-ssl-cert:/var/lib/eiou/ssl
     cap_drop:
       - ALL
     cap_add:
@@ -257,8 +257,8 @@ volumes:
     name: alice-config
   alice-backups:
     name: alice-backups
-  alice-letsencrypt:
-    name: alice-letsencrypt
+  alice-ssl-cert:
+    name: alice-ssl-cert
 
   bob-mysql-data:
     name: bob-mysql-data
@@ -266,8 +266,8 @@ volumes:
     name: bob-config
   bob-backups:
     name: bob-backups
-  bob-letsencrypt:
-    name: bob-letsencrypt
+  bob-ssl-cert:
+    name: bob-ssl-cert
 
   carol-mysql-data:
     name: carol-mysql-data
@@ -275,8 +275,8 @@ volumes:
     name: carol-config
   carol-backups:
     name: carol-backups
-  carol-letsencrypt:
-    name: carol-letsencrypt
+  carol-ssl-cert:
+    name: carol-ssl-cert
 
   daniel-mysql-data:
     name: daniel-mysql-data
@@ -284,5 +284,5 @@ volumes:
     name: daniel-config
   daniel-backups:
     name: daniel-backups
-  daniel-letsencrypt:
-    name: daniel-letsencrypt
+  daniel-ssl-cert:
+    name: daniel-ssl-cert

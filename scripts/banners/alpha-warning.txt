@@ -31,5 +31,3 @@ maintaining backups, understanding the obligations you create,
 and complying with all applicable laws. Do not use this for
 obligations you cannot afford to lose. This is not legal
 advice. Consult an attorney in your jurisdiction.
-
-Report issues: github.com/eiou-org/eiou-docker

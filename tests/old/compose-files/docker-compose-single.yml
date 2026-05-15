@@ -39,16 +39,16 @@ services:
     # See docs/DOCKER_CONFIGURATION.md for complete documentation
     # =========================================================================
     environment:
-      # QUICKSTART (required for HTTP/HTTPS mode)
+      # EIOU_HOST (required for HTTP/HTTPS mode)
       # Sets the node's hostname. Node will be reachable at http://<value>
-      - QUICKSTART=eiou
+      - EIOU_HOST=eiou
 
-      # NODE IDENTITY (optional - override QUICKSTART for production use)
+      # NODE IDENTITY (optional - override EIOU_HOST for production use)
       # -----------------------------------------------------------------
-      # Display name (shown in local UI, defaults to QUICKSTART):
+      # Display name (shown in local UI, defaults to EIOU_HOST):
       # - EIOU_NAME=My Node
       #
-      # External address (IP or domain, defaults to QUICKSTART):
+      # External address (IP or domain, defaults to EIOU_HOST):
       # - EIOU_HOST=192.168.1.100
       #
       # Port for HTTP/HTTPS URLs (appended to addresses):
@@ -109,9 +109,10 @@ services:
       # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
       - eiou-backups:/var/lib/eiou/backups
 
-      # Let's Encrypt certificate persistence
-      # Keeps certificates across container restarts and rebuilds.
-      - eiou-letsencrypt:/etc/letsencrypt
+      # SSL certificate state — one logical volume holding all cert state in
+      # subdirectories (ssl/letsencrypt/, ssl/nginx/, etc.). startup.sh
+      # symlinks /etc/letsencrypt and /etc/nginx/ssl into this tree on boot.
+      - eiou-ssl-cert:/var/lib/eiou/ssl
 
       # OPTIONAL: External SSL certificates (Let's Encrypt wildcard, commercial CA, etc.)
       # Use with scripts/create-ssl-letsencrypt.sh for multi-node wildcard certs:
@@ -178,5 +179,5 @@ volumes:
   # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
   eiou-backups:
     name: eiou-backups
-  eiou-letsencrypt:
-    name: eiou-letsencrypt
+  eiou-ssl-cert:
+    name: eiou-ssl-cert

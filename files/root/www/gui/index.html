@@ -23,6 +23,7 @@ use Eiou\Gui\Controllers\PaymentRequestController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
 use Eiou\Gui\Controllers\ApiKeysController;
+use Eiou\Gui\Controllers\AltCodeController;
 use Eiou\Gui\Controllers\PluginController;
 
 if (!file_exists("/etc/eiou/config/userconfig.json")) {
@@ -73,6 +74,19 @@ $apiKeysController = new ApiKeysController(
     $repoFactory->get(Eiou\Database\ApiKeyRepository::class)
 );
 $apiKeysController->registerActions($serviceContainer->getActionRegistry());
+// Alt-code controller — owns altCode* AJAX actions for set/rotate/clear
+// of the user-chosen alternate auth code. No repository wiring needed;
+// the controller talks to UserContext directly the way the auth-code
+// re-verify endpoint in ApiKeysController already does. The rate
+// limiter + AppConfig are passed so the controller can throttle
+// set/clear attempts independently of the login bucket (defense in
+// depth against primary-code probing through a stolen session).
+$altCodeController = new AltCodeController(
+    $secureSession,
+    $serviceContainer->getRateLimiterService(),
+    $serviceContainer->getAppConfig()
+);
+$altCodeController->registerActions($serviceContainer->getActionRegistry());
 $paymentRequestController = new PaymentRequestController(
     $secureSession,
     $serviceContainer->getPaymentRequestService()
@@ -110,6 +124,21 @@ $pluginController = $app->pluginLoader !== null
         // the null fallback degrades gracefully.
         $app->services !== null
             ? $app->services->getPluginUninstallService()
+            : null,
+        // Install service follows the same gating — it's only used by
+        // the pluginsUpload action and never on the no-wallet bootstrap
+        // path, so the null fallback is acceptable there.
+        $app->services !== null
+            ? $app->services->getPluginInstallService()
+            : null,
+        // Upgrade service drives pluginsUploadAsUpgrade and pluginsUpgrade
+        // (the bundled-version upgrade). Same gating as the install
+        // service — null in the no-wallet bootstrap path. Pass the
+        // already-constructed PluginLoader explicitly to avoid recursion
+        // through Application::getInstance(); see getPluginUpgradeService's
+        // docblock for the rationale.
+        $app->services !== null
+            ? $app->services->getPluginUpgradeService($app->pluginLoader)
             : null
     )
     : null;
@@ -193,7 +222,11 @@ if (!$secureSession->isAuthenticated()
         } else {
             $submittedAuthCode = $_POST['authcode'];
 
-            if ($user->has('authcode_encrypted') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
+            if ($user->has('authcode_encrypted') && $secureSession->authenticate(
+                $submittedAuthCode,
+                $user->getAuthCode(),
+                $user->getAltCodeHash()
+            )) {
                 // Optional: issue a remember-me token if the checkbox was
                 // ticked. Uses this user's configured lifetime and device-cap
                 // limits. A failed mint is non-fatal — user just doesn't get

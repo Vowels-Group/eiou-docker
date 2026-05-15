@@ -1051,7 +1051,11 @@ class P2pServiceTest extends TestCase
 
         $this->assertEquals('p2p', $result['txType']);
         $this->assertEquals(self::TEST_ADDRESS, $result['receiverAddress']);
-        $this->assertEquals(10000, $result['amount']); // 100.00 * 100
+        // After the Money split, amount is a SplitAmount instead of a
+        // raw int. 100.00 → whole=100, frac=0.
+        $this->assertInstanceOf(\Eiou\Core\SplitAmount::class, $result['amount']);
+        $this->assertSame(100, $result['amount']->whole);
+        $this->assertSame(0, $result['amount']->frac);
     }
 
     // =========================================================================
@@ -1344,17 +1348,58 @@ class P2pServiceTest extends TestCase
     }
 
     /**
-     * Test sendP2pRequest resolves contact name to address
-     *
-     * Note: This test is skipped due to an API mismatch between:
-     * - ContactServiceInterface::lookupAddressesByName returns ?string
-     * - TransportUtilityService::fallbackTransportAddress expects array
-     * The P2pService code passes the result of one to the other, which is incompatible.
-     * This should be addressed in a separate refactoring PR.
+     * Resolving a recipient that's a contact name (not a raw address):
+     * isAddress() returns false → lookupAddressesByName() returns the
+     * contact's address map → fallbackTransportAddress() picks one →
+     * data[2] is rewritten to that address before the P2P request is
+     * inserted. The original ?string/array API mismatch this test was
+     * skipped for has been fixed (lookupAddressesByName now returns
+     * ?array per the interface).
      */
     public function testSendP2pRequestResolvesContactName(): void
     {
-        $this->markTestSkipped('API mismatch: lookupAddressesByName returns string but fallbackTransportAddress expects array');
+        if (!function_exists('bccomp')) {
+            $this->markTestSkipped('bcmath required for InputValidator::validateAmount');
+        }
+
+        $contactName = 'Alice';
+        $resolvedAddress = 'http://alice.example.com:8080';
+        $contactAddresses = ['http' => $resolvedAddress, 'https' => null, 'tor' => null];
+
+        $this->transportUtility->expects($this->once())
+            ->method('isAddress')
+            ->with($contactName)
+            ->willReturn(false);
+
+        $this->contactService->expects($this->once())
+            ->method('lookupAddressesByName')
+            ->with($contactName)
+            ->willReturn($contactAddresses);
+
+        $this->transportUtility->expects($this->once())
+            ->method('fallbackTransportAddress')
+            ->with($contactAddresses)
+            ->willReturn($resolvedAddress);
+
+        $this->timeUtility->method('getCurrentMicrotime')->willReturn(1700000000123456);
+        $this->userContext->method('getHopBudgetRandomized')->willReturn(false);
+
+        // The lookup-then-rewrite path must hand the resolved address to
+        // p2pRepository::insertP2pRequest as the second argument.
+        // (receiverAddress is *not* in the wire payload — it's stripped
+        // for privacy; the destination address travels alongside.)
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->isType('array'),
+                $resolvedAddress,
+                $this->anything()
+            );
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($this->anything(), Constants::STATUS_QUEUED);
+
+        $this->service->sendP2pRequest(['eiou', 'send', $contactName, '100.00']);
     }
 
     // =========================================================================
@@ -2497,22 +2542,6 @@ class P2pServiceTest extends TestCase
         ob_get_clean();
 
         $this->assertEquals(1, $result);
-    }
-
-    /**
-     * Test that expired P2P requests are rejected during checkP2pPossible
-     *
-     * Verifies that when a P2P request has an expiration time in the past,
-     * the checkP2pPossible method rejects it appropriately.
-     */
-    public function testCheckP2pPossibleRejectsExpiredP2p(): void
-    {
-        // checkP2pPossible does not currently check expiration directly -
-        // expiration is handled at message processing level, not in the P2P eligibility check.
-        // This test verifies the exception handling path when handleP2pRequest fails.
-        $this->markTestSkipped(
-            'checkP2pPossible does not check expiration - expiration is handled at message processing level'
-        );
     }
 
     /**

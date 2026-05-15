@@ -110,8 +110,8 @@ class HelloEiouPlugin implements PluginInterface
         );
 
         // ---------------------------------------------------------------------
-        // GUI hook surface — demonstrates each registry added in the
-        // plugin-GUI-hooks branch. See docs/PLUGIN_GUI_HOOKS.md.
+        // GUI hook surface — demonstrates each registry: hooks, asset, tab,
+        // action. See docs/PLUGINS.md "Extending the GUI" for the API reference.
         // ---------------------------------------------------------------------
         $hooks   = $container->getHooks();
         $assets  = $container->getAssetRegistry();

@@ -9,8 +9,6 @@
  *
  * Uses file-based storage in /tmp so state is shared across all processor
  * workers and automatically cleared on container restart (when Tor restarts).
- *
- * @see https://github.com/eiou-org/eiou-docker/issues/699
  */
 
 namespace Eiou\Utils;
