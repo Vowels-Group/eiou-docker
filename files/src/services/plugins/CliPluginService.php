@@ -26,17 +26,29 @@ class CliPluginService
     private ?PluginUninstallService $uninstallService;
     private ?PluginUpgradeService $upgradeService;
     private ?PluginCronService $cronService;
+    private ?PluginInstallService $installService;
+
+    /**
+     * Pattern for telling apart a bundled plugin name from a zip
+     * file path on the `upgrade` subcommand. A plugin id is strict
+     * kebab-case (matches `PluginInstallService::PLUGIN_ID_PATTERN`);
+     * anything that doesn't match — slashes, dots, leading dash, etc.
+     * — gets routed to the zip-upgrade path instead.
+     */
+    private const PLUGIN_NAME_RE = '/^[a-z0-9][a-z0-9-_]{0,63}$/i';
 
     public function __construct(
         PluginLoader $loader,
         ?PluginUninstallService $uninstallService = null,
         ?PluginUpgradeService $upgradeService = null,
-        ?PluginCronService $cronService = null
+        ?PluginCronService $cronService = null,
+        ?PluginInstallService $installService = null
     ) {
         $this->loader = $loader;
         $this->uninstallService = $uninstallService;
         $this->upgradeService = $upgradeService;
         $this->cronService = $cronService;
+        $this->installService = $installService;
     }
 
     /**
@@ -415,45 +427,143 @@ class CliPluginService
     }
 
     /**
-     * eiou plugin upgrade <name>
+     * eiou plugin install <zip-path>
      *
-     * Replaces an installed plugin's on-disk code with the version baked
-     * into the current image (`/app/plugins/<name>/`). Preserves the
-     * plugin's MySQL tables, user, credentials, and gateway token —
-     * uninstall + install would lose all of that, which is the whole
-     * reason this command exists.
+     * Install a plugin from an operator-supplied zip on the local
+     * filesystem. The path must be readable by the wallet's PHP user;
+     * operators typically `docker cp my-plugin.zip <node>:/tmp/...`
+     * first. Runs through the same validation pipeline the GUI upload
+     * uses (magic bytes, entry walk, manifest, signature verification
+     * per configured mode), then atomic-renames the staged tree into
+     * `/etc/eiou/plugins/<name>/` and stages the plugin DISABLED. The
+     * operator runs `eiou plugin enable <name>` followed by a node
+     * restart to activate.
      *
-     * Flow at a glance:
+     * Refuses if the plugin id is already installed; the error
+     * surfaces both versions and tells the operator to invoke
+     * `eiou plugin upgrade <zip-path>` instead. The CLI deliberately
+     * does NOT auto-route to the upgrade flow on collision — the GUI
+     * has a confirmation modal there; the CLI's analog is making the
+     * operator type a different verb so a script that meant "install
+     * fresh" can't silently overwrite a stateful plugin.
+     */
+    public function installPlugin(array $argv, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+        $path = $argv[3] ?? '';
+
+        if ($path === '') {
+            $output->error(
+                "Usage: eiou plugin install <zip-path>",
+                ErrorCodes::VALIDATION_ERROR
+            );
+            return;
+        }
+
+        if ($this->installService === null) {
+            $output->error(
+                'Plugin install service is not available in this context',
+                ErrorCodes::GENERAL_ERROR
+            );
+            return;
+        }
+
+        $real = $this->resolveZipPath($path, 'install', $output);
+        if ($real === null) return;
+
+        try {
+            $result = $this->installService->installFromZip($real, basename($real));
+        } catch (PluginAlreadyInstalledException $e) {
+            // The install service refused because the plugin id is
+            // already on disk. Tell the operator how to replace it —
+            // calling out the upgrade subcommand AND uninstall so
+            // they don't have to read PLUGINS.md to find the verb.
+            $output->error(
+                $e->getMessage()
+                . " Run `eiou plugin upgrade {$real}` to replace the installed version,"
+                . " or `eiou plugin uninstall {$e->pluginId}` to remove it first.",
+                ErrorCodes::VALIDATION_ERROR,
+                409,
+                [
+                    'plugin_id' => $e->pluginId,
+                    'new_version' => $e->newVersion,
+                    'current_version' => $e->currentVersion,
+                ]
+            );
+            return;
+        } catch (\InvalidArgumentException $e) {
+            // 400-class — malformed zip, manifest validation, etc.
+            $output->error($e->getMessage(), ErrorCodes::VALIDATION_ERROR);
+            return;
+        } catch (\RuntimeException $e) {
+            // 500-class — filesystem, signature-required-mode failures.
+            $output->error($e->getMessage(), ErrorCodes::GENERAL_ERROR);
+            return;
+        }
+
+        $sigStatus = $result['signature']['status'] ?? 'not_checked';
+        $sigNote = ($sigStatus !== 'not_checked')
+            ? " Signature: {$sigStatus}"
+                . (!empty($result['signature']['enforced']) ? ' (required)' : '')
+                . '.'
+            : '';
+        $output->success(
+            "Plugin installed: {$result['plugin_id']} v{$result['version']}"
+            . " (staged DISABLED).{$sigNote}"
+            . " Run `eiou plugin enable {$result['plugin_id']}`, then restart the node to activate.",
+            $result
+        );
+    }
+
+    /**
+     * eiou plugin upgrade <name|zip-path>
      *
-     *   1. The image's bundled version must be strictly newer than what's
-     *      installed; same version is "nothing to do" (refused), downgrade
-     *      is refused outright (the operator would have to uninstall to
-     *      acknowledge the destructive intent).
-     *   2. The new manifest's `min_upgradable_from` field is honoured —
-     *      if the installed version is below that floor, the operator
-     *      gets a clear error telling them to install an intermediate
-     *      version first.
+     * Replaces an installed plugin's on-disk code with a newer
+     * version. Two argument shapes feed into the same engine:
+     *
+     *   - `<name>` (strict kebab-case): upgrade to the image-baked
+     *     version under `/app/plugins/<name>/` via
+     *     `PluginUpgradeService::upgradeFromBundle`. Refused unless
+     *     the bundled version is strictly newer than installed.
+     *   - `<zip-path>` (anything else — slash, dot, etc.): upgrade
+     *     to the version inside the operator-supplied zip via
+     *     `PluginUpgradeService::upgradeFromZip`. Runs the same
+     *     validation pipeline the GUI uses (magic bytes, entry walk,
+     *     manifest, signature) before swapping.
+     *
+     * Either way the operator's existing plugin state — MySQL tables,
+     * plugin user, credentials, gateway bearer token — is preserved
+     * across the swap; uninstall + install would lose all of that,
+     * which is the whole reason this command exists.
+     *
+     * Flow at a glance (identical for both shapes):
+     *
+     *   1. The new version must be strictly newer than what's
+     *      installed; same version is "nothing to do" (refused),
+     *      downgrade is refused outright (the operator would have
+     *      to uninstall to acknowledge the destructive intent).
+     *   2. The new manifest's `min_upgradable_from` field is
+     *      honoured — if the installed version is below that
+     *      floor, the operator gets a clear error telling them
+     *      to install an intermediate version first.
      *   3. Old directory is renamed to `<name>.backup-<oldver>-<ts>/`
      *      next to the live plugin dir, kept for 30 days for rollback.
-     *   4. If the plugin's entry class implements `UpgradablePlugin`, its
-     *      `onUpgrade()` hook runs with old grants still active.
+     *   4. If the plugin's entry class implements `UpgradablePlugin`,
+     *      its `onUpgrade()` hook runs with old grants still active.
      *   5. MySQL grants are reconciled against the new manifest's
      *      `owned_tables` — REVOKE ALL then GRANT per-table.
-     *   6. If the plugin is currently enabled, the FPM pool is reloaded
-     *      so workers pick up the new code. Disabled plugins reload
-     *      on their next enable.
-     *
-     * For uploading a new version from a zip (the GUI flow), see
-     * `PluginUpgradeService::upgradeFromZip()`.
+     *   6. If the plugin is currently enabled, the FPM pool is
+     *      reloaded so workers pick up the new code. Disabled
+     *      plugins reload on their next enable.
      */
     public function upgradePlugin(array $argv, ?CliOutputManager $output = null): void
     {
         $output = $output ?? CliOutputManager::getInstance();
-        $name = $argv[3] ?? '';
+        $arg = $argv[3] ?? '';
 
-        if ($name === '' || !preg_match('/^[a-z0-9][a-z0-9-_]{0,63}$/i', $name)) {
+        if ($arg === '') {
             $output->error(
-                "Usage: eiou plugin upgrade <name>",
+                "Usage: eiou plugin upgrade <name|zip-path>",
                 ErrorCodes::VALIDATION_ERROR
             );
             return;
@@ -467,8 +577,21 @@ class CliPluginService
             return;
         }
 
+        // Plugin ids are strict kebab-case (no slashes, no dots). If
+        // the arg matches that shape, treat it as a bundled-upgrade
+        // request; otherwise route to the zip-upgrade path. This
+        // keeps the existing `eiou plugin upgrade hello-eiou` UX
+        // unchanged while opening up `eiou plugin upgrade /tmp/x.zip`.
+        $isPluginName = preg_match(self::PLUGIN_NAME_RE, $arg) === 1;
+
         try {
-            $result = $this->upgradeService->upgradeFromBundle($name);
+            if ($isPluginName) {
+                $result = $this->upgradeService->upgradeFromBundle($arg);
+            } else {
+                $real = $this->resolveZipPath($arg, 'upgrade', $output);
+                if ($real === null) return;
+                $result = $this->upgradeService->upgradeFromZip($real, basename($real));
+            }
         } catch (\InvalidArgumentException $e) {
             // 400-class — refused upgrade attempts (no bundle, same
             // version, downgrade, min_upgradable_from violation, etc.).
@@ -479,6 +602,8 @@ class CliPluginService
             $output->error($e->getMessage(), ErrorCodes::GENERAL_ERROR);
             return;
         }
+
+        $name = $result['plugin_id'] ?? $arg;
 
         // Check whether any step downgraded to error:<msg>. The directory
         // swap is the load-bearing step; if it failed the whole upgrade
@@ -552,5 +677,46 @@ class CliPluginService
         foreach ($report['errors'] as $e) {
             $output->info(sprintf('  error   %s.%s: %s', $e['plugin'], $e['action'], $e['reason']));
         }
+    }
+
+    /**
+     * Resolve an operator-supplied zip path to an absolute, canonical
+     * path and confirm it points at a readable regular file. Returns
+     * null and writes an error to `$output` on any failure; the
+     * caller's idiomatic check is `if ($real === null) return;`.
+     *
+     * `$verb` (install / upgrade) is folded into the error message
+     * so the operator sees a copy-paste-correct retry suggestion in
+     * context.
+     */
+    private function resolveZipPath(string $path, string $verb, CliOutputManager $output): ?string
+    {
+        // realpath() canonicalises, follows symlinks, AND fails for
+        // missing files — all three behaviours are what we want here.
+        // Symlink following is fine: the install service does its own
+        // symlink-rejection pass on the extracted tree, but the
+        // outer zip file itself can come from anywhere the operator
+        // can read.
+        $real = realpath($path);
+        if ($real === false || !is_file($real)) {
+            $output->error(
+                "Zip file not found or not a regular file: '{$path}'. "
+                . "Hint: copy it into the container first (e.g. "
+                . "`docker cp my-plugin.zip <node>:/tmp/my-plugin.zip`) "
+                . "and pass the in-container path.",
+                ErrorCodes::VALIDATION_ERROR
+            );
+            return null;
+        }
+        if (!is_readable($real)) {
+            $output->error(
+                "Zip file not readable by this process: '{$real}'. "
+                . "Check ownership and mode — the wallet CLI typically "
+                . "runs as www-data.",
+                ErrorCodes::VALIDATION_ERROR
+            );
+            return null;
+        }
+        return $real;
     }
 }

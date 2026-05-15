@@ -407,11 +407,14 @@ class CliPluginServiceTest extends TestCase
     // upgrade subcommand
     // =========================================================================
 
-    public function testUpgradeRejectsInvalidName(): void
+    public function testUpgradeRejectsMissingArgument(): void
     {
+        // Empty argument still triggers the usage error — the
+        // polymorphism kicks in only after we have something to
+        // route on.
         $this->output->expects($this->once())->method('error')
             ->with(
-                $this->stringContains('Usage: eiou plugin upgrade <name>'),
+                $this->stringContains('Usage: eiou plugin upgrade <name|zip-path>'),
                 ErrorCodes::VALIDATION_ERROR
             );
 
@@ -420,7 +423,29 @@ class CliPluginServiceTest extends TestCase
             null,
             $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class)
         );
-        $svc->upgradePlugin(['eiou','plugin','upgrade','../etc/passwd'], $this->output);
+        $svc->upgradePlugin(['eiou','plugin','upgrade'], $this->output);
+    }
+
+    public function testUpgradeHostileNonNameArgumentTreatedAsMissingPath(): void
+    {
+        // A garbage argument that doesn't match the plugin-name
+        // pattern (slashes, dots, leading `..`) routes to the
+        // zip-upgrade path. The resolver then refuses with a
+        // file-not-found error rather than ever calling
+        // upgradeFromBundle with a value that would have escaped
+        // the kebab-case regex previously.
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
+        $upgrade->expects($this->never())->method('upgradeFromBundle');
+        $upgrade->expects($this->never())->method('upgradeFromZip');
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('not found'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade','../etc/passwd'], $this->output);
     }
 
     public function testUpgradeRefusedWhenServiceNotAvailable(): void
@@ -523,5 +548,263 @@ class CliPluginServiceTest extends TestCase
 
         (new CliPluginService($this->loader, null, $upgrade))
             ->upgradePlugin(['eiou','plugin','upgrade','alpha'], $this->output);
+    }
+
+    // =========================================================================
+    // install subcommand (from zip path)
+    // =========================================================================
+
+    public function testInstallRejectsMissingArgument(): void
+    {
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('Usage: eiou plugin install <zip-path>'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        $svc = new CliPluginService(
+            $this->loader, null, null, null,
+            $this->createMock(\Eiou\Services\Plugins\PluginInstallService::class)
+        );
+        $svc->installPlugin(['eiou','plugin','install'], $this->output);
+    }
+
+    public function testInstallRefusedWhenServiceNotAvailable(): void
+    {
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('not available'),
+                ErrorCodes::GENERAL_ERROR
+            );
+
+        // No install service wired — refuse cleanly rather than fatal.
+        (new CliPluginService($this->loader))
+            ->installPlugin(['eiou','plugin','install','/tmp/x.zip'], $this->output);
+    }
+
+    public function testInstallRefusedWhenFileMissing(): void
+    {
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('not found'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        $install = $this->createMock(\Eiou\Services\Plugins\PluginInstallService::class);
+        // The install service should never be invoked when the
+        // resolver rejects the path — guard against accidental
+        // pass-through.
+        $install->expects($this->never())->method('installFromZip');
+
+        $svc = new CliPluginService($this->loader, null, null, null, $install);
+        $svc->installPlugin(
+            ['eiou','plugin','install','/tmp/definitely-not-here-' . uniqid() . '.zip'],
+            $this->output
+        );
+    }
+
+    public function testInstallSurfacesAlreadyInstalledWithBothVersionsAndUpgradeHint(): void
+    {
+        // The PluginAlreadyInstalledException carries plugin_id +
+        // new_version + current_version; the CLI surfaces all three
+        // through error()'s additionalData and the human message
+        // points at the upgrade subcommand so the operator has a
+        // copy-paste retry path. Not auto-routing to upgrade is
+        // deliberate — see installPlugin docstring.
+        $zip = $this->makeRealZip();
+        $install = $this->createMock(\Eiou\Services\Plugins\PluginInstallService::class);
+        $install->method('installFromZip')
+            ->willThrowException(new \Eiou\Services\Plugins\PluginAlreadyInstalledException(
+                'foo', '1.3.0', '1.2.0'
+            ));
+
+        $captured = null;
+        $this->output->expects($this->once())->method('error')
+            ->willReturnCallback(function ($msg, $code, $status = null, $extra = []) use (&$captured) {
+                $captured = ['msg' => $msg, 'code' => $code, 'status' => $status, 'extra' => $extra];
+            });
+
+        $svc = new CliPluginService($this->loader, null, null, null, $install);
+        $svc->installPlugin(['eiou','plugin','install',$zip], $this->output);
+
+        $this->assertStringContainsString("eiou plugin upgrade", $captured['msg']);
+        $this->assertStringContainsString("eiou plugin uninstall foo", $captured['msg']);
+        $this->assertSame(409, $captured['status']);
+        $this->assertSame('foo', $captured['extra']['plugin_id']);
+        $this->assertSame('1.3.0', $captured['extra']['new_version']);
+        $this->assertSame('1.2.0', $captured['extra']['current_version']);
+    }
+
+    public function testInstallSurfacesInvalidArgumentAs400(): void
+    {
+        $zip = $this->makeRealZip();
+        $install = $this->createMock(\Eiou\Services\Plugins\PluginInstallService::class);
+        $install->method('installFromZip')
+            ->willThrowException(new \InvalidArgumentException("Zip could not be opened (code 19)"));
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('could not be opened'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        $svc = new CliPluginService($this->loader, null, null, null, $install);
+        $svc->installPlugin(['eiou','plugin','install',$zip], $this->output);
+    }
+
+    public function testInstallSurfacesRuntimeExceptionAs500(): void
+    {
+        $zip = $this->makeRealZip();
+        $install = $this->createMock(\Eiou\Services\Plugins\PluginInstallService::class);
+        $install->method('installFromZip')
+            ->willThrowException(new \RuntimeException("Signature required but plugin is unsigned"));
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('Signature required'),
+                ErrorCodes::GENERAL_ERROR
+            );
+
+        $svc = new CliPluginService($this->loader, null, null, null, $install);
+        $svc->installPlugin(['eiou','plugin','install',$zip], $this->output);
+    }
+
+    public function testInstallSuccessReportsStagedDisabled(): void
+    {
+        $zip = $this->makeRealZip();
+        $install = $this->createMock(\Eiou\Services\Plugins\PluginInstallService::class);
+        $install->method('installFromZip')->willReturn([
+            'plugin_id' => 'foo',
+            'version' => '1.0.0',
+            'signature' => [
+                'status' => 'ok',
+                'key_fingerprint' => 'a1b2c3',
+                'enforced' => false,
+            ],
+        ]);
+
+        $captured = null;
+        $this->output->expects($this->once())->method('success')
+            ->willReturnCallback(function ($msg, $data) use (&$captured) {
+                $captured = ['msg' => $msg, 'data' => $data];
+            });
+
+        $svc = new CliPluginService($this->loader, null, null, null, $install);
+        $svc->installPlugin(['eiou','plugin','install',$zip], $this->output);
+
+        // Operator-facing message must spell out the staged-disabled
+        // state AND the enable-then-restart sequence — otherwise an
+        // installed plugin sits invisible after the command returns
+        // and operators assume the install didn't take.
+        $this->assertStringContainsString('foo v1.0.0', $captured['msg']);
+        $this->assertStringContainsString('DISABLED', $captured['msg']);
+        $this->assertStringContainsString('eiou plugin enable foo', $captured['msg']);
+        $this->assertStringContainsString('restart', $captured['msg']);
+        // Signature line included when present.
+        $this->assertStringContainsString('Signature: ok', $captured['msg']);
+    }
+
+    // =========================================================================
+    // upgrade subcommand polymorphism (name vs. zip path)
+    // =========================================================================
+
+    public function testUpgradeWithBundledNameStillUsesBundlePath(): void
+    {
+        // Regression: bare plugin name continues to route to
+        // upgradeFromBundle. The new zip-path branch must NOT
+        // shadow the existing `eiou plugin upgrade hello-eiou` UX.
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
+        $upgrade->expects($this->once())->method('upgradeFromBundle')
+            ->with('hello-eiou')
+            ->willReturn([
+                'plugin_id' => 'hello-eiou',
+                'old_version' => '1.2.0',
+                'new_version' => '1.6.0',
+                'backup_dir' => '/etc/eiou/plugins/hello-eiou.backup-1.2.0-20260515-130000',
+                'steps' => ['swap' => 'ok'],
+            ]);
+        $upgrade->expects($this->never())->method('upgradeFromZip');
+
+        $this->output->expects($this->once())->method('success')
+            ->with($this->stringContains('1.2.0 → 1.6.0'));
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade','hello-eiou'], $this->output);
+    }
+
+    public function testUpgradeWithZipPathCallsUpgradeFromZip(): void
+    {
+        $zip = $this->makeRealZip();
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
+        $upgrade->expects($this->never())->method('upgradeFromBundle');
+        $upgrade->expects($this->once())->method('upgradeFromZip')
+            ->with($zip, basename($zip))
+            ->willReturn([
+                'plugin_id' => 'foo',
+                'old_version' => '1.2.0',
+                'new_version' => '1.3.0',
+                'backup_dir' => '/etc/eiou/plugins/foo.backup-1.2.0-20260515-130000',
+                'steps' => ['swap' => 'ok'],
+            ]);
+
+        $this->output->expects($this->once())->method('success')
+            ->with($this->stringContains('1.2.0 → 1.3.0'));
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade',$zip], $this->output);
+    }
+
+    public function testUpgradeWithZipPathRejectsMissingFile(): void
+    {
+        // A path-shaped argument (contains '/' so it doesn't match
+        // PLUGIN_NAME_RE) that doesn't resolve to a real file must
+        // error out at the resolver, NOT hit the upgrade service.
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
+        $upgrade->expects($this->never())->method('upgradeFromBundle');
+        $upgrade->expects($this->never())->method('upgradeFromZip');
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('not found'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(
+                ['eiou','plugin','upgrade','/tmp/missing-' . uniqid() . '.zip'],
+                $this->output
+            );
+    }
+
+    public function testUpgradeWithDottedArgumentTreatedAsPath(): void
+    {
+        // Plugin names are strict kebab-case (no dots). Anything
+        // containing a dot is unambiguously a path — including the
+        // common `./plugin.zip` shorthand.
+        $upgrade = $this->createMock(\Eiou\Services\Plugins\PluginUpgradeService::class);
+        $upgrade->expects($this->never())->method('upgradeFromBundle');
+
+        $this->output->expects($this->once())->method('error')
+            ->with(
+                $this->stringContains('not found'),
+                ErrorCodes::VALIDATION_ERROR
+            );
+
+        (new CliPluginService($this->loader, null, $upgrade))
+            ->upgradePlugin(['eiou','plugin','upgrade','./nonexistent.zip'], $this->output);
+    }
+
+    /**
+     * Create a real on-disk file that resolveZipPath() can accept.
+     * Content doesn't need to be a valid zip — the install service
+     * is mocked in these tests, so its inner validation never runs.
+     * realpath() and is_readable() are the only filesystem checks
+     * that matter here.
+     */
+    private function makeRealZip(): string
+    {
+        $path = $this->pluginRoot . '/' . uniqid('upload-', true) . '.zip';
+        file_put_contents($path, "PK\x03\x04 placeholder");
+        return $path;
     }
 }

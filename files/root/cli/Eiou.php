@@ -29,7 +29,7 @@
  *   backup <action> [args]                     - Manage encrypted database backups
  *   apikey <action> [args]                     - Manage REST API keys
  *   payback <action> [args]                    - Manage your payback methods
- *   plugin [list|enable|disable|uninstall|upgrade] - Manage plugins (requires `restart` to apply)
+ *   plugin [list|install|enable|disable|uninstall|upgrade] - Manage plugins (requires `restart` to apply)
  *   viewsettings / changesettings [k v]        - View / change wallet settings
  *   report <type> [--full] [--send]            - Generate troubleshooting reports
  *   updatecheck                                - Check Docker Hub / GitHub for newer images
@@ -344,13 +344,16 @@ elseif($request === "plugin"){
     $app->pluginLoader,
     $app->services->getPluginUninstallService(),
     $app->services->getPluginUpgradeService($app->pluginLoader),
-    $app->services->getPluginCronService($app->pluginLoader)
+    $app->services->getPluginCronService($app->pluginLoader),
+    $app->services->getPluginInstallService()
   );
   $subcommand = strtolower($cleanArgv[2] ?? 'list');
   if ($subcommand === 'enable') {
     $pluginCliService->enablePlugin($cleanArgv, $output);
   } elseif ($subcommand === 'disable') {
     $pluginCliService->disablePlugin($cleanArgv, $output);
+  } elseif ($subcommand === 'install') {
+    $pluginCliService->installPlugin($cleanArgv, $output);
   } elseif ($subcommand === 'uninstall') {
     $pluginCliService->uninstallPlugin($cleanArgv, $output);
   } elseif ($subcommand === 'upgrade') {
