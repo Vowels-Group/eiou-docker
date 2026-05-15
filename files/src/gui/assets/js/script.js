@@ -10779,8 +10779,9 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                             '<li>Manifests without <code>"sandboxed": true</code> (in-process plugins are no longer supported)</li>' +
                             '<li>Path traversal (<code>..</code>, leading <code>/</code>, backslashes)</li>' +
                             '<li>Symlinks, hidden dotfiles, <code>.phar</code>, <code>.htaccess</code>, anything outside the allow-list</li>' +
-                            '<li>Plugins already installed (uninstall first to replace)</li>' +
                         '</ul>' +
+                        '<p style="margin: 0 0 0.4rem 0;"><strong>Replacing an installed plugin</strong></p>' +
+                        '<p style="margin: 0 0 1rem 0;">Upload a newer version of an already-installed plugin and you\'ll be asked to confirm the replace. The plugin\'s installed data (database tables, credentials, gateway token) is preserved; the old version is kept on disk for rollback.</p>' +
                     '</div>' +
                     '<div class="modal-footer" style="gap: 0.5rem;">' +
                         '<button type="button" class="btn btn-secondary" data-plugin-upload-cancel="1">Cancel</button>' +
@@ -10852,8 +10853,17 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 showToast('Uploading…', file.name, 'info');
             }
 
+            postUploadFor(file, 'pluginsUpload');
+        }
+
+        // POST the file under either `pluginsUpload` (install) or
+        // `pluginsUploadAsUpgrade` (replace already-installed plugin).
+        // Split out so the two-step "upload → 409 → confirm → re-upload"
+        // flow can reuse the same File object without rerunning the
+        // .zip / size guards in submitUpload.
+        function postUploadFor(file, action) {
             var body = new FormData();
-            body.append('action', 'pluginsUpload');
+            body.append('action', action);
             body.append('csrf_token', csrfTokenValue());
             body.append('plugin_zip', file);
 
@@ -10866,35 +10876,107 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 return res.json().then(function(data) { return { status: res.status, data: data }; });
             }).then(function(r) {
                 if (r.data && r.data.success) {
-                    var sig = r.data.signature || {};
-                    var sigLine = '';
-                    if (sig.status && sig.status !== 'not_checked') {
-                        sigLine = ' Signature: ' + sig.status
-                            + (sig.enforced ? ' (required)' : '');
-                    }
-                    if (typeof showToast === 'function') {
-                        showToast(
-                            'Plugin uploaded',
-                            r.data.plugin_id + ' v' + r.data.version
-                                + ' is staged disabled.' + sigLine
-                                + ' Enable it and restart the node to activate.',
-                            'success'
-                        );
-                    }
-                    // Refresh list so the new plugin shows up.
-                    refresh();
-                } else {
-                    var msg = (r.data && r.data.error) ||
-                              (r.data && r.data.message) ||
-                              'Upload failed';
-                    if (typeof showToast === 'function') {
-                        showToast('Upload failed', msg, 'error');
-                    }
+                    handleUploadSuccess(r.data, action);
+                    return;
+                }
+                // 409 already_installed with both versions surfaced →
+                // offer the upgrade flow. The backend's
+                // PluginAlreadyInstalledException carries plugin_id +
+                // new_version + current_version; we mirror them into a
+                // "Replace v{current} with v{new}?" confirm and re-POST
+                // the same File object through pluginsUploadAsUpgrade
+                // on consent. Only fires on the install path, not when
+                // a pluginsUploadAsUpgrade itself returns 409 (which
+                // shouldn't happen — that endpoint validates the same
+                // shape but throws different codes like same_version /
+                // downgrade_refused — so a 409 from it would mean a
+                // real race the operator can't resolve client-side).
+                if (action === 'pluginsUpload'
+                    && r.status === 409
+                    && r.data && r.data.error === 'already_installed'
+                    && r.data.plugin_id) {
+                    promptReplaceConfirm(file, r.data);
+                    return;
+                }
+                var msg = (r.data && r.data.message) ||
+                          (r.data && r.data.error) ||
+                          'Upload failed';
+                if (typeof showToast === 'function') {
+                    showToast(
+                        action === 'pluginsUploadAsUpgrade' ? 'Upgrade failed' : 'Upload failed',
+                        msg,
+                        'error'
+                    );
                 }
             }).catch(function() {
                 if (typeof showToast === 'function') {
-                    showToast('Upload failed', 'Network error during upload', 'error');
+                    showToast(
+                        action === 'pluginsUploadAsUpgrade' ? 'Upgrade failed' : 'Upload failed',
+                        'Network error during upload',
+                        'error'
+                    );
                 }
+            });
+        }
+
+        function handleUploadSuccess(data, action) {
+            if (action === 'pluginsUploadAsUpgrade') {
+                if (typeof showToast === 'function') {
+                    showToast(
+                        'Plugin upgraded',
+                        data.plugin_id + ' upgraded ' + data.old_version
+                            + ' → ' + data.new_version
+                            + '. Previous version preserved for rollback.',
+                        'success'
+                    );
+                }
+            } else {
+                var sig = data.signature || {};
+                var sigLine = '';
+                if (sig.status && sig.status !== 'not_checked') {
+                    sigLine = ' Signature: ' + sig.status
+                        + (sig.enforced ? ' (required)' : '');
+                }
+                if (typeof showToast === 'function') {
+                    showToast(
+                        'Plugin uploaded',
+                        data.plugin_id + ' v' + data.version
+                            + ' is staged disabled.' + sigLine
+                            + ' Enable it and restart the node to activate.',
+                        'success'
+                    );
+                }
+            }
+            refresh();
+        }
+
+        function promptReplaceConfirm(file, errData) {
+            var current = errData.current_version || '';
+            var incoming = errData.new_version || '';
+            var msg;
+            if (current && incoming) {
+                msg = 'Replace ' + errData.plugin_id
+                    + ' v' + current + ' with v' + incoming + '? '
+                    + 'The plugin\'s installed data (database tables, '
+                    + 'credentials, gateway token) is preserved. The old '
+                    + 'version is kept on disk for rollback.';
+            } else {
+                msg = 'Replace the installed ' + errData.plugin_id
+                    + ' with this upload? The plugin\'s installed data '
+                    + 'is preserved and the old version is kept on disk '
+                    + 'for rollback.';
+            }
+            showConfirmModal(msg, {
+                title: 'Replace installed plugin?',
+                confirmText: 'Replace',
+                confirmClass: 'btn-primary',
+                icon: 'fa-arrow-up-right-dots'
+            }).then(function(ok) {
+                if (!ok) return;
+                if (typeof showToast === 'function') {
+                    showToast('Upgrading…', file.name, 'info');
+                }
+                postUploadFor(file, 'pluginsUploadAsUpgrade');
             });
         }
 
