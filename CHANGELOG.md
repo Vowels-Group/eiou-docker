@@ -12,6 +12,8 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- **Pay button on incoming payment-request rows no longer silently fails the first time it is opened via the row-click drill-down modal.** When the operator clicked a pending row to open the "Payment Request Details" modal and then hit Pay, the approval modal opened correctly, but on confirm the modal closed without showing a loader and without submitting — payment never went out. A retry from the inline row Pay button (or a page refresh) worked. Root cause: `openPrApproveModal` removed the drill-down `#pr-pending-modal` from the DOM to avoid two stacked dialogs, and that drill-down owned the Pay form. The form's reference in `pendingApproveForm` was kept, but the element was detached from the document, so the later `form.requestSubmit()` in `confirmPrApproveModal` was a no-op (the HTML spec defines `submit()` / `requestSubmit()` on a disconnected form as not initiating navigation, and the synthetic submit event never reached the document-level capture listener that would have fired the loader and let the form submission proceed). The fix hides the drill-down (`style.display = 'none'`) instead of removing it, keeps the form connected through the approve flow, and moves the cleanup to `closePrApproveModal` so cancel still tears the drill-down down. `confirmPrApproveModal` now calls `requestSubmit()` before `closePrApproveModal` (which is what removes the drill-down) so the form is still attached at the moment of submission.
 
 ## v0.1.15-alpha (2026-05-15)
 
