@@ -1364,6 +1364,28 @@ start_hs_desc_watcher() {
     HS_DESC_WATCHER_PID=$!
 }
 
+# Render the operator's external HTTPS port into the nginx config
+# before nginx starts. The placeholder __EIOU_HTTPS_PORT_SUFFIX__ in
+# /etc/nginx/sites-available/eiou.conf is replaced with either an
+# empty string (default :443 deployments) or a `:<port>` suffix when
+# EIOU_PORT is set to a non-default value. Without this, nodes
+# published on `-p 8443:443` emit port-stripped redirects (the
+# `$host` nginx variable drops the port from the Host header) and
+# browsers hit :443, which isn't mapped through. Cross-scheme
+# redirects must be absolute, so the absolute_redirect-off pattern
+# used for same-scheme redirects can't fix this case on its own.
+# The substitution is idempotent: on first boot the placeholder is
+# replaced; the file is COPYed fresh from the image on every
+# container start (it lives in /etc, not in a volume), so subsequent
+# boots re-render against the current EIOU_PORT value.
+if [ "$EIOU_PORT" != "false" ] && [ "$EIOU_PORT" != "443" ]; then
+    EIOU_HTTPS_PORT_SUFFIX=":${EIOU_PORT}"
+else
+    EIOU_HTTPS_PORT_SUFFIX=""
+fi
+sed -i "s|__EIOU_HTTPS_PORT_SUFFIX__|${EIOU_HTTPS_PORT_SUFFIX}|g" \
+    /etc/nginx/sites-available/eiou.conf
+
 # Start services
 service cron start
 service tor start
