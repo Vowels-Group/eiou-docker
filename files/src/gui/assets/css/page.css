@@ -6413,6 +6413,20 @@ details.payback-type-group > summary.payback-type-group-label:hover { background
 .payback-field-group { display: flex; flex-direction: column; gap: 0.25rem; }
 .payback-swift-id-btns { display: flex; gap: 0.5rem; }
 .payback-swift-id-btns > .btn { flex: 1 1 auto; }
+
+/* Custom payback — key/value row editor in the Add/Edit modal. */
+.payback-row-editor { display: flex; flex-direction: column; gap: 0.35rem; }
+.payback-row-editor .payback-row {
+    display: grid;
+    grid-template-columns: 10rem 1fr auto;
+    gap: 0.4rem;
+    align-items: center;
+}
+.payback-row-editor .payback-row .form-control { min-width: 0; }
+.payback-row-add { align-self: flex-start; margin-top: 0.35rem; }
+@media (max-width: 600px) {
+    .payback-row-editor .payback-row { grid-template-columns: 1fr 1fr auto; }
+}
 .payback-methods-table tbody tr.is-clickable { cursor: pointer; transition: background 0.15s; }
 .payback-methods-table tbody tr.is-clickable:hover { background: var(--bg-alt, #f6f8fa); }
 .contacts-table.payback-methods-table .col-pb-type     { width: 14%; white-space: nowrap; }

@@ -185,15 +185,57 @@ class PaybackMethodTypeValidator
     private function validateCustom(string $currency, array $fields): array
     {
         $errors = [];
-        $details = $fields['details'] ?? null;
-        if (empty($details) || !is_string($details)) {
-            $errors[] = $this->err('details', 'required', 'details is required');
-        } elseif (strlen($details) > 1024) {
-            $errors[] = $this->err('details', 'too_long', 'details must be ≤ 1024 chars');
+        $rows = $fields['rows'] ?? null;
+        if (!is_array($rows) || $rows === []) {
+            $errors[] = $this->err('rows', 'required',
+                'at least one key/value row is required');
+            return $errors;
         }
-        // Currency is user-declared — shape-only (already validated above).
-        if (!empty($fields['instructions']) && !is_string($fields['instructions'])) {
-            $errors[] = $this->err('instructions', 'invalid_type', 'instructions must be a string');
+        if (count($rows) > 50) {
+            $errors[] = $this->err('rows', 'too_many',
+                'rows must be 50 or fewer');
+            return $errors;
+        }
+        $hasNonEmpty = false;
+        foreach ($rows as $i => $row) {
+            if (!is_array($row)) {
+                $errors[] = $this->err("rows[$i]", 'invalid_type',
+                    'each row must be an object with key and value');
+                continue;
+            }
+            $key   = $row['key']   ?? '';
+            $value = $row['value'] ?? '';
+            if (!is_string($key) || !is_string($value)) {
+                $errors[] = $this->err("rows[$i]", 'invalid_type',
+                    'row key and value must be strings');
+                continue;
+            }
+            $key   = trim($key);
+            $value = trim($value);
+            if ($key === '' && $value === '') {
+                continue; // skip wholly-blank rows silently
+            }
+            if ($key === '') {
+                $errors[] = $this->err("rows[$i].key", 'required',
+                    'row key is required when value is set');
+            } elseif (strlen($key) > 64) {
+                $errors[] = $this->err("rows[$i].key", 'too_long',
+                    'row key must be ≤ 64 chars');
+            }
+            if ($value === '') {
+                $errors[] = $this->err("rows[$i].value", 'required',
+                    'row value is required when key is set');
+            } elseif (strlen($value) > 1024) {
+                $errors[] = $this->err("rows[$i].value", 'too_long',
+                    'row value must be ≤ 1024 chars');
+            }
+            if ($key !== '' && $value !== '') {
+                $hasNonEmpty = true;
+            }
+        }
+        if ($errors === [] && !$hasNonEmpty) {
+            $errors[] = $this->err('rows', 'required',
+                'at least one key/value row is required');
         }
         return $errors;
     }
@@ -397,24 +439,104 @@ class PaybackMethodTypeValidator
                 [
                     'id' => self::TYPE_CUSTOM, 'label' => 'Custom', 'group' => 'other',
                     'icon' => 'fas fa-question',
-                    'description' => 'Free-form instructions when no canonical rail fits. Currency is whatever you declare.',
-                    'info' => 'Use <strong>Custom</strong> when no typed rail fits — an in-person '
+                    'description' => 'Free-form key/value rows when no canonical rail fits. Currency is whatever you declare.',
+                    'info' => 'Use <strong>Custom</strong> when no typed rail fits (an in-person '
                         . 'meet-up, a gift card, an obscure payment service, a barter arrangement, '
-                        . 'etc. Put the instructions a payer needs to actually settle into the '
-                        . '<em>Details</em> field (up to 1024 characters). '
+                        . 'etc). Add one row per field a payer needs (e.g. <em>name: Alice</em>, '
+                        . '<em>iban: DE89…</em>, <em>reference: invoice-42</em>). The recipient sees '
+                        . 'each row separately and can copy individual values with one tap. '
                         . '<br><br>'
-                        . '<strong>Heads up — the list view redacts custom details entirely</strong> '
-                        . '(<code>•••</code>). Because this field is free text, no prefix preview is '
-                        . 'safe; the full value is released only after you unlock with your auth code.',
+                        . '<strong>Heads up: the list view redacts custom rows entirely</strong> '
+                        . '(<code>•••</code>). Because rows are free text, no prefix preview is safe; '
+                        . 'the full content is released only after you unlock with your auth code.',
                     'currencies' => null,
                     'fields' => [
-                        ['name' => 'details', 'label' => 'Details', 'type' => 'textarea', 'required' => true,
-                            'placeholder' => 'Describe how a contact should pay you.', 'help' => '≤ 1024 characters'],
-                        ['name' => 'instructions', 'label' => 'Extra instructions (optional)', 'type' => 'textarea', 'required' => false],
+                        ['name' => 'rows', 'label' => 'Fields', 'type' => 'row_editor', 'required' => true,
+                            'help' => 'Add one row per piece of information the payer needs. '
+                                . 'Up to 50 rows, key ≤ 64 chars, value ≤ 1024 chars.',
+                            'rowKeyPlaceholder' => 'name',
+                            'rowValuePlaceholder' => 'value'],
                     ],
                 ],
             ],
         ];
+    }
+
+    // =========================================================================
+    // Receive-side sanitization — applied to wire payloads before storage.
+    //
+    // A malicious peer can ship any JSON shape; the local validator only runs
+    // at create time and never sees inbound fields. This sanitizer normalizes
+    // a Custom payload's `rows` into a safe, render-ready shape: drops
+    // non-string entries, caps row count + key/value length, and strips
+    // control characters and Unicode bidi/format/zero-width characters that
+    // could visually spoof a row's contents.
+    // =========================================================================
+
+    public const CUSTOM_MAX_ROWS      = 50;
+    public const CUSTOM_MAX_KEY_LEN   = 64;
+    public const CUSTOM_MAX_VALUE_LEN = 1024;
+
+    /**
+     * Normalize Custom payback fields received from a peer. Unknown top-level
+     * keys are dropped (only `rows` survives). Returns ['rows' => [...]] with
+     * each row shaped as {key, value} strings.
+     *
+     * @param array<string,mixed> $fields Raw decoded fields from the wire.
+     * @return array{rows: list<array{key:string,value:string}>}
+     */
+    public static function sanitizeCustomFields(array $fields): array
+    {
+        $rows = $fields['rows'] ?? null;
+        if (!is_array($rows)) {
+            return ['rows' => []];
+        }
+        $clean = [];
+        $i = 0;
+        foreach ($rows as $row) {
+            if ($i >= self::CUSTOM_MAX_ROWS) {
+                break;
+            }
+            if (!is_array($row)) {
+                continue;
+            }
+            $key   = self::sanitizeFieldString($row['key']   ?? '', self::CUSTOM_MAX_KEY_LEN);
+            $value = self::sanitizeFieldString($row['value'] ?? '', self::CUSTOM_MAX_VALUE_LEN);
+            // Drop rows that aren't well-formed: either side empty (after
+            // sanitization) means the row has no useful key/value pair to
+            // display. Matches the create-time validator's rule that key
+            // and value are both required when either is set.
+            if ($key === '' || $value === '') {
+                continue;
+            }
+            $clean[] = ['key' => $key, 'value' => $value];
+            $i++;
+        }
+        return ['rows' => $clean];
+    }
+
+    /**
+     * Strip control and bidi/format characters and clamp length. Coerces
+     * non-strings to empty.
+     */
+    private static function sanitizeFieldString(mixed $s, int $maxLen): string
+    {
+        if (!is_string($s)) {
+            return '';
+        }
+        // Strip C0/C1 control chars except \t \n \r.
+        $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/u', '', $s) ?? '';
+        // Strip Unicode bidi/format/zero-width chars that can spoof rendering:
+        //   U+200B–200F (ZWSP, ZWNJ, ZWJ, LRM, RLM)
+        //   U+202A–202E (LRE, RLE, PDF, LRO, RLO)
+        //   U+2066–2069 (LRI, RLI, FSI, PDI)
+        //   U+FEFF      (BOM / ZWNBSP)
+        $s = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}]/u', '', $s) ?? '';
+        $s = trim($s);
+        if (function_exists('mb_substr')) {
+            return mb_substr($s, 0, $maxLen, 'UTF-8');
+        }
+        return substr($s, 0, $maxLen);
     }
 
     // =========================================================================

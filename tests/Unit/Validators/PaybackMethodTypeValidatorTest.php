@@ -140,27 +140,167 @@ class PaybackMethodTypeValidatorTest extends TestCase
 
     public function testCustomValid(): void
     {
-        // Custom accepts user-declared currency codes outside the canonical
-        // fiat/crypto set — the service layer trusts the user here because
-        // the "rail" is an out-of-band arrangement.
+        // Custom now uses a key/value row editor. Accepts user-declared
+        // currency codes outside the canonical fiat/crypto set — the service
+        // layer trusts the user here because the "rail" is an out-of-band
+        // arrangement.
         $errors = $this->v->validate('custom', 'XRP', [
-            'details' => 'Send XRP to destination address shared via email.',
+            'rows' => [
+                ['key' => 'address', 'value' => 'rEXAMPLE123…'],
+                ['key' => 'memo',    'value' => 'invoice-42'],
+            ],
         ]);
         $this->assertSame([], $errors);
     }
 
-    public function testCustomRequiresDetails(): void
+    public function testCustomRequiresAtLeastOneRow(): void
     {
         $errors = $this->v->validate('custom', 'USD', []);
         $this->assertContains('required', $this->codes($errors));
+
+        $errors = $this->v->validate('custom', 'USD', ['rows' => []]);
+        $this->assertContains('required', $this->codes($errors));
     }
 
-    public function testCustomRejectsDetailsOver1024Chars(): void
+    public function testCustomBlankRowsAreNotEnough(): void
+    {
+        // A row where both fields are empty is silently dropped; the result
+        // must still surface a "required" error because no real row remains.
+        $errors = $this->v->validate('custom', 'USD', [
+            'rows' => [['key' => '', 'value' => '']],
+        ]);
+        $this->assertContains('required', $this->codes($errors));
+    }
+
+    public function testCustomRowMissingKeyOrValueRejected(): void
     {
         $errors = $this->v->validate('custom', 'USD', [
-            'details' => str_repeat('x', 1025),
+            'rows' => [['key' => 'name', 'value' => '']],
+        ]);
+        $this->assertContains('required', $this->codes($errors));
+
+        $errors = $this->v->validate('custom', 'USD', [
+            'rows' => [['key' => '', 'value' => 'Alice']],
+        ]);
+        $this->assertContains('required', $this->codes($errors));
+    }
+
+    public function testCustomRowKeyOver64CharsRejected(): void
+    {
+        $errors = $this->v->validate('custom', 'USD', [
+            'rows' => [['key' => str_repeat('k', 65), 'value' => 'v']],
         ]);
         $this->assertContains('too_long', $this->codes($errors));
+    }
+
+    public function testCustomRowValueOver1024CharsRejected(): void
+    {
+        $errors = $this->v->validate('custom', 'USD', [
+            'rows' => [['key' => 'k', 'value' => str_repeat('v', 1025)]],
+        ]);
+        $this->assertContains('too_long', $this->codes($errors));
+    }
+
+    public function testCustomTooManyRowsRejected(): void
+    {
+        $rows = [];
+        for ($i = 0; $i < 51; $i++) {
+            $rows[] = ['key' => 'k' . $i, 'value' => 'v' . $i];
+        }
+        $errors = $this->v->validate('custom', 'USD', ['rows' => $rows]);
+        $this->assertContains('too_many', $this->codes($errors));
+    }
+
+    public function testCustomNonStringRowFieldsRejected(): void
+    {
+        $errors = $this->v->validate('custom', 'USD', [
+            'rows' => [['key' => 'k', 'value' => ['nested' => 'object']]],
+        ]);
+        $this->assertContains('invalid_type', $this->codes($errors));
+    }
+
+    // =========================================================================
+    // Custom — receive-side sanitization
+    // =========================================================================
+
+    public function testSanitizeCustomFieldsDropsNonStringRows(): void
+    {
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields([
+            'rows' => [
+                ['key' => 'name',  'value' => 'Alice'],
+                'not-an-array',
+                ['key' => 12,      'value' => 'numeric-key-coerced-to-empty-then-dropped'],
+                ['key' => 'memo',  'value' => 'invoice-42'],
+            ],
+        ]);
+        $this->assertSame([
+            ['key' => 'name', 'value' => 'Alice'],
+            ['key' => 'memo', 'value' => 'invoice-42'],
+        ], $clean['rows']);
+    }
+
+    public function testSanitizeCustomFieldsCapsRowCount(): void
+    {
+        $rows = [];
+        for ($i = 0; $i < 60; $i++) {
+            $rows[] = ['key' => 'k' . $i, 'value' => 'v' . $i];
+        }
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields(['rows' => $rows]);
+        $this->assertCount(50, $clean['rows']);
+    }
+
+    public function testSanitizeCustomFieldsCapsStringLength(): void
+    {
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields([
+            'rows' => [['key' => str_repeat('k', 200), 'value' => str_repeat('v', 5000)]],
+        ]);
+        $this->assertSame(64,   strlen($clean['rows'][0]['key']));
+        $this->assertSame(1024, strlen($clean['rows'][0]['value']));
+    }
+
+    public function testSanitizeCustomFieldsStripsControlAndBidiChars(): void
+    {
+        $rtlOverride = "\u{202E}"; // RIGHT-TO-LEFT OVERRIDE
+        $zeroWidth   = "\u{200B}"; // ZERO WIDTH SPACE
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields([
+            'rows' => [[
+                'key'   => "name{$rtlOverride}",
+                'value' => "Alice{$zeroWidth}\x07Smith", // \x07 = BEL control char
+            ]],
+        ]);
+        $this->assertSame('name',        $clean['rows'][0]['key']);
+        $this->assertSame('AliceSmith',  $clean['rows'][0]['value']);
+    }
+
+    public function testSanitizeCustomFieldsDropsUnknownTopLevelKeys(): void
+    {
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields([
+            'rows'    => [['key' => 'k', 'value' => 'v']],
+            'evil'    => '<script>alert(1)</script>',
+            'details' => 'legacy field that should not survive',
+        ]);
+        $this->assertSame(['rows'], array_keys($clean));
+    }
+
+    public function testSanitizeCustomFieldsHandlesMissingRows(): void
+    {
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields([]);
+        $this->assertSame(['rows' => []], $clean);
+
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields(['rows' => 'not-an-array']);
+        $this->assertSame(['rows' => []], $clean);
+    }
+
+    public function testSanitizeCustomFieldsSkipsBlankRows(): void
+    {
+        $clean = PaybackMethodTypeValidator::sanitizeCustomFields([
+            'rows' => [
+                ['key' => '',      'value' => ''],
+                ['key' => 'name',  'value' => 'Alice'],
+                ['key' => '   ',   'value' => '   '],
+            ],
+        ]);
+        $this->assertSame([['key' => 'name', 'value' => 'Alice']], $clean['rows']);
     }
 
     // =========================================================================
@@ -213,7 +353,7 @@ class PaybackMethodTypeValidatorTest extends TestCase
     public function testCatalogEveryFieldHasRequiredKeys(): void
     {
         $catalog = (new PaybackMethodTypeValidator())->getCatalog();
-        $validFieldTypes = ['text', 'select', 'email', 'tel', 'number', 'textarea'];
+        $validFieldTypes = ['text', 'select', 'email', 'tel', 'number', 'textarea', 'row_editor'];
         foreach ($catalog['types'] as $type) {
             foreach ($type['fields'] as $field) {
                 $this->assertArrayHasKey('name',     $field);

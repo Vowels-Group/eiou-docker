@@ -101,14 +101,18 @@ class PaybackMethodServiceTest extends TestCase
 
     public function testAddRejectsBadSharePolicy(): void
     {
-        $res = $this->svc->add('custom', 'x', 'USD', ['details' => 'pay me'], 'maybe');
+        $res = $this->svc->add('custom', 'x', 'USD', [
+            'rows' => [['key' => 'note', 'value' => 'pay me']],
+        ], 'maybe');
         $codes = array_column($res['errors'], 'code');
         $this->assertContains('invalid_value', $codes);
     }
 
     public function testAddRejectsEmptyLabel(): void
     {
-        $res = $this->svc->add('custom', '', 'USD', ['details' => 'pay me']);
+        $res = $this->svc->add('custom', '', 'USD', [
+            'rows' => [['key' => 'note', 'value' => 'pay me']],
+        ]);
         $codes = array_column($res['errors'], 'code');
         $this->assertContains('invalid_value', $codes);
     }
@@ -126,7 +130,10 @@ class PaybackMethodServiceTest extends TestCase
                 return '1';
             });
         $this->svc->add('custom', 'Venmo cash handoff', 'USD', [
-            'details' => 'DM me @alice on Venmo once you have the amount.',
+            'rows' => [
+                ['key' => 'venmo', 'value' => '@alice'],
+                ['key' => 'note',  'value' => 'DM me once you have the amount.'],
+            ],
         ]);
     }
 
