@@ -2626,13 +2626,15 @@ function initializePaymentRequestApprovalHandler() {
 function openPrApproveModal(form) {
     pendingApproveForm = form;
     // If the user reached Pay via the row-click drill-down modal
-    // (openPrPendingModal), close that modal first so we don't render
-    // two stacked dialogs. The drill-down modal is a dynamically
-    // inserted #pr-pending-modal element appended to <body>.
+    // (openPrPendingModal), hide that modal so we don't render two
+    // stacked dialogs. We hide rather than remove because the Pay
+    // form lives inside #pr-pending-modal — detaching it from the
+    // DOM would make the later requestSubmit() in confirmPrApproveModal
+    // a no-op (HTML spec: form.submit/requestSubmit on a disconnected
+    // form does nothing). The drill-down modal is removed once the
+    // approve modal closes (closePrApproveModal).
     var pendingModal = document.getElementById('pr-pending-modal');
-    if (pendingModal && document.body.contains(pendingModal)) {
-        document.body.removeChild(pendingModal);
-    }
+    if (pendingModal) pendingModal.style.display = 'none';
     var desc = form.getAttribute('data-pr-description') || '';
     var amount = form.getAttribute('data-pr-amount') || '';
     var cp = form.getAttribute('data-pr-counterparty') || '';
@@ -2673,6 +2675,13 @@ function closePrApproveModal() {
     var modal = document.getElementById('pr-approve-modal');
     if (modal) modal.classList.add('d-none');
     pendingApproveForm = null;
+    // If a drill-down detail modal was hidden by openPrApproveModal,
+    // tear it down now that the approve modal is closing (either via
+    // cancel or after confirm has submitted the form).
+    var pendingModal = document.getElementById('pr-pending-modal');
+    if (pendingModal && document.body.contains(pendingModal)) {
+        document.body.removeChild(pendingModal);
+    }
 }
 
 function prApproveMaxNote() {
@@ -2720,16 +2729,21 @@ function confirmPrApproveModal() {
     if (hidden) hidden.value = note;
 
     var form = pendingApproveForm;
-    closePrApproveModal();
 
     // Mark + re-submit so the existing submit handler hits the
     // showLoader path on this pass instead of re-opening the modal.
+    // Submit BEFORE closing: closePrApproveModal removes the
+    // drill-down detail modal, and if the user reached Pay through
+    // that drill-down, the form lives inside it — removing it first
+    // would detach the form and make requestSubmit a silent no-op.
     form.setAttribute('data-pr-confirmed', '1');
     if (typeof form.requestSubmit === 'function') {
         form.requestSubmit();
     } else {
         form.submit();
     }
+
+    closePrApproveModal();
 }
 
 /**
