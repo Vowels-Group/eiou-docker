@@ -11504,6 +11504,34 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             label.textContent = f.label + (f.required ? ' *' : '');
             wrap.appendChild(label);
 
+            if (f.type === 'row_editor') {
+                wrap.setAttribute('data-payback-field-kind', 'row_editor');
+                var editor = document.createElement('div');
+                editor.className = 'payback-row-editor';
+                editor.id = inputId;
+                editor.setAttribute('data-payback-field', f.name);
+                editor.setAttribute('data-row-key-placeholder', f.rowKeyPlaceholder || 'key');
+                editor.setAttribute('data-row-value-placeholder', f.rowValuePlaceholder || 'value');
+                wrap.appendChild(editor);
+
+                var addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'btn btn-sm btn-secondary payback-row-add';
+                addBtn.innerHTML = '<i class="fas fa-plus"></i> Add row';
+                addBtn.addEventListener('click', function () { appendRowEditorRow(editor, '', ''); });
+                wrap.appendChild(addBtn);
+
+                if (f.help) {
+                    var helpRE = document.createElement('small');
+                    helpRE.className = 'text-muted';
+                    helpRE.textContent = f.help;
+                    wrap.appendChild(helpRE);
+                }
+                // Start with one empty row so the user has somewhere to type.
+                appendRowEditorRow(editor, '', '');
+                return wrap;
+            }
+
             var input;
             if (f.type === 'select') {
                 input = document.createElement('select');
@@ -11539,6 +11567,88 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 wrap.appendChild(help);
             }
             return wrap;
+        }
+
+        // Populate a row_editor field from stored data. Accepts the new
+        // {rows: [{key,value}…]} shape and a legacy {details, instructions}
+        // shape; the latter is migrated row-by-row so old saved methods can
+        // still be opened in the new form.
+        function prefillRowEditor(fieldIndex, fieldSchema, stored) {
+            var editor = document.querySelector(
+                '#payback-type-fields [data-payback-field-index="' + fieldIndex + '"] [data-payback-field="' + fieldSchema.name + '"]'
+            );
+            if (!editor) { return; }
+            // Clear the auto-added blank row.
+            editor.querySelectorAll('.payback-row').forEach(function (r) { editor.removeChild(r); });
+
+            var rows = [];
+            var raw = stored ? stored[fieldSchema.name] : null;
+            if (Array.isArray(raw)) {
+                raw.forEach(function (r) {
+                    if (r && typeof r === 'object') {
+                        rows.push({
+                            key:   String(r.key   == null ? '' : r.key),
+                            value: String(r.value == null ? '' : r.value)
+                        });
+                    }
+                });
+            } else if (stored && (stored.details != null || stored.instructions != null)) {
+                // Legacy custom shape — surface each non-empty leg as a row so
+                // the user can keep editing the same data in the new editor.
+                if (stored.details)      { rows.push({ key: 'details',      value: String(stored.details) }); }
+                if (stored.instructions) { rows.push({ key: 'instructions', value: String(stored.instructions) }); }
+            }
+
+            if (rows.length === 0) {
+                appendRowEditorRow(editor, '', '');
+            } else {
+                rows.forEach(function (r) { appendRowEditorRow(editor, r.key, r.value); });
+            }
+        }
+
+        // Append one key/value row to a row_editor container. Wires up the
+        // remove button. Used by both initial render and prefillForEdit.
+        function appendRowEditorRow(editor, keyVal, valueVal) {
+            var row = document.createElement('div');
+            row.className = 'payback-row';
+
+            var kIn = document.createElement('input');
+            kIn.type = 'text';
+            kIn.className = 'form-control payback-row-key';
+            kIn.setAttribute('data-row-part', 'key');
+            kIn.maxLength = 64;
+            kIn.placeholder = editor.getAttribute('data-row-key-placeholder') || 'key';
+            kIn.value = keyVal || '';
+
+            var vIn = document.createElement('input');
+            vIn.type = 'text';
+            vIn.className = 'form-control payback-row-value';
+            vIn.setAttribute('data-row-part', 'value');
+            vIn.maxLength = 1024;
+            vIn.placeholder = editor.getAttribute('data-row-value-placeholder') || 'value';
+            vIn.value = valueVal || '';
+
+            var rmBtn = document.createElement('button');
+            rmBtn.type = 'button';
+            rmBtn.className = 'btn btn-sm btn-outline payback-row-remove';
+            rmBtn.title = 'Remove row';
+            rmBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            rmBtn.addEventListener('click', function () {
+                // Keep at least one row visible so the editor never collapses
+                // to nothing — clear it instead of removing the last row.
+                if (editor.querySelectorAll('.payback-row').length <= 1) {
+                    kIn.value = '';
+                    vIn.value = '';
+                    kIn.focus();
+                } else {
+                    editor.removeChild(row);
+                }
+            });
+
+            row.appendChild(kIn);
+            row.appendChild(vIn);
+            row.appendChild(rmBtn);
+            editor.appendChild(row);
         }
 
         function attachConditionalWatchers(type) {
@@ -11688,6 +11798,10 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             // selects) so applyShowWhen resolves correctly.
             (type.fields || []).forEach(function (f, i) {
                 if (f.showWhen) { return; }
+                if (f.type === 'row_editor') {
+                    prefillRowEditor(i, f, stored);
+                    return;
+                }
                 if (stored[f.name] == null) { return; }
                 var el = document.querySelector('#payback-type-fields [data-payback-field-index="' + i + '"] [data-payback-field]');
                 if (el) { el.value = stored[f.name]; }
@@ -11708,6 +11822,7 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
             // Second pass: fill every conditional field whose showWhen matches
             // the stored watched value.
             (type.fields || []).forEach(function (f, i) {
+                if (f.type === 'row_editor') { return; } // handled in first pass
                 if (stored[f.name] == null) { return; }
                 if (f.showWhen) {
                     var watchedVal = stored[f.showWhen.field];
@@ -11788,6 +11903,23 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
                 var wrap = el.closest('[data-payback-field-group]');
                 if (wrap && wrap.style.display === 'none') { return; }
                 var name = el.getAttribute('data-payback-field');
+
+                // row_editor: collect each .payback-row as {key, value} into
+                // an array. Skip wholly-blank rows.
+                if (wrap && wrap.getAttribute('data-payback-field-kind') === 'row_editor') {
+                    var rows = [];
+                    el.querySelectorAll('.payback-row').forEach(function (rowEl) {
+                        var k = (rowEl.querySelector('[data-row-part="key"]')   || {}).value || '';
+                        var v = (rowEl.querySelector('[data-row-part="value"]') || {}).value || '';
+                        k = String(k).trim();
+                        v = String(v).trim();
+                        if (k === '' && v === '') { return; }
+                        rows.push({ key: k, value: v });
+                    });
+                    if (rows.length) { out[name] = rows; }
+                    return;
+                }
+
                 var v = el.value;
                 if (el.type === 'number' && v !== '' && !isNaN(v)) { v = Number(v); }
                 if (v === '' || v == null) { return; }
@@ -12056,16 +12188,34 @@ window.addEventListener('beforeunload', window.stopAutoRefresh);
 
         function openDetailModal(method) {
             var fields = (method && typeof method.fields === 'object' && method.fields) ? method.fields : {};
+            var pairs = [];
+            // Preferred shape (new Custom row_editor and any other type that
+            // adopts it): fields.rows is an array of {key, value} strings.
+            if (Array.isArray(fields.rows)) {
+                fields.rows.forEach(function (r) {
+                    if (!r || typeof r !== 'object') { return; }
+                    var k = String(r.key   == null ? '' : r.key);
+                    var v = String(r.value == null ? '' : r.value);
+                    if (k === '' && v === '') { return; }
+                    pairs.push({ key: k, value: v });
+                });
+            } else {
+                // Legacy / non-row-editor shape: flat object whose keys are
+                // field names and values are strings.
+                Object.keys(fields).forEach(function (k) {
+                    var v = fields[k];
+                    if (v == null || v === '') { return; }
+                    pairs.push({ key: k, value: String(v) });
+                });
+            }
             var rows = '';
-            Object.keys(fields).forEach(function (k) {
-                var v = fields[k];
-                if (v == null || v === '') { return; }
+            pairs.forEach(function (p) {
                 rows +=
                     '<div class="payback-detail-row">' +
-                        '<div class="payback-detail-key text-muted">' + escapeHtmlSafe(k) + '</div>' +
+                        '<div class="payback-detail-key text-muted">' + escapeHtmlSafe(p.key) + '</div>' +
                         '<div class="payback-detail-value">' +
-                            '<span class="payback-detail-text">' + escapeHtmlSafe(String(v)) + '</span>' +
-                            ' <button type="button" class="btn btn-sm btn-outline payback-detail-copy" data-copy="' + escapeAttrSafe(String(v)) + '" data-copy-label="' + escapeAttrSafe(String(k)) + '" title="Copy"><i class="fas fa-copy"></i></button>' +
+                            '<span class="payback-detail-text">' + escapeHtmlSafe(p.value) + '</span>' +
+                            ' <button type="button" class="btn btn-sm btn-outline payback-detail-copy" data-copy="' + escapeAttrSafe(p.value) + '" data-copy-label="' + escapeAttrSafe(p.key) + '" title="Copy"><i class="fas fa-copy"></i></button>' +
                         '</div>' +
                     '</div>';
             });

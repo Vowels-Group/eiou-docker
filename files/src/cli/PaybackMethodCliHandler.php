@@ -230,10 +230,7 @@ HELP;
                 return $this->promptBankWire($currency);
 
             case PaybackMethodTypeValidator::TYPE_CUSTOM:
-                return [
-                    'details' => $this->prompt('Free-text instructions (≤ 1024 chars)'),
-                    'instructions' => $this->promptOptional('Additional instructions (optional)'),
-                ];
+                return ['rows' => $this->promptCustomRows()];
         }
         // Unknown type — caller likely registered via a plugin. Fall back
         // to an empty field set; the plugin's own validator will report
@@ -281,6 +278,28 @@ HELP;
                 ];
         }
         return ['rail' => $rail, 'recipient_name' => $name];
+    }
+
+    /**
+     * Interactively read key/value rows for a Custom payback method until
+     * the user submits a blank key.
+     *
+     * @return list<array{key:string,value:string}>
+     */
+    private function promptCustomRows(): array
+    {
+        echo "Enter one key/value row per pair (e.g. name / Alice). " .
+             "Submit a blank key to finish.\n";
+        $rows = [];
+        $i = 1;
+        while (count($rows) < PaybackMethodTypeValidator::CUSTOM_MAX_ROWS) {
+            $key = $this->prompt("  Row $i key");
+            if ($key === '') { break; }
+            $value = $this->prompt("  Row $i value");
+            $rows[] = ['key' => $key, 'value' => $value];
+            $i++;
+        }
+        return $rows;
     }
 
     // =========================================================================

@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Database\PaybackMethodReceivedRepository;
 use Eiou\Utils\Logger;
+use Eiou\Validators\PaybackMethodTypeValidator;
 
 /**
  * E2E-fetch layer for payback methods.
@@ -159,13 +160,22 @@ class ReceivedPaybackMethodService
             if (!is_array($m) || empty($m['remote_id']) || empty($m['type'])) {
                 continue;
             }
+            $type   = (string) $m['type'];
+            $fields = is_array($m['fields'] ?? null) ? $m['fields'] : [];
+            // Receive-side hardening: a malicious peer could ship any JSON
+            // shape. For type-specific shapes we trust, normalize defensively
+            // (strip control chars, cap lengths, drop nested junk) before
+            // storage so the rendering layer sees safe data.
+            if ($type === PaybackMethodTypeValidator::TYPE_CUSTOM) {
+                $fields = PaybackMethodTypeValidator::sanitizeCustomFields($fields);
+            }
             $this->receivedRepo->upsertReceived([
                 'contact_pubkey_hash' => $senderPubkeyHash,
                 'remote_method_id' => (string) $m['remote_id'],
-                'type' => (string) $m['type'],
+                'type' => $type,
                 'label' => (string) ($m['label'] ?? ''),
                 'currency' => (string) ($m['currency'] ?? ''),
-                'fields_json' => json_encode($m['fields'] ?? []),
+                'fields_json' => json_encode($fields),
                 'settlement_min_unit' => (int) ($m['settlement_min_unit'] ?? 1),
                 'settlement_min_unit_exponent' => (int) ($m['settlement_min_unit_exponent'] ?? -8),
                 'priority' => (int) ($m['priority'] ?? 100),

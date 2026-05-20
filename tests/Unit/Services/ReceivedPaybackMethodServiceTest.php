@@ -214,6 +214,45 @@ class ReceivedPaybackMethodServiceTest extends TestCase
         $this->assertEquals(1, $count);
     }
 
+    public function testHandleIncomingResponseSanitizesCustomFields(): void
+    {
+        // A peer sends a malicious Custom payload: nested junk, control
+        // characters, RTL-override spoofing, and unknown top-level keys.
+        // The receive path must normalize this to the safe row-editor shape
+        // before storage.
+        $captured = null;
+        $this->repo->expects($this->once())
+            ->method('upsertReceived')
+            ->willReturnCallback(function (array $row) use (&$captured) {
+                $captured = $row;
+                return '1';
+            });
+        $this->svc->handleIncomingResponse('alicehash', [
+            'status' => 'ok',
+            'methods' => [[
+                'remote_id' => 'm-custom-1',
+                'type' => 'custom',
+                'label' => 'Custom rail',
+                'currency' => 'USD',
+                'fields' => [
+                    'rows' => [
+                        ['key' => 'name', 'value' => "Alice\u{202E}"],   // RTL override
+                        ['key' => 'memo', 'value' => "x\x07y"],            // BEL control char
+                        ['key' => 'evil', 'value' => ['nested' => 'obj']], // non-string → dropped to ''
+                    ],
+                    'arbitrary' => '<script>alert(1)</script>',           // top-level junk
+                ],
+            ]],
+        ]);
+        $this->assertNotNull($captured);
+        $decoded = json_decode($captured['fields_json'], true);
+        $this->assertSame(['rows'], array_keys($decoded));
+        $this->assertSame([
+            ['key' => 'name', 'value' => 'Alice'],
+            ['key' => 'memo', 'value' => 'xy'],
+        ], $decoded['rows']);
+    }
+
     // =========================================================================
     // handleIncomingRevoke
     // =========================================================================
